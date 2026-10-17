@@ -8,4 +8,7 @@ Browser SQL workbench (SSMS-lite) on DuckDB-WASM: drop CSV / Excel files, query 
 - Check UI changes in the browser (`.claude/launch.json`: `stratalab` = dev on 5180, `stratalab-build` = production preview on 5181). The production build matters: DuckDB's worker and .wasm paths only break there.
 - DuckDB-WASM OPFS: we register the database files ourselves (see the decision in ROADMAP.md); don't switch back to `opfs://` paths without checking that the file in OPFS actually grows.
 - Local test files go in `data-local/` (git-ignored).
+- Datasets: `scripts/build-datasets.py <id> …` rebuilds only those (all when none); builds are byte-for-byte repeatable. AdventureWorks needs a SQL Server once (see the script's header; Docker works), then its JSON cache in `data-local/datasets-src/` is enough.
+- DuckDB-WASM downloads extensions from extensions.duckdb.org on first use: Parquet (every dataset load) and ICU (`current_date`, `localtimestamp`, time zones). Don't put ICU functions in dataset DDL (`now()` is in the core). A network that blocks that host breaks dataset loading.
+- Ecosystem links stay in step with StrataSQL's `src/core/shareLink.ts`: `#ddl=` in (2a), `#sql=…&name=…` out to model.quaera.app (2c); fixtures of what we send live in StrataSQL's `tests/fixtures/stratalab/` (regenerate them with `src/core/modelLink.ts` when the DDL shape changes). Windows are named `stratalab` / `stratasql`.
 - Code Apache-2.0. Deployed by GitHub Actions to GitHub Pages on push to main; DNS on Cloudflare.
