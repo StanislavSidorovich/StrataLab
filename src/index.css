@@ -106,9 +106,11 @@ button:disabled {
   border-color: transparent;
   background: transparent;
 }
-/* A phone's header holds Open, Save, Run, the catalog, help and theme: icon buttons get narrower. */
+/* A phone's header holds Open, Save, Run, the catalog, help and theme: icon buttons get narrower.
+   So do the result bar's Copy, Export and Save as table. */
 @media (max-width: 639px) {
-  header .btn-ghost {
+  header .btn-ghost,
+  .result-bar .btn-ghost {
     padding-left: 6px;
     padding-right: 6px;
   }

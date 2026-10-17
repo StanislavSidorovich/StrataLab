@@ -8,6 +8,24 @@ import { ACCEPT } from './Sidebar'
 import { DEMO_TABLES, WELCOME_SQL } from '../data/demo'
 import { installApp } from '../pwa/register'
 
+const isMac = /Mac|iPhone|iPad/.test(navigator.platform)
+const mod = isMac ? '⌘' : 'Ctrl+'
+
+/** The keys, as in SSMS and Azure Data Studio where the browser lets us. */
+const KEYS: [string, string][] = [
+  [`${mod}Enter · F5`, 'Run the selection, or the whole tab'],
+  ['Esc', 'Stop the running query (in the editor)'],
+  [`${mod}O`, 'Open a .sql file'],
+  [`${mod}S · ${isMac ? '⇧⌘S' : 'Ctrl+Shift+S'}`, 'Save the tab as a .sql file · save as'],
+  [isMac ? '⇧⌥F' : 'Shift+Alt+F', 'Format SQL'],
+  [`${mod}/`, 'Comment or uncomment the lines'],
+  [`${mod}F`, 'Find and replace'],
+  [`${mod}Z · ${isMac ? '⇧⌘Z' : 'Ctrl+Y'}`, 'Undo · redo'],
+  ['Ctrl+Space', 'Complete a table or column name'],
+  [`${mod}V`, 'Outside the editor: make a table of cells copied from Excel'],
+  [isMac ? '⌥⇧T' : 'Alt+Shift+T', 'Reopen the last closed tab'],
+]
+
 function pickFiles() {
   const input = document.createElement('input')
   input.type = 'file'
@@ -18,9 +36,9 @@ function pickFiles() {
 }
 
 const PLACES: [string, string, string][] = [
-  ['Left', 'Object tree', 'Your tables, the demo shop and loaded datasets. Paste a table copied in Excel (Ctrl+V outside the editor). Click a table to see its columns, double-click for its first 100 rows; the ⋯ menu profiles, exports, renames, adds rows from a file or generates sample rows.'],
-  ['Top', 'Query tabs', 'Each tab speaks DuckDB, SQL Server (T-SQL) or PostgreSQL: the switch is above the editor. Write SQL here, with completion of table and column names. Ctrl+Enter or F5 runs the selection, or the whole tab when nothing is selected. Tabs are kept between visits; double-click a tab to rename it. The buttons at the editor’s right undo, redo, comment lines, format the SQL and find.'],
-  ['Bottom', 'Result and Messages', 'The result grid shows each column’s type. Copy pastes straight into Excel; CSV and Excel download the result. Messages lists every query and import with its time.'],
+  ['Left', 'Object tree', 'Your tables, the demo shop and loaded datasets; the box above them finds a table or a column. Paste a table copied in Excel (Ctrl+V outside the editor). Click a table to see its columns, double-click for its first 100 rows; its ⋯ menu profiles, exports, renames, adds rows from a file or generates sample rows. The ⋯ next to TABLES downloads the whole database as one file and restores it: keep a copy before clearing the browser.'],
+  ['Top', 'Query tabs', 'Each tab speaks DuckDB, SQL Server (T-SQL) or PostgreSQL: the switch is above the editor. Write SQL here, with completion of table and column names. Ctrl+Enter or F5 runs the selection, or the whole tab when nothing is selected. Tabs are kept between visits; double-click a tab to rename it, right-click it to duplicate, close others or reopen a closed one. The buttons at the editor’s right undo, redo, comment lines, format the SQL and find.'],
+  ['Bottom', 'Result and Messages', 'The result grid shows each column’s type. Copy pastes straight into Excel (right-click a cell for one value, a row or a column); Export downloads CSV, Excel, JSON or Parquet; Save as table keeps the result as a new table. Messages lists every query and import with its time.'],
   ['Header', 'Open, Save, Run and the engine', 'Open and Save read and write .sql files (Ctrl+O, Ctrl+S). While a query runs, Run becomes Stop (Esc in the editor). “DuckDB · saved in this browser” means your tables survive a reload. Nothing is uploaded: the database lives in this browser only.'],
 ]
 
@@ -99,6 +117,22 @@ export function WelcomeDialog() {
                     <div style={{ color: 'var(--muted)', fontSize: 12 }}>{where}</div>
                   </dt>
                   <dd>{how}</dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+
+          <section>
+            <h2 className="font-semibold mb-2">Keyboard shortcuts</h2>
+            <dl className="grid gap-x-4 gap-y-1 sm:grid-cols-2" style={{ fontSize: 12.5 }}>
+              {KEYS.map(([keys, what]) => (
+                <div key={keys} className="flex gap-3">
+                  <dt className="shrink-0 w-40 flex flex-wrap items-start gap-1">
+                    {keys.split(' · ').map((k) => (
+                      <kbd key={k} className="mono px-1.5 py-0.5 rounded whitespace-nowrap" style={{ background: 'var(--panel-2)', border: '1px solid var(--line)', fontSize: 11.5 }}>{k}</kbd>
+                    ))}
+                  </dt>
+                  <dd>{what}</dd>
                 </div>
               ))}
             </dl>

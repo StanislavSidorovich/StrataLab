@@ -13,7 +13,19 @@ Stages follow SPEC §6. A stage is done only when its acceptance criteria pass.
 
 **Overall progress: stages 1–4 of 6 done.** Two thirds of the six stages; next is stage 5 (share links, practice tasks with an automatic result check). The full application = all six stages.
 
-## Where we are (2026-10-17, interface buttons: Stop, Open / Save, Paste a table, Format)
+## Where we are (2026-10-17, interface buttons P2: tree search, result and tab menus, database backup)
+
+**The second round of buttons from the comparison with SSMS, DBeaver and Azure Data Studio** (priority P2 in the project's notes):
+
+- **Find a table or column**: a search box over the tree (Esc clears it) keeps the tables whose name, `schema.name` or one of whose columns contains what was typed; a table found by a column opens on it, the match is marked, dataset folders and the POSTGRESQL section are filtered too, the counts read `TABLES (1/4)`. A **Refresh** button next to it reads both databases again (`src/core/tree.ts`).
+- **Result bar**: **Copy ▾** (with or without headers), **Export ▾** (CSV, Excel, **JSON**, **Parquet**) and **Save as table** (asks for a name, the tab's title by default, and before replacing a table). A right-click (a long press on a phone) on a cell copies that value, its row, its column or the whole result. JSON is an array of objects, one row per line, numbers and true / false as such, a DECIMAL as a number when nothing is lost (`src/core/jsonWrite.ts`). Parquet and Save as table hand the result in the grid to DuckDB (`insertArrowTable`), so nothing is run again.
+- **Tab menu** (right-click or long press on a tab): Rename, Duplicate (next to it, `Query 1 (copy)`), Close, Close others, Close tabs to the right, **Reopen closed tab** (Alt+Shift+T: the browser keeps Ctrl+Shift+T for itself). The last 20 closed tabs with SQL in them are remembered for this visit (`src/core/tabs.ts`).
+- **Download database / Restore from a backup** in the ⋯ next to TABLES: the whole DuckDB database (own tables, views, macros, sequences, loaded datasets) as one `quaera-lab-2026-10-17.duckdb`, which opens in DuckDB's own tools (checked with Python's duckdb 1.5.6). Restore replaces everything in one transaction: a file that is not a database leaves the tables as they were. PostgreSQL's tables are not in the backup (`src/db/backup.ts`, `src/core/backup.ts`).
+- **Keyboard shortcuts** listed in the guide (? button), with ⌘ on a Mac.
+
+How it was checked: 91 unit tests green (17 new, `tests/workbench.test.ts`). In Chromium with Playwright, dev server and production build, light and dark, desktop and 390 px (no page scroll; the result bar's buttons become icons): search by name, by column and with no match; JSON downloaded with numbers, booleans and ISO dates; Copy without headers, Copy value from the cell menu; Save as table → `top3` in the tree and queryable; Duplicate, Close others, Alt+Shift+T; backup downloaded, tables dropped and changed, restore brought back exactly the backup (a second schema with foreign keys, a view, a macro, a sequence), and it was still there after a reload; a broken file was refused with the tables untouched; the tab menu opened by a long touch. **Not tried:** Parquet export of a result (needs the Parquet extension from extensions.duckdb.org, blocked in this session: the export shows DuckDB's error), a real phone. First chunk 331.8 → 338.7 kB (gzip).
+
+### Earlier (2026-10-17, interface buttons: Stop, Open / Save, Paste a table, Format)
 
 **The buttons SSMS, DBeaver and pgAdmin users reach for first** (comparison in the project's notes, priority P1):
 
@@ -157,6 +169,11 @@ The MVP works locally (dev and production build checked in the browser): DuckDB 
 - ✱ **Format makes keywords upper case** (`SELECT`, `FROM`), the usual SSMS / textbook look; names and functions are left as written. One Undo step.
 - ✱ **Pasted text becomes a table only outside the editor**, and only when it looks like one (two lines with the same number of tabs); inside the editor Ctrl+V pastes text as always.
 - ✱ **Save without a picker downloads**, named after the tab (`Query 1.sql`); with a picker, the file a tab came from is remembered for this visit only.
+- ✱ **Backup = a .duckdb file, not a zip of Parquet** (`EXPORT DATABASE`): one file that DuckDB, Python and DBeaver open as is, no zip library, and Parquet export needs an extension from the network. Made by attaching a new file and `COPY FROM DATABASE … (SCHEMA)`, then filling the tables parents first: DuckDB's own copy of the rows goes alphabetically and fails on foreign keys (order_items before orders). A backup from a newer DuckDB may not open in an older one.
+- ✱ **Restore replaces, it does not merge**: two databases with the same table names have no right merge; the app asks first and says to download a backup before. All in one transaction.
+- ✱ **Tree search filters, it does not only highlight**: in a dataset with dozens of tables the point is to see the few that match; columns count too (“which table has `email`?”).
+- ✱ **Reopen closed tab = Alt+Shift+T**: Ctrl+Shift+T can't be taken from the browser. Closed tabs are kept for this visit only, empty ones not at all.
+- ✱ **Result to Parquet / to a table through DuckDB's Arrow insert**, not by running the query again: the query may have changed tables, or be a script.
 - Name **StrataLab**, subdomain **lab.quaera.app** (owner, 2026-10-17), in line with StrataSQL and StrataFlow.
 
 ## Next steps (by priority)
@@ -173,7 +190,8 @@ The MVP works locally (dev and production build checked in the browser): DuckDB 
 10. ✅ **Welcome screen** (2026-10-17): three ways to start, where things are, ? button; demo shop labelled.
 11. ✅ **Stage 4 — dialects** (2026-10-17): T-SQL → DuckDB with a side-by-side diff; PostgreSQL 18 (PGlite) with copy from DuckDB. **Owner, after deploy:** on lab.quaera.app switch a tab to T-SQL and run something (the first time downloads the translator), and copy a dataset to PostgreSQL from its folder's ⋯ menu (not possible in the cloud session, see “How it was checked”).
 12. ✅ **PWA: Update button and Install as app** (2026-10-17, stage 6 started). **Owner, after deploy:** open lab.quaera.app once, then after the next deploy the **Update** button should appear; try Install as app on a computer and a phone. Full offline datasets need the Parquet extension served with the site (Known gaps).
-13. **Stage 5 — share and practise**: `#s=` share links (datasets by id + queries + dialect), tasks with an automatic result check, links from quaera.app lessons.
+13. ✅ **Interface buttons P1 and P2** (2026-10-17): Stop, Open / Save .sql, Paste a table, Format, editor toolbar; tree search, result and tab menus, database backup, shortcuts in the guide. **Owner, after deploy:** export a result as Parquet once (the cloud session can't reach the extension).
+14. **Stage 5 — share and practise**: `#s=` share links (datasets by id + queries + dialect), tasks with an automatic result check, links from quaera.app lessons.
 
 ## Known gaps
 
@@ -183,6 +201,7 @@ The MVP works locally (dev and production build checked in the browser): DuckDB 
 - A query result is held in memory in full; `SELECT *` on tens of millions of rows will be slow. A row cap with “show more” is a candidate.
 - A multi-statement script in a DuckDB tab runs its statements before the last in one go: Stop only interrupts the last one. Running DuckDB tabs statement by statement needs a splitter (DuckDB-WASM's `extractStatements` is a candidate).
 - PostgreSQL tabs have no Stop (PGlite can't cancel a query).
+- The database backup has DuckDB's tables only; PostgreSQL's (PGlite) are not in it.
 - A tab opened from a .sql file forgets the file on reload: the next Save asks where to save again.
 - T-SQL that has no DuckDB counterpart is passed on and fails in DuckDB with DuckDB's error: variables (`DECLARE @x`), `MERGE … OUTPUT inserted.…`, `BEGIN TRY … END CATCH`. The translation view says so where sqlglot warns; `EXEC` (stored procedures) is stopped before running with a note. `SELECT … INTO #tmp` works (a temporary table).
 - `'text' + column` is turned into `||` only when one side is a string literal (or already a `||`): `first_name + last_name` stays `+` and fails in DuckDB with the T-SQL hint. sqlglot doesn't know column types.

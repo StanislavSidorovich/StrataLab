@@ -13,7 +13,9 @@ import { WelcomeDialog } from './WelcomeDialog'
 import { DialectBar } from './DialectBar'
 import { applyUpdate, useUpdateReady } from '../pwa/register'
 import { engineLoadingLabel, engineLoadingShort } from './EngineLoading'
-import { addTab, closeTab, enqueueFiles, openCatalog, openWelcome, pasteTable, renameTab, stopQuery, tabDialect, toggleTheme, useLab } from './store'
+import { addTab, closeTabs, duplicateTab, enqueueFiles, openCatalog, openWelcome, pasteTable, renameTab, reopenClosedTab, stopQuery, tabDialect, toggleTheme, useLab } from './store'
+import { Menu, useLongPress, type MenuItem } from './Menu'
+import { tabsToClose } from '../core/tabs'
 
 export function App() {
   const theme = useLab((s) => s.theme)
@@ -30,6 +32,12 @@ export function App() {
       if (e.defaultPrevented) return
       const mod = e.ctrlKey || e.metaKey
       const key = e.key.toLowerCase()
+      // Ctrl+Shift+T is the browser's own; Alt+Shift+T reopens a tab closed here.
+      if (e.altKey && e.shiftKey && !mod && e.code === 'KeyT') {
+        e.preventDefault()
+        reopenClosedTab()
+        return
+      }
       if (mod && !e.altKey && (key === 'o' || key === 's')) {
         e.preventDefault()
         void (key === 'o' ? openSqlFile() : saveSqlFile(e.shiftKey))
@@ -277,19 +285,35 @@ function EngineBadge() {
   )
 }
 
+/** Closes tabs and forgets the files they were opened from. */
+function close(ids: string[]) {
+  closeTabs(ids)
+  ids.forEach(forgetFile)
+}
+
 function Tabs() {
   const tabs = useLab((s) => s.tabs)
   const active = useLab((s) => s.activeTab)
   const [editing, setEditing] = useState<string | null>(null)
+  const [menu, setMenu] = useState<{ id: string; at: { x: number; y: number } } | null>(null)
+  const longPress = useLongPress((at) => {
+    const id = document.elementFromPoint(at.x, at.y)?.closest('[data-tab]')?.getAttribute('data-tab')
+    if (id) setMenu({ id, at })
+  })
   return (
-    <div className="h-9 shrink-0 flex items-end gap-0.5 px-2 overflow-x-auto" style={{ background: 'var(--panel-2)', borderBottom: '1px solid var(--line)' }}>
+    <div className="h-9 shrink-0 flex items-end gap-0.5 px-2 overflow-x-auto" style={{ background: 'var(--panel-2)', borderBottom: '1px solid var(--line)' }} {...longPress}>
       {tabs.map((t) => (
         <div
           key={t.id}
+          data-tab={t.id}
           className="group flex items-center gap-1 pl-3 pr-1 h-8 rounded-t-md shrink-0 max-w-52"
           style={t.id === active ? { background: 'var(--panel)', border: '1px solid var(--line)', borderBottom: 'none', fontWeight: 600 } : { color: 'var(--muted)' }}
           onClick={() => useLab.setState({ activeTab: t.id })}
           onDoubleClick={() => setEditing(t.id)}
+          onContextMenu={(e) => {
+            e.preventDefault()
+            setMenu({ id: t.id, at: { x: e.clientX, y: e.clientY } })
+          }}
         >
           {editing === t.id ? (
             <input
@@ -303,14 +327,13 @@ function Tabs() {
               }}
             />
           ) : (
-            <span className="truncate" title="Double-click to rename">{t.title}</span>
+            <span className="truncate" title="Double-click to rename; right-click for more">{t.title}</span>
           )}
           <button
             className="p-0.5 rounded opacity-40 group-hover:opacity-100"
             onClick={(e) => {
               e.stopPropagation()
-              closeTab(t.id)
-              forgetFile(t.id)
+              close([t.id])
             }}
             aria-label={`Close ${t.title}`}
           >
@@ -321,6 +344,26 @@ function Tabs() {
       <button className="h-8 px-2 shrink-0" style={{ color: 'var(--muted)' }} onClick={() => addTab()} aria-label="New query tab" title="New query tab">
         <Plus size={15} />
       </button>
+      {menu && <TabMenu id={menu.id} at={menu.at} rename={() => setEditing(menu.id)} close={() => setMenu(null)} />}
     </div>
   )
+}
+
+/** Right-click (or a long press) on a tab, as in SSMS and browsers. */
+function TabMenu({ id, at, rename, close: closeMenu }: { id: string; at: { x: number; y: number }; rename: () => void; close: () => void }) {
+  const ids = useLab((s) => s.tabs).map((t) => t.id)
+  const closed = useLab((s) => s.closedTabs.length)
+  const others = tabsToClose(ids, id, 'others')
+  const right = tabsToClose(ids, id, 'right')
+  const items: MenuItem[] = [
+    ['Rename', rename, { keys: 'double-click' }],
+    ['Duplicate', () => duplicateTab(id)],
+    'separator',
+    ['Close', () => close([id])],
+    ['Close others', () => close(others), { disabled: !others.length }],
+    ['Close tabs to the right', () => close(right), { disabled: !right.length }],
+    'separator',
+    ['Reopen closed tab', reopenClosedTab, { disabled: !closed, keys: 'Alt+Shift+T' }],
+  ]
+  return <Menu items={items} close={closeMenu} at={at} label="Tab" />
 }
