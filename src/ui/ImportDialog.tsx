@@ -1,15 +1,16 @@
 // One file at a time: what we detected, a live preview with column types, and where the
-// rows go: a new table, or an existing one (stage 2b) with its columns matched and every
-// row checked against its types and keys first. Changing any option re-reads the preview.
+// rows go: My tables or one of the user's datasets, as a new table or into an existing one
+// (stage 2b) with its columns matched and every row checked against its types and keys first.
+// Changing any option re-reads the preview.
 import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, CheckCircle2, Copy, FileSpreadsheet, Loader2, X } from 'lucide-react'
 import type { Table } from 'apache-arrow'
 import { DataGrid } from './DataGrid'
-import { cancelImport, confirmImport, emptyTableNamed, finishFill, ownTables, updateImport, useLab } from './store'
+import { cancelImport, confirmImport, emptyTableNamed, finishFill, newDataset, ownDatasets, schemaLabel, tablesIn, updateImport, useLab } from './store'
 import { previewSource, writeSheet, type ImportSource } from '../db/importer'
 import { SHOWN_PROBLEMS, checkFill, insertFill, loadTarget, sourceColumns, type FillReport } from '../db/fill'
 import { autoMap, mappingProblems, PROBLEM_LABELS, type FillTarget, type Mapping, type SourceColumn } from '../core/fill'
-import { tableNameFrom } from '../core/sql'
+import { qualifiedName, tableNameFrom, uniqueName } from '../core/sql'
 import type { CsvOptions } from '../core/sniff'
 
 const DELIMS: [string, string][] = [
@@ -25,6 +26,8 @@ const DATES: [string, string][] = [
   ['%m/%d/%Y', '12/31/2026'],
   ['%Y-%m-%d', '2026-12-31'],
 ]
+
+const NEW_DATASET = '\u0000new'
 
 const rows = (n: number) => `${n.toLocaleString()} row${n === 1 ? '' : 's'}`
 const message = (e: unknown) => String(e instanceof Error ? e.message : e)
@@ -59,7 +62,18 @@ function Dialog({ src, queued }: { src: ImportSource; queued: number }) {
   const setCsv = (patch: Partial<CsvOptions>) => updateImport({ ...src, csv: { ...src.csv!, ...patch } })
   const o = src.csv
   const fill = src.target ?? null
-  const targets = ownTables(tables).filter((t) => t.kind === 'table')
+  const targets = tablesIn(tables, src.schema).filter((t) => t.kind === 'table')
+  const schemas = useLab((s) => s.schemas)
+  const datasets = ['main', ...ownDatasets(schemas)]
+
+  /** Another dataset: the name is made free there, and an empty table of that name takes the rows. */
+  const intoSchema = async (value: string) => {
+    const schema = value === NEW_DATASET ? await newDataset() : value
+    if (!schema) return
+    const taken = tablesIn(useLab.getState().tables, schema).map((t) => t.name)
+    const target = emptyTableNamed(src.tableName, schema)
+    updateImport({ ...src, schema, target, tableName: target ?? uniqueName(src.tableName, taken) })
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(10,14,20,0.55)' }}>
@@ -68,7 +82,7 @@ function Dialog({ src, queued }: { src: ImportSource; queued: number }) {
           <FileSpreadsheet size={18} style={{ color: 'var(--accent)' }} />
           <div className="flex-1 min-w-0">
             <div className="font-semibold truncate">
-              {fill ? `Add rows from ${src.fileName} to ${fill}` : `Import ${src.fileName}`}
+              {fill ? `Add rows from ${src.fileName} to ${qualifiedName(src.schema, fill)}` : `Import ${src.fileName}`}
             </div>
             {queued > 1 && <div style={{ color: 'var(--muted)', fontSize: 12 }}>{queued - 1} more file(s) after this one</div>}
           </div>
@@ -78,6 +92,18 @@ function Dialog({ src, queued }: { src: ImportSource; queued: number }) {
         </div>
 
         <div className="px-4 py-3 flex flex-wrap gap-x-5 gap-y-3 items-end" style={{ borderBottom: '1px solid var(--line)' }}>
+          <label className="flex flex-col gap-1">
+            <span style={{ color: 'var(--muted)', fontSize: 12 }}>Dataset</span>
+            <select className="field" value={src.schema} onChange={(e) => void intoSchema(e.target.value)} title="Where the table goes: My tables, or one of your datasets (a folder of tables, named like sales.orders)">
+              {datasets.map((s) => (
+                <option key={s} value={s}>
+                  {schemaLabel(s)}
+                </option>
+              ))}
+              <option value={NEW_DATASET}>New dataset…</option>
+            </select>
+          </label>
+
           <label className="flex flex-col gap-1">
             <span style={{ color: 'var(--muted)', fontSize: 12 }}>Put the rows into</span>
             <select className="field" value={fill ?? ''} onChange={(e) => updateImport({ ...src, target: e.target.value || null })}>
@@ -109,7 +135,7 @@ function Dialog({ src, queued }: { src: ImportSource; queued: number }) {
                   onChange={async (e) => {
                     const many = src.sheets!.length > 1
                     const tableName = many ? tableNameFrom(e.target.value) : src.tableName
-                    const target = many ? (emptyTableNamed(tableName) ?? src.target) : src.target
+                    const target = many ? (emptyTableNamed(tableName, src.schema) ?? src.target) : src.target
                     updateImport(await writeSheet({ ...src, sheet: e.target.value, tableName, target }))
                   }}
                 >
@@ -200,7 +226,7 @@ function NewTableBody({ src, preview, error, setError, loading }: { src: ImportS
   const tables = useLab((s) => s.tables)
   const [busy, setBusy] = useState(false)
   const [replace, setReplace] = useState(false)
-  const exists = ownTables(tables).some((t) => t.name.toLowerCase() === src.tableName.toLowerCase())
+  const exists = tablesIn(tables, src.schema).some((t) => t.name.toLowerCase() === src.tableName.toLowerCase())
 
   const create = async () => {
     setBusy(true)
@@ -225,7 +251,7 @@ function NewTableBody({ src, preview, error, setError, loading }: { src: ImportS
         {exists && (
           <label className="flex items-center gap-2" style={{ color: 'var(--danger)' }}>
             <input type="checkbox" checked={replace} onChange={(e) => setReplace(e.target.checked)} />
-            Table {src.tableName} exists — replace it
+            Table {qualifiedName(src.schema, src.tableName)} exists — replace it
           </label>
         )}
         <button className="btn" onClick={() => void cancelImport(src)}>
@@ -265,13 +291,13 @@ function FillBody({ src, table, preview, previewError, loading }: { src: ImportS
 
   useEffect(() => {
     let alive = true
-    loadTarget(table)
+    loadTarget(table, src.schema)
       .then((t) => alive && setTarget(t))
       .catch((e) => alive && setError(message(e)))
     return () => {
       alive = false
     }
-  }, [table])
+  }, [table, src.schema])
 
   useEffect(() => {
     let alive = true

@@ -5,6 +5,7 @@ import { SqlEditor, runActive } from './SqlEditor'
 import { forgetFile, openSqlFile, openSqlFiles, saveSqlFile } from './sqlFiles'
 import { isSqlFile, looksLikeTable } from '../core/editorFiles'
 import { Results } from './Results'
+import { MoveDialog } from './MoveDialog'
 import { ImportDialog } from './ImportDialog'
 import { DdlDialog } from './DdlDialog'
 import { GenerateDialog } from './GenerateDialog'
@@ -131,6 +132,7 @@ export function App() {
         </div>
       )}
       <ImportDialog />
+      <MoveDialog />
       <DdlDialog />
       <GenerateDialog />
       <CatalogDialog />
@@ -165,13 +167,15 @@ function useDropZone() {
       e.preventDefault()
       depth = 0
       setDragging(false)
-      // Dropped on a table in the object tree: add the rows to it.
-      const table = (e.target as Element | null)?.closest?.('[data-fill-table]')?.getAttribute('data-fill-table') ?? undefined
+      // Dropped on a table in the object tree: add the rows to it; on a dataset's folder: new tables in it.
+      const at = (e.target as Element | null)?.closest?.('[data-fill-table], [data-fill-schema]')
+      const table = at?.getAttribute('data-fill-table') ?? undefined
+      const schema = at?.getAttribute('data-fill-schema') ?? undefined
       const files = [...(e.dataTransfer?.files ?? [])]
       // .sql scripts open as query tabs; the rest are data.
       void openSqlFiles(files.filter((f) => isSqlFile(f.name)))
       const data = files.filter((f) => !isSqlFile(f.name))
-      if (data.length) void enqueueFiles(data, table)
+      if (data.length) void enqueueFiles(data, table, schema)
     }
     window.addEventListener('dragenter', enter)
     window.addEventListener('dragleave', leave)

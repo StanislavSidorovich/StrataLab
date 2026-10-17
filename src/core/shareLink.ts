@@ -1,7 +1,8 @@
 // `#s=<data>` share links (stage 5): which catalog datasets to load, whether the demo shop is
 // needed, and the query tabs, packed like `#ddl=` (deflate-raw, base64url) in the URL fragment,
 // which never reaches a server. The user's own tables (their files) are not in the link: they
-// stay in this browser, and the share dialog says which ones a query uses.
+// stay in this browser, and the share dialog says which ones a query uses (their own datasets'
+// tables, `sales.orders`, too).
 import { TooLarge, packText, unpackText } from './ddlLink'
 
 export const SHARE_PARAM = 's'
@@ -33,7 +34,13 @@ const DIALECTS = new Set<string>(['duckdb', 'tsql', 'postgres'])
 /** What a set of tabs needs, and the user's own tables they use that a link can't carry. */
 export function planShare(
   tabs: SharedTab[],
-  loaded: { datasets: string[]; demoTables: string[]; ownTables: string[] },
+  loaded: {
+    datasets: string[]
+    demoTables: string[]
+    ownTables: string[]
+    /** tables of the user's own datasets (`sales.orders`): their data can't travel either */
+    ownDatasetTables?: { schema: string; name: string }[]
+  },
 ): { share: Share; notShared: string[] } {
   const text = tabs.map((t) => stripComments(t.sql)).join('\n')
   const uses = (name: string) => new RegExp(`(^|[^\\w."])"?${escapeRe(name)}"?(?![\\w"])`, 'i').test(text)
@@ -41,7 +48,12 @@ export function planShare(
   const datasets = loaded.datasets.filter(usesSchema)
   const demoSet = new Set(loaded.demoTables.map((n) => n.toLowerCase()))
   const demo = loaded.demoTables.some(uses)
-  const notShared = loaded.ownTables.filter((n) => !demoSet.has(n.toLowerCase()) && uses(n))
+  const usesIn = (schema: string, name: string) =>
+    new RegExp(`(^|[^\\w."])"?${escapeRe(schema)}"?\\s*\\.\\s*"?${escapeRe(name)}"?(?![\\w"])`, 'i').test(text)
+  const notShared = [
+    ...loaded.ownTables.filter((n) => !demoSet.has(n.toLowerCase()) && uses(n)),
+    ...(loaded.ownDatasetTables ?? []).filter((t) => usesIn(t.schema, t.name)).map((t) => `${t.schema}.${t.name}`),
+  ]
   return { share: { datasets, demo, tabs: tabs.map((t) => ({ title: t.title, sql: t.sql, ...(t.dialect && t.dialect !== 'duckdb' ? { dialect: t.dialect } : {}) })) }, notShared }
 }
 

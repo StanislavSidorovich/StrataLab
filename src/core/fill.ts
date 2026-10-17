@@ -3,6 +3,9 @@
 // before anything is inserted. Pure: the db layer stages the file and runs these strings.
 import { quoteIdent, quoteString } from './sql'
 
+/** The table as SQL names it: `orders` in main, `"sales"."orders"` in a dataset. */
+const ref = (target: FillTarget, name: string) => (target.schema && target.schema !== 'main' ? `${quoteIdent(target.schema)}.${quoteIdent(name)}` : quoteIdent(name))
+
 export interface TargetColumn {
   name: string
   type: string
@@ -18,6 +21,8 @@ export type TargetConstraint =
 
 export interface FillTarget {
   table: string
+  /** the table's schema: main (the user's own tables) when left out, or one of their datasets */
+  schema?: string
   columns: TargetColumn[]
   constraints: TargetConstraint[]
 }
@@ -164,7 +169,7 @@ export function fillSql(
       const on = k.columns.map((c) => `t.${quoteIdent(c)} = f.${quoteIdent(c)}`).join(' AND ')
       parts.push(
         `SELECT f.__row, 'exists' AS kind, ${quoteString(label)} AS col, ${keyText(k.columns, 'f.')} || ${quoteString(` is already in ${target.table}`)} AS message ` +
-          `FROM ${view} f WHERE ${allNotNull(k.columns, 'f.')} AND EXISTS (SELECT 1 FROM ${quoteIdent(target.table)} t WHERE ${on})`,
+          `FROM ${view} f WHERE ${allNotNull(k.columns, 'f.')} AND EXISTS (SELECT 1 FROM ${ref(target, target.table)} t WHERE ${on})`,
       )
     } else if (k.kind === 'foreign') {
       if (!usable(k.columns)) continue
@@ -175,7 +180,7 @@ export function fillSql(
         : ''
       parts.push(
         `SELECT f.__row, 'foreign' AS kind, ${quoteString(k.columns.join(', '))} AS col, ${keyText(k.columns, 'f.')} || ${quoteString(` is not in ${k.refTable}`)} AS message ` +
-          `FROM ${view} f WHERE ${allNotNull(k.columns, 'f.')} AND NOT EXISTS (SELECT 1 FROM ${quoteIdent(k.refTable)} r WHERE ${on})${self}`,
+          `FROM ${view} f WHERE ${allNotNull(k.columns, 'f.')} AND NOT EXISTS (SELECT 1 FROM ${ref(target, k.refTable)} r WHERE ${on})${self}`,
       )
     } else {
       parts.push(row('check', '', quoteString(`fails CHECK ${k.expression}`), view, `NOT coalesce(${k.expression}, true)`))
@@ -187,7 +192,7 @@ export function fillSql(
     view: viewSql,
     problems: parts.join('\nUNION ALL\n') || `SELECT NULL::BIGINT AS __row, NULL AS kind, NULL AS col, NULL AS message WHERE false`,
     insert: (skip) =>
-      `INSERT INTO ${quoteIdent(target.table)} (${cols}) SELECT ${cols} FROM ${view}` +
+      `INSERT INTO ${ref(target, target.table)} (${cols}) SELECT ${cols} FROM ${view}` +
       (skip ? ` WHERE __row NOT IN (SELECT __row FROM ${skip})` : '') +
       ' ORDER BY __row',
   }
