@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, Check, FolderOpen, HardDrive, HelpCircle, Library, Loader2, Moon, Play, Plus, Save, Square, Sun, Upload, X, Zap } from 'lucide-react'
+import { AlertTriangle, Check, FolderOpen, HardDrive, HelpCircle, Library, Loader2, Moon, Play, Plus, RefreshCw, Save, Square, Sun, Upload, X, Zap } from 'lucide-react'
 import { Sidebar } from './Sidebar'
 import { SqlEditor, runActive } from './SqlEditor'
 import { forgetFile, openSqlFile, openSqlFiles, saveSqlFile } from './sqlFiles'
@@ -11,6 +11,7 @@ import { GenerateDialog } from './GenerateDialog'
 import { CatalogDialog, DatasetProgressCard } from './CatalogDialog'
 import { WelcomeDialog } from './WelcomeDialog'
 import { DialectBar } from './DialectBar'
+import { applyUpdate, useUpdateReady } from '../pwa/register'
 import { engineLoadingLabel, engineLoadingShort } from './EngineLoading'
 import { addTab, closeTab, enqueueFiles, openCatalog, openWelcome, pasteTable, renameTab, stopQuery, tabDialect, toggleTheme, useLab } from './store'
 
@@ -166,6 +167,7 @@ function useDropZone() {
 function TopBar() {
   const engine = useLab((s) => s.engine)
   const theme = useLab((s) => s.theme)
+  const updateReady = useUpdateReady()
   return (
     <header className="h-12 shrink-0 flex items-center gap-1 sm:gap-3 px-2 sm:px-3" style={{ background: 'var(--panel)', borderBottom: '1px solid var(--line)' }}>
       <div className="flex items-center gap-2 font-bold text-[15px] whitespace-nowrap">
@@ -194,10 +196,17 @@ function TopBar() {
       <button className="btn btn-ghost md:hidden" onClick={() => openCatalog()} disabled={engine.status !== 'ready'} aria-label="Sample datasets" title="Sample datasets">
         <Library size={16} />
       </button>
+      {/* Only while a new version waits (src/pwa/register.ts). */}
+      {updateReady && (
+        <button className="btn btn-primary" onClick={applyUpdate} title="A new version of Quaera Lab is ready: reload to use it (your tables and query tabs are kept)" aria-label="Update" data-testid="update">
+          <RefreshCw size={14} /> <span className="hidden sm:inline">Update</span>
+        </button>
+      )}
       <button className="btn btn-ghost" onClick={openWelcome} aria-label="How to use Quaera Lab" title="How to use Quaera Lab">
         <HelpCircle size={16} />
       </button>
-      <button className="btn btn-ghost" onClick={toggleTheme} aria-label="Switch theme" title="Light / dark">
+      {/* On a phone the header is full: the theme button steps aside while Update shows. */}
+      <button className={`btn btn-ghost${updateReady ? ' phone-hidden' : ''}`} onClick={toggleTheme} aria-label="Switch theme" title="Light / dark">
         {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
       </button>
     </header>

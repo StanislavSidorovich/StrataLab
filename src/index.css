@@ -112,6 +112,9 @@ button:disabled {
     padding-left: 6px;
     padding-right: 6px;
   }
+  header .phone-hidden {
+    display: none;
+  }
 }
 .btn-danger {
   background: var(--danger);
