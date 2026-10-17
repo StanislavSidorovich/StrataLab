@@ -5,6 +5,7 @@ import { SqlEditor, runActive } from './SqlEditor'
 import { Results } from './Results'
 import { ImportDialog } from './ImportDialog'
 import { DdlDialog } from './DdlDialog'
+import { engineLoadingLabel, engineLoadingShort } from './EngineLoading'
 import { addTab, closeTab, enqueueFiles, renameTab, toggleTheme, useLab } from './store'
 
 export function App() {
@@ -162,8 +163,10 @@ function EngineBadge() {
   const engine = useLab((s) => s.engine)
   if (engine.status === 'loading')
     return (
-      <span className="flex items-center gap-1.5" style={{ color: 'var(--muted)' }}>
-        <Loader2 size={14} className="animate-spin" /> Starting DuckDB…
+      <span className="flex items-center gap-1.5 whitespace-nowrap tabular-nums" style={{ color: 'var(--muted)' }}>
+        <Loader2 size={14} className="animate-spin" />
+        <span className="hidden sm:inline">{engineLoadingLabel(engine.progress)}</span>
+        <span className="sm:hidden">{engineLoadingShort(engine.progress)}</span>
       </span>
     )
   if (engine.status === 'error')

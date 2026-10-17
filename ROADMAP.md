@@ -13,7 +13,11 @@ Stages follow SPEC §6. A stage is done only when its acceptance criteria pass.
 
 **Overall progress: stage 1 of 6, stage 2 under way (2a done).** The full application = all six stages.
 
-## Where we are (2026-10-17, stage 2a)
+## Where we are (2026-10-17, stage 2a + loading progress)
+
+**DuckDB's first load now shows its progress.** The header says “Loading DuckDB 42%”, then “Starting DuckDB…” (just the percentage on a phone), and the result pane shows a card: a progress bar, “Step 1 of 2 · downloading DuckDB” / “Step 2 of 2 · starting the database”, and a line saying the ~8 MB download happens once and files are never uploaded. Arriving from model.quaera.app adds “Your model opens as soon as the engine is ready” (this closes the known gap where the page showed no sign of the model for a few seconds). Before React arrives, `index.html` shows “Loading StrataLab…” instead of a blank page. Checked with Playwright on the production build with the network throttled to 6 MB/s: the bar climbs smoothly 2% → 99% in 6 s, then step 2; time to ready is the same as before the change (8.0 s vs 8.0 s on a first visit, 2.2 s unthrottled). Dev server, dark mode and phone width checked too. 34 unit tests green.
+
+### Stage 2a (2026-10-17)
 
 **Stage 2a done: a model from model.quaera.app opens as empty tables.** StrataSQL's SQL tab has **Open in StrataLab ↗**; it sends its PostgreSQL DDL in `#ddl=` (deflate-raw + base64url, like its share links). On load, or when the hash changes in an open tab, StrataLab decodes it (`src/core/ddlLink.ts`), clears the hash, turns the script into a DuckDB plan (`src/core/ddlPlan.ts`), asks before replacing tables that already exist (replace / keep and create the rest / cancel), creates the tables (`src/db/ddl.ts`), refreshes the tree and opens a tab with one `SELECT` per table. Anything DuckDB can't take is listed per statement in a dialog. Checked end to end with Playwright on both dev servers (and the production build): the Quaera model's 12 tables, 12 PKs, 7 UNIQUEs and 16 FKs arrive; `INSERT` with a missing `rep_id` fails with DuckDB's foreign-key error; a second click reuses the StrataLab tab and asks before replacing. All 9 StrataSQL models (8 cases + Quaera) decode byte for byte and create with no notes. 31 unit tests green.
 
@@ -40,6 +44,7 @@ The MVP works locally (dev and production build checked in the browser): DuckDB 
 - ✱ **Ask before replacing**: replace all / keep the existing ones and create the rest / cancel. Drops go in reverse creation order; a table another (non-model) table still refers to is kept, with a note.
 - ✱ **No demo shop when arriving with a model**: whoever came from model.quaera.app came for that model, and the demo's `customers` / `orders` could clash with it.
 - ✱ **One StrataLab tab**: StrataSQL's link opens a named window (`stratalab`), and StrataLab also reads `#ddl=` on `hashchange`, so a second click lands in the same tab (a second tab could not lock the saved database and would fall back to memory).
+- ✱ **We download DuckDB's .wasm ourselves** (`src/db/engine.ts`) and hand DuckDB a `blob:` URL, counting bytes on the way. DuckDB's own progress callback only fires when chunks arrive more than 20 ms apart, so on a decent connection it stays silent. The file comes gzip-compressed, so Content-Length is useless for a percentage; `vite.config.ts` puts the unpacked sizes of both .wasm builds into the bundle at build time (`__DUCKDB_WASM_BYTES__`). The bar stops at 99% until the engine has started.
 - Name **StrataLab**, subdomain **lab.quaera.app** (owner, 2026-10-17), in line with StrataSQL and StrataFlow.
 
 ## Next steps (by priority)
@@ -50,14 +55,13 @@ The MVP works locally (dev and production build checked in the browser): DuckDB 
 4. **Stage 2b — fill a table from Excel**: drop a file onto an existing table → map file columns to table columns → type / NOT NULL / FK / UNIQUE check with a row-by-row report (“row 47: customer_id 999 not in customers”) → INSERT.
 5. **Stage 2c — to model.quaera.app**: “Show as model” sends the current tables' DDL to StrataSQL's SQL → model import (its roadmap #32).
 6. **Data generator** for empty modelled tables (respects FKs).
-7. Lazy-load DuckDB's JS and CodeMirror to cut the 285 kB (gzip) first chunk; the .wasm (~8 MB gzip) is already fetched in parallel.
+7. Lazy-load DuckDB's JS and CodeMirror to cut the 290 kB (gzip) first chunk; the .wasm (~8 MB gzip) is already fetched in parallel. ✅ The .wasm download shows its progress (2026-10-17).
 
 ## Known gaps
 
 - Numbers with a space as thousands separator (`1 234,50`) stay text: DuckDB has no thousands option. Could be cleaned before import.
 - A query result is held in memory in full; `SELECT *` on tens of millions of rows will be slow. A row cap with “show more” is a candidate.
 - Multi-statement scripts show only the last statement's result.
-- On a first visit DuckDB (~8 MB) loads before the model is created: for a few seconds the page shows no sign that a model is on its way.
 - Not tried yet on Safari / Firefox (OPFS sync access handles are supported there, but untested).
 - `#ddl=` opened while StrataLab is already open in a tab **not** started from StrataSQL's link (typed address, bookmark) opens a second tab, which gets an in-memory database (the badge says so).
 - DuckDB foreign keys only block: `ON DELETE CASCADE / SET NULL` from a model are left out (noted in the dialog).

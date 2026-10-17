@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { AlertTriangle, ClipboardCopy, FileSpreadsheet, FileText, Lightbulb, Loader2 } from 'lucide-react'
 import { DataGrid } from './DataGrid'
+import { EngineLoading } from './EngineLoading'
 import { useLab } from './store'
 import { splitError } from '../core/dialect'
 import { exportResultCsv, exportResultXlsx } from '../db/export'
@@ -66,6 +67,8 @@ export function Results() {
 
 function ResultBody() {
   const res = useLab((s) => s.results[s.activeTab])
+  const loading = useLab((s) => s.engine.status === 'loading')
+  if (loading) return <EngineLoading />
   if (!res) return <Empty text="Run a query to see its result here — Ctrl+Enter or F5." />
   if (res.status === 'running')
     return (

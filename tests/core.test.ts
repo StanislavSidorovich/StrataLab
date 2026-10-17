@@ -3,6 +3,7 @@ import { decodeText, detectDateFormats, detectDecimalComma, detectDelimiter, sni
 import { quoteIdent, tableNameFrom, uniqueName } from '../src/core/sql'
 import { dialectHints, splitError } from '../src/core/dialect'
 import { cleanHeader, findHeaderRow, isoLocal, toCsv } from '../src/core/csvWrite'
+import { downloadPercent } from '../src/core/progress'
 
 const cp1251 = (s: string) => {
   // minimal encoder for the test: Cyrillic А..я = 0xC0..0xFF, ASCII as is
@@ -100,5 +101,24 @@ describe('Excel → CSV', () => {
     expect(isoLocal(new Date(2026, 9, 17))).toBe('2026-10-17')
     expect(isoLocal(new Date(2026, 9, 17, 9, 5, 0))).toBe('2026-10-17 09:05:00')
     expect(toCsv([['a', 'b'], ['x,y', null], [1.5, 'say "hi"']])).toBe('a,b\n"x,y",\n1.5,"say ""hi"""\n')
+  })
+})
+
+describe('engine download progress', () => {
+  it('counts against the unpacked size known from the build', () => {
+    // gzip on the wire: the header says 8 MB, the browser hands over 36 MB
+    expect(downloadPercent(0, 36_000_000, 8_000_000)).toBe(0)
+    expect(downloadPercent(9_000_000, 36_000_000, 8_000_000)).toBe(25)
+  })
+
+  it('stops at 99% until the engine has started', () => {
+    expect(downloadPercent(36_000_000, 36_000_000, 8_000_000)).toBe(99)
+    expect(downloadPercent(40_000_000, 36_000_000, 0)).toBe(99)
+  })
+
+  it('falls back to the header size, but not once more bytes than that have arrived', () => {
+    expect(downloadPercent(4_000_000, 0, 8_000_000)).toBe(50)
+    expect(downloadPercent(9_000_000, 0, 8_000_000)).toBeNull()
+    expect(downloadPercent(1, 0, 0)).toBeNull()
   })
 })

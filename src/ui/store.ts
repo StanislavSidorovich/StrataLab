@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { Table } from 'apache-arrow'
-import { checkpoint, getEngine, query } from '../db/engine'
+import { checkpoint, getEngine, query, type EngineProgress } from '../db/engine'
 import { loadCatalog, type TableInfo } from '../db/catalog'
 import { closeSource, createTable, openSource, type ImportSource } from '../db/importer'
 import { dialectHints, type DialectHint } from '../core/dialect'
@@ -39,7 +39,7 @@ export type DdlState =
   | { phase: 'error'; message: string }
 
 type EngineState =
-  | { status: 'loading' }
+  | { status: 'loading'; progress: EngineProgress; withModel: boolean }
   | { status: 'ready'; version: string; persistent: boolean }
   | { status: 'error'; error: string }
 
@@ -80,7 +80,7 @@ function initialTheme(): 'light' | 'dark' {
 }
 
 export const useLab = create<State>(() => ({
-  engine: { status: 'loading' },
+  engine: { status: 'loading', progress: { step: 'download', percent: null }, withModel: ddlDataFromHash(location.hash) !== null },
   tables: [],
   ...loadTabs(),
   results: {},
@@ -117,7 +117,9 @@ function addLog(entry: Omit<LogEntry, 'at'>) {
 
 export async function initEngine() {
   try {
-    const e = await getEngine()
+    const e = await getEngine((progress) =>
+      set((s) => (s.engine.status === 'loading' ? { engine: { ...s.engine, progress } } : {})),
+    )
     set({ engine: { status: 'ready', version: e.version, persistent: e.persistent } })
     await refreshCatalog()
     const fromModel = await openDdlFromHash()

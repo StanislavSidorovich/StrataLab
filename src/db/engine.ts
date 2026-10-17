@@ -7,6 +7,10 @@ import mvpWasm from '@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm?url'
 import mvpWorker from '@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?url'
 import ehWasm from '@duckdb/duckdb-wasm/dist/duckdb-eh.wasm?url'
 import ehWorker from '@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url'
+import { downloadPercent } from '../core/progress'
+
+/** Decompressed sizes of the two .wasm files, filled in by vite.config.ts. */
+declare const __DUCKDB_WASM_BYTES__: { eh: number; mvp: number }
 
 const DB_FILE = 'stratalab.duckdb'
 
@@ -17,21 +21,32 @@ export interface Engine {
   persistent: boolean
 }
 
+/** What the first start is doing: fetching the engine (percent, null if unknown), then starting it. */
+export type EngineProgress = { step: 'download'; percent: number | null } | { step: 'start' }
+
 let enginePromise: Promise<Engine> | null = null
 
-export function getEngine(): Promise<Engine> {
-  enginePromise ??= start()
+/** The first caller's `onProgress` hears about the start; later callers just wait. */
+export function getEngine(onProgress?: (p: EngineProgress) => void): Promise<Engine> {
+  enginePromise ??= start(onProgress ?? (() => {}))
   return enginePromise
 }
 
-async function start(): Promise<Engine> {
+async function start(onProgress: (p: EngineProgress) => void): Promise<Engine> {
   const bundle = await duckdb.selectBundle({
     mvp: { mainModule: mvpWasm, mainWorker: mvpWorker },
     eh: { mainModule: ehWasm, mainWorker: ehWorker },
   })
   const worker = new Worker(bundle.mainWorker!)
   const db = new duckdb.AsyncDuckDB(new duckdb.ConsoleLogger(duckdb.LogLevel.WARNING), worker)
-  await db.instantiate(bundle.mainModule, bundle.pthreadWorker)
+  const knownSize = bundle.mainModule === ehWasm ? __DUCKDB_WASM_BYTES__.eh : __DUCKDB_WASM_BYTES__.mvp
+  const wasmUrl = await downloadWasm(bundle.mainModule, knownSize, onProgress)
+  onProgress({ step: 'start' })
+  try {
+    await db.instantiate(wasmUrl, bundle.pthreadWorker)
+  } finally {
+    if (wasmUrl.startsWith('blob:')) URL.revokeObjectURL(wasmUrl)
+  }
 
   let persistent = false
   try {
@@ -46,6 +61,33 @@ async function start(): Promise<Engine> {
   const conn = await db.connect()
   const version = (await db.getVersion()).replace(/^v/, '')
   return { db, conn, version, persistent }
+}
+
+/**
+ * Fetches the .wasm here, counting bytes, and hands DuckDB a blob: URL of it.
+ * DuckDB's own progress callback only fires when chunks arrive more than 20 ms
+ * apart, so on a decent connection the bar would sit at 0% and then jump.
+ */
+async function downloadWasm(url: string, knownSize: number, onProgress: (p: EngineProgress) => void): Promise<string> {
+  onProgress({ step: 'download', percent: downloadPercent(0, knownSize, 0) })
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`Could not download DuckDB (${res.status} ${res.statusText})`)
+  if (!res.body) return url // no streams: let DuckDB fetch it (from the cache by now)
+  const headerSize = Number(res.headers.get('content-length')) || 0
+  const reader = res.body.getReader()
+  const chunks: Uint8Array[] = []
+  let loaded = 0
+  let shown: number | null = -1
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    chunks.push(value)
+    loaded += value.byteLength
+    const percent = downloadPercent(loaded, knownSize, headerSize)
+    if (percent !== shown) onProgress({ step: 'download', percent: (shown = percent) })
+  }
+  // application/wasm lets the worker compile it with instantiateStreaming.
+  return URL.createObjectURL(new Blob(chunks as BlobPart[], { type: 'application/wasm' }))
 }
 
 /**
