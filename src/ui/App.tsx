@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, HardDrive, Library, Loader2, Moon, Play, Plus, Sun, Upload, X, Zap } from 'lucide-react'
+import { AlertTriangle, HardDrive, HelpCircle, Library, Loader2, Moon, Play, Plus, Sun, Upload, X, Zap } from 'lucide-react'
 import { Sidebar } from './Sidebar'
 import { SqlEditor, runActive } from './SqlEditor'
 import { Results } from './Results'
@@ -7,8 +7,9 @@ import { ImportDialog } from './ImportDialog'
 import { DdlDialog } from './DdlDialog'
 import { GenerateDialog } from './GenerateDialog'
 import { CatalogDialog, DatasetProgressCard } from './CatalogDialog'
+import { WelcomeDialog } from './WelcomeDialog'
 import { engineLoadingLabel, engineLoadingShort } from './EngineLoading'
-import { addTab, closeTab, enqueueFiles, openCatalog, renameTab, toggleTheme, useLab } from './store'
+import { addTab, closeTab, enqueueFiles, openCatalog, openWelcome, renameTab, toggleTheme, useLab } from './store'
 
 export function App() {
   const theme = useLab((s) => s.theme)
@@ -86,6 +87,7 @@ export function App() {
       <GenerateDialog />
       <CatalogDialog />
       <DatasetProgressCard />
+      <WelcomeDialog />
     </div>
   )
 }
@@ -162,6 +164,9 @@ function TopBar() {
       {/* The sidebar (with its catalog button) is hidden on a phone. */}
       <button className="btn btn-ghost md:hidden" onClick={() => openCatalog()} disabled={engine.status !== 'ready'} aria-label="Sample datasets" title="Sample datasets">
         <Library size={16} />
+      </button>
+      <button className="btn btn-ghost" onClick={openWelcome} aria-label="How to use Quaera Lab" title="How to use Quaera Lab">
+        <HelpCircle size={16} />
       </button>
       <button className="btn btn-ghost" onClick={toggleTheme} aria-label="Switch theme" title="Light / dark">
         {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}

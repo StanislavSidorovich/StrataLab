@@ -5,7 +5,7 @@ import { loadCatalog, type TableInfo } from '../db/catalog'
 import { closeSource, createTable, openSource, type ImportSource } from '../db/importer'
 import { dialectHints, type DialectHint } from '../core/dialect'
 import { qualifiedName, quoteIdent, sqlName, uniqueName } from '../core/sql'
-import { DEMO_SQL, WELCOME_SQL } from '../data/demo'
+import { DEMO_SQL, DEMO_TABLES, WELCOME_SQL } from '../data/demo'
 import { ddlDataFromHash, decodeDdl, hashWithoutDdl } from '../core/ddlLink'
 import { planDdl, starterSql, type DdlNote, type DdlPlan } from '../core/ddlPlan'
 import { applyPlan, type Existing } from '../db/ddl'
@@ -75,9 +75,12 @@ interface State {
   /** the dataset catalog dialog is open */
   catalogOpen: boolean
   generate: GenerateState | null
+  /** the welcome screen (what's where, how to start) is open */
+  welcomeOpen: boolean
 }
 
 const TABS_KEY = 'stratalab.tabs.v1'
+const WELCOME_KEY = 'stratalab.welcome-seen'
 const THEME_KEY = 'stratalab.theme'
 
 function loadTabs(): { tabs: QueryTab[]; activeTab: string } {
@@ -88,6 +91,16 @@ function loadTabs(): { tabs: QueryTab[]; activeTab: string } {
     /* first visit or blocked storage */
   }
   return { tabs: [{ id: 't1', title: 'Query 1', sql: WELCOME_SQL }], activeTab: 't1' }
+}
+
+/** First visit, and not arriving with a model or a dataset link (those came for that). */
+function firstVisit(): boolean {
+  if (ddlDataFromHash(location.hash) !== null || datasetFromHash(location.hash)) return false
+  try {
+    return localStorage.getItem(WELCOME_KEY) !== '1'
+  } catch {
+    return false
+  }
 }
 
 function initialTheme(): 'light' | 'dark' {
@@ -118,6 +131,7 @@ export const useLab = create<State>(() => ({
   dataset: null,
   catalogOpen: false,
   generate: null,
+  welcomeOpen: firstVisit(),
 }))
 
 /** The user's own tables and views (schema main), without the catalog datasets. */
@@ -246,6 +260,14 @@ export async function loadDemo() {
   addLog({ sql: '-- demo shop', ok: true, text: 'Demo shop loaded: customers, products, orders, order_items' })
 }
 
+/** Drops the demo shop's tables, the ones that refer to others first. */
+export async function removeDemo() {
+  for (const name of [...DEMO_TABLES].reverse()) await query(`DROP TABLE IF EXISTS ${name}`)
+  await checkpoint()
+  await refreshCatalog()
+  addLog({ sql: '-- remove demo shop', ok: true, text: 'Demo shop removed (“Load demo shop” brings it back)' })
+}
+
 export async function dropObject(t: TableInfo) {
   const name = qualifiedName(t.schema, t.name)
   await query(`DROP ${t.kind === 'view' ? 'VIEW' : 'TABLE'} ${name}`)
@@ -317,6 +339,19 @@ export async function cancelImport(src: ImportSource) {
   await clearFill()
   await closeSource(src)
   set((s) => ({ imports: s.imports.filter((i) => i.id !== src.id) }))
+}
+
+export function openWelcome() {
+  set({ welcomeOpen: true })
+}
+
+export function closeWelcome() {
+  set({ welcomeOpen: false })
+  try {
+    localStorage.setItem(WELCOME_KEY, '1')
+  } catch {
+    /* ignore */
+  }
 }
 
 export function toggleTheme() {

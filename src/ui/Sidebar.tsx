@@ -3,7 +3,7 @@
 // right-click menu, as a small menu button).
 import { useEffect, useRef, useState } from 'react'
 import { ChevronDown, ChevronRight, Database, Eye, Folder, Library, MoreHorizontal, Network, Sparkles, Store, Table2, Upload } from 'lucide-react'
-import { dropDataset, dropObject, enqueueFiles, loadDemo, openAndRun, openAsModel, openCatalog, openDataset, openGenerate, ownTables, renameObject, useLab } from './store'
+import { dropDataset, dropObject, removeDemo, enqueueFiles, loadDemo, openAndRun, openAsModel, openCatalog, openDataset, openGenerate, ownTables, renameObject, useLab } from './store'
 import { qualifiedName } from '../core/sql'
 import { exportTable } from '../db/export'
 import type { TableInfo } from '../db/catalog'
@@ -81,8 +81,19 @@ export function Sidebar() {
             <Sparkles size={12} className="shrink-0" /> Generate rows for {empty.length === 1 ? `empty ${empty[0].name}` : `${empty.length} empty tables`}…
           </button>
         )}
+        {hasDemo && (
+          <p className="mx-3 mb-1 flex items-start gap-1.5" style={{ color: 'var(--muted)', fontSize: 12 }}>
+            <Store size={12} className="shrink-0 mt-0.5" />
+            <span>
+              <b>demo</b> = the demo shop: made-up practice data, the same for everyone.{' '}
+              <button className="hover:underline" style={{ color: 'var(--accent)' }} onClick={() => confirm('Remove the demo shop tables (customers, products, orders, order_items)?') && void removeDemo()}>
+                Remove
+              </button>
+            </span>
+          </p>
+        )}
         {tables.map((t) => (
-          <TableNode key={t.name} t={t} />
+          <TableNode key={t.name} t={t} demo={hasDemo && DEMO_TABLES.includes(t.name)} />
         ))}
         {schemas.length > 0 && (
           <div className="px-3 pt-4 pb-1 flex items-center gap-2 font-semibold" style={{ color: 'var(--muted)', fontSize: 11, letterSpacing: 0.4 }}>
@@ -143,7 +154,7 @@ function SchemaNode({ schema, tables }: { schema: string; tables: TableInfo[] })
   )
 }
 
-function TableNode({ t }: { t: TableInfo }) {
+function TableNode({ t, demo = false }: { t: TableInfo; demo?: boolean }) {
   const [open, setOpen] = useState(false)
   const [menu, setMenu] = useState(false)
   const [dropHere, setDropHere] = useState(0)
@@ -171,6 +182,11 @@ function TableNode({ t }: { t: TableInfo }) {
         <button className="truncate text-left flex-1" onClick={() => setOpen(!open)} title={`${name} — double-click to see the first 100 rows${fillable ? '; drop a file here to add rows' : ''}`}>
           {t.name}
         </button>
+        {demo && (
+          <span className="shrink-0 px-1 rounded" style={{ background: 'var(--panel-2)', color: 'var(--muted)', fontSize: 10 }} title="Demo shop: made-up practice data">
+            demo
+          </span>
+        )}
         {t.rows != null && (
           <span className="shrink-0" style={{ color: 'var(--muted)', fontSize: 11 }}>
             {t.rows.toLocaleString()}
