@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, Check, FolderOpen, HardDrive, HelpCircle, Library, Loader2, Moon, Play, Plus, RefreshCw, Save, Square, Sun, Upload, X, Zap } from 'lucide-react'
+import { AlertTriangle, Check, FolderOpen, HardDrive, HelpCircle, Library, Loader2, Moon, Play, Plus, RefreshCw, Save, Square, Share2, Sun, Upload, X, Zap } from 'lucide-react'
 import { Sidebar } from './Sidebar'
 import { SqlEditor, runActive } from './SqlEditor'
 import { forgetFile, openSqlFile, openSqlFiles, saveSqlFile } from './sqlFiles'
@@ -10,17 +10,19 @@ import { DdlDialog } from './DdlDialog'
 import { GenerateDialog } from './GenerateDialog'
 import { CatalogDialog, DatasetProgressCard } from './CatalogDialog'
 import { WelcomeDialog } from './WelcomeDialog'
+import { ShareDialog } from './ShareDialog'
 import { PracticeDialog, TaskBar } from './Practice'
 import { DialectBar } from './DialectBar'
 import { applyUpdate, useUpdateReady } from '../pwa/register'
 import { engineLoadingLabel, engineLoadingShort } from './EngineLoading'
-import { addTab, closeTabs, duplicateTab, enqueueFiles, openCatalog, openWelcome, pasteTable, renameTab, reopenClosedTab, stopQuery, tabDialect, toggleTheme, useLab } from './store'
+import { addTab, closeTabs, duplicateTab, enqueueFiles, openCatalog, openShare, openWelcome, pasteTable, renameTab, reopenClosedTab, stopQuery, tabDialect, toggleTheme, useLab } from './store'
 import { Menu, useLongPress, type MenuItem } from './Menu'
 import { tabsToClose } from '../core/tabs'
 
 export function App() {
   const theme = useLab((s) => s.theme)
   const importError = useLab((s) => s.importError)
+  const notice = useLab((s) => s.notice)
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
   }, [theme])
@@ -112,6 +114,15 @@ export function App() {
           </button>
         </div>
       )}
+      {notice && !importError && (
+        <div className="fixed bottom-4 right-4 z-40 max-w-md rounded-lg p-3 flex gap-2 shadow-lg" style={{ background: 'var(--accent-soft)', color: 'var(--text)', border: '1px solid var(--accent)' }} role="status">
+          <Share2 size={16} className="shrink-0 mt-0.5" style={{ color: 'var(--accent)' }} />
+          <span className="flex-1">{notice}</span>
+          <button onClick={() => useLab.setState({ notice: null })} aria-label="Close">
+            <X size={14} />
+          </button>
+        </div>
+      )}
       {dragging && (
         <div className="fixed inset-0 z-40 flex items-center justify-center pointer-events-none" style={{ background: 'rgba(5,150,105,0.12)', border: '3px dashed var(--accent)' }}>
           <div className="rounded-xl px-6 py-4 flex items-center gap-3 text-base font-semibold shadow-xl" style={{ background: 'var(--panel)' }}>
@@ -125,6 +136,7 @@ export function App() {
       <CatalogDialog />
       <DatasetProgressCard />
       <WelcomeDialog />
+      <ShareDialog />
       <PracticeDialog />
     </div>
   )
@@ -236,6 +248,10 @@ function FileButtons() {
       </button>
       <button className="btn btn-ghost" onClick={(e) => void save(e.shiftKey)} aria-label="Save this tab as a .sql file" title="Save this tab as a .sql file (Ctrl+S); Shift+click or Ctrl+Shift+S: save as…">
         {saved ? <Check size={15} /> : <Save size={15} />} <span className="hidden lg:inline">{saved ? 'Saved' : 'Save'}</span>
+      </button>
+      {/* A phone's header is full: there, Share is in the tab menu (a long press on a tab). */}
+      <button className="btn btn-ghost hidden sm:inline-flex" onClick={() => openShare()} aria-label="Share a link" title="Share a link to these queries and the sample datasets they use">
+        <Share2 size={15} /> <span className="hidden lg:inline">Share</span>
       </button>
     </div>
   )
@@ -361,6 +377,7 @@ function TabMenu({ id, at, rename, close: closeMenu }: { id: string; at: { x: nu
   const items: MenuItem[] = [
     ['Rename', rename, { keys: 'double-click' }],
     ['Duplicate', () => duplicateTab(id)],
+    ['Share a link…', () => (useLab.setState({ activeTab: id }), openShare())],
     'separator',
     ['Close', () => close([id])],
     ['Close others', () => close(others), { disabled: !others.length }],

@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto'
 import { createReadStream, readdirSync, readFileSync, statSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
-import { swFiles } from './src/core/pwa'
+import { swFiles } from './src/core/pwa.ts'
 
 // The .wasm is served gzip-compressed, so the browser can't tell how big it is
 // once unpacked; the loading bar needs that number (src/db/engine.ts).
