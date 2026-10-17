@@ -374,7 +374,7 @@ export function planDdl(sql: string): DdlPlan {
     }
 
     if (/^drop\s+table\b/i.test(stmt)) {
-      note(stmt, 'Not run: StrataLab asks before it replaces a table that already exists')
+      note(stmt, 'Not run: Quaera Lab asks before it replaces a table that already exists')
       continue
     }
     if (IGNORED.test(stmt)) continue

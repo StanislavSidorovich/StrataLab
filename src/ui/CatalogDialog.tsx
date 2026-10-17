@@ -70,7 +70,7 @@ export function CatalogDialog() {
                       Reload
                     </button>
                   )}
-                  <button className="btn btn-ghost ml-auto" onClick={() => copyLink(d.id)} title="A link that opens StrataLab with this dataset loaded">
+                  <button className="btn btn-ghost ml-auto" onClick={() => copyLink(d.id)} title="A link that opens Quaera Lab with this dataset loaded">
                     {copied === d.id ? <Check size={14} /> : <Link2 size={14} />} {copied === d.id ? 'Copied' : 'Link'}
                   </button>
                 </div>

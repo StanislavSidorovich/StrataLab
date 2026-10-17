@@ -41,7 +41,7 @@ export function kindOf(fileName: string): SourceKind | null {
 
 export async function openSource(file: File): Promise<ImportSource> {
   const kind = kindOf(file.name)
-  if (!kind) throw new Error(`${file.name}: StrataLab reads CSV, Excel, Parquet and JSON files`)
+  if (!kind) throw new Error(`${file.name}: Quaera Lab reads CSV, Excel, Parquet and JSON files`)
   const id = `src${++counter}`
   const bytes = new Uint8Array(await file.arrayBuffer())
   const base: ImportSource = { id, fileName: file.name, kind, regName: '', tableName: tableNameFrom(file.name) }

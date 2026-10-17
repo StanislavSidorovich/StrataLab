@@ -489,7 +489,7 @@ export async function openDatasetFromHash(): Promise<boolean> {
   history.replaceState(null, '', location.pathname + location.search + hashWithoutDataset(location.hash))
   const d = datasetById(id)
   if (!d) {
-    set({ importError: `The link asks for a dataset called “${id}”, which StrataLab doesn't have.` })
+    set({ importError: `The link asks for a dataset called “${id}”, which Quaera Lab doesn't have.` })
     return false
   }
   await openDataset(d)

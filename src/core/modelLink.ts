@@ -104,7 +104,7 @@ const cols = (names: string[]) => names.map(sqlName).join(', ')
 export function modelDdl(tables: ModelTable[], label: string): ModelDdl {
   const names = new Set(tables.map((t) => t.name))
   const notes: string[] = []
-  const out = [`-- ${label}: ${tables.length} table${tables.length === 1 ? '' : 's'} from StrataLab (lab.quaera.app)`]
+  const out = [`-- ${label}: ${tables.length} table${tables.length === 1 ? '' : 's'} from Quaera Lab (lab.quaera.app)`]
   for (const t of ordered(tables)) {
     const lines = t.columns.map((c) => {
       let type = postgresType(c.type)

@@ -142,7 +142,7 @@ function TopBar() {
           <path d="M5 7v18c0 2.2 4.9 4 11 4s11-1.8 11-4V7" fill="none" stroke="var(--accent)" strokeWidth="3" />
           <path d="M5 16c0 2.2 4.9 4 11 4s11-1.8 11-4" fill="none" stroke="var(--accent)" strokeWidth="2" opacity="0.6" />
         </svg>
-        StrataLab
+        Quaera Lab
       </div>
       <nav className="hidden lg:flex items-center gap-1 ml-2" style={{ color: 'var(--muted)', fontSize: 12 }}>
         <span>part of</span>
@@ -190,7 +190,7 @@ function EngineBadge() {
     <span
       className="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded-md"
       style={{ background: engine.persistent ? 'var(--accent-soft)' : 'var(--warn-soft)', color: engine.persistent ? 'var(--accent)' : 'var(--warn-text)', fontSize: 12 }}
-      title={engine.persistent ? 'Tables are kept in this browser between visits. Nothing is uploaded.' : 'Tables last until this tab is closed: StrataLab is already open in another tab (it holds the saved database), or this browser has no private file store.'}
+      title={engine.persistent ? 'Tables are kept in this browser between visits. Nothing is uploaded.' : 'Tables last until this tab is closed: Quaera Lab is already open in another tab (it holds the saved database), or this browser has no private file store.'}
     >
       {engine.persistent ? <HardDrive size={13} /> : <Zap size={13} />}
       DuckDB {engine.version} · {engine.persistent ? 'saved in this browser' : 'in memory'}

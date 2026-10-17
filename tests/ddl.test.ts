@@ -109,8 +109,8 @@ describe('DDL plan for DuckDB', () => {
     )
     expect(plan.extras).toEqual([])
     expect(plan.notes.map((n) => n.message)).toEqual([
-      'Not run: StrataLab asks before it replaces a table that already exists',
-      'Not run: StrataLab asks before it replaces a table that already exists',
+      'Not run: Quaera Lab asks before it replaces a table that already exists',
+      'Not run: Quaera Lab asks before it replaces a table that already exists',
     ])
   })
 
