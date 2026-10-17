@@ -114,7 +114,7 @@ interface State {
   postgres: PostgresState
   pgTables: TableInfo[]
   /** what the result pane shows */
-  resultView: 'result' | 'translation' | 'messages' | 'history'
+  resultView: 'result' | 'chart' | 'translation' | 'messages' | 'history'
   /** a copy to PostgreSQL in progress: the table being copied */
   pgCopy: string | null
   /** tabs closed this visit, newest last (the tab menu's “Reopen closed tab”) */
