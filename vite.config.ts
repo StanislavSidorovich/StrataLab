@@ -3,14 +3,24 @@ import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { createHash } from 'node:crypto'
-import { createReadStream, readdirSync, readFileSync, statSync } from 'node:fs'
+import { createReadStream, existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { swFiles } from './src/core/pwa.ts'
+import { EXTENSIONS_DIR } from './src/core/extensions.ts'
 
 // The .wasm is served gzip-compressed, so the browser can't tell how big it is
 // once unpacked; the loading bar needs that number (src/db/engine.ts).
 const wasmBytes = (name: string) => statSync(createRequire(import.meta.url).resolve(`@duckdb/duckdb-wasm/dist/${name}`)).size
+
+// The DuckDB extensions in public/duckdb-ext/ (scripts/fetch-duckdb-extensions.mjs): the engine uses
+// them instead of extensions.duckdb.org when they are there (src/core/extensions.ts).
+const extDir = join('public', EXTENSIONS_DIR)
+const ownExtensions = existsSync(extDir)
+  ? readdirSync(extDir, { recursive: true, withFileTypes: true })
+      .filter((f) => f.isFile())
+      .map((f) => join(f.parentPath, f.name).slice(extDir.length + 1).replace(/\\/g, '/'))
+  : []
 
 // Pyodide (Python for the T-SQL translator, stage 4) is served with the site under pyodide/,
 // like the datasets: no CDN, so it works where a network blocks one, and later offline.
@@ -74,7 +84,10 @@ export default defineConfig({
   worker: { format: 'es' },
   // DuckDB-WASM ships its own workers and .wasm files; they are imported with ?url.
   optimizeDeps: { exclude: ['@duckdb/duckdb-wasm', '@electric-sql/pglite', 'pyodide'] },
-  define: { __DUCKDB_WASM_BYTES__: JSON.stringify({ eh: wasmBytes('duckdb-eh.wasm'), mvp: wasmBytes('duckdb-mvp.wasm') }) },
+  define: {
+    __DUCKDB_WASM_BYTES__: JSON.stringify({ eh: wasmBytes('duckdb-eh.wasm'), mvp: wasmBytes('duckdb-mvp.wasm') }),
+    __OWN_DUCKDB_EXTENSIONS__: JSON.stringify(ownExtensions),
+  },
   build: { chunkSizeWarningLimit: 2000 },
   test: { include: ['tests/**/*.test.ts'] },
 })

@@ -25,6 +25,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      # Parquet and ICU served with the site, not from extensions.duckdb.org (src/core/extensions.ts)
+      - run: npm run extensions
       - run: npm run build
       - uses: actions/upload-pages-artifact@v5
         with:

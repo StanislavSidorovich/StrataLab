@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, Check, FolderOpen, HardDrive, HelpCircle, Library, Loader2, Moon, Play, Plus, RefreshCw, Save, Square, Share2, Sun, Upload, X, Zap } from 'lucide-react'
-import { Sidebar } from './Sidebar'
+import { AlertTriangle, Check, ChevronDown, FileText, HardDrive, HelpCircle, Library, Loader2, Moon, Plus, RefreshCw, Share2, Sun, Upload, X, Zap } from 'lucide-react'
+import { Sidebar, pickBackup, pickFilesFor } from './Sidebar'
 import { SqlEditor, runActive } from './SqlEditor'
 import { forgetFile, openSqlFile, openSqlFiles, saveSqlFile } from './sqlFiles'
 import { isSqlFile, looksLikeTable } from '../core/editorFiles'
@@ -15,7 +15,7 @@ import { PracticeDialog, TaskBar } from './Practice'
 import { DialectBar } from './DialectBar'
 import { applyUpdate, useUpdateReady } from '../pwa/register'
 import { engineLoadingLabel, engineLoadingShort } from './EngineLoading'
-import { addTab, closeTabs, duplicateTab, enqueueFiles, openCatalog, openShare, openWelcome, pasteTable, renameTab, reopenClosedTab, stopQuery, tabDialect, toggleTheme, useLab } from './store'
+import { addTab, closeTabs, downloadBackup, duplicateTab, enqueueFiles, openCatalog, openShare, openWelcome, pasteTable, pasteTableFromClipboard, renameTab, reopenClosedTab, toggleTheme, useLab } from './store'
 import { Menu, useLongPress, type MenuItem } from './Menu'
 import { tabsToClose } from '../core/tabs'
 
@@ -201,6 +201,7 @@ function TopBar() {
         </svg>
         Quaera Lab
       </div>
+      <FileMenu />
       <nav className="hidden lg:flex items-center gap-1 ml-2" style={{ color: 'var(--muted)', fontSize: 12 }}>
         <span>part of</span>
         <a className="hover:underline" href="https://quaera.app" target="_blank" rel="noreferrer">Quaera</a>
@@ -212,8 +213,6 @@ function TopBar() {
         <a className="hover:underline" href="https://pandas.quaera.app" target="_blank" rel="noreferrer">pandas</a>
       </nav>
       <div className="flex-1" />
-      <FileButtons />
-      <RunButton />
       <EngineBadge />
       {/* The sidebar (with its catalog button) is hidden on a phone. */}
       <button className="btn btn-ghost md:hidden" onClick={() => openCatalog()} disabled={engine.status !== 'ready'} aria-label="Sample datasets" title="Sample datasets">
@@ -236,43 +235,40 @@ function TopBar() {
   )
 }
 
-function FileButtons() {
+const isMac = /Mac|iPhone|iPad/.test(navigator.platform)
+const mod = isMac ? '⌘' : 'Ctrl+'
+
+/** The File menu, as in a desktop program: files, data in and out, the whole database. */
+function FileMenu() {
+  const [open, setOpen] = useState(false)
   const [saved, setSaved] = useState(false)
+  const ready = useLab((s) => s.engine.status === 'ready')
+  const busy = useLab((s) => s.backup !== null)
   const save = async (saveAs: boolean) => {
     if (await saveSqlFile(saveAs)) (setSaved(true), setTimeout(() => setSaved(false), 1500))
   }
+  const items: MenuItem[] = [
+    ['New query tab', () => addTab()],
+    ['Open a .sql file…', () => void openSqlFile(), { keys: `${mod}O` }],
+    ['Save', () => void save(false), { keys: `${mod}S` }],
+    ['Save as…', () => void save(true), { keys: isMac ? '⇧⌘S' : 'Ctrl+Shift+S' }],
+    'separator',
+    ['Add CSV / Excel…', () => pickFilesFor(), { disabled: !ready }],
+    ['Paste a table', () => void pasteTableFromClipboard(), { disabled: !ready }],
+    ['Sample datasets…', () => openCatalog(), { disabled: !ready }],
+    'separator',
+    ['Share a link…', () => openShare()],
+    'separator',
+    ['Download database (.duckdb)', () => void downloadBackup(), { disabled: !ready || busy }],
+    ['Restore from a backup…', pickBackup, { disabled: !ready || busy }],
+  ]
   return (
-    <div className="flex items-center">
-      <button className="btn btn-ghost" onClick={() => void openSqlFile()} aria-label="Open a .sql file" title="Open a .sql file in a new tab (Ctrl+O)">
-        <FolderOpen size={15} /> <span className="hidden lg:inline">Open</span>
+    <div className="relative">
+      <button className="btn btn-ghost" onClick={() => setOpen(!open)} aria-haspopup="menu" aria-expanded={open} title="Open, save, share; add data; back up the database">
+        {saved ? <Check size={15} /> : <FileText size={15} />} {saved ? 'Saved' : 'File'} <ChevronDown size={13} />
       </button>
-      <button className="btn btn-ghost" onClick={(e) => void save(e.shiftKey)} aria-label="Save this tab as a .sql file" title="Save this tab as a .sql file (Ctrl+S); Shift+click or Ctrl+Shift+S: save as…">
-        {saved ? <Check size={15} /> : <Save size={15} />} <span className="hidden lg:inline">{saved ? 'Saved' : 'Save'}</span>
-      </button>
-      {/* A phone's header is full: there, Share is in the tab menu (a long press on a tab). */}
-      <button className="btn btn-ghost hidden sm:inline-flex" onClick={() => openShare()} aria-label="Share a link" title="Share a link to these queries and the sample datasets they use">
-        <Share2 size={15} /> <span className="hidden lg:inline">Share</span>
-      </button>
+      {open && <Menu items={items} close={() => setOpen(false)} label="File" align="left" />}
     </div>
-  )
-}
-
-/** Run, or Stop while the active tab's query runs (PostgreSQL tabs can't be stopped). */
-function RunButton() {
-  const engine = useLab((s) => s.engine)
-  const tabId = useLab((s) => s.activeTab)
-  const running = useLab((s) => s.results[s.activeTab]?.status === 'running')
-  const pg = useLab((s) => tabDialect(s.tabs.find((t) => t.id === s.activeTab)) === 'postgres')
-  if (running && !pg)
-    return (
-      <button className="btn btn-danger" onClick={() => void stopQuery(tabId)} title="Stop the running query (Esc in the editor)">
-        <Square size={13} fill="currentColor" /> Stop
-      </button>
-    )
-  return (
-    <button className="btn btn-primary" onClick={runActive} disabled={engine.status !== 'ready' || running} title="Run the selection, or the whole tab (Ctrl+Enter, F5)">
-      {running ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />} Run
-    </button>
   )
 }
 

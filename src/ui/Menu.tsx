@@ -6,9 +6,10 @@ export type MenuItem = [label: string, run: () => void, opts?: { disabled?: bool
 
 /**
  * With `danger`, the last item is set apart in red. With `at`, the menu opens at that point of
- * the window (kept inside it); else under its parent, which is `position: relative`.
+ * the window (kept inside it); else under its parent, which is `position: relative`, lined up
+ * with its right edge (or its left one, with `align="left"`).
  */
-export function Menu({ items, close, danger = false, at, label }: { items: MenuItem[]; close: () => void; danger?: boolean; at?: { x: number; y: number }; label?: string }) {
+export function Menu({ items, close, danger = false, at, label, align = 'right' }: { items: MenuItem[]; close: () => void; danger?: boolean; at?: { x: number; y: number }; label?: string; align?: 'left' | 'right' }) {
   const ref = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState(at)
   useEffect(() => {
@@ -38,7 +39,7 @@ export function Menu({ items, close, danger = false, at, label }: { items: MenuI
       ref={ref}
       role="menu"
       aria-label={label}
-      className={`${at ? 'fixed' : 'absolute right-0 top-7'} z-50 rounded-lg py-1 shadow-lg min-w-56`}
+      className={`${at ? 'fixed' : align === 'left' ? 'absolute left-0 top-9' : 'absolute right-0 top-7'} z-50 rounded-lg py-1 shadow-lg min-w-56`}
       style={{ background: 'var(--panel)', border: '1px solid var(--line)', fontSize: 13, fontWeight: 400, letterSpacing: 0, color: 'var(--text)', ...(pos ? { left: pos.x, top: pos.y } : {}) }}
       onContextMenu={(e) => e.preventDefault()}
     >
