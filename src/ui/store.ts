@@ -12,6 +12,7 @@ import { applyPlan, type Existing } from '../db/ddl'
 import { clearFill } from '../db/fill'
 import { datasetById, datasetFromHash, hashWithoutDataset, type Dataset } from '../data/datasets'
 import { isLoaded, loadDataset, removeDataset, type DatasetProgress } from '../db/datasets'
+import { showAsModel } from '../db/modelExport'
 
 export interface QueryTab {
   id: string
@@ -401,6 +402,18 @@ export async function dropDataset(id: string) {
   await removeDataset(id)
   await refreshCatalog()
   addLog({ sql: `DROP SCHEMA ${id} CASCADE`, ok: true, text: `${datasetById(id)?.title ?? id} removed` })
+}
+
+/**
+ * “Show as model” (stage 2c): the tables of one schema (`main` = the user's own) open as a
+ * conceptual model in model.quaera.app. Called straight from the click: it opens the window first.
+ */
+export function openAsModel(schema: string) {
+  const label = schema === 'main' ? 'My tables' : datasetById(schema)?.title ?? schema
+  showAsModel(schema, label).then(
+    (r) => addLog({ sql: `-- show ${schema} as a model`, ok: true, text: `${label}: ${r.tables} tables sent to model.quaera.app` + (r.notes.length ? `\n${r.notes.join('\n')}` : '') }),
+    (e) => addLog({ sql: `-- show ${schema} as a model`, ok: false, text: String(e instanceof Error ? e.message : e) }),
+  )
 }
 
 /** `#ds=chinook` in the address (a link from quaera.app or a lesson): load and open that dataset. */

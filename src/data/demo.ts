@@ -5,9 +5,41 @@
 export const DEMO_TABLES = ['customers', 'products', 'orders', 'order_items']
 
 export const DEMO_SQL = `
+DROP TABLE IF EXISTS order_items;
+DROP TABLE IF EXISTS orders;
+DROP TABLE IF EXISTS products;
+DROP TABLE IF EXISTS customers;
+
+CREATE TABLE customers (
+  customer_id INTEGER PRIMARY KEY,
+  full_name   VARCHAR NOT NULL,
+  city        VARCHAR,
+  signup_date DATE,
+  channel     VARCHAR
+);
+CREATE TABLE products (
+  product_id   INTEGER PRIMARY KEY,
+  product_name VARCHAR NOT NULL UNIQUE,
+  category     VARCHAR NOT NULL,
+  price        DECIMAL(10,2) NOT NULL CHECK (price >= 0)
+);
+CREATE TABLE orders (
+  order_id    INTEGER PRIMARY KEY,
+  customer_id INTEGER NOT NULL REFERENCES customers (customer_id),
+  ordered_at  TIMESTAMP NOT NULL,
+  status      VARCHAR NOT NULL CHECK (status IN ('delivered', 'shipped', 'cancelled', 'returned'))
+);
+CREATE TABLE order_items (
+  order_id   INTEGER NOT NULL REFERENCES orders (order_id),
+  line_no    INTEGER NOT NULL,
+  product_id INTEGER NOT NULL REFERENCES products (product_id),
+  quantity   INTEGER NOT NULL CHECK (quantity > 0),
+  PRIMARY KEY (order_id, line_no)
+);
+
 SELECT setseed(0.42);
 
-CREATE OR REPLACE TABLE customers AS
+INSERT INTO customers
 SELECT
   i AS customer_id,
   (['Ana', 'João', 'Maria', 'Pedro', 'Inês', 'Rui', 'Olga', 'Ivan', 'Sofia', 'Tiago', 'Elena', 'Marta'])[1 + (i * 7) % 12]
@@ -17,7 +49,7 @@ SELECT
   (['email', 'ads', 'friend', 'social'])[1 + CAST(floor(random() * 4) AS INTEGER)] AS channel
 FROM range(1, 201) t(i);
 
-CREATE OR REPLACE TABLE products AS
+INSERT INTO products
 SELECT * FROM (VALUES
   (1, 'Espresso beans 1kg', 'Coffee', 18.50), (2, 'Filter coffee 500g', 'Coffee', 9.90),
   (3, 'Decaf 250g', 'Coffee', 7.20), (4, 'Green tea 100g', 'Tea', 5.40),
@@ -29,7 +61,7 @@ SELECT * FROM (VALUES
   (15, 'Dark chocolate 85%', 'Snacks', 3.90), (16, 'Pastel de nata x6', 'Snacks', 7.80)
 ) AS p(product_id, product_name, category, price);
 
-CREATE OR REPLACE TABLE orders AS
+INSERT INTO orders
 SELECT
   i AS order_id,
   1 + CAST(floor(random() * 200) AS INTEGER) AS customer_id,
@@ -37,7 +69,7 @@ SELECT
   (['delivered', 'delivered', 'delivered', 'delivered', 'shipped', 'cancelled', 'returned'])[1 + CAST(floor(random() * 7) AS INTEGER)] AS status
 FROM range(1, 1501) t(i);
 
-CREATE OR REPLACE TABLE order_items AS
+INSERT INTO order_items
 SELECT
   o.order_id,
   n AS line_no,

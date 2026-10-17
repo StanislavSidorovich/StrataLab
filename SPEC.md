@@ -47,6 +47,7 @@ Subdomains are separate origins, so data moves in the URL fragment (never sent t
 
 - `#ddl=<deflate+base64url>` — CREATE TABLE statements to run on open (from model.quaera.app).
 - `#ds=<dataset id>` — open a catalog dataset (stage 3).
+- To model.quaera.app: `https://model.quaera.app/#sql=<deflate+base64url>&name=<label>` — CREATE TABLE statements of one schema, opened there as a conceptual model (“Show as model”, stage 2c).
 - `#s=<…>` — shared lab: datasets by id + queries (stage 5). Own files can't be shared by link (they stay local); the share dialog says so.
 
 Exports to pandas: Parquet (keeps types).

@@ -2,8 +2,8 @@
 // dataset as a folder (its own schema), and what you can do with each one (the SSMS
 // right-click menu, as a small menu button).
 import { useEffect, useRef, useState } from 'react'
-import { ChevronDown, ChevronRight, Database, Eye, Folder, Library, MoreHorizontal, Store, Table2, Upload } from 'lucide-react'
-import { dropDataset, dropObject, enqueueFiles, loadDemo, openAndRun, openCatalog, openDataset, ownTables, renameObject, useLab } from './store'
+import { ChevronDown, ChevronRight, Database, Eye, Folder, Library, MoreHorizontal, Network, Store, Table2, Upload } from 'lucide-react'
+import { dropDataset, dropObject, enqueueFiles, loadDemo, openAndRun, openAsModel, openCatalog, openDataset, ownTables, renameObject, useLab } from './store'
 import { qualifiedName } from '../core/sql'
 import { exportTable } from '../db/export'
 import type { TableInfo } from '../db/catalog'
@@ -58,6 +58,16 @@ export function Sidebar() {
       </div>
       <div className="px-3 pt-3 pb-1 flex items-center gap-2 font-semibold" style={{ color: 'var(--muted)', fontSize: 11, letterSpacing: 0.4 }}>
         <Database size={13} /> TABLES {tables.length > 0 && `(${tables.length})`}
+        {tables.some((t) => t.kind === 'table') && (
+          <button
+            className="ml-auto flex items-center gap-1 font-normal hover:underline"
+            style={{ color: 'var(--accent)', letterSpacing: 0 }}
+            onClick={() => openAsModel('main')}
+            title="Open these tables as a conceptual model (entities and relationships) in model.quaera.app"
+          >
+            <Network size={12} /> Show as model ↗
+          </button>
+        )}
       </div>
       <div className="flex-1 overflow-auto pb-3">
         {tables.length === 0 && engine.status === 'ready' && (
@@ -93,6 +103,7 @@ function SchemaNode({ schema, tables }: { schema: string; tables: TableInfo[] })
           ['Reload (undo my changes)…', () => confirm(`Load ${d.title} again? Changes made to its tables are lost.`) && void openDataset(d, true)],
         ] as [string, () => void][])
       : []),
+    ['Show as model in model.quaera.app ↗', () => openAsModel(schema)],
     ['Remove from this browser…', () => confirm(`Remove ${d?.title ?? schema} and its ${tables.length} tables from this browser?`) && void dropDataset(schema)],
   ]
   return (

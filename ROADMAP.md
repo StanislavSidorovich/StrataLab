@@ -5,15 +5,25 @@ Stages follow SPEC §6. A stage is done only when its acceptance criteria pass.
 | Stage | Status | Acceptance |
 |---|---|---|
 | 1. MVP workbench | ✅ done (2026-10-17, v0.1.0) · live at https://lab.quaera.app | Drop a CSV/Excel file, see a preview with types, create a table, JOIN it with another, export the result; tables survive a reload |
-| 2. Ecosystem hops | ⏳ in progress · 2a ✅ 2b ✅ (2026-10-17) · 2c and the data generator left | model.quaera.app → “Open in StrataLab” creates the tables; StrataLab → “Show as model” opens the schema in model.quaera.app; fill a modelled table from Excel with key checks |
+| 2. Ecosystem hops | ⏳ in progress · 2a ✅ 2b ✅ 2c ✅ (2026-10-17) · the data generator left | model.quaera.app → “Open in StrataLab” creates the tables; StrataLab → “Show as model” opens the schema in model.quaera.app; fill a modelled table from Excel with key checks |
 | 3. Dataset catalog | ✅ done (2026-10-17) · 5 of 5 datasets · AdventureWorks to be tried once on lab.quaera.app after deploy | Chinook, Northwind, AdventureWorks, Sakila and Quaera's own dataset load in one click (Parquet served with the site) |
 | 4. Dialects | ⬜ | PostgreSQL mode (PGlite) and T-SQL → DuckDB translation (sqlglot) with a side-by-side diff |
 | 5. Share and practise | ⬜ | Share link (data + query, DB Fiddle style); tasks with automatic result check, linked from quaera.app |
 | 6. Polish | ⬜ | PWA (offline), query history and snippets, EXPLAIN as a tree, charts on results, RU/PT interface |
 
-**Overall progress: stages 1 and 3 of 6 done; stage 2 half done (2a, 2b; 2c and the data generator left).** Roughly two and a half stages' worth of the six. The full application = all six stages.
+**Overall progress: stages 1 and 3 of 6 done; stage 2 nearly done (2a, 2b, 2c; the data generator left).** Roughly 2.8 stages' worth of the six. The full application = all six stages.
 
-## Where we are (2026-10-17, stage 3 done: AdventureWorks)
+## Where we are (2026-10-17, stage 2c: Show as model)
+
+**Stage 2c done: tables go back to model.quaera.app as a model.** **Show as model ↗** (next to TABLES, for the user's own tables; in a dataset folder's menu, for that dataset) reads the schema's tables, columns, PRIMARY KEY, UNIQUE, FOREIGN KEY and CHECK from DuckDB's catalog, writes them as PostgreSQL-flavoured CREATE TABLEs (`src/core/modelLink.ts`, referenced tables first, DuckDB types under the names StrataSQL reads: VARCHAR → text, DOUBLE → double precision, DECIMAL → numeric…), packs them like `#ddl=` and opens `model.quaera.app/#sql=…&name=…`. StrataSQL (its new `#sql=` reader, same commit day) builds the conceptual model with its SQL → model import (#32): tables → entities, foreign keys → relationships, PK → `<pi>`, UNIQUE → `<ai>`; CHECKs are noted as skipped. The window is opened under the name `stratasql` and StrataSQL names its tab so, so a second click lands in the same tab (it reads the new fragment without reloading; the previous model is one Undo away). Nothing goes to a server.
+
+Checked end to end with Playwright on both dev servers and on StrataLab's production build: the demo shop arrives as 4 entities, 3 relationships, Model check “no issues”; after adding two keyed tables a second click updates the same StrataSQL tab (no new tab) to 6 entities, 4 relationships. What StrataLab sends for each of the five datasets is a fixture in StrataSQL's tests: every DuckDB type is known there, and every foreign key becomes a relationship (Chinook 11 entities / 11 relationships, Northwind 13 / 13, AdventureWorks 10 / 12, Sakila 15 / 21, Kaiyo Trading 13 / 0: its source has no foreign keys).
+
+**Fixed on the way: the demo shop had no keys.** `src/data/demo.ts` said “4 tables with keys”, but the tables were made with `CREATE TABLE AS`, so they had none (and showed in a model as four loose boxes with “no primary key”). They are now declared with PRIMARY KEY, foreign keys, a UNIQUE product name and CHECKs (price ≥ 0, quantity > 0, status in its four values), then filled by the same generator: the rows are identical (same seed; compared column by column in DuckDB 1.5.4). Dropping `customers` now fails while `orders` refers to it, as in any database.
+
+48 unit tests green.
+
+### Earlier (2026-10-17, stage 3 done: AdventureWorks)
 
 **Stage 3 done: AdventureWorks LT is the fifth dataset.** `#ds=adventureworks` or “Load” in the catalog brings Microsoft's light AdventureWorks (the `SalesLT` schema of `AdventureWorksLT2022.bak`, MIT) into the schema `adventureworks`: 10 tables, 4,276 rows, 176 kB of Parquet, with every primary key, the 15 UNIQUE keys (`AK_…`), 12 foreign keys and 13 CHECKs of the original. `SalesLT.Product` in a SQL Server tutorial is `adventureworks.Product` here. The category tree (`ProductCategory.ParentProductCategoryID`) loads in rounds like Chinook's employees. The starter query gives revenue by category and parent category (Touring Bikes 220,655.38 first).
 
@@ -82,6 +92,10 @@ The MVP works locally (dev and production build checked in the browser): DuckDB 
 - ✱ **Computed columns stored as values** (`LineTotal`, `SalesOrderNumber`, `TotalDue`): DuckDB's generated columns can't be filled by `INSERT … BY NAME` and would surprise the fill and DDL features; the values are SQL Server's own. `ON DELETE CASCADE` (order lines) left out, like StrataSQL's models.
 - ✱ **Defaults that need nothing extra**: `rowguid` defaults to `uuid()`, `ModifiedDate` to `CAST(now() AS TIMESTAMP)`, `OrderDate` to today via `now()`, so an INSERT can leave them out as in SQL Server. `localtimestamp` and `current_date` were avoided: in DuckDB-WASM they first download the ICU extension.
 - ✱ **Kept as in the source**: the Arabic, Hebrew, Thai and Chinese product descriptions are question marks in Microsoft's backup itself (508 of 762); they are not repaired, the card says so.
+- ✱ **“Show as model” sends PostgreSQL-flavoured DDL in `#sql=`** (same packing as `#ddl=`), not a model file: StrataSQL already turns SQL into a model (#32) with its own rules (intermediate entities, roles, dependent entities), so the link carries only what the database knows. Types are renamed to what StrataSQL reads; a type with no column type in a model (LIST, STRUCT…) goes as text with a note in Messages; a foreign key to a table in another schema is left out with a note.
+- ✱ **One schema per click**: the user's own tables (`main`) from the TABLES header, a dataset from its folder's menu. Mixing them would put two unrelated databases in one model.
+- ✱ **Named window both ways**: StrataLab opens `stratasql`, StrataSQL names its tab `stratasql`, as StrataSQL → StrataLab already uses `stratalab`. The window is opened synchronously on the click, then pointed at the link: a window opened after an await may be blocked.
+- ✱ **Demo shop with keys** (see “Where we are”): it is the first thing a learner shows as a model, and the comment already promised keys.
 - Name **StrataLab**, subdomain **lab.quaera.app** (owner, 2026-10-17), in line with StrataSQL and StrataFlow.
 
 ## Next steps (by priority)
@@ -91,7 +105,7 @@ The MVP works locally (dev and production build checked in the browser): DuckDB 
 3. ✅ **Stage 2a — from model.quaera.app** (2026-10-17): “Open in StrataLab ↗” in StrataSQL's SQL tab → `#ddl=` → empty tables with PK / UNIQUE / CHECK / FK, a starter SELECT tab, a note per statement DuckDB couldn't take. ✅ Live: checked on model.quaera.app → lab.quaera.app (2026-10-17).
 4. ✅ **Stage 2b — fill a table from Excel** (2026-10-17): drop onto a table → match columns → type / NOT NULL / PK / UNIQUE / FK / CHECK report by file row → insert the good rows.
 5. ✅ **Stage 3 — catalog with 5 datasets** (2026-10-17): Chinook, Northwind, AdventureWorks LT, Sakila, Kaiyo Trading; `#ds=` links. **Owner, after deploy:** try `https://lab.quaera.app/#ds=adventureworks` and `#ds=quaera`; quaera.app's SQL track can link to them.
-6. **Stage 2c — to model.quaera.app**: “Show as model” sends the current tables' DDL to StrataSQL's SQL → model import (its roadmap #32).
+6. ✅ **Stage 2c — to model.quaera.app** (2026-10-17): “Show as model ↗” → `model.quaera.app/#sql=…&name=…` → StrataSQL's SQL → model import (its roadmap #32, #34).
 7. **Data generator** for empty modelled tables (respects FKs): pairs with 2b, generate or fill from Excel.
 8. ✅ **Stage 3 — AdventureWorks LT** (2026-10-17). Optional later: NYC Taxi sample.
 9. Lazy-load DuckDB's JS and CodeMirror to cut the 304 kB (gzip) first chunk (stages 2b and 3 added ~14 kB, about 4 kB of it the datasets' CREATE TABLEs, which could load with the catalog). ✅ The .wasm download shows its progress (2026-10-17).
@@ -105,6 +119,7 @@ The MVP works locally (dev and production build checked in the browser): DuckDB 
 - Multi-statement scripts show only the last statement's result.
 - Not tried yet on Safari / Firefox (OPFS sync access handles are supported there, but untested).
 - `#ddl=` opened while StrataLab is already open in a tab **not** started from StrataSQL's link (typed address, bookmark) opens a second tab, which gets an in-memory database (the badge says so).
+- “Show as model” sends the current state of the tables: the model is a new copy in StrataSQL, not linked back (edits there don't come back to StrataLab; StrataSQL's “Open in StrataLab ↗” does that way).
 - DuckDB foreign keys only block: `ON DELETE CASCADE / SET NULL` from a model are left out (noted in the dialog).
 - Mobile: usable to look, not to work (sidebar hidden below 768 px; the catalog has a header button).
 - Filling works only into the user's own tables (schema `main`), not into a dataset's.
