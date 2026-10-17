@@ -5,6 +5,7 @@ import { SqlEditor, runActive } from './SqlEditor'
 import { Results } from './Results'
 import { ImportDialog } from './ImportDialog'
 import { DdlDialog } from './DdlDialog'
+import { GenerateDialog } from './GenerateDialog'
 import { CatalogDialog, DatasetProgressCard } from './CatalogDialog'
 import { engineLoadingLabel, engineLoadingShort } from './EngineLoading'
 import { addTab, closeTab, enqueueFiles, openCatalog, renameTab, toggleTheme, useLab } from './store'
@@ -82,6 +83,7 @@ export function App() {
       )}
       <ImportDialog />
       <DdlDialog />
+      <GenerateDialog />
       <CatalogDialog />
       <DatasetProgressCard />
     </div>

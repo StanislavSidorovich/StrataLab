@@ -5,15 +5,21 @@ Stages follow SPEC §6. A stage is done only when its acceptance criteria pass.
 | Stage | Status | Acceptance |
 |---|---|---|
 | 1. MVP workbench | ✅ done (2026-10-17, v0.1.0) · live at https://lab.quaera.app | Drop a CSV/Excel file, see a preview with types, create a table, JOIN it with another, export the result; tables survive a reload |
-| 2. Ecosystem hops | ⏳ in progress · 2a ✅ 2b ✅ 2c ✅ (2026-10-17) · the data generator left | model.quaera.app → “Open in StrataLab” creates the tables; StrataLab → “Show as model” opens the schema in model.quaera.app; fill a modelled table from Excel with key checks |
+| 2. Ecosystem hops | ✅ done (2026-10-17) · 2a, 2b, 2c and the data generator | model.quaera.app → “Open in StrataLab” creates the tables; StrataLab → “Show as model” opens the schema in model.quaera.app; fill a modelled table from Excel with key checks |
 | 3. Dataset catalog | ✅ done (2026-10-17) · 5 of 5 datasets · AdventureWorks to be tried once on lab.quaera.app after deploy | Chinook, Northwind, AdventureWorks, Sakila and Quaera's own dataset load in one click (Parquet served with the site) |
 | 4. Dialects | ⬜ | PostgreSQL mode (PGlite) and T-SQL → DuckDB translation (sqlglot) with a side-by-side diff |
 | 5. Share and practise | ⬜ | Share link (data + query, DB Fiddle style); tasks with automatic result check, linked from quaera.app |
 | 6. Polish | ⬜ | PWA (offline), query history and snippets, EXPLAIN as a tree, charts on results, RU/PT interface |
 
-**Overall progress: stages 1 and 3 of 6 done; stage 2 nearly done (2a, 2b, 2c; the data generator left).** Roughly 2.8 stages' worth of the six. The full application = all six stages.
+**Overall progress: stages 1, 2 and 3 of 6 done.** Half of the six stages; next is stage 4 (dialects: PostgreSQL mode, T-SQL translation). The full application = all six stages.
 
-## Where we are (2026-10-17, stage 2c: Show as model)
+## Where we are (2026-10-17, stage 2 done: data generator)
+
+**Stage 2 done: the data generator.** Empty tables (a model from model.quaera.app, or the user's own CREATE TABLEs) get sample rows that keep their keys. The tree says **“Generate rows for 15 empty tables…”** under TABLES, and each table's menu has **Generate sample rows…** (that table plus the empty tables it needs are ticked). The dialog lists the tables parents first with what each refers to, rows now, and how many to add; a table that can't be filled says why (“needs rows in customers first: tick it too”, a NOT NULL key to itself in an empty table, a LIST column). The rows are made by DuckDB itself (`src/core/generate.ts` writes the SQL, `src/db/generate.ts` runs it): a foreign key takes the key of a random existing parent row; primary keys and UNIQUE columns continue after the values already there; simple CHECKs steer the values (`stars BETWEEN 1 AND 5` → 1–5, `status IN ('draft', 'published')` → one of those, `price >= 0`) and every CHECK filters the rows (ten times more are made than needed, so two date CHECKs that keep a quarter still fill the table); column names give plausible values (first_name, email, city, country, phone, quantity, discount…). Then a tab with a SELECT per filled table.
+
+How it was checked: empty copies of all five catalog datasets (62 tables, with every PK, FK, UNIQUE and CHECK) filled with 100 rows per table, three times over, in DuckDB 1.5.4: every table got exactly its rows each time and DuckDB rejected nothing. In the browser (dev and production build): Sakila's 15 tables arriving by `#ddl=` filled in one click (2,400 rows, 1,000 rentals with no orphan); from a table's menu, `reviews` ticked its empty parent `authors` too, and the reviews have stars 1–5 and only the two allowed statuses. 52 unit tests green.
+
+### Earlier (2026-10-17, stage 2c: Show as model)
 
 **Stage 2c done: tables go back to model.quaera.app as a model.** **Show as model ↗** (next to TABLES, for the user's own tables; in a dataset folder's menu, for that dataset) reads the schema's tables, columns, PRIMARY KEY, UNIQUE, FOREIGN KEY and CHECK from DuckDB's catalog, writes them as PostgreSQL-flavoured CREATE TABLEs (`src/core/modelLink.ts`, referenced tables first, DuckDB types under the names StrataSQL reads: VARCHAR → text, DOUBLE → double precision, DECIMAL → numeric…), packs them like `#ddl=` and opens `model.quaera.app/#sql=…&name=…`. StrataSQL (its new `#sql=` reader, same commit day) builds the conceptual model with its SQL → model import (#32): tables → entities, foreign keys → relationships, PK → `<pi>`, UNIQUE → `<ai>`; CHECKs are noted as skipped. The window is opened under the name `stratasql` and StrataSQL names its tab so, so a second click lands in the same tab (it reads the new fragment without reloading; the previous model is one Undo away). Nothing goes to a server.
 
@@ -96,6 +102,9 @@ The MVP works locally (dev and production build checked in the browser): DuckDB 
 - ✱ **One schema per click**: the user's own tables (`main`) from the TABLES header, a dataset from its folder's menu. Mixing them would put two unrelated databases in one model.
 - ✱ **Named window both ways**: StrataLab opens `stratasql`, StrataSQL names its tab `stratasql`, as StrataSQL → StrataLab already uses `stratalab`. The window is opened synchronously on the click, then pointed at the link: a window opened after an await may be blocked.
 - ✱ **Demo shop with keys** (see “Where we are”): it is the first thing a learner shows as a model, and the comment already promised keys.
+- ✱ **Generated inside DuckDB, not in JavaScript**: each table is one `CREATE TEMP TABLE … AS SELECT … FROM range(n)` plus one filtered INSERT, so 10,000 rows cost the same as 100 and the same rules (CHECK, keys) that guard the table pick the rows. The CHECK text DuckDB keeps is reused as the filter, so any CHECK holds, not only the ones we read hints from.
+- ✱ **Plausible over random**: a column called email gets `user17@example.com`, first_name a first name, city a city, a code-like key `CUSTOMER-00017`; other text is “Column name 17”, so a learner can see which row is which. Dates fall in 2023–2025. No NULLs except a nullable foreign key with no parent yet (a key to itself on the first fill).
+- ✱ **Never more than asked, sometimes fewer**: when the keys leave too few combinations (a junction table over 5 × 5 rows) the dialog says how many went in and why the rest did not.
 - Name **StrataLab**, subdomain **lab.quaera.app** (owner, 2026-10-17), in line with StrataSQL and StrataFlow.
 
 ## Next steps (by priority)
@@ -106,7 +115,7 @@ The MVP works locally (dev and production build checked in the browser): DuckDB 
 4. ✅ **Stage 2b — fill a table from Excel** (2026-10-17): drop onto a table → match columns → type / NOT NULL / PK / UNIQUE / FK / CHECK report by file row → insert the good rows.
 5. ✅ **Stage 3 — catalog with 5 datasets** (2026-10-17): Chinook, Northwind, AdventureWorks LT, Sakila, Kaiyo Trading; `#ds=` links. **Owner, after deploy:** try `https://lab.quaera.app/#ds=adventureworks` and `#ds=quaera`; quaera.app's SQL track can link to them.
 6. ✅ **Stage 2c — to model.quaera.app** (2026-10-17): “Show as model ↗” → `model.quaera.app/#sql=…&name=…` → StrataSQL's SQL → model import (its roadmap #32, #34).
-7. **Data generator** for empty modelled tables (respects FKs): pairs with 2b, generate or fill from Excel.
+7. ✅ **Data generator** (2026-10-17): sample rows for empty tables that keep PK / UNIQUE / FK / CHECK; from the tree or a table's menu.
 8. ✅ **Stage 3 — AdventureWorks LT** (2026-10-17). Optional later: NYC Taxi sample.
 9. Lazy-load DuckDB's JS and CodeMirror to cut the 304 kB (gzip) first chunk (stages 2b and 3 added ~14 kB, about 4 kB of it the datasets' CREATE TABLEs, which could load with the catalog). ✅ The .wasm download shows its progress (2026-10-17).
 
@@ -123,5 +132,7 @@ The MVP works locally (dev and production build checked in the browser): DuckDB 
 - DuckDB foreign keys only block: `ON DELETE CASCADE / SET NULL` from a model are left out (noted in the dialog).
 - Mobile: usable to look, not to work (sidebar hidden below 768 px; the catalog has a header button).
 - Filling works only into the user's own tables (schema `main`), not into a dataset's.
+- Generated dates don't know about each other unless a CHECK says so (a `RequiredDate` can fall before its `OrderDate`).
+- Generating is about 0.4 s per table: every query is followed by a CHECKPOINT (see the decision on the WAL). Fine for a model; a 100-table schema would take a while.
 - Filling a table that refers to itself: rows pointing at other rows of the same file pass the check, but DuckDB rejects them in one INSERT; the insert then fails as a whole with DuckDB's message (nothing written).
 - Reloading or removing a dataset loses changes made to its tables (the app asks first).

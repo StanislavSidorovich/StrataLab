@@ -12,7 +12,9 @@ import { applyPlan, type Existing } from '../db/ddl'
 import { clearFill } from '../db/fill'
 import { datasetById, datasetFromHash, hashWithoutDataset, type Dataset } from '../data/datasets'
 import { isLoaded, loadDataset, removeDataset, type DatasetProgress } from '../db/datasets'
-import { showAsModel } from '../db/modelExport'
+import { schemaForModel, showAsModel } from '../db/modelExport'
+import { planGeneration, type GenPlan, type GenTable } from '../core/generate'
+import { runGeneration, type GenOutcome } from '../db/generate'
 
 export interface QueryTab {
   id: string
@@ -42,6 +44,12 @@ export type DdlState =
   | { phase: 'report'; title: string | null; created: string[]; notes: DdlNote[] }
   | { phase: 'error'; message: string }
 
+/** The data generator: choosing tables and counts, running, or what it did. */
+export type GenerateState =
+  | { phase: 'choose'; tables: GenTable[]; counts: Record<string, number> }
+  | { phase: 'running'; plan: GenPlan; step: number }
+  | { phase: 'report'; outcomes: GenOutcome[]; problems: GenPlan['problems'] }
+
 /** A catalog dataset being loaded (or what went wrong). */
 export type DatasetState =
   | { phase: 'loading'; dataset: Dataset; progress: DatasetProgress }
@@ -66,6 +74,7 @@ interface State {
   dataset: DatasetState | null
   /** the dataset catalog dialog is open */
   catalogOpen: boolean
+  generate: GenerateState | null
 }
 
 const TABS_KEY = 'stratalab.tabs.v1'
@@ -108,6 +117,7 @@ export const useLab = create<State>(() => ({
   ddl: null,
   dataset: null,
   catalogOpen: false,
+  generate: null,
 }))
 
 /** The user's own tables and views (schema main), without the catalog datasets. */
@@ -363,6 +373,62 @@ export async function runDdl(plan: DdlPlan, replace: boolean) {
 
 export function closeDdl() {
   set({ ddl: null })
+}
+
+// ------------------------------------------------------------------ data generator (stage 2)
+
+/**
+ * Opens the generator over the user's own tables. With `focus`, that table and the empty tables
+ * it needs (its NOT NULL foreign keys, all the way up) are ticked; without, every empty table.
+ */
+export async function openGenerate(focus?: string) {
+  const rows = new Map(ownTables(get().tables).map((t) => [t.name, t.rows ?? 0]))
+  const tables: GenTable[] = (await schemaForModel('main')).map((t) => ({ ...t, rows: rows.get(t.name) ?? 0 }))
+  const byName = new Map(tables.map((t) => [t.name, t]))
+  const chosen = new Set<string>()
+  const need = (name: string) => {
+    const t = byName.get(name)
+    if (!t || chosen.has(name)) return
+    chosen.add(name)
+    const notNull = new Set(t.columns.filter((c) => c.notNull).map((c) => c.name))
+    for (const fk of t.foreignKeys) if (fk.refTable !== name && fk.columns.some((c) => notNull.has(c)) && !byName.get(fk.refTable)?.rows) need(fk.refTable)
+  }
+  if (focus) need(focus)
+  else for (const t of tables) if (!t.rows) chosen.add(t.name)
+  set({ generate: { phase: 'choose', tables, counts: Object.fromEntries(tables.map((t) => [t.name, chosen.has(t.name) ? 100 : 0])) } })
+}
+
+export function setGenerateCount(table: string, n: number) {
+  const g = get().generate
+  if (g?.phase !== 'choose') return
+  set({ generate: { ...g, counts: { ...g.counts, [table]: Math.max(0, Math.min(100_000, Math.floor(n) || 0)) } } })
+}
+
+export function generationPlan(g: Extract<GenerateState, { phase: 'choose' }>): GenPlan {
+  return planGeneration(g.tables, new Map(Object.entries(g.counts)))
+}
+
+export async function runGenerate() {
+  const g = get().generate
+  if (g?.phase !== 'choose') return
+  const plan = generationPlan(g)
+  set({ generate: { phase: 'running', plan, step: 0 } })
+  const outcomes = await runGeneration(plan, (step) => set({ generate: { phase: 'running', plan, step } }))
+  await refreshCatalog()
+  const added = outcomes.reduce((n, o) => n + o.added, 0)
+  addLog({
+    sql: '-- generate sample rows',
+    ok: outcomes.every((o) => !o.error),
+    text: outcomes.map((o) => `${o.table}: ${o.error ? o.error : `${o.added} rows`}`).join(' · ') || 'nothing generated',
+  })
+  const filled = outcomes.filter((o) => o.added > 0)
+  if (filled.length) addTab(filled.map((o) => `SELECT * FROM ${sqlName(o.table)} LIMIT 100;`).join('\n\n') + '\n', 'Generated rows')
+  set({ generate: { phase: 'report', outcomes, problems: plan.problems } })
+  if (added && !plan.problems.length && outcomes.every((o) => !o.error && o.added === o.asked)) set({ generate: null })
+}
+
+export function closeGenerate() {
+  set({ generate: null })
 }
 
 // ------------------------------------------------------------------ dataset catalog (stage 3)

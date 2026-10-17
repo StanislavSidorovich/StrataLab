@@ -2,8 +2,8 @@
 // dataset as a folder (its own schema), and what you can do with each one (the SSMS
 // right-click menu, as a small menu button).
 import { useEffect, useRef, useState } from 'react'
-import { ChevronDown, ChevronRight, Database, Eye, Folder, Library, MoreHorizontal, Network, Store, Table2, Upload } from 'lucide-react'
-import { dropDataset, dropObject, enqueueFiles, loadDemo, openAndRun, openAsModel, openCatalog, openDataset, ownTables, renameObject, useLab } from './store'
+import { ChevronDown, ChevronRight, Database, Eye, Folder, Library, MoreHorizontal, Network, Sparkles, Store, Table2, Upload } from 'lucide-react'
+import { dropDataset, dropObject, enqueueFiles, loadDemo, openAndRun, openAsModel, openCatalog, openDataset, openGenerate, ownTables, renameObject, useLab } from './store'
 import { qualifiedName } from '../core/sql'
 import { exportTable } from '../db/export'
 import type { TableInfo } from '../db/catalog'
@@ -28,6 +28,7 @@ export function Sidebar() {
   const tables = ownTables(all)
   const hasDemo = DEMO_TABLES.every((n) => tables.some((t) => t.name === n))
   const schemas = [...new Set(all.map((t) => t.schema).filter((s) => s !== 'main'))]
+  const empty = tables.filter((t) => t.kind === 'table' && t.rows === 0)
 
   return (
     <aside className="h-full flex flex-col" style={{ background: 'var(--panel)', borderRight: '1px solid var(--line)' }}>
@@ -74,6 +75,11 @@ export function Sidebar() {
           <p className="px-3 py-2" style={{ color: 'var(--muted)' }}>
             No tables yet. Drop CSV or Excel files anywhere on the page.
           </p>
+        )}
+        {empty.length > 0 && (
+          <button className="mx-3 mb-1 flex items-center gap-1 hover:underline text-left" style={{ color: 'var(--accent)', fontSize: 12 }} onClick={() => void openGenerate()}>
+            <Sparkles size={12} className="shrink-0" /> Generate rows for {empty.length === 1 ? `empty ${empty[0].name}` : `${empty.length} empty tables`}…
+          </button>
         )}
         {tables.map((t) => (
           <TableNode key={t.name} t={t} />
@@ -201,7 +207,12 @@ function TableMenu({ t, name, close }: { t: TableInfo; name: string; close: () =
     ['Script SELECT with columns', () => openAndRun(`SELECT ${cols}
 FROM ${name}
 LIMIT 100;`, t.name)],
-    ...(fillable ? ([['Add rows from CSV / Excel…', () => pickFilesFor(t.name)]] as [string, () => void][]) : []),
+    ...(fillable
+      ? ([
+          ['Add rows from CSV / Excel…', () => pickFilesFor(t.name)],
+          ['Generate sample rows…', () => void openGenerate(t.name)],
+        ] as [string, () => void][])
+      : []),
     ['Export as CSV', () => void exportTable(name, t.name, 'csv')],
     ['Export as Parquet (for pandas)', () => void exportTable(name, t.name, 'parquet')],
     [
