@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, Check, ChevronDown, FileText, HardDrive, HelpCircle, Library, Loader2, Moon, Plus, RefreshCw, Share2, Sun, Upload, X, Zap } from 'lucide-react'
+import { AlertTriangle, Check, ChevronDown, FileText, HardDrive, HelpCircle, Library, Loader2, Plus, RefreshCw, Share2, Upload, X, Zap } from 'lucide-react'
 import { Sidebar, pickBackup, pickFilesFor } from './Sidebar'
 import { SqlEditor, runActive } from './SqlEditor'
 import { forgetFile, openSqlFile, openSqlFiles, saveSqlFile } from './sqlFiles'
@@ -16,7 +16,8 @@ import { PracticeDialog, TaskBar } from './Practice'
 import { DialectBar } from './DialectBar'
 import { applyUpdate, useUpdateReady } from '../pwa/register'
 import { engineLoadingLabel, engineLoadingShort } from './EngineLoading'
-import { addTab, closeTabs, downloadBackup, duplicateTab, enqueueFiles, openCatalog, openShare, openWelcome, pasteTable, pasteTableFromClipboard, renameTab, reopenClosedTab, toggleTheme, useLab } from './store'
+import { addTab, closeTabs, downloadBackup, duplicateTab, enqueueFiles, openCatalog, openShare, openWelcome, pasteTable, pasteTableFromClipboard, renameTab, reopenClosedTab, useLab } from './store'
+import { AppearanceButton } from './Appearance'
 import { Menu, useLongPress, type MenuItem } from './Menu'
 import { tabsToClose } from '../core/tabs'
 
@@ -193,7 +194,6 @@ function useDropZone() {
 
 function TopBar() {
   const engine = useLab((s) => s.engine)
-  const theme = useLab((s) => s.theme)
   const updateReady = useUpdateReady()
   return (
     <header className="h-12 shrink-0 flex items-center gap-1 sm:gap-3 px-2 sm:px-3" style={{ background: 'var(--panel)', borderBottom: '1px solid var(--line)' }}>
@@ -231,10 +231,8 @@ function TopBar() {
       <button className="btn btn-ghost" onClick={openWelcome} aria-label="How to use Quaera Lab" title="How to use Quaera Lab">
         <HelpCircle size={16} />
       </button>
-      {/* On a phone the header is full: the theme button steps aside while Update shows. */}
-      <button className={`btn btn-ghost${updateReady ? ' phone-hidden' : ''}`} onClick={toggleTheme} aria-label="Switch theme" title="Light / dark">
-        {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
-      </button>
+      {/* On a phone the header is full: the appearance button steps aside while Update shows. */}
+      <AppearanceButton className={updateReady ? 'phone-hidden' : ''} />
     </header>
   )
 }

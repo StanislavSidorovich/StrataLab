@@ -105,11 +105,21 @@ function completionSchema(tables: TableInfo[], plain: string) {
   return schema
 }
 
+// The editor's background is --code-bg (src/index.css), which the Appearance button can change.
 const lightTheme = EditorView.theme({
-  '&': { backgroundColor: 'var(--panel)', color: 'var(--text)' },
-  '.cm-gutters': { backgroundColor: 'var(--panel)', color: 'var(--muted)', border: 'none' },
+  '&': { backgroundColor: 'var(--code-bg)', color: 'var(--text)' },
+  '.cm-gutters': { backgroundColor: 'var(--code-bg)', color: 'var(--muted)', border: 'none' },
   '.cm-activeLine, .cm-activeLineGutter': { backgroundColor: 'rgba(5,150,105,0.06)' },
 })
+
+// One Dark with its background taken from --code-bg (One Dark's own #282c34 unless changed).
+const darkBackground = EditorView.theme(
+  {
+    '&': { backgroundColor: 'var(--code-bg)' },
+    '.cm-gutters': { backgroundColor: 'var(--code-bg)' },
+  },
+  { dark: true },
+)
 
 export function SqlEditor() {
   const host = useRef<HTMLDivElement>(null)
@@ -125,7 +135,7 @@ export function SqlEditor() {
     dialect === 'postgres'
       ? sql({ dialect: PostgreSQL, schema: completionSchema(pgTables, 'public'), upperCaseKeywords: false })
       : sql({ dialect: dialect === 'tsql' ? MSSQL : PostgreSQL, schema: completionSchema(tables, 'main'), upperCaseKeywords: false })
-  const themeExt = () => (dark ? oneDark : lightTheme)
+  const themeExt = () => (dark ? [Prec.high(darkBackground), oneDark] : lightTheme)
 
   const makeState = (id: string, doc: string) =>
     EditorState.create({
