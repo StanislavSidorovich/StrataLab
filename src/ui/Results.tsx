@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { AlertTriangle, ArrowLeftRight, ClipboardCopy, FileSpreadsheet, FileText, Lightbulb, Loader2 } from 'lucide-react'
 import { DataGrid } from './DataGrid'
 import { EngineLoading } from './EngineLoading'
-import { runSql, setResultView, setTabDialect, tabDialect, useLab } from './store'
+import { STOPPED, runSql, setResultView, setTabDialect, tabDialect, useLab } from './store'
 import { TranslationView } from './TranslationView'
 import { sideBySide } from '../core/diff'
 import { splitError } from '../core/dialect'
@@ -94,9 +94,12 @@ function ResultBody() {
           ? 'Starting PostgreSQL: a ~10 MB download the first time, then from the browser’s cache…'
           : dialect === 'tsql' && translating
             ? 'Translating T-SQL to DuckDB: the translator (Python + sqlglot, ~12 MB) downloads once…'
-            : 'Running…'}
+            : dialect === 'postgres'
+              ? 'Running…'
+              : 'Running… Stop (or Esc in the editor) cancels it.'}
       </div>
     )
+  if (res.status === 'error' && res.error === STOPPED) return <Empty text={`Stopped after ${((res.ms ?? 0) / 1000).toFixed(1)} s, before the query finished.`} />
   if (res.status === 'error') return <ErrorBox error={res.error!} hints={res.hints ?? []} />
   const t = res.table!
   if (t.numCols === 0 || (t.numRows === 0 && t.schema.fields.length === 1 && t.schema.fields[0].name === 'Count'))

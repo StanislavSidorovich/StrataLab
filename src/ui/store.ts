@@ -1,10 +1,11 @@
 import { create } from 'zustand'
 import type { Table } from 'apache-arrow'
-import { checkpoint, getEngine, query, type EngineProgress } from '../db/engine'
+import { cancelQuery, checkpoint, getEngine, isCancelled, query, queryCancellable, type EngineProgress } from '../db/engine'
 import { loadCatalog, type TableInfo } from '../db/catalog'
 import { closeSource, createTable, openSource, type ImportSource } from '../db/importer'
 import { dialectHints, type DialectHint } from '../core/dialect'
 import { qualifiedName, quoteIdent, sqlName, uniqueName } from '../core/sql'
+import { looksLikeTable } from '../core/editorFiles'
 import { DEMO_SQL, DEMO_TABLES, WELCOME_SQL } from '../data/demo'
 import { ddlDataFromHash, decodeDdl, hashWithoutDdl } from '../core/ddlLink'
 import { planDdl, starterSql, type DdlNote, type DdlPlan } from '../core/ddlPlan'
@@ -235,6 +236,7 @@ export const tabDialect = (tab: QueryTab | undefined): Dialect => tab?.dialect ?
 export async function runSql(tabId: string, sql: string) {
   if (!sql.trim()) return
   const dialect = tabDialect(get().tabs.find((t) => t.id === tabId))
+  stopped.delete(tabId)
   set((s) => ({ results: { ...s.results, [tabId]: { ...s.results[tabId], status: 'running' } } }))
   if (dialect === 'postgres') return runOnPostgres(tabId, sql)
   let toRun = sql
@@ -251,14 +253,15 @@ export async function runSql(tabId: string, sql: string) {
     }
     toRun = duckdbScript(translated)
     // One at a time, so the result shown is the last one that returns rows (as in PostgreSQL
-    // tabs; DuckDB-WASM's own multi-statement query returns the first).
+    // tabs), and Stop can end any of them.
     statements = translated.map((st) => st.target!)
   }
   const t0 = performance.now()
+  const isStopped = () => stopped.has(tabId)
   try {
-    let table = await query(statements[0])
+    let table = await queryCancellable(statements[0], tabId, isStopped)
     for (const st of statements.slice(1)) {
-      const next = await query(st)
+      const next = await queryCancellable(st, tabId, isStopped)
       if (next.numCols > 0) table = next
     }
     const ms = performance.now() - t0
@@ -269,11 +272,32 @@ export async function runSql(tabId: string, sql: string) {
     await checkpoint()
     if (WRITES.test(toRun)) await refreshCatalog()
   } catch (e) {
+    if (isCancelled(e)) {
+      const ms = performance.now() - t0
+      set((s) => ({ results: { ...s.results, [tabId]: { status: 'error', error: STOPPED, ms } } }))
+      addLog({ sql, ok: false, text: `Stopped after ${(ms / 1000).toFixed(1)} s` })
+      // Statements of a script that ran before the stop may have changed tables.
+      await checkpoint()
+      if (WRITES.test(toRun)) await refreshCatalog()
+      return
+    }
     const error = String(e instanceof Error ? e.message : e)
     // In a T-SQL tab the hints are what the translation is for; they'd only repeat it.
     set((s) => ({ results: { ...s.results, [tabId]: { status: 'error', error, hints: dialect === 'tsql' ? [] : dialectHints(sql), ms: performance.now() - t0 } } }))
     addLog({ sql, ok: false, text: error.split('\n')[0] })
   }
+}
+
+export const STOPPED = 'Stopped: the query was cancelled before it finished.'
+
+/** Tabs whose run was stopped: a T-SQL script checks this between its statements. */
+const stopped = new Set<string>()
+
+/** The Stop button (Esc in the editor): cancels the tab's DuckDB query. PostgreSQL tabs can't be stopped. */
+export async function stopQuery(tabId: string) {
+  if (get().results[tabId]?.status !== 'running') return
+  stopped.add(tabId)
+  await cancelQuery(tabId)
 }
 
 /** Translates a T-SQL tab's script to DuckDB (loading Python the first time); null if that failed. */
@@ -474,6 +498,27 @@ export async function enqueueFiles(files: File[], target?: string) {
       set({ importError: String(e instanceof Error ? e.message : e) })
     }
   }
+}
+
+/** Cells copied from Excel, Google Sheets or a web page (tab-separated) go through the import dialog. */
+export function pasteTable(text: string) {
+  return enqueueFiles([new File([text], 'pasted.tsv', { type: 'text/tab-separated-values' })])
+}
+
+/** The “Paste a table” button: reads the clipboard (the browser may ask first). */
+export async function pasteTableFromClipboard() {
+  let text = ''
+  try {
+    text = await navigator.clipboard.readText()
+  } catch {
+    set({ importError: 'The browser did not let Quaera Lab read the clipboard. Click outside the editor and press Ctrl+V instead.' })
+    return
+  }
+  if (!looksLikeTable(text)) {
+    set({ importError: 'The clipboard holds no table. Select cells in Excel or Google Sheets (with a header row), copy them, then paste here.' })
+    return
+  }
+  await pasteTable(text)
 }
 
 /** The name of an existing table called `name` that has no rows yet, or null. */

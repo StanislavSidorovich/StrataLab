@@ -7,7 +7,9 @@ import { keymap } from '@codemirror/view'
 import { Compartment, EditorState, Prec } from '@codemirror/state'
 import { MSSQL, PostgreSQL, sql } from '@codemirror/lang-sql'
 import { oneDark } from '@codemirror/theme-one-dark'
-import { runSql, setTabSql, tabDialect, useLab } from './store'
+import { isolateHistory, redo, toggleComment, undo } from '@codemirror/commands'
+import { openSearchPanel } from '@codemirror/search'
+import { runSql, setTabSql, stopQuery, tabDialect, useLab, type Dialect } from './store'
 import type { TableInfo } from '../db/catalog'
 
 const language = new Compartment()
@@ -29,6 +31,52 @@ export function runActive() {
 /** What the active tab would run: the selection, or the whole tab. */
 export function activeSql(): string {
   return activeView ? currentSql(activeView) : ''
+}
+
+/** The editor toolbar's buttons: the same commands as the editor's keys. */
+const COMMANDS = { undo, redo, comment: toggleComment, find: openSearchPanel }
+export function editorCommand(name: keyof typeof COMMANDS) {
+  if (!activeView) return
+  COMMANDS[name](activeView)
+  activeView.focus()
+}
+
+const FORMATTER_LANGUAGE = { duckdb: 'duckdb', tsql: 'transactsql', postgres: 'postgresql' } as const
+
+/**
+ * Format SQL (Shift+Alt+F): the selection, or the whole tab, in the tab's dialect. One change,
+ * so Undo brings the old layout back. Throws when the formatter can't read the SQL.
+ */
+export async function formatActive(dialect: Dialect) {
+  const v = activeView
+  if (!v) return
+  const { format } = await import('sql-formatter')
+  const sel = v.state.selection.main
+  const from = sel.empty ? 0 : sel.from
+  const to = sel.empty ? v.state.doc.length : sel.to
+  const text = v.state.sliceDoc(from, to)
+  if (!text.trim()) return
+  const formatted = format(text, { language: FORMATTER_LANGUAGE[dialect], keywordCase: 'upper', tabWidth: 2 })
+  if (formatted !== text)
+    v.dispatch({
+      changes: { from, to, insert: formatted },
+      selection: sel.empty ? undefined : { anchor: from, head: from + formatted.length },
+      // its own Undo step, never merged with the typing just before it
+      annotations: isolateHistory.of('full'),
+      userEvent: 'input.format',
+    })
+  v.focus()
+}
+
+/** Shows a formatter error where import errors go. */
+function formatError(e: unknown) {
+  const msg = String(e instanceof Error ? e.message : e).split('\n')[0]
+  useLab.setState({ importError: `Could not format this SQL: ${msg}` })
+}
+
+export function formatActiveTab() {
+  const s = useLab.getState()
+  void formatActive(tabDialect(s.tabs.find((t) => t.id === s.activeTab))).catch(formatError)
 }
 
 /** Completion: the default schema's tables as they are, others after their schema name (chinook.Track). */
@@ -72,6 +120,16 @@ export function SqlEditor() {
           keymap.of([
             { key: 'Mod-Enter', run: (v) => (void runSql(id, currentSql(v)), true) },
             { key: 'F5', run: (v) => (void runSql(id, currentSql(v)), true) },
+            { key: 'Shift-Alt-f', run: () => (formatActiveTab(), true) },
+            // Esc stops a running query; otherwise it does what it always does (close completion…).
+            {
+              key: 'Escape',
+              run: () => {
+                if (useLab.getState().results[id]?.status !== 'running') return false
+                void stopQuery(id)
+                return true
+              },
+            },
           ]),
         ),
         basicSetup,

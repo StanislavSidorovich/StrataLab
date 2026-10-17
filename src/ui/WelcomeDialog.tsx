@@ -16,10 +16,10 @@ function pickFiles() {
 }
 
 const PLACES: [string, string, string][] = [
-  ['Left', 'Object tree', 'Your tables, the demo shop and loaded datasets. Click a table to see its columns, double-click for its first 100 rows; the ⋯ menu profiles, exports, renames, adds rows from a file or generates sample rows.'],
-  ['Top', 'Query tabs', 'Each tab speaks DuckDB, SQL Server (T-SQL) or PostgreSQL: the switch is above the editor. Write SQL here, with completion of table and column names. Ctrl+Enter or F5 runs the selection, or the whole tab when nothing is selected. Tabs are kept between visits; double-click a tab to rename it.'],
+  ['Left', 'Object tree', 'Your tables, the demo shop and loaded datasets. Paste a table copied in Excel (Ctrl+V outside the editor). Click a table to see its columns, double-click for its first 100 rows; the ⋯ menu profiles, exports, renames, adds rows from a file or generates sample rows.'],
+  ['Top', 'Query tabs', 'Each tab speaks DuckDB, SQL Server (T-SQL) or PostgreSQL: the switch is above the editor. Write SQL here, with completion of table and column names. Ctrl+Enter or F5 runs the selection, or the whole tab when nothing is selected. Tabs are kept between visits; double-click a tab to rename it. The buttons at the editor’s right undo, redo, comment lines, format the SQL and find.'],
   ['Bottom', 'Result and Messages', 'The result grid shows each column’s type. Copy pastes straight into Excel; CSV and Excel download the result. Messages lists every query and import with its time.'],
-  ['Header', 'Run and the engine', '“DuckDB · saved in this browser” means your tables survive a reload. Nothing is uploaded: the database lives in this browser only.'],
+  ['Header', 'Open, Save, Run and the engine', 'Open and Save read and write .sql files (Ctrl+O, Ctrl+S). While a query runs, Run becomes Stop (Esc in the editor). “DuckDB · saved in this browser” means your tables survive a reload. Nothing is uploaded: the database lives in this browser only.'],
 ]
 
 export function WelcomeDialog() {

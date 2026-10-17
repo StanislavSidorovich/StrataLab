@@ -106,6 +106,26 @@ button:disabled {
   border-color: transparent;
   background: transparent;
 }
+/* A phone's header holds Open, Save, Run, the catalog, help and theme: icon buttons get narrower. */
+@media (max-width: 639px) {
+  header .btn-ghost {
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+}
+.btn-danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+  font-weight: 600;
+}
+.dark .btn-danger {
+  color: #3b1513;
+}
+.btn-danger:hover:not(:disabled) {
+  background: var(--danger);
+  filter: brightness(1.08);
+}
 
 .field {
   border: 1px solid var(--line);

@@ -2,7 +2,7 @@
 // file system (OPFS) when it can, so tables survive a reload; otherwise it
 // stays in memory for this tab only.
 import * as duckdb from '@duckdb/duckdb-wasm'
-import type { Table } from 'apache-arrow'
+import { tableFromIPC, type Table } from 'apache-arrow'
 import mvpWasm from '@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm?url'
 import mvpWorker from '@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?url'
 import ehWasm from '@duckdb/duckdb-wasm/dist/duckdb-eh.wasm?url'
@@ -122,15 +122,55 @@ async function emptyWal(dir: FileSystemDirectoryHandle) {
   await w.close()
 }
 
-export async function query(sql: string): Promise<Table> {
-  const { conn } = await getEngine()
-  return conn.query(sql)
+// One connection, one query at a time, in the order asked. The worker used to do this by
+// itself; a sent (cancellable) query is polled in steps, and another query on the connection
+// between two steps would end it.
+let queue: Promise<unknown> = Promise.resolve()
+function serial<T>(job: () => Promise<T>): Promise<T> {
+  const next = queue.then(job, job)
+  queue = next.catch(() => {})
+  return next
 }
+
+export function query(sql: string): Promise<Table> {
+  return serial(async () => (await getEngine()).conn.query(sql))
+}
+
+/** The tab whose cancellable query is running, if any. */
+let sending: string | null = null
+
+/**
+ * A query the Stop button can cancel: DuckDB runs it in steps (`send`), and between two steps
+ * `cancelQuery` stops it ("query was canceled"). In a script, the statements before the last run
+ * in one go when it starts; only the last one can be stopped. Returns the last statement's result.
+ * `stopped`: asked when its turn comes, so a query stopped while it waited never starts.
+ */
+export function queryCancellable(sql: string, tag: string, stopped: () => boolean): Promise<Table> {
+  return serial(async () => {
+    if (stopped()) throw new Error('query was canceled')
+    const { conn } = await getEngine()
+    sending = tag
+    try {
+      return await tableFromIPC(await conn.send(sql))
+    } finally {
+      sending = null
+    }
+  })
+}
+
+/** Stops the query `queryCancellable` is running for `tag`; false if it isn't running one. */
+export async function cancelQuery(tag: string): Promise<boolean> {
+  if (sending !== tag) return false
+  const { conn } = await getEngine()
+  return conn.cancelSent()
+}
+
+export const isCancelled = (e: unknown) => /query was cancell?ed/i.test(String(e instanceof Error ? e.message : e))
 
 /** Writes the database file to OPFS so that the next visit sees the changes. */
 export async function checkpoint(): Promise<void> {
-  const { conn, persistent } = await getEngine()
-  if (persistent) await conn.query('CHECKPOINT')
+  const { persistent } = await getEngine()
+  if (persistent) await query('CHECKPOINT')
 }
 
 export async function registerBuffer(name: string, bytes: Uint8Array): Promise<void> {

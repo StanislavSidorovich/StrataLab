@@ -1,9 +1,9 @@
 // Above the editor (stage 4): what this tab speaks. DuckDB runs as written; T-SQL is translated
 // to DuckDB first (sqlglot) and the translation can be seen side by side; PostgreSQL runs on a
 // real PostgreSQL (PGlite), a separate database that tables are copied into.
-import { ArrowLeftRight, Copy, Loader2 } from 'lucide-react'
+import { ArrowLeftRight, Copy, Loader2, Redo2, Search, SquareSlash, Undo2, WandSparkles } from 'lucide-react'
 import { copySchemaToPostgres, ownTables, setTabDialect, showTranslation, tabDialect, useLab, type Dialect } from './store'
-import { activeSql } from './SqlEditor'
+import { activeSql, editorCommand, formatActiveTab } from './SqlEditor'
 
 const DIALECTS: { id: Dialect; label: string; short: string; title: string }[] = [
   { id: 'duckdb', label: 'DuckDB', short: 'DuckDB', title: 'Run as written on DuckDB (close to PostgreSQL)' },
@@ -69,6 +69,31 @@ export function DialectBar() {
           )}
         </>
       )}
+
+      <EditorTools />
+    </div>
+  )
+}
+
+const isMac = /Mac|iPhone|iPad/.test(navigator.platform)
+const mod = isMac ? '⌘' : 'Ctrl+'
+
+/** The editor's own commands as buttons: hints at the keys on a computer, the only way on a phone. */
+function EditorTools() {
+  const tools: [string, string, React.ReactNode, () => void][] = [
+    ['Undo', `${mod}Z`, <Undo2 size={14} />, () => editorCommand('undo')],
+    ['Redo', isMac ? '⇧⌘Z' : 'Ctrl+Y', <Redo2 size={14} />, () => editorCommand('redo')],
+    ['Comment or uncomment the lines', `${mod}/`, <SquareSlash size={14} />, () => editorCommand('comment')],
+    ['Format SQL (the selection, or the whole tab)', isMac ? '⇧⌥F' : 'Shift+Alt+F', <WandSparkles size={14} />, formatActiveTab],
+    ['Find and replace', `${mod}F`, <Search size={14} />, () => editorCommand('find')],
+  ]
+  return (
+    <div className="ml-auto flex shrink-0 items-center" role="toolbar" aria-label="Editor">
+      {tools.map(([label, keys, icon, run]) => (
+        <button key={label} className="p-1.5 rounded hover:bg-[var(--panel-2)]" style={{ color: 'var(--muted)' }} onClick={run} aria-label={label} title={`${label} (${keys})`}>
+          {icon}
+        </button>
+      ))}
     </div>
   )
 }
