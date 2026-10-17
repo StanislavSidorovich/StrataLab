@@ -2,7 +2,7 @@
 // schema, with where they come from and their licence. Also the card shown while one loads.
 import { useState } from 'react'
 import { AlertTriangle, Check, EyeOff, ExternalLink, Library, Link2, Loader2, Store, X } from 'lucide-react'
-import { addTab, closeDatasetError, hasDemoTables, hideDemo, loadDemo, openCatalog, openDataset, showDemo, useLab } from './store'
+import { addTab, closeDatasetError, hasDemoTables, hideDemo, loadDemo, openCatalog, openDataset, openPractice, showDemo, useLab } from './store'
 import { WELCOME_SQL } from '../data/demo'
 import { DATASETS, datasetBytes, datasetRows } from '../data/datasets'
 
@@ -126,6 +126,9 @@ function DemoCard() {
             Reload
           </button>
         )}
+        <button className="btn btn-ghost" onClick={() => { openCatalog(false); openPractice() }} title="Worked examples and tasks with a check of your answer">
+          Practice…
+        </button>
         {shown && (
           <button className="btn btn-ghost ml-auto" onClick={hideDemo} title="Take the demo tables out of the table list. Nothing is deleted.">
             <EyeOff size={14} /> Hide

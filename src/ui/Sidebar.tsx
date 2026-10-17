@@ -2,8 +2,8 @@
 // dataset as a folder (its own schema), and what you can do with each one (the SSMS
 // right-click menu, as a small menu button).
 import { createContext, useContext, useRef, useState } from 'react'
-import { ChevronDown, ChevronRight, ClipboardPaste, Database, DatabaseZap, Eye, Folder, Library, Loader2, MoreHorizontal, Network, RefreshCw, Search, Sparkles, Store, Table2, Upload, X } from 'lucide-react'
-import { copySchemaToPostgres, downloadBackup, dropPgObject, dropDataset, dropObject, enqueueFiles, hasDemoTables, hideDemo, loadDemo, openAndRun, openAsModel, openCatalog, openDataset, openGenerate, ownTables, pasteTableFromClipboard, refreshTree, renameObject, restoreBackup, useLab } from './store'
+import { ChevronDown, ChevronRight, ClipboardPaste, Database, DatabaseZap, Eye, Folder, GraduationCap, Library, Loader2, MoreHorizontal, Network, RefreshCw, Search, Sparkles, Store, Table2, Upload, X } from 'lucide-react'
+import { copySchemaToPostgres, downloadBackup, dropPgObject, dropDataset, dropObject, enqueueFiles, hasDemoTables, hideDemo, loadDemo, openAndRun, openAsModel, openCatalog, openDataset, openGenerate, openPractice, ownTables, pasteTableFromClipboard, refreshTree, renameObject, restoreBackup, useLab } from './store'
 import { qualifiedName } from '../core/sql'
 import { treeMatch, type TreeMatch } from '../core/tree'
 import { isDatabaseFile } from '../core/backup'
@@ -94,6 +94,9 @@ export function Sidebar() {
         </button>
         <button className="btn w-full justify-center" disabled={engine.status !== 'ready'} onClick={() => openCatalog()}>
           <Library size={14} /> Sample datasets…
+        </button>
+        <button className="btn w-full justify-center" disabled={engine.status !== 'ready'} onClick={() => openPractice()} title="Business questions on the demo shop: worked examples, and tasks with a check of your answer and hints">
+          <GraduationCap size={14} /> Practice…
         </button>
         {!demoHere && !demoHidden && (
           <button className="btn w-full justify-center" disabled={engine.status !== 'ready'} onClick={() => void loadDemo()}>

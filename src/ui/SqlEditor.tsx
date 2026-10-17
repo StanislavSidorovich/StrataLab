@@ -41,6 +41,21 @@ export function editorCommand(name: keyof typeof COMMANDS) {
   activeView.focus()
 }
 
+/**
+ * Adds a statement at the end of the active tab and scrolls to it (a practice task's
+ * Solution), closing the last statement with a semicolon first so the two stay apart.
+ */
+export function appendToActive(statement: string) {
+  const v = activeView
+  if (!v) return
+  const end = v.state.doc.length
+  const lines = v.state.doc.toString().trimEnd().split('\n')
+  const last = lines[lines.length - 1].trim()
+  const text = (last && !last.endsWith(';') && !last.startsWith('--') ? ';\n' : '\n') + statement
+  v.dispatch({ changes: { from: end, insert: text }, selection: { anchor: end + text.length }, scrollIntoView: true, userEvent: 'input' })
+  v.focus()
+}
+
 const FORMATTER_LANGUAGE = { duckdb: 'duckdb', tsql: 'transactsql', postgres: 'postgresql' } as const
 
 /**
