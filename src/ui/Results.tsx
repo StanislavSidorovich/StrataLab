@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { AlertTriangle, ArrowLeftRight, ChevronDown, ClipboardCopy, Download, History, Lightbulb, Loader2, Search, TableProperties, Trash2, X } from 'lucide-react'
+import { AlertTriangle, ArrowLeftRight, ChartColumn, ChevronDown, ClipboardCopy, Download, History, Lightbulb, Loader2, Search, TableProperties, Trash2, X } from 'lucide-react'
+import { ChartView } from './Chart'
 import { DataGrid } from './DataGrid'
 import { EngineLoading } from './EngineLoading'
 import { Menu, type MenuItem } from './Menu'
@@ -45,7 +46,7 @@ export function Results() {
   const stored = useLab((s) => s.resultView)
   const view = stored === 'translation' && dialect !== 'tsql' ? 'result' : stored
   const changes = translation?.status === 'done' ? translation.statements.reduce((n, st) => n + (st.target == null ? 1 : sideBySide(st.source, st.target).changes), 0) : null
-  const views = dialect === 'tsql' ? (['result', 'translation', 'messages', 'history'] as const) : (['result', 'messages', 'history'] as const)
+  const views = dialect === 'tsql' ? (['result', 'chart', 'translation', 'messages', 'history'] as const) : (['result', 'chart', 'messages', 'history'] as const)
   const fileName = title.replace(/[^\w-]+/g, '_').toLowerCase()
 
   return (
@@ -59,6 +60,11 @@ export function Results() {
             onClick={() => setResultView(v)}
           >
             {v === 'result' && 'Result'}
+            {v === 'chart' && (
+              <span className="flex items-center gap-1.5" title="The result as bars, a line or a scatter" aria-label="Chart">
+                <ChartColumn size={13} /> <span className="hidden sm:inline">Chart</span>
+              </span>
+            )}
             {v === 'translation' && (
               <>
                 <ArrowLeftRight size={13} /> <span className="hidden sm:inline">T-SQL → </span>DuckDB{changes != null && ` (${changes})`}
@@ -83,7 +89,7 @@ export function Results() {
         )}
       </div>
       <div className="flex-1 min-h-0">
-        {view === 'history' ? <HistoryView /> : view === 'messages' ? <Messages /> : view === 'translation' ? <TranslationView /> : <ResultBody />}
+        {view === 'history' ? <HistoryView /> : view === 'messages' ? <Messages /> : view === 'translation' ? <TranslationView /> : view === 'chart' && res?.status === 'done' && res.table && res.table.numRows > 0 ? <ChartView table={res.table} tabId={activeTab} fileName={fileName} /> : <ResultBody />}
       </div>
     </div>
   )

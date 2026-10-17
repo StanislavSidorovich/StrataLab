@@ -17,6 +17,11 @@
   --warn-text: #7a4b00;
   --grid-alt: #fafbfc;
   --sel: #e0f2fe;
+  /* chart series, in this order (validated for colour-blind separation on --panel) */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
   color-scheme: light;
 }
 
@@ -35,6 +40,10 @@
   --warn-text: #fcd34d;
   --grid-alt: #19202a;
   --sel: #10324a;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
   color-scheme: dark;
 }
 
