@@ -48,7 +48,7 @@ Static site (Vite + React + TypeScript), GitHub Pages, custom domain via Cloudfl
 - Import: drag-and-drop anywhere or a button; preview of 50 rows with detected types and total rows; options: table name, separator, date format, decimal comma, header; Excel: sheet, header row.
 - Errors: DuckDB message split into kind and text; T-SQL habits explained.
 - Demo shop dataset (customers, products, orders, order_items) on first visit.
-- Light / dark theme.
+- Light / dark theme; the editor and panel backgrounds can be tinted (Aa, as in StrataSQL).
 
 ## 5. Data exchange between Quaera apps
 
