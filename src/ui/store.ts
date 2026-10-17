@@ -22,6 +22,7 @@ import { copyTitle, rememberClosed } from '../core/tabs'
 import { backupFileName } from '../core/backup'
 import { backupDatabase, restoreDatabase } from '../db/backup'
 import { download } from '../db/export'
+import { decodeShare, hashWithoutShare, shareDataFromHash } from '../core/shareLink'
 
 /** What a query tab speaks (stage 4): DuckDB itself, T-SQL translated to DuckDB, or PostgreSQL (PGlite). */
 export type Dialect = 'duckdb' | 'tsql' | 'postgres'
@@ -113,6 +114,10 @@ interface State {
   closedTabs: QueryTab[]
   /** a database backup or restore in progress */
   backup: 'saving' | 'restoring' | null
+  /** the Share dialog is open */
+  shareOpen: boolean
+  /** a passing message that is not an error (what a shared link opened) */
+  notice: string | null
 }
 
 const TABS_KEY = 'stratalab.tabs.v1'
@@ -131,7 +136,7 @@ function loadTabs(): { tabs: QueryTab[]; activeTab: string } {
 
 /** First visit, and not arriving with a model or a dataset link (those came for that). */
 function firstVisit(): boolean {
-  if (ddlDataFromHash(location.hash) !== null || datasetFromHash(location.hash)) return false
+  if (ddlDataFromHash(location.hash) !== null || datasetFromHash(location.hash) || shareDataFromHash(location.hash)) return false
   try {
     return localStorage.getItem(WELCOME_KEY) !== '1'
   } catch {
@@ -175,6 +180,8 @@ export const useLab = create<State>(() => ({
   pgCopy: null,
   closedTabs: [],
   backup: null,
+  shareOpen: false,
+  notice: null,
 }))
 
 /** The user's own tables and views (schema main), without the catalog datasets. */
@@ -215,9 +222,11 @@ export async function initEngine() {
     if (get().tabs.some((t) => t.dialect === 'postgres')) void startPostgres()
     const fromModel = await openDdlFromHash()
     const fromLink = await openDatasetFromHash()
+    const fromShare = await openShareFromHash()
     window.addEventListener('hashchange', () => {
       void openDdlFromHash()
       void openDatasetFromHash()
+      void openShareFromHash()
     })
     // First visit: an empty database gets the demo shop, so the welcome query works.
     // A user who dropped the demo tables in a saved database does not get them back.
@@ -229,7 +238,7 @@ export async function initEngine() {
       /* ignore */
     }
     // Someone arriving with a model came for that model, not for the demo shop.
-    if (!fromModel && !fromLink && ownTables(get().tables).length === 0 && (!e.persistent || !offered)) await loadDemo()
+    if (!fromModel && !fromLink && !fromShare && ownTables(get().tables).length === 0 && (!e.persistent || !offered)) await loadDemo()
   } catch (e) {
     set({ engine: { status: 'error', error: String(e instanceof Error ? e.message : e) } })
   }
@@ -746,6 +755,11 @@ export async function openDataset(d: Dataset, reload = false) {
     addTab(d.starter, d.title)
     return
   }
+  if (await fetchDataset(d)) openAndRun(d.starter, d.title)
+}
+
+/** Loads a dataset with the progress card; false (and the card shows why) if it failed. */
+async function fetchDataset(d: Dataset): Promise<boolean> {
   set({ dataset: { phase: 'loading', dataset: d, progress: { step: 'download', share: 0 } } })
   const t0 = performance.now()
   try {
@@ -754,10 +768,11 @@ export async function openDataset(d: Dataset, reload = false) {
     set({ dataset: null })
     const rows = d.tables.reduce((n, t) => n + t.rows, 0)
     addLog({ sql: `-- dataset ${d.id}`, ok: true, text: `${d.title}: ${d.tables.length} tables, ${rows.toLocaleString()} rows in schema ${d.id} · ${(performance.now() - t0).toFixed(0)} ms` })
-    openAndRun(d.starter, d.title)
+    return true
   } catch (e) {
     await refreshCatalog()
     set({ dataset: { phase: 'error', dataset: d, message: String(e instanceof Error ? e.message : e) } })
+    return false
   }
 }
 
@@ -795,6 +810,50 @@ export async function openDatasetFromHash(): Promise<boolean> {
   }
   await openDataset(d)
   return true
+}
+
+/**
+ * A shared link (`#s=`, stage 5): loads the datasets it names and the demo shop when its queries
+ * use it, then opens its queries in new tabs next to the user's own. Nothing runs by itself: a
+ * link comes from anyone, and its SQL could change the user's tables.
+ */
+export async function openShareFromHash(): Promise<boolean> {
+  const data = shareDataFromHash(location.hash)
+  if (!data) return false
+  history.replaceState(null, '', location.pathname + location.search + hashWithoutShare(location.hash))
+  let share
+  try {
+    share = await decodeShare(data)
+  } catch (e) {
+    set({ importError: String(e instanceof Error ? e.message : e) })
+    return false
+  }
+  const loadedNow: string[] = []
+  const unknown = share.datasets.filter((id) => !datasetById(id))
+  for (const id of share.datasets) {
+    const d = datasetById(id)
+    if (!d || (await isLoaded(id))) continue
+    if (await fetchDataset(d)) loadedNow.push(d.title)
+  }
+  const demoMissing = share.demo && !DEMO_TABLES.every((n) => ownTables(get().tables).some((t) => t.name === n))
+  if (demoMissing) await loadDemo()
+  let first: string | null = null
+  for (const t of share.tabs) {
+    const id = addTab(t.sql, t.title, t.dialect)
+    first ??= id
+  }
+  if (first) set({ activeTab: first })
+  const n = share.tabs.length
+  const parts = [n === 1 ? 'The shared query opened in a new tab' : `${n} shared queries opened in new tabs`]
+  if (loadedNow.length) parts.push(`${loadedNow.join(', ')} loaded`)
+  if (demoMissing) parts.push('the demo shop loaded')
+  set({ notice: `${parts.join('; ')}. Nothing has run yet: read the query, then press Run.${unknown.length ? ` This version has no dataset called ${unknown.join(', ')}.` : ''}` })
+  addLog({ sql: '-- shared link', ok: true, text: parts.join('; ') })
+  return true
+}
+
+export function openShare(open = true) {
+  set({ shareOpen: open })
 }
 
 // ------------------------------------------------------------------ result → table, backup

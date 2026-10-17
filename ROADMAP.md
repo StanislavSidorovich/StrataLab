@@ -8,12 +8,18 @@ Stages follow SPEC §6. A stage is done only when its acceptance criteria pass.
 | 2. Ecosystem hops | ✅ done (2026-10-17) · 2a, 2b, 2c and the data generator | model.quaera.app → “Open in StrataLab” creates the tables; StrataLab → “Show as model” opens the schema in model.quaera.app; fill a modelled table from Excel with key checks |
 | 3. Dataset catalog | ✅ done (2026-10-17) · 5 of 5 datasets · AdventureWorks to be tried once on lab.quaera.app after deploy | Chinook, Northwind, AdventureWorks, Sakila and Quaera's own dataset load in one click (Parquet served with the site) |
 | 4. Dialects | ✅ done (2026-10-17) · T-SQL → DuckDB (sqlglot), PostgreSQL 18 (PGlite) | PostgreSQL mode (PGlite) and T-SQL → DuckDB translation (sqlglot) with a side-by-side diff |
-| 5. Share and practise | ⬜ | Share link (data + query, DB Fiddle style); tasks with automatic result check, linked from quaera.app |
+| 5. Share and practise | 🟡 started: share links (2026-10-17) | Share link (data + query, DB Fiddle style); tasks with automatic result check, linked from quaera.app |
 | 6. Polish | ⬜ · started: installable app with an Update button (2026-10-17) | PWA (offline), query history and snippets, EXPLAIN as a tree, charts on results, RU/PT interface |
 
 **Overall progress: stages 1–4 of 6 done.** Two thirds of the six stages; next is stage 5 (share links, practice tasks with an automatic result check). The full application = all six stages.
 
-## Where we are (2026-10-17, interface buttons P2: tree search, result and tab menus, database backup)
+## Where we are (2026-10-17, stage 5 started: share links)
+
+**Share** (stage 5, SPEC §5 `#s=`): a **Share** button in the header (on a phone, in the tab menu: long-press a tab) opens a dialog with a link to **this tab** or **all tabs**. The link carries the queries (title, SQL, dialect), the catalog datasets they name (`chinook.`, `sakila.`…) and whether they use the demo shop; it is packed like `#ddl=` (deflate-raw, base64url) in the fragment, so nothing reaches a server (`src/core/shareLink.ts`). The dialog lists what goes in, warns about the user's own tables a query uses (their data can't travel in a link: send the file or a backup) and about long links (over 8,000 characters). Opening a link loads the missing datasets and the demo shop, adds the queries as new tabs next to the user's own and says so in a note; **nothing runs by itself**, since a link comes from anyone. A damaged, cut, oversized (over 1 MB inflated) or unknown link is refused with a plain message; every field is checked.
+
+How it was checked: 99 unit tests green (8 new, `tests/shareLink.test.ts`: what a query needs, comments and strings ignored, round trip with Cyrillic, damaged / newer / oversized links). In Chromium: a query over the demo shop and an imported table → the dialog listed the demo shop and warned about `sales_2024`; the link opened in a fresh browser at 390 px loaded the demo shop, opened the query in a new tab without running it and cleared the fragment; a broken link gave the message; the P2 checks still pass. **Not tried:** a link with a catalog dataset (loading needs the Parquet extension, blocked in this session). First chunk 338.7 → 341.1 kB (gzip).
+
+### Earlier (2026-10-17, interface buttons P2: tree search, result and tab menus, database backup)
 
 **The second round of buttons from the comparison with SSMS, DBeaver and Azure Data Studio** (priority P2 in the project's notes):
 
@@ -169,6 +175,10 @@ The MVP works locally (dev and production build checked in the browser): DuckDB 
 - ✱ **Format makes keywords upper case** (`SELECT`, `FROM`), the usual SSMS / textbook look; names and functions are left as written. One Undo step.
 - ✱ **Pasted text becomes a table only outside the editor**, and only when it looks like one (two lines with the same number of tabs); inside the editor Ctrl+V pastes text as always.
 - ✱ **Save without a picker downloads**, named after the tab (`Query 1.sql`); with a picker, the file a tab came from is remembered for this visit only.
+- ✱ **A shared link never runs its SQL**: the queries open in new tabs and wait for Run. A link is input from anyone and could hold `DROP TABLE`; DB Fiddle runs on open, but its database is a throwaway, ours is the user's own.
+- ✱ **Shared tabs are added, not swapped in**: the user's own tabs stay; the first shared one becomes active.
+- ✱ **Own tables are not packed into the link** (SPEC §5): even small ones would make links that messengers cut; the dialog names them and points to the file or the backup.
+- ✱ **Share on a phone sits in the tab menu**: the 390 px header has no room left.
 - ✱ **Backup = a .duckdb file, not a zip of Parquet** (`EXPORT DATABASE`): one file that DuckDB, Python and DBeaver open as is, no zip library, and Parquet export needs an extension from the network. Made by attaching a new file and `COPY FROM DATABASE … (SCHEMA)`, then filling the tables parents first: DuckDB's own copy of the rows goes alphabetically and fails on foreign keys (order_items before orders). A backup from a newer DuckDB may not open in an older one.
 - ✱ **Restore replaces, it does not merge**: two databases with the same table names have no right merge; the app asks first and says to download a backup before. All in one transaction.
 - ✱ **Tree search filters, it does not only highlight**: in a dataset with dozens of tables the point is to see the few that match; columns count too (“which table has `email`?”).
@@ -191,7 +201,7 @@ The MVP works locally (dev and production build checked in the browser): DuckDB 
 11. ✅ **Stage 4 — dialects** (2026-10-17): T-SQL → DuckDB with a side-by-side diff; PostgreSQL 18 (PGlite) with copy from DuckDB. **Owner, after deploy:** on lab.quaera.app switch a tab to T-SQL and run something (the first time downloads the translator), and copy a dataset to PostgreSQL from its folder's ⋯ menu (not possible in the cloud session, see “How it was checked”).
 12. ✅ **PWA: Update button and Install as app** (2026-10-17, stage 6 started). **Owner, after deploy:** open lab.quaera.app once, then after the next deploy the **Update** button should appear; try Install as app on a computer and a phone. Full offline datasets need the Parquet extension served with the site (Known gaps).
 13. ✅ **Interface buttons P1 and P2** (2026-10-17): Stop, Open / Save .sql, Paste a table, Format, editor toolbar; tree search, result and tab menus, database backup, shortcuts in the guide. **Owner, after deploy:** export a result as Parquet once (the cloud session can't reach the extension).
-14. **Stage 5 — share and practise**: `#s=` share links (datasets by id + queries + dialect), tasks with an automatic result check, links from quaera.app lessons.
+14. **Stage 5 — share and practise**: ✅ `#s=` share links (2026-10-17; **owner, after deploy:** share a query over a sample dataset and open it in another browser); next: tasks with an automatic result check, links from quaera.app lessons.
 
 ## Known gaps
 

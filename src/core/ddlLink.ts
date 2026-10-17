@@ -24,11 +24,16 @@ function fromBase64Url(text: string): Uint8Array {
   return Uint8Array.from(bin, (c) => c.charCodeAt(0))
 }
 
-export async function encodeDdl(sql: string): Promise<string> {
-  return toBase64Url(await pipe(new TextEncoder().encode(sql), new CompressionStream('deflate-raw')))
+/** Text packed for a URL fragment: UTF-8, deflate-raw, base64url (also the `#s=` share links). */
+export async function packText(text: string): Promise<string> {
+  return toBase64Url(await pipe(new TextEncoder().encode(text), new CompressionStream('deflate-raw')))
 }
 
-class TooLarge extends Error {}
+export async function encodeDdl(sql: string): Promise<string> {
+  return packText(sql)
+}
+
+export class TooLarge extends Error {}
 
 /** Inflates chunk by chunk and stops at the limit, so a crafted link cannot fill the memory. */
 async function inflate(bytes: Uint8Array, limit: number): Promise<Uint8Array> {
@@ -54,10 +59,15 @@ async function inflate(bytes: Uint8Array, limit: number): Promise<Uint8Array> {
   return out
 }
 
+/** Text back from {@link packText}; throws TooLarge past `limit` bytes, or an error for a damaged link. */
+export async function unpackText(data: string, limit: number): Promise<string> {
+  return new TextDecoder('utf-8', { fatal: true }).decode(await inflate(fromBase64Url(data), limit))
+}
+
 /** The script back from {@link encodeDdl}; a damaged or oversized link throws a readable error. */
 export async function decodeDdl(data: string): Promise<string> {
   try {
-    return new TextDecoder('utf-8', { fatal: true }).decode(await inflate(fromBase64Url(data), MAX_DDL_BYTES))
+    return await unpackText(data, MAX_DDL_BYTES)
   } catch (e) {
     if (e instanceof TooLarge) throw new Error('The model in the link is too large to open.')
     throw new Error('The model link is damaged or incomplete (it may have been cut when it was copied).')
