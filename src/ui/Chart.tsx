@@ -118,7 +118,7 @@ export function ChartView({ table, tabId, fileName }: { table: Table; tabId: str
         </div>
         <label className="flex items-center gap-1 min-w-0">
           <span style={{ color: 'var(--muted)' }}>X</span>
-          <select className="field min-w-0 max-w-[6.5rem] sm:max-w-[14rem]" style={{ paddingTop: 3, paddingBottom: 3 }} value={spec.x} onChange={(e) => setSpec({ ...spec, x: Number(e.target.value) })} aria-label="X axis">
+          <select className="field min-w-0 max-w-[5.5rem] sm:max-w-[14rem]" style={{ paddingTop: 3, paddingBottom: 3 }} value={spec.x} onChange={(e) => setSpec({ ...spec, x: Number(e.target.value) })} aria-label="X axis">
             <option value={-1}>Row number</option>
             {cols.map((c, i) => (
               <option key={i} value={i}>{c.name}</option>
@@ -164,7 +164,7 @@ function SeriesPicker({ spec, cols, numberCols, onChange }: { spec: ChartSpec; c
   return (
     <div className="relative flex items-center gap-1 min-w-0" ref={ref}>
       <span style={{ color: 'var(--muted)' }}>Y</span>
-      <button className="field flex items-center gap-1 min-w-0 max-w-[6.5rem] sm:max-w-[16rem]" style={{ paddingTop: 3, paddingBottom: 3 }} onClick={() => setOpen(!open)} aria-haspopup="true" aria-expanded={open} aria-label="Y axis" title={names}>
+      <button className="field flex items-center gap-1 min-w-0 max-w-[5.5rem] sm:max-w-[16rem]" style={{ paddingTop: 3, paddingBottom: 3 }} onClick={() => setOpen(!open)} aria-haspopup="true" aria-expanded={open} aria-label="Y axis" title={names}>
         <span className="truncate">{names}</span>
         <ChevronDown size={12} className="shrink-0" />
       </button>
@@ -230,7 +230,20 @@ function Plot({ spec, data, xKind, xName, yNames, ref }: PlotProps) {
   const yTicks = niceTicks(lo, hi, H < 260 ? 3 : 5)
   const yLabels = yTicks.map(compactNumber)
   const legend = yNames.length > 1
-  const top = 34
+  // The legend has its own rows above the plot (wrapping on a narrow screen), so it never covers a mark.
+  const legendItems: { label: string; x: number; y: number }[] = []
+  {
+    let x = 0
+    let y = 16
+    for (const name of yNames) {
+      const label = clip(name, phone ? 14 : 24)
+      const w = 14 + label.length * 7
+      if (x > 0 && x + w > W - 16) (x = 0), (y += 18)
+      legendItems.push({ label, x: 16 + x, y })
+      x += w + 16
+    }
+  }
+  const top = legend ? legendItems[legendItems.length - 1].y + 18 : 34
   const left = Math.max(...yLabels.map((l) => l.length)) * 7 + 14
   const right = 16
   const bottom = 40
@@ -301,6 +314,17 @@ function Plot({ spec, data, xKind, xName, yNames, ref }: PlotProps) {
     setHover(best.i < 0 ? null : { i: best.i, s: best.s, px, py })
   }
 
+  // The tooltip sits beside what it describes, never on it: right of the hovered bars, line point or
+  // dot (left of them on the right half), level with the highest value there.
+  const tipPlace = () => {
+    if (!hover) return {}
+    const i = hover.i
+    const vals = (spec.type === 'scatter' ? [data.ys[hover.s ?? 0][i]] : data.ys.map((s) => s[i])).filter((v): v is number => v != null)
+    const y = vals.length ? sy(Math.max(...vals)) : top
+    const [a, b] = band && spec.type === 'bar' ? [left + i * bw, left + (i + 1) * bw] : [sx(data.xs[i]) - 10, sx(data.xs[i]) + 10]
+    const side = (a + b) / 2 > W / 2 ? { right: W - a + 6 } : { left: b + 6 }
+    return { top: Math.min(Math.max(4, y - 8), H - 24 - 20 * (vals.length + 1)), ...side }
+  }
   const xText = (i: number) => (band ? data.labels[i] : data.scale === 'time' ? timeText(data.xs[i], xKind) : fmtValue(data.xs[i]))
   const title = `${yNames.join(', ')} by ${xName}`
 
@@ -322,20 +346,12 @@ function Plot({ spec, data, xKind, xName, yNames, ref }: PlotProps) {
           <rect width={W} height={H} style={{ fill: 'var(--panel)' }} />
           {legend ? (
             <g>
-              {(() => {
-                let x = left
-                return yNames.map((name, s) => {
-                  const label = clip(name, phone ? 12 : 24)
-                  const g = (
-                    <g key={s} transform={`translate(${x},14)`}>
-                      <rect y={-8} width={10} height={10} rx={2} style={{ fill: `var(--series-${s + 1})` }} />
-                      <text x={14} style={{ fill: 'var(--text)', fontSize: 12 }}>{label}</text>
-                    </g>
-                  )
-                  x += 14 + label.length * 7 + 14
-                  return g
-                })
-              })()}
+              {legendItems.map(({ label, x, y }, s) => (
+                <g key={s} transform={`translate(${x},${y})`}>
+                  <rect y={-9} width={10} height={10} rx={2} style={{ fill: `var(--series-${s + 1})` }} />
+                  <text x={14} style={{ fill: 'var(--text)', fontSize: 12 }}>{label}</text>
+                </g>
+              ))}
             </g>
           ) : (
             <text x={left} y={16} style={{ fill: 'var(--text)', fontSize: 12, fontWeight: 600 }}>{clip(title, Math.floor((W - left) / 7))}</text>
@@ -408,8 +424,7 @@ function Plot({ spec, data, xKind, xName, yNames, ref }: PlotProps) {
             border: '1px solid var(--line)',
             fontSize: 12,
             maxWidth: 260,
-            top: Math.min(Math.max(4, hover.py + 14), H - 90),
-            ...(hover.px > W / 2 ? { right: W - hover.px + 12 } : { left: hover.px + 12 }),
+            ...tipPlace(),
           }}
         >
           <div className="font-semibold truncate">
