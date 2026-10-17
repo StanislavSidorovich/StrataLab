@@ -4,6 +4,7 @@ import { Sidebar } from './Sidebar'
 import { SqlEditor, runActive } from './SqlEditor'
 import { Results } from './Results'
 import { ImportDialog } from './ImportDialog'
+import { DdlDialog } from './DdlDialog'
 import { addTab, closeTab, enqueueFiles, renameTab, toggleTheme, useLab } from './store'
 
 export function App() {
@@ -78,6 +79,7 @@ export function App() {
         </div>
       )}
       <ImportDialog />
+      <DdlDialog />
     </div>
   )
 }

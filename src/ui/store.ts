@@ -6,6 +6,9 @@ import { closeSource, createTable, openSource, type ImportSource } from '../db/i
 import { dialectHints, type DialectHint } from '../core/dialect'
 import { quoteIdent, uniqueName } from '../core/sql'
 import { DEMO_SQL, WELCOME_SQL } from '../data/demo'
+import { ddlDataFromHash, decodeDdl, hashWithoutDdl } from '../core/ddlLink'
+import { planDdl, starterSql, type DdlNote, type DdlPlan } from '../core/ddlPlan'
+import { applyPlan, type Existing } from '../db/ddl'
 
 export interface QueryTab {
   id: string
@@ -28,6 +31,13 @@ export interface LogEntry {
   text: string
 }
 
+/** A model opened from model.quaera.app (`#ddl=`): waiting for the user, or what happened. */
+export type DdlState =
+  | { phase: 'confirm'; plan: DdlPlan; clashing: Existing[] }
+  | { phase: 'running'; plan: DdlPlan }
+  | { phase: 'report'; title: string | null; created: string[]; notes: DdlNote[] }
+  | { phase: 'error'; message: string }
+
 type EngineState =
   | { status: 'loading' }
   | { status: 'ready'; version: string; persistent: boolean }
@@ -43,6 +53,7 @@ interface State {
   imports: ImportSource[]
   importError: string | null
   theme: 'light' | 'dark'
+  ddl: DdlState | null
 }
 
 const TABS_KEY = 'stratalab.tabs.v1'
@@ -77,6 +88,7 @@ export const useLab = create<State>(() => ({
   imports: [],
   importError: null,
   theme: initialTheme(),
+  ddl: null,
 }))
 
 const set = useLab.setState
@@ -108,6 +120,8 @@ export async function initEngine() {
     const e = await getEngine()
     set({ engine: { status: 'ready', version: e.version, persistent: e.persistent } })
     await refreshCatalog()
+    const fromModel = await openDdlFromHash()
+    window.addEventListener('hashchange', () => void openDdlFromHash())
     // First visit: an empty database gets the demo shop, so the welcome query works.
     // A user who dropped the demo tables in a saved database does not get them back.
     let offered = false
@@ -117,7 +131,8 @@ export async function initEngine() {
     } catch {
       /* ignore */
     }
-    if (get().tables.length === 0 && (!e.persistent || !offered)) await loadDemo()
+    // Someone arriving with a model came for that model, not for the demo shop.
+    if (!fromModel && get().tables.length === 0 && (!e.persistent || !offered)) await loadDemo()
   } catch (e) {
     set({ engine: { status: 'error', error: String(e instanceof Error ? e.message : e) } })
   }
@@ -240,4 +255,56 @@ export async function cancelImport(src: ImportSource) {
 
 export function toggleTheme() {
   set((s) => ({ theme: s.theme === 'dark' ? 'light' : 'dark' }))
+}
+
+/**
+ * `#ddl=` in the address: the tables of a model sent by model.quaera.app. The fragment is
+ * cleared at once, so a reload does not create the tables again. True when there was one.
+ */
+export async function openDdlFromHash(): Promise<boolean> {
+  const data = ddlDataFromHash(location.hash)
+  if (!data) return false
+  history.replaceState(null, '', location.pathname + location.search + hashWithoutDdl(location.hash))
+  let plan: DdlPlan
+  try {
+    plan = planDdl(await decodeDdl(data))
+  } catch (e) {
+    set({ ddl: { phase: 'error', message: String(e instanceof Error ? e.message : e) } })
+    return true
+  }
+  if (!plan.tables.length) {
+    set({ ddl: { phase: 'error', message: 'The link holds no CREATE TABLE statement.' } })
+    return true
+  }
+  const planned = new Set(plan.tables.map((t) => t.name.toLowerCase()))
+  const clashing = get()
+    .tables.filter((t) => planned.has(t.name.toLowerCase()))
+    .map((t) => ({ name: t.name, kind: t.kind }))
+  if (clashing.length) set({ ddl: { phase: 'confirm', plan, clashing } })
+  else await runDdl(plan, false)
+  return true
+}
+
+/** Creates the planned tables; `replace` drops the existing tables with the same names first. */
+export async function runDdl(plan: DdlPlan, replace: boolean) {
+  set({ ddl: { phase: 'running', plan } })
+  const existing = get().tables.map((t) => ({ name: t.name, kind: t.kind }))
+  try {
+    const { created, notes } = await applyPlan(plan, existing, replace)
+    await refreshCatalog()
+    if (created.length) addTab(starterSql(plan, created), plan.title ?? 'Model')
+    addLog({
+      sql: `-- model${plan.title ? ` "${plan.title}"` : ''} from model.quaera.app`,
+      ok: created.length > 0,
+      text: `${created.length} of ${plan.tables.length} tables created${notes.length ? `, ${notes.length} note(s)` : ''}`,
+    })
+    set({ ddl: notes.length || !created.length ? { phase: 'report', title: plan.title, created: created.map((t) => t.name), notes } : null })
+  } catch (e) {
+    await refreshCatalog()
+    set({ ddl: { phase: 'error', message: String(e instanceof Error ? e.message : e) } })
+  }
+}
+
+export function closeDdl() {
+  set({ ddl: null })
 }
