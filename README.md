@@ -14,7 +14,7 @@ SQL Server Management Studio is a ~2 GB install plus a database server, a licenc
 - **Query** in tabs with SQL completion; `Ctrl+Enter` or `F5` runs the selection or the whole tab.
 - **See** results in a fast grid with column types; copy into Excel, export CSV / Excel, export whole tables as CSV / Parquet (for pandas).
 - **Fill** an existing table from a file (drop it onto the table): columns are matched by name, and every row is checked against the table's types, NOT NULL, keys, foreign keys and CHECKs before anything is written — "row 47: customer_id = 999 is not in customers". Insert the good rows, fix the rest.
-- **Sample datasets** in one click, each in its own schema: Chinook, Northwind, Sakila and Quaera's Kaiyo Trading. A link like `lab.quaera.app/#ds=northwind` opens one directly.
+- **Sample datasets** in one click, each in its own schema: Chinook, Northwind, AdventureWorks LT, Sakila and Quaera's Kaiyo Trading. A link like `lab.quaera.app/#ds=northwind` opens one directly.
 - **Keep** your tables between visits (stored in the browser's private file system).
 - **Learn** the dialect: coming from SQL Server? `TOP`, `[brackets]`, `ISNULL`, `GETDATE()` get a "use this instead" hint.
 - A **demo shop** dataset is loaded on the first visit.

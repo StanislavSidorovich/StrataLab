@@ -21,7 +21,7 @@ describe('dataset catalog', () => {
   })
 
   it('has every built dataset described, with its files on disk', () => {
-    expect(DATASETS.map((d) => d.id)).toEqual(['chinook', 'northwind', 'sakila', 'quaera'])
+    expect(DATASETS.map((d) => d.id)).toEqual(['chinook', 'northwind', 'adventureworks', 'sakila', 'quaera'])
     for (const d of DATASETS) {
       expect(d.tables.length, d.id).toBeGreaterThan(0)
       expect(d.ddl.length).toBe(d.tables.length)
@@ -36,5 +36,6 @@ describe('dataset catalog', () => {
       expect(d.starter).toContain(`${d.id}.`)
     }
     expect(datasetById('chinook')?.tables.find((t) => t.name === 'Employee')?.selfRef?.columns).toEqual(['ReportsTo'])
+    expect(datasetById('adventureworks')?.tables.find((t) => t.name === 'ProductCategory')?.selfRef?.columns).toEqual(['ParentProductCategoryID'])
   })
 })

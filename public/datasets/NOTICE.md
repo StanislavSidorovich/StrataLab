@@ -54,6 +54,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  THE SOFTWARE.
 ```
 
+## AdventureWorks LT (`adventureworks`)
+
+Source: https://github.com/microsoft/sql-server-samples/tree/master/samples/databases/adventure-works
+(`AdventureWorksLT2022.bak` from the repository's `adventureworks` release; the `SalesLT` schema).
+Same licence as Northwind above: Microsoft SQL Server Sample Code, Copyright (c) Microsoft
+Corporation, MIT License (full text in the Northwind section).
+
 ## Sakila (`sakila`)
 
 Source: https://github.com/jOOQ/sakila (SQLite version)

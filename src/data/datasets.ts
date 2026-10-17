@@ -80,6 +80,29 @@ ORDER BY sales DESC;
 `,
   },
   {
+    id: 'adventureworks',
+    title: 'AdventureWorks LT',
+    about: "Microsoft's bicycle maker, the light edition (SalesLT): customers, addresses, products, categories, orders.",
+    practise: 'The other SQL Server textbook dataset: a category tree, a customer with several addresses, order headers and lines.',
+    licence: 'MIT',
+    source: { label: 'microsoft/sql-server-samples', url: 'https://github.com/microsoft/sql-server-samples/tree/master/samples/databases/adventure-works' },
+    notes:
+      "Product.ThumbNailPhoto and the views are left out; LineTotal, SalesOrderNumber and TotalDue (computed in SQL Server) are stored values. The Arabic, Hebrew, Thai and Chinese descriptions are “???” in Microsoft's backup itself.",
+    starter: `-- AdventureWorks LT: Microsoft's bicycle maker. Its tables live in the schema adventureworks
+-- (SalesLT.Product in SQL Server is adventureworks.Product here).
+-- Revenue by product category, with the category above it:
+SELECT parent.Name AS parent_category,
+       cat.Name    AS category,
+       round(sum(d.LineTotal), 2) AS revenue
+FROM adventureworks.SalesOrderDetail d
+JOIN adventureworks.Product         p   ON p.ProductID = d.ProductID
+JOIN adventureworks.ProductCategory cat ON cat.ProductCategoryID = p.ProductCategoryID
+LEFT JOIN adventureworks.ProductCategory parent ON parent.ProductCategoryID = cat.ParentProductCategoryID
+GROUP BY ALL
+ORDER BY revenue DESC;
+`,
+  },
+  {
     id: 'sakila',
     title: 'Sakila',
     about: 'A DVD rental chain: films, actors, inventory, rentals, payments.',

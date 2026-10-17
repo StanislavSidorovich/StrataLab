@@ -9,12 +9,27 @@ loads it into DuckDB with its keys, and writes
 The app creates the tables from the statements and fills them with INSERT … BY NAME from the
 Parquet files, so the keys and constraints are the same as here.
 
-Run:  py -3 -m pip install duckdb   then   py -3 scripts/build-datasets.py
+Run:  py -3 -m pip install duckdb   then   py -3 scripts/build-datasets.py [dataset id …]
+(only the named datasets are rebuilt; the others keep their files and manifest entries).
 Sources are cached in data-local/datasets-src (git-ignored).
+
+AdventureWorksLT ships only as a SQL Server backup, so its first build needs a SQL Server to
+restore it into (any edition, 2022 or later): `sqlcmd` on PATH talks to it. Set
+STRATALAB_SQLCMD to the command that reaches it (default `sqlcmd -C -S localhost -E`) and,
+when the server sees the files under another path (Docker), AWLT_BAK to the backup's path
+there. The rows are then cached as JSON and later builds need no server. With Docker:
+
+  docker run -d --name mssql -e ACCEPT_EULA=Y -e MSSQL_SA_PASSWORD=<password> \
+    -v <repo>/data-local/datasets-src:/src mcr.microsoft.com/mssql/server:2022-latest
+  STRATALAB_SQLCMD="docker exec mssql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P <password>" \
+    AWLT_BAK=/src/AdventureWorksLT2022.bak python3 scripts/build-datasets.py
 """
 import json
+import os
 import re
+import shlex
 import sqlite3
+import subprocess
 import urllib.request
 from pathlib import Path
 
@@ -31,6 +46,7 @@ SOURCES = {
     'sakila-data.sql': 'https://raw.githubusercontent.com/jOOQ/sakila/main/sqlite-sakila-db/sqlite-sakila-insert-data.sql',
     'instnwnd.sql': 'https://raw.githubusercontent.com/microsoft/sql-server-samples/master/samples/databases/northwind-pubs/instnwnd.sql',
     'quaera.dataset': 'https://quaera.app/data/quaera.dataset',
+    'AdventureWorksLT2022.bak': 'https://github.com/microsoft/sql-server-samples/releases/download/adventureworks/AdventureWorksLT2022.bak',
 }
 
 
@@ -359,13 +375,224 @@ def northwind(con: duckdb.DuckDBPyConnection) -> tuple[list[str], list[str], dic
     return order, ddl, NORTHWIND_SELF_REFS
 
 
+# ------------------------------------------------------------------ AdventureWorksLT (SQL Server backup)
+
+# The SalesLT schema of AdventureWorksLT2022, table by table in load order, as SQL Server has it:
+# same names, keys (AK_… are UNIQUE), CHECKs and constant defaults. money → DECIMAL(19,4) (prices
+# have 3–4 decimals), datetime → DATE where the source never has a time of day (checked below),
+# TIMESTAMP otherwise; uniqueidentifier → UUID; the computed columns (LineTotal, SalesOrderNumber,
+# TotalDue) are kept as stored values; ThumbNailPhoto (varbinary) is left out; ON DELETE CASCADE
+# of SalesOrderDetail → SalesOrderHeader is left out (DuckDB keys only block).
+AW = 'adventureworks'
+AW_ROWGUID = '"rowguid" UUID NOT NULL DEFAULT uuid() UNIQUE'
+# now() is in DuckDB-WASM's core; localtimestamp and current_date make it download ICU first.
+AW_MODIFIED = '"ModifiedDate" TIMESTAMP NOT NULL DEFAULT CAST(now() AS TIMESTAMP)'
+AW_DDL = [
+    ('Address', f'''"AddressID" INTEGER NOT NULL PRIMARY KEY,
+  "AddressLine1" VARCHAR NOT NULL,
+  "AddressLine2" VARCHAR,
+  "City" VARCHAR NOT NULL,
+  "StateProvince" VARCHAR NOT NULL,
+  "CountryRegion" VARCHAR NOT NULL,
+  "PostalCode" VARCHAR NOT NULL,
+  {AW_ROWGUID},
+  {AW_MODIFIED}'''),
+    ('Customer', f'''"CustomerID" INTEGER NOT NULL PRIMARY KEY,
+  "NameStyle" BOOLEAN NOT NULL DEFAULT false,
+  "Title" VARCHAR,
+  "FirstName" VARCHAR NOT NULL,
+  "MiddleName" VARCHAR,
+  "LastName" VARCHAR NOT NULL,
+  "Suffix" VARCHAR,
+  "CompanyName" VARCHAR,
+  "SalesPerson" VARCHAR,
+  "EmailAddress" VARCHAR,
+  "Phone" VARCHAR,
+  "PasswordHash" VARCHAR NOT NULL,
+  "PasswordSalt" VARCHAR NOT NULL,
+  {AW_ROWGUID},
+  {AW_MODIFIED}'''),
+    ('CustomerAddress', f'''"CustomerID" INTEGER NOT NULL REFERENCES {AW}."Customer" ("CustomerID"),
+  "AddressID" INTEGER NOT NULL REFERENCES {AW}."Address" ("AddressID"),
+  "AddressType" VARCHAR NOT NULL,
+  {AW_ROWGUID},
+  {AW_MODIFIED},
+  PRIMARY KEY ("CustomerID", "AddressID")'''),
+    ('ProductCategory', f'''"ProductCategoryID" INTEGER NOT NULL PRIMARY KEY,
+  "ParentProductCategoryID" INTEGER REFERENCES {AW}."ProductCategory" ("ProductCategoryID"),
+  "Name" VARCHAR NOT NULL UNIQUE,
+  {AW_ROWGUID},
+  {AW_MODIFIED}'''),
+    ('ProductModel', f'''"ProductModelID" INTEGER NOT NULL PRIMARY KEY,
+  "Name" VARCHAR NOT NULL UNIQUE,
+  "CatalogDescription" VARCHAR,
+  {AW_ROWGUID},
+  {AW_MODIFIED}'''),
+    ('ProductDescription', f'''"ProductDescriptionID" INTEGER NOT NULL PRIMARY KEY,
+  "Description" VARCHAR NOT NULL,
+  {AW_ROWGUID},
+  {AW_MODIFIED}'''),
+    ('ProductModelProductDescription', f'''"ProductModelID" INTEGER NOT NULL REFERENCES {AW}."ProductModel" ("ProductModelID"),
+  "ProductDescriptionID" INTEGER NOT NULL REFERENCES {AW}."ProductDescription" ("ProductDescriptionID"),
+  "Culture" VARCHAR NOT NULL,
+  {AW_ROWGUID},
+  {AW_MODIFIED},
+  PRIMARY KEY ("ProductModelID", "ProductDescriptionID", "Culture")'''),
+    ('Product', f'''"ProductID" INTEGER NOT NULL PRIMARY KEY,
+  "Name" VARCHAR NOT NULL UNIQUE,
+  "ProductNumber" VARCHAR NOT NULL UNIQUE,
+  "Color" VARCHAR,
+  "StandardCost" DECIMAL(19,4) NOT NULL CHECK ("StandardCost" >= 0),
+  "ListPrice" DECIMAL(19,4) NOT NULL CHECK ("ListPrice" >= 0),
+  "Size" VARCHAR,
+  "Weight" DECIMAL(8,2) CHECK ("Weight" > 0),
+  "ProductCategoryID" INTEGER REFERENCES {AW}."ProductCategory" ("ProductCategoryID"),
+  "ProductModelID" INTEGER REFERENCES {AW}."ProductModel" ("ProductModelID"),
+  "SellStartDate" DATE NOT NULL,
+  "SellEndDate" DATE,
+  "DiscontinuedDate" DATE,
+  "ThumbnailPhotoFileName" VARCHAR,
+  {AW_ROWGUID},
+  {AW_MODIFIED},
+  CHECK ("SellEndDate" >= "SellStartDate" OR "SellEndDate" IS NULL)'''),
+    ('SalesOrderHeader', f'''"SalesOrderID" INTEGER NOT NULL PRIMARY KEY,
+  "RevisionNumber" SMALLINT NOT NULL DEFAULT 0,
+  "OrderDate" DATE NOT NULL DEFAULT CAST(CAST(now() AS TIMESTAMP) AS DATE),
+  "DueDate" DATE NOT NULL,
+  "ShipDate" DATE,
+  "Status" SMALLINT NOT NULL DEFAULT 1 CHECK ("Status" >= 0 AND "Status" <= 8),
+  "OnlineOrderFlag" BOOLEAN NOT NULL DEFAULT true,
+  "SalesOrderNumber" VARCHAR NOT NULL UNIQUE,
+  "PurchaseOrderNumber" VARCHAR,
+  "AccountNumber" VARCHAR,
+  "CustomerID" INTEGER NOT NULL REFERENCES {AW}."Customer" ("CustomerID"),
+  "ShipToAddressID" INTEGER REFERENCES {AW}."Address" ("AddressID"),
+  "BillToAddressID" INTEGER REFERENCES {AW}."Address" ("AddressID"),
+  "ShipMethod" VARCHAR NOT NULL,
+  "CreditCardApprovalCode" VARCHAR,
+  "SubTotal" DECIMAL(19,4) NOT NULL DEFAULT 0 CHECK ("SubTotal" >= 0),
+  "TaxAmt" DECIMAL(19,4) NOT NULL DEFAULT 0 CHECK ("TaxAmt" >= 0),
+  "Freight" DECIMAL(19,4) NOT NULL DEFAULT 0 CHECK ("Freight" >= 0),
+  "TotalDue" DECIMAL(19,4) NOT NULL,
+  "Comment" VARCHAR,
+  {AW_ROWGUID},
+  {AW_MODIFIED},
+  CHECK ("DueDate" >= "OrderDate"),
+  CHECK ("ShipDate" >= "OrderDate" OR "ShipDate" IS NULL)'''),
+    ('SalesOrderDetail', f'''"SalesOrderID" INTEGER NOT NULL REFERENCES {AW}."SalesOrderHeader" ("SalesOrderID"),
+  "SalesOrderDetailID" INTEGER NOT NULL,
+  "OrderQty" SMALLINT NOT NULL CHECK ("OrderQty" > 0),
+  "ProductID" INTEGER NOT NULL REFERENCES {AW}."Product" ("ProductID"),
+  "UnitPrice" DECIMAL(19,4) NOT NULL CHECK ("UnitPrice" >= 0),
+  "UnitPriceDiscount" DECIMAL(19,4) NOT NULL DEFAULT 0 CHECK ("UnitPriceDiscount" >= 0),
+  "LineTotal" DECIMAL(38,6) NOT NULL,
+  {AW_ROWGUID},
+  {AW_MODIFIED},
+  PRIMARY KEY ("SalesOrderID", "SalesOrderDetailID")'''),
+]
+
+AW_SELF_REFS = {'ProductCategory': {'columns': ['ParentProductCategoryID'], 'refColumns': ['ProductCategoryID'], 'key': ['ProductCategoryID']}}
+
+
+def sqlcmd(query: str, database: str | None = None) -> str:
+    """Runs one query on the SQL Server of STRATALAB_SQLCMD; output as UTF-8, no headers, no width limit."""
+    cmd = shlex.split(os.environ.get('STRATALAB_SQLCMD', 'sqlcmd -C -S localhost -E'))
+    cmd += ['-b', '-f', 'o:65001', '-y', '0'] + (['-d', database] if database else []) + ['-Q', 'SET NOCOUNT ON; ' + query]
+    r = subprocess.run(cmd, capture_output=True)
+    if r.returncode:
+        raise RuntimeError(f'sqlcmd failed: {r.stdout.decode("utf-8", "replace")}{r.stderr.decode("utf-8", "replace")}')
+    return r.stdout.decode('utf-8')
+
+
+def adventureworks_json() -> Path:
+    """
+    Every SalesLT table as a JSON array of text values (cached): restores the backup into the
+    SQL Server once and reads each table with FOR JSON. Values go out as text (datetime as ISO
+    8601, money with its 4 decimals), so nothing is rounded on the way.
+    """
+    folder = CACHE / 'adventureworkslt'
+    if (folder / 'counts.json').exists():
+        return folder
+    folder.mkdir(parents=True, exist_ok=True)
+    bak = os.environ.get('AWLT_BAK') or str(fetch('AdventureWorksLT2022.bak').resolve())
+    db = 'StrataLab_AdventureWorksLT'
+    sqlcmd(f"""IF DB_ID('{db}') IS NULL BEGIN
+      DECLARE @data nvarchar(400) = CAST(SERVERPROPERTY('InstanceDefaultDataPath') AS nvarchar(400));
+      DECLARE @log nvarchar(400) = CAST(SERVERPROPERTY('InstanceDefaultLogPath') AS nvarchar(400));
+      DECLARE @sql nvarchar(max) = N'RESTORE DATABASE [{db}] FROM DISK = N''{bak}'' WITH '
+        + N'MOVE ''AdventureWorksLT2022_Data'' TO N''' + @data + N'{db}.mdf'', '
+        + N'MOVE ''AdventureWorksLT2022_Log'' TO N''' + @log + N'{db}_log.ldf''';
+      EXEC (@sql);
+    END""")
+    counts = {}
+    for table, _ in AW_DDL:
+        cols = json.loads(sqlcmd(f"SELECT name, TYPE_NAME(system_type_id) AS t FROM sys.columns WHERE object_id = OBJECT_ID('SalesLT.{table}') ORDER BY column_id FOR JSON PATH", db).replace('\n', ''))
+        select = []
+        for c in cols:
+            name, t = c['name'], c['t']
+            if t in ('varbinary', 'image'):
+                continue
+            style = {'datetime': ', 126', 'money': ', 2'}.get(t, '')
+            select.append(f'CONVERT(nvarchar(max), [{name}]{style}) AS [{name}]')
+        out = sqlcmd(f'SELECT {", ".join(select)} FROM SalesLT.[{table}] FOR JSON PATH, INCLUDE_NULL_VALUES', db)
+        rows = json.loads(out.replace('\n', '') or '[]')  # FOR JSON comes in lines of 2033 characters
+        counts[table] = int(sqlcmd(f'SELECT COUNT(*) FROM SalesLT.[{table}]', db).strip())
+        assert len(rows) == counts[table], f'{table}: read {len(rows)} rows of {counts[table]}'
+        (folder / f'{table}.json').write_text(json.dumps(rows, ensure_ascii=False), encoding='utf-8')
+    (folder / 'counts.json').write_text(json.dumps(counts, indent=1), encoding='utf-8')
+    return folder
+
+
+def adventureworks(con: duckdb.DuckDBPyConnection) -> tuple[list[str], list[str], dict]:
+    folder = adventureworks_json()
+    counts = json.loads((folder / 'counts.json').read_text(encoding='utf-8'))
+    order, ddl = [], []
+    for table, body in AW_DDL:
+        sql = f'CREATE TABLE {AW}.{q(table)} (\n  {body}\n)'
+        con.execute(sql)
+        order.append(table)
+        ddl.append(sql)
+        types = {r[0]: r[1] for r in con.execute(f"SELECT column_name, data_type FROM duckdb_columns() WHERE schema_name = '{AW}' AND table_name = '{table}' ORDER BY column_index").fetchall()}
+        cols = list(types)
+        as_text = ', '.join(f"'{c}': 'VARCHAR'" for c in cols)
+        src = f"read_json('{(folder / (table + '.json')).as_posix()}', format = 'array', columns = {{{as_text}}})"
+        con.execute(f'CREATE OR REPLACE TEMP TABLE aw_stage AS SELECT * FROM {src}')
+
+        def cast(c: str) -> str:
+            t = types[c]
+            if t == 'DATE':
+                return f'CAST(CAST({q(c)} AS TIMESTAMP) AS DATE)'
+            if t == 'BOOLEAN':
+                return f"{q(c)} = '1'"
+            if t == 'VARCHAR':
+                return f'rtrim({q(c)})' if c == 'Culture' else q(c)  # nchar(6) is padded
+            return f'CAST({q(c)} AS {t})'
+
+        insert_rows(con, f'{AW}.{q(table)}', 'SELECT ' + ', '.join(f'{cast(c)} AS {q(c)}' for c in cols) + ' FROM aw_stage', AW_SELF_REFS.get(table))
+        got = con.execute(f'SELECT count(*) FROM {AW}.{q(table)}').fetchone()[0]
+        assert got == counts[table], f'{table}: {got} rows, SQL Server has {counts[table]}'
+        for c in cols:
+            t = types[c]
+            if t == 'DATE':  # a DATE column must not drop a time of day
+                n = con.execute(f'SELECT count(*) FROM aw_stage WHERE CAST({q(c)} AS TIMESTAMP) <> CAST(CAST({q(c)} AS TIMESTAMP) AS DATE)').fetchone()[0]
+                assert n == 0, f'{table}.{c}: {n} values have a time of day'
+            if t.startswith('DECIMAL'):  # nor a DECIMAL any digits
+                n = con.execute(f'SELECT count(*) FROM aw_stage WHERE CAST({q(c)} AS DECIMAL(38,10)) <> CAST(CAST({q(c)} AS {t}) AS DECIMAL(38,10))').fetchone()[0]
+                assert n == 0, f'{table}.{c}: {n} values lose digits as {t}'
+    return order, ddl, AW_SELF_REFS
+
+
 # ------------------------------------------------------------------ build
 
 def sakila_sqlite() -> Path:
-    path = CACHE / 'sakila.sqlite'
+    path = CACHE / 'sakila-original-dates.sqlite'
     if not path.exists():
         db = sqlite3.connect(path)
         db.executescript(fetch('sakila-schema.sql').read_text(encoding='utf-8'))
+        # The schema's triggers set last_update to the time of the INSERT: without them the rows
+        # keep their own dates (2006-02-15 …) and every build gives the same files.
+        for (name,) in db.execute("SELECT name FROM sqlite_master WHERE type = 'trigger'").fetchall():
+            db.execute(f'DROP TRIGGER {q(name)}')
         db.executescript(fetch('sakila-data.sql').read_text(encoding='utf-8'))
         db.commit()
         db.close()
@@ -387,12 +614,22 @@ DATASETS = {
     # a key after the table exists, so that one is left out. film_text only repeats film's text.
     'sakila': lambda con: from_sqlite(con, 'sakila', sakila_sqlite(), skip_tables=('film_text',), skip_fks={('store', ('manager_staff_id',))}),
     'quaera': lambda con: from_sqlite(con, 'quaera', quaera_sqlite()),
+    'adventureworks': adventureworks,
 }
 
 
-def main():
+def main(only: list[str]):
+    """Builds the datasets named on the command line (all when none); the others keep their files."""
+    unknown = set(only) - set(DATASETS)
+    if unknown:
+        raise SystemExit(f'unknown dataset {", ".join(sorted(unknown))}; known: {", ".join(DATASETS)}')
+    kept = json.loads(MANIFEST.read_text(encoding='utf-8')) if only and MANIFEST.exists() else {}
     manifest = {}
     for ds, build in DATASETS.items():
+        if only and ds not in only:
+            if ds in kept:
+                manifest[ds] = kept[ds]
+            continue
         con = duckdb.connect()
         con.execute(f'CREATE SCHEMA {ds}')
         order, ddl, self_refs = build(con)
@@ -416,4 +653,5 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    import sys
+    main(sys.argv[1:])

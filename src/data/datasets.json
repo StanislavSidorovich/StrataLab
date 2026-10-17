@@ -224,7 +224,7 @@
     "name": "actor",
     "file": "actor.parquet",
     "rows": 200,
-    "bytes": 2718
+    "bytes": 2708
    },
    {
     "name": "country",
@@ -236,13 +236,13 @@
     "name": "city",
     "file": "city.parquet",
     "rows": 600,
-    "bytes": 6859
+    "bytes": 6836
    },
    {
     "name": "address",
     "file": "address.parquet",
     "rows": 603,
-    "bytes": 11853
+    "bytes": 11830
    },
    {
     "name": "language",
@@ -260,19 +260,19 @@
     "name": "film",
     "file": "film.parquet",
     "rows": 1000,
-    "bytes": 16402
+    "bytes": 16368
    },
    {
     "name": "film_actor",
     "file": "film_actor.parquet",
     "rows": 5462,
-    "bytes": 12725
+    "bytes": 12531
    },
    {
     "name": "film_category",
     "file": "film_category.parquet",
     "rows": 1000,
-    "bytes": 3268
+    "bytes": 3230
    },
    {
     "name": "store",
@@ -284,13 +284,13 @@
     "name": "customer",
     "file": "customer.parquet",
     "rows": 599,
-    "bytes": 15377
+    "bytes": 15354
    },
    {
     "name": "inventory",
     "file": "inventory.parquet",
     "rows": 4581,
-    "bytes": 12931
+    "bytes": 12755
    },
    {
     "name": "staff",
@@ -302,13 +302,13 @@
     "name": "rental",
     "file": "rental.parquet",
     "rows": 16044,
-    "bytes": 249557
+    "bytes": 249034
    },
    {
     "name": "payment",
     "file": "payment.parquet",
     "rows": 16049,
-    "bytes": 181824
+    "bytes": 185982
    }
   ]
  },
@@ -406,6 +406,93 @@
     "file": "staging_raw_sellout.parquet",
     "rows": 3110,
     "bytes": 35153
+   }
+  ]
+ },
+ "adventureworks": {
+  "ddl": [
+   "CREATE TABLE adventureworks.\"Address\" (\n  \"AddressID\" INTEGER NOT NULL PRIMARY KEY,\n  \"AddressLine1\" VARCHAR NOT NULL,\n  \"AddressLine2\" VARCHAR,\n  \"City\" VARCHAR NOT NULL,\n  \"StateProvince\" VARCHAR NOT NULL,\n  \"CountryRegion\" VARCHAR NOT NULL,\n  \"PostalCode\" VARCHAR NOT NULL,\n  \"rowguid\" UUID NOT NULL DEFAULT uuid() UNIQUE,\n  \"ModifiedDate\" TIMESTAMP NOT NULL DEFAULT CAST(now() AS TIMESTAMP)\n)",
+   "CREATE TABLE adventureworks.\"Customer\" (\n  \"CustomerID\" INTEGER NOT NULL PRIMARY KEY,\n  \"NameStyle\" BOOLEAN NOT NULL DEFAULT false,\n  \"Title\" VARCHAR,\n  \"FirstName\" VARCHAR NOT NULL,\n  \"MiddleName\" VARCHAR,\n  \"LastName\" VARCHAR NOT NULL,\n  \"Suffix\" VARCHAR,\n  \"CompanyName\" VARCHAR,\n  \"SalesPerson\" VARCHAR,\n  \"EmailAddress\" VARCHAR,\n  \"Phone\" VARCHAR,\n  \"PasswordHash\" VARCHAR NOT NULL,\n  \"PasswordSalt\" VARCHAR NOT NULL,\n  \"rowguid\" UUID NOT NULL DEFAULT uuid() UNIQUE,\n  \"ModifiedDate\" TIMESTAMP NOT NULL DEFAULT CAST(now() AS TIMESTAMP)\n)",
+   "CREATE TABLE adventureworks.\"CustomerAddress\" (\n  \"CustomerID\" INTEGER NOT NULL REFERENCES adventureworks.\"Customer\" (\"CustomerID\"),\n  \"AddressID\" INTEGER NOT NULL REFERENCES adventureworks.\"Address\" (\"AddressID\"),\n  \"AddressType\" VARCHAR NOT NULL,\n  \"rowguid\" UUID NOT NULL DEFAULT uuid() UNIQUE,\n  \"ModifiedDate\" TIMESTAMP NOT NULL DEFAULT CAST(now() AS TIMESTAMP),\n  PRIMARY KEY (\"CustomerID\", \"AddressID\")\n)",
+   "CREATE TABLE adventureworks.\"ProductCategory\" (\n  \"ProductCategoryID\" INTEGER NOT NULL PRIMARY KEY,\n  \"ParentProductCategoryID\" INTEGER REFERENCES adventureworks.\"ProductCategory\" (\"ProductCategoryID\"),\n  \"Name\" VARCHAR NOT NULL UNIQUE,\n  \"rowguid\" UUID NOT NULL DEFAULT uuid() UNIQUE,\n  \"ModifiedDate\" TIMESTAMP NOT NULL DEFAULT CAST(now() AS TIMESTAMP)\n)",
+   "CREATE TABLE adventureworks.\"ProductModel\" (\n  \"ProductModelID\" INTEGER NOT NULL PRIMARY KEY,\n  \"Name\" VARCHAR NOT NULL UNIQUE,\n  \"CatalogDescription\" VARCHAR,\n  \"rowguid\" UUID NOT NULL DEFAULT uuid() UNIQUE,\n  \"ModifiedDate\" TIMESTAMP NOT NULL DEFAULT CAST(now() AS TIMESTAMP)\n)",
+   "CREATE TABLE adventureworks.\"ProductDescription\" (\n  \"ProductDescriptionID\" INTEGER NOT NULL PRIMARY KEY,\n  \"Description\" VARCHAR NOT NULL,\n  \"rowguid\" UUID NOT NULL DEFAULT uuid() UNIQUE,\n  \"ModifiedDate\" TIMESTAMP NOT NULL DEFAULT CAST(now() AS TIMESTAMP)\n)",
+   "CREATE TABLE adventureworks.\"ProductModelProductDescription\" (\n  \"ProductModelID\" INTEGER NOT NULL REFERENCES adventureworks.\"ProductModel\" (\"ProductModelID\"),\n  \"ProductDescriptionID\" INTEGER NOT NULL REFERENCES adventureworks.\"ProductDescription\" (\"ProductDescriptionID\"),\n  \"Culture\" VARCHAR NOT NULL,\n  \"rowguid\" UUID NOT NULL DEFAULT uuid() UNIQUE,\n  \"ModifiedDate\" TIMESTAMP NOT NULL DEFAULT CAST(now() AS TIMESTAMP),\n  PRIMARY KEY (\"ProductModelID\", \"ProductDescriptionID\", \"Culture\")\n)",
+   "CREATE TABLE adventureworks.\"Product\" (\n  \"ProductID\" INTEGER NOT NULL PRIMARY KEY,\n  \"Name\" VARCHAR NOT NULL UNIQUE,\n  \"ProductNumber\" VARCHAR NOT NULL UNIQUE,\n  \"Color\" VARCHAR,\n  \"StandardCost\" DECIMAL(19,4) NOT NULL CHECK (\"StandardCost\" >= 0),\n  \"ListPrice\" DECIMAL(19,4) NOT NULL CHECK (\"ListPrice\" >= 0),\n  \"Size\" VARCHAR,\n  \"Weight\" DECIMAL(8,2) CHECK (\"Weight\" > 0),\n  \"ProductCategoryID\" INTEGER REFERENCES adventureworks.\"ProductCategory\" (\"ProductCategoryID\"),\n  \"ProductModelID\" INTEGER REFERENCES adventureworks.\"ProductModel\" (\"ProductModelID\"),\n  \"SellStartDate\" DATE NOT NULL,\n  \"SellEndDate\" DATE,\n  \"DiscontinuedDate\" DATE,\n  \"ThumbnailPhotoFileName\" VARCHAR,\n  \"rowguid\" UUID NOT NULL DEFAULT uuid() UNIQUE,\n  \"ModifiedDate\" TIMESTAMP NOT NULL DEFAULT CAST(now() AS TIMESTAMP),\n  CHECK (\"SellEndDate\" >= \"SellStartDate\" OR \"SellEndDate\" IS NULL)\n)",
+   "CREATE TABLE adventureworks.\"SalesOrderHeader\" (\n  \"SalesOrderID\" INTEGER NOT NULL PRIMARY KEY,\n  \"RevisionNumber\" SMALLINT NOT NULL DEFAULT 0,\n  \"OrderDate\" DATE NOT NULL DEFAULT CAST(CAST(now() AS TIMESTAMP) AS DATE),\n  \"DueDate\" DATE NOT NULL,\n  \"ShipDate\" DATE,\n  \"Status\" SMALLINT NOT NULL DEFAULT 1 CHECK (\"Status\" >= 0 AND \"Status\" <= 8),\n  \"OnlineOrderFlag\" BOOLEAN NOT NULL DEFAULT true,\n  \"SalesOrderNumber\" VARCHAR NOT NULL UNIQUE,\n  \"PurchaseOrderNumber\" VARCHAR,\n  \"AccountNumber\" VARCHAR,\n  \"CustomerID\" INTEGER NOT NULL REFERENCES adventureworks.\"Customer\" (\"CustomerID\"),\n  \"ShipToAddressID\" INTEGER REFERENCES adventureworks.\"Address\" (\"AddressID\"),\n  \"BillToAddressID\" INTEGER REFERENCES adventureworks.\"Address\" (\"AddressID\"),\n  \"ShipMethod\" VARCHAR NOT NULL,\n  \"CreditCardApprovalCode\" VARCHAR,\n  \"SubTotal\" DECIMAL(19,4) NOT NULL DEFAULT 0 CHECK (\"SubTotal\" >= 0),\n  \"TaxAmt\" DECIMAL(19,4) NOT NULL DEFAULT 0 CHECK (\"TaxAmt\" >= 0),\n  \"Freight\" DECIMAL(19,4) NOT NULL DEFAULT 0 CHECK (\"Freight\" >= 0),\n  \"TotalDue\" DECIMAL(19,4) NOT NULL,\n  \"Comment\" VARCHAR,\n  \"rowguid\" UUID NOT NULL DEFAULT uuid() UNIQUE,\n  \"ModifiedDate\" TIMESTAMP NOT NULL DEFAULT CAST(now() AS TIMESTAMP),\n  CHECK (\"DueDate\" >= \"OrderDate\"),\n  CHECK (\"ShipDate\" >= \"OrderDate\" OR \"ShipDate\" IS NULL)\n)",
+   "CREATE TABLE adventureworks.\"SalesOrderDetail\" (\n  \"SalesOrderID\" INTEGER NOT NULL REFERENCES adventureworks.\"SalesOrderHeader\" (\"SalesOrderID\"),\n  \"SalesOrderDetailID\" INTEGER NOT NULL,\n  \"OrderQty\" SMALLINT NOT NULL CHECK (\"OrderQty\" > 0),\n  \"ProductID\" INTEGER NOT NULL REFERENCES adventureworks.\"Product\" (\"ProductID\"),\n  \"UnitPrice\" DECIMAL(19,4) NOT NULL CHECK (\"UnitPrice\" >= 0),\n  \"UnitPriceDiscount\" DECIMAL(19,4) NOT NULL DEFAULT 0 CHECK (\"UnitPriceDiscount\" >= 0),\n  \"LineTotal\" DECIMAL(38,6) NOT NULL,\n  \"rowguid\" UUID NOT NULL DEFAULT uuid() UNIQUE,\n  \"ModifiedDate\" TIMESTAMP NOT NULL DEFAULT CAST(now() AS TIMESTAMP),\n  PRIMARY KEY (\"SalesOrderID\", \"SalesOrderDetailID\")\n)"
+  ],
+  "tables": [
+   {
+    "name": "Address",
+    "file": "Address.parquet",
+    "rows": 450,
+    "bytes": 20135
+   },
+   {
+    "name": "Customer",
+    "file": "Customer.parquet",
+    "rows": 847,
+    "bytes": 58782
+   },
+   {
+    "name": "CustomerAddress",
+    "file": "CustomerAddress.parquet",
+    "rows": 417,
+    "bytes": 10041
+   },
+   {
+    "name": "ProductCategory",
+    "file": "ProductCategory.parquet",
+    "rows": 41,
+    "bytes": 2087,
+    "selfRef": {
+     "columns": [
+      "ParentProductCategoryID"
+     ],
+     "refColumns": [
+      "ProductCategoryID"
+     ],
+     "key": [
+      "ProductCategoryID"
+     ]
+    }
+   },
+   {
+    "name": "ProductModel",
+    "file": "ProductModel.parquet",
+    "rows": 128,
+    "bytes": 8024
+   },
+   {
+    "name": "ProductDescription",
+    "file": "ProductDescription.parquet",
+    "rows": 762,
+    "bytes": 29449
+   },
+   {
+    "name": "ProductModelProductDescription",
+    "file": "ProductModelProductDescription.parquet",
+    "rows": 762,
+    "bytes": 15556
+   },
+   {
+    "name": "Product",
+    "file": "Product.parquet",
+    "rows": 295,
+    "bytes": 14217
+   },
+   {
+    "name": "SalesOrderHeader",
+    "file": "SalesOrderHeader.parquet",
+    "rows": 32,
+    "bytes": 5864
+   },
+   {
+    "name": "SalesOrderDetail",
+    "file": "SalesOrderDetail.parquet",
+    "rows": 542,
+    "bytes": 16201
    }
   ]
  }
