@@ -15,6 +15,8 @@ Stages follow SPEC §6. A stage is done only when its acceptance criteria pass.
 
 ## Where we are (2026-10-17, stage 2a + loading progress)
 
+**Publishing finished:** Cloudflare Web Analytics is on (cookieless page views; the script loads only on lab.quaera.app, so local runs aren't counted).
+
 **DuckDB's first load now shows its progress.** The header says “Loading DuckDB 42%”, then “Starting DuckDB…” (just the percentage on a phone), and the result pane shows a card: a progress bar, “Step 1 of 2 · downloading DuckDB” / “Step 2 of 2 · starting the database”, and a line saying the ~8 MB download happens once and files are never uploaded. Arriving from model.quaera.app adds “Your model opens as soon as the engine is ready” (this closes the known gap where the page showed no sign of the model for a few seconds). Before React arrives, `index.html` shows “Loading StrataLab…” instead of a blank page. Checked with Playwright on the production build with the network throttled to 6 MB/s: the bar climbs smoothly 2% → 99% in 6 s, then step 2; time to ready is the same as before the change (8.0 s vs 8.0 s on a first visit, 2.2 s unthrottled). Dev server, dark mode and phone width checked too. 34 unit tests green.
 
 ### Stage 2a (2026-10-17)
@@ -50,7 +52,7 @@ The MVP works locally (dev and production build checked in the browser): DuckDB 
 ## Next steps (by priority)
 
 1. ✅ **Name + subdomain**: StrataLab · lab.quaera.app (owner, 2026-10-17)
-2. **Publish**: ✅ GitHub repo, ✅ Pages via Actions, ✅ custom domain on GitHub · ✅ Cloudflare DNS `CNAME lab` (live 2026-10-17, http redirects to https) · ⏳ Cloudflare Web Analytics token (beacon only on lab.quaera.app, like StrataSQL)
+2. **Publish**: ✅ GitHub repo, ✅ Pages via Actions, ✅ custom domain on GitHub · ✅ Cloudflare DNS `CNAME lab` (live 2026-10-17, http redirects to https) · ✅ Cloudflare Web Analytics (2026-10-17): beacon in `index.html`, loaded only on lab.quaera.app, like StrataSQL
 3. ✅ **Stage 2a — from model.quaera.app** (2026-10-17): “Open in StrataLab ↗” in StrataSQL's SQL tab → `#ddl=` → empty tables with PK / UNIQUE / CHECK / FK, a starter SELECT tab, a note per statement DuckDB couldn't take. ✅ Live: checked on model.quaera.app → lab.quaera.app (2026-10-17).
 4. **Stage 2b — fill a table from Excel**: drop a file onto an existing table → map file columns to table columns → type / NOT NULL / FK / UNIQUE check with a row-by-row report (“row 47: customer_id 999 not in customers”) → INSERT.
 5. **Stage 2c — to model.quaera.app**: “Show as model” sends the current tables' DDL to StrataSQL's SQL → model import (its roadmap #32).

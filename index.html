@@ -11,6 +11,16 @@
     <meta property="og:site_name" content="StrataLab" />
     <meta property="og:title" content="StrataLab — query your CSV and Excel files with SQL in the browser" />
     <meta property="og:description" content="Drop a file, write a JOIN. Free, no install, your data never leaves the browser. Part of Quaera." />
+    <!-- Cloudflare Web Analytics: cookieless page-view counts, on the live site only (not local runs). -->
+    <script>
+      if (location.hostname === 'lab.quaera.app') {
+        const s = document.createElement('script')
+        s.defer = true
+        s.src = 'https://static.cloudflareinsights.com/beacon.min.js'
+        s.dataset.cfBeacon = '{"token": "ef7cf3125aef473296ceb958dc9c7f09"}'
+        document.head.appendChild(s)
+      }
+    </script>
   </head>
   <body>
     <!-- Shown until the app's script arrives; React replaces it. -->
