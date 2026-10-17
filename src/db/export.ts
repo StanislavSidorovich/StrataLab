@@ -1,10 +1,12 @@
-// Exports: a result grid as CSV / Excel (from the Arrow table already in
-// memory), a whole table as CSV / Parquet (DuckDB's COPY, so nothing is
-// limited by the grid). Parquet is the hand-over format to pandas.
-import type { Table } from 'apache-arrow'
+// Exports: a result grid as CSV / Excel / JSON (from the Arrow table already in
+// memory) or Parquet (the same table handed to DuckDB), a whole table as CSV /
+// Parquet (DuckDB's COPY, so nothing is limited by the grid). Parquet is the
+// hand-over format to pandas.
+import { DataType, type Table } from 'apache-arrow'
 import { csvField } from '../core/csvWrite'
-import { quoteString } from '../core/sql'
-import { dropFile, query, readFile } from './engine'
+import { decimalJson, rowsToJson } from '../core/jsonWrite'
+import { quoteIdent, quoteString } from '../core/sql'
+import { dropFile, insertArrow, query, readFile } from './engine'
 import { formatterFor } from './format'
 
 export function download(data: BlobPart, fileName: string, type: string) {
@@ -43,6 +45,35 @@ export async function exportResultXlsx(table: Table, name: string) {
   XLSX.utils.book_append_sheet(wb, ws, name.slice(0, 31) || 'result')
   const out = XLSX.write(wb, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer
   download(out, `${name}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+}
+
+/** JSON keeps numbers and true / false as such; dates and times are ISO text as in the grid. */
+export function exportResultJson(table: Table, name: string) {
+  const fields = table.schema.fields
+  const fmt = fields.map(formatterFor)
+  const cols = fields.map((_, i) => table.getChildAt(i))
+  const cell = fields.map((f, i) => {
+    if (DataType.isBool(f.type)) return (v: unknown) => (v == null ? null : Boolean(v))
+    if (DataType.isDecimal(f.type)) return (v: unknown) => {
+      const text = fmt[i](v)
+      return text == null ? null : decimalJson(String(text))
+    }
+    return fmt[i]
+  })
+  const rows: unknown[][] = []
+  for (let r = 0; r < table.numRows; r++) rows.push(cols.map((c, i) => cell[i](c?.get(r))))
+  download(rowsToJson(fields.map((f) => f.name), rows), `${name}.json`, 'application/json')
+}
+
+/** Parquet keeps the column types: the result goes into DuckDB for a moment and out by COPY. */
+export async function exportResultParquet(table: Table, name: string) {
+  const tmp = `__result_export_${Date.now()}`
+  await insertArrow(table, tmp)
+  try {
+    await exportTable(quoteIdent(tmp), name, 'parquet')
+  } finally {
+    await query(`DROP TABLE IF EXISTS ${quoteIdent(tmp)}`)
+  }
 }
 
 /** `sqlName`: the table as written in SQL (maybe schema-qualified); `fileName` without extension. */

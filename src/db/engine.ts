@@ -173,6 +173,11 @@ export async function checkpoint(): Promise<void> {
   if (persistent) await query('CHECKPOINT')
 }
 
+/** A new table `name` in main from an Arrow table already in the page (a result in the grid). */
+export function insertArrow(table: Table, name: string): Promise<void> {
+  return serial(async () => (await getEngine()).conn.insertArrowTable(table, { name, create: true }))
+}
+
 export async function registerBuffer(name: string, bytes: Uint8Array): Promise<void> {
   const { db } = await getEngine()
   await db.registerFileBuffer(name, bytes)

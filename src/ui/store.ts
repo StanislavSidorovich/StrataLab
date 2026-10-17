@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { Table } from 'apache-arrow'
-import { cancelQuery, checkpoint, getEngine, isCancelled, query, queryCancellable, type EngineProgress } from '../db/engine'
+import { cancelQuery, checkpoint, getEngine, insertArrow, isCancelled, query, queryCancellable, type EngineProgress } from '../db/engine'
 import { loadCatalog, type TableInfo } from '../db/catalog'
 import { closeSource, createTable, openSource, type ImportSource } from '../db/importer'
 import { dialectHints, type DialectHint } from '../core/dialect'
@@ -18,6 +18,10 @@ import { planGeneration, type GenPlan, type GenTable } from '../core/generate'
 import { runGeneration, type GenOutcome } from '../db/generate'
 import { duckdbScript, translateTsql, type TranslatedStatement, type TranslatorProgress } from '../dialects/tsql'
 import { copyToPostgres, getPostgres, postgresCatalog, runPostgres } from '../dialects/postgres'
+import { copyTitle, rememberClosed } from '../core/tabs'
+import { backupFileName } from '../core/backup'
+import { backupDatabase, restoreDatabase } from '../db/backup'
+import { download } from '../db/export'
 
 /** What a query tab speaks (stage 4): DuckDB itself, T-SQL translated to DuckDB, or PostgreSQL (PGlite). */
 export type Dialect = 'duckdb' | 'tsql' | 'postgres'
@@ -105,6 +109,10 @@ interface State {
   resultView: 'result' | 'translation' | 'messages'
   /** a copy to PostgreSQL in progress: the table being copied */
   pgCopy: string | null
+  /** tabs closed this visit, newest last (the tab menu's “Reopen closed tab”) */
+  closedTabs: QueryTab[]
+  /** a database backup or restore in progress */
+  backup: 'saving' | 'restoring' | null
 }
 
 const TABS_KEY = 'stratalab.tabs.v1'
@@ -165,6 +173,8 @@ export const useLab = create<State>(() => ({
   pgTables: [],
   resultView: 'result',
   pgCopy: null,
+  closedTabs: [],
+  backup: null,
 }))
 
 /** The user's own tables and views (schema main), without the catalog datasets. */
@@ -227,6 +237,12 @@ export async function initEngine() {
 
 export async function refreshCatalog() {
   set({ tables: await loadCatalog() })
+}
+
+/** The tree's Refresh: reads both databases again (changes made from another tab, say). */
+export async function refreshTree() {
+  await refreshCatalog()
+  if (get().postgres.status === 'ready') await refreshPgCatalog()
 }
 
 const WRITES = /\b(create|drop|alter|insert|update|delete|copy|attach|detach|import|truncate|merge)\b/i
@@ -425,16 +441,46 @@ export function addTab(sql = '', title?: string, dialect?: Dialect) {
 }
 
 export function closeTab(id: string) {
+  closeTabs([id])
+}
+
+/** Closes tabs (the tab menu's “Close others”, “Close tabs to the right”); “Reopen closed tab” brings them back. */
+export function closeTabs(ids: string[]) {
+  const gone = new Set(ids)
   set((s) => {
-    const tabs = s.tabs.filter((t) => t.id !== id)
+    const tabs = s.tabs.filter((t) => !gone.has(t.id))
     if (!tabs.length) tabs.push({ id: `t${++tabCounter}`, title: 'Query 1', sql: '' })
-    const idx = s.tabs.findIndex((t) => t.id === id)
-    const activeTab = s.activeTab === id ? tabs[Math.max(0, idx - 1)].id : s.activeTab
+    // The active tab closed: the nearest open tab on its left takes over.
+    const idx = s.tabs.findIndex((t) => t.id === s.activeTab)
+    const left = s.tabs.slice(0, idx).reverse().find((t) => !gone.has(t.id))
+    const activeTab = gone.has(s.activeTab) ? (left ?? tabs[0]).id : s.activeTab
     const results = { ...s.results }
-    delete results[id]
     const translations = { ...s.translations }
-    delete translations[id]
-    return { tabs, activeTab, results, translations }
+    for (const id of ids) {
+      delete results[id]
+      delete translations[id]
+    }
+    return { tabs, activeTab, results, translations, closedTabs: rememberClosed(s.closedTabs, s.tabs.filter((t) => gone.has(t.id))) }
+  })
+}
+
+/** The last closed tab, back where tabs open (at the end), with its SQL and dialect. */
+export function reopenClosedTab() {
+  const tab = get().closedTabs.at(-1)
+  if (!tab) return
+  set((s) => ({ closedTabs: s.closedTabs.slice(0, -1) }))
+  addTab(tab.sql, tab.title, tab.dialect)
+}
+
+/** A copy of a tab next to it: same SQL and dialect, “(copy)” in its title. */
+export function duplicateTab(id: string) {
+  const tab = get().tabs.find((t) => t.id === id)
+  if (!tab) return
+  const copy: QueryTab = { ...tab, id: `t${++tabCounter}`, title: copyTitle(tab.title, get().tabs.map((t) => t.title)) }
+  set((s) => {
+    const tabs = [...s.tabs]
+    tabs.splice(tabs.indexOf(tab) + 1, 0, copy)
+    return { tabs, activeTab: copy.id }
   })
 }
 
@@ -749,4 +795,58 @@ export async function openDatasetFromHash(): Promise<boolean> {
   }
   await openDataset(d)
   return true
+}
+
+// ------------------------------------------------------------------ result → table, backup
+
+/** Save as table: the result in the grid becomes a table in main (a table of that name is replaced when `replace`). */
+export async function saveResultAsTable(table: Table, name: string, replace: boolean) {
+  const target = quoteIdent(name)
+  const tmp = `__save_${Date.now()}`
+  try {
+    await insertArrow(table, tmp)
+    if (replace) await query(`DROP TABLE IF EXISTS ${target}`)
+    await query(`ALTER TABLE ${quoteIdent(tmp)} RENAME TO ${target}`)
+    await checkpoint()
+    await refreshCatalog()
+    addLog({ sql: `-- save result as table ${name}`, ok: true, text: `${table.numRows.toLocaleString()} rows saved as table ${name}` })
+  } catch (e) {
+    await query(`DROP TABLE IF EXISTS ${quoteIdent(tmp)}`).catch(() => {})
+    const error = String(e instanceof Error ? e.message : e)
+    addLog({ sql: `-- save result as table ${name}`, ok: false, text: error })
+    set({ importError: `Could not save the result as a table: ${error}` })
+  }
+}
+
+/** Download database: everything in DuckDB as one .duckdb file. */
+export async function downloadBackup() {
+  if (get().backup) return
+  set({ backup: 'saving' })
+  try {
+    const bytes = await backupDatabase()
+    const file = backupFileName(new Date())
+    download(bytes as BlobPart, file, 'application/octet-stream')
+    addLog({ sql: '-- download database', ok: true, text: `${file} (${(bytes.byteLength / 1024 / 1024).toFixed(1)} MB): every table, view and dataset` })
+  } catch (e) {
+    set({ importError: `Could not make the backup: ${String(e instanceof Error ? e.message : e)}` })
+  } finally {
+    set({ backup: null })
+  }
+}
+
+/** Restore from a backup: replaces every DuckDB table with the file's (PostgreSQL is not touched). */
+export async function restoreBackup(file: File) {
+  if (get().backup) return
+  set({ backup: 'restoring' })
+  try {
+    const n = await restoreDatabase(file)
+    addLog({ sql: `-- restore ${file.name}`, ok: true, text: `Database restored from ${file.name}: ${n} table${n === 1 ? '' : 's'}` })
+  } catch (e) {
+    const error = String(e instanceof Error ? e.message : e)
+    addLog({ sql: `-- restore ${file.name}`, ok: false, text: error })
+    set({ importError: `Could not restore ${file.name}: ${error}. Your tables are as they were.` })
+  } finally {
+    set({ backup: null })
+    await refreshCatalog()
+  }
 }
