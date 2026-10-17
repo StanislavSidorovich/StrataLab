@@ -53,6 +53,13 @@ export async function runPostgres(sql: string): Promise<Table> {
   return pgToArrow(last?.fields ?? [], (last?.rows ?? []) as unknown[][])
 }
 
+/** EXPLAIN (…, FORMAT JSON) of one statement: PostgreSQL's plan as parsed JSON. */
+export async function explainPostgres(explain: string): Promise<unknown> {
+  const { pg } = await getPostgres()
+  const r = await pg.query<Record<string, unknown>>(explain)
+  return Object.values(r.rows[0] ?? {})[0]
+}
+
 const SYSTEM = "('pg_catalog', 'information_schema', 'pg_toast')"
 
 /** Tables and views of every schema but the system ones, for the object tree and completion. */

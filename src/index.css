@@ -137,6 +137,11 @@ button:disabled {
     padding-left: 8px;
     padding-right: 8px;
   }
+  /* an icon only on a phone, so the bar above the editor still fits 390 px */
+  .btn-explain {
+    padding-left: 5px;
+    padding-right: 5px;
+  }
 }
 .btn-danger {
   background: var(--danger);

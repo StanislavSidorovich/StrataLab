@@ -1,8 +1,8 @@
 // Above the editor (stage 4): what this tab speaks. DuckDB runs as written; T-SQL is translated
 // to DuckDB first (sqlglot) and the translation can be seen side by side; PostgreSQL runs on a
 // real PostgreSQL (PGlite), a separate database that tables are copied into.
-import { ArrowLeftRight, Copy, Loader2, Play, Redo2, Search, Square, SquareSlash, Undo2, WandSparkles } from 'lucide-react'
-import { copySchemaToPostgres, ownTables, setTabDialect, showTranslation, stopQuery, tabDialect, useLab, type Dialect } from './store'
+import { ArrowLeftRight, Copy, ListTree, Loader2, Play, Redo2, Search, Square, SquareSlash, Undo2, WandSparkles } from 'lucide-react'
+import { copySchemaToPostgres, explainSql, ownTables, setTabDialect, showTranslation, stopQuery, tabDialect, useLab, type Dialect } from './store'
 import { activeSql, editorCommand, formatActiveTab, runActive } from './SqlEditor'
 
 const DIALECTS: { id: Dialect; label: string; short: string; title: string }[] = [
@@ -22,15 +22,16 @@ export function DialectBar() {
   const dialect = tabDialect(tab)
 
   return (
-    <div className="h-9 shrink-0 flex items-center gap-1.5 sm:gap-2 px-2 overflow-x-auto" style={{ background: 'var(--panel)', borderBottom: '1px solid var(--line)', fontSize: 12 }}>
+    <div className="h-9 shrink-0 flex items-center gap-1 sm:gap-2 px-2 overflow-x-auto" style={{ background: 'var(--panel)', borderBottom: '1px solid var(--line)', fontSize: 12 }}>
       <RunButton />
+      <ExplainButton />
       <div role="radiogroup" aria-label="Dialect of this tab" className="flex shrink-0 rounded-md p-0.5" style={{ background: 'var(--panel-2)' }}>
         {DIALECTS.map((d) => (
           <button
             key={d.id}
             role="radio"
             aria-checked={dialect === d.id}
-            className="px-2 sm:px-2.5 py-1 rounded whitespace-nowrap"
+            className="px-1.5 sm:px-2.5 py-1 rounded whitespace-nowrap"
             style={dialect === d.id ? { background: 'var(--panel)', fontWeight: 600, boxShadow: '0 1px 2px rgba(0,0,0,0.12)', color: 'var(--accent)' } : { color: 'var(--muted)' }}
             title={d.title}
             onClick={() => setTabDialect(tab.id, d.id)}
@@ -80,7 +81,7 @@ export function DialectBar() {
 function RunButton() {
   const engine = useLab((s) => s.engine)
   const tabId = useLab((s) => s.activeTab)
-  const running = useLab((s) => s.results[s.activeTab]?.status === 'running')
+  const running = useLab((s) => s.results[s.activeTab]?.status === 'running' || s.plans[s.activeTab]?.status === 'running')
   const pg = useLab((s) => tabDialect(s.tabs.find((t) => t.id === s.activeTab)) === 'postgres')
   if (running && !pg)
     return (
@@ -91,6 +92,24 @@ function RunButton() {
   return (
     <button className="btn btn-primary btn-run shrink-0" onClick={runActive} disabled={engine.status !== 'ready' || running} title="Run the selection, or the whole tab (Ctrl+Enter, F5)">
       {running ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />} Run
+    </button>
+  )
+}
+
+/** Explain: how the database runs the tab's query, as a tree of steps (the Plan view under the editor). */
+function ExplainButton() {
+  const ready = useLab((s) => s.engine.status === 'ready')
+  const tabId = useLab((s) => s.activeTab)
+  const busy = useLab((s) => s.results[s.activeTab]?.status === 'running' || s.plans[s.activeTab]?.status === 'running')
+  return (
+    <button
+      className="btn btn-ghost btn-explain shrink-0"
+      onClick={() => void explainSql(tabId, activeSql())}
+      disabled={!ready || busy}
+      aria-label="Explain"
+      title="Explain: show how the database runs this query, step by step, with the rows and the time of each step (EXPLAIN ANALYZE)"
+    >
+      <ListTree size={13} /> <span className="hidden sm:inline">Explain</span>
     </button>
   )
 }
@@ -110,7 +129,7 @@ function EditorTools() {
   return (
     <div className="ml-auto flex shrink-0 items-center" role="toolbar" aria-label="Editor">
       {tools.map(([label, keys, icon, run]) => (
-        <button key={label} className="p-1 sm:p-1.5 rounded hover:bg-[var(--panel-2)]" style={{ color: 'var(--muted)' }} onClick={run} aria-label={label} title={`${label} (${keys})`}>
+        <button key={label} className="p-[3px] sm:p-1.5 rounded hover:bg-[var(--panel-2)]" style={{ color: 'var(--muted)' }} onClick={run} aria-label={label} title={`${label} (${keys})`}>
           {icon}
         </button>
       ))}
