@@ -1,8 +1,9 @@
 // The dataset catalog (stage 3): sample databases that load in one click into their own
 // schema, with where they come from and their licence. Also the card shown while one loads.
 import { useState } from 'react'
-import { AlertTriangle, Check, ExternalLink, Library, Link2, Loader2, X } from 'lucide-react'
-import { closeDatasetError, openCatalog, openDataset, useLab } from './store'
+import { AlertTriangle, Check, EyeOff, ExternalLink, Library, Link2, Loader2, Store, X } from 'lucide-react'
+import { addTab, closeDatasetError, hasDemoTables, hideDemo, loadDemo, openCatalog, openDataset, openPractice, showDemo, useLab } from './store'
+import { WELCOME_SQL } from '../data/demo'
 import { DATASETS, datasetBytes, datasetRows } from '../data/datasets'
 
 const size = (bytes: number) => (bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} kB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`)
@@ -39,6 +40,7 @@ export function CatalogDialog() {
           </button>
         </div>
         <ul className="overflow-auto min-h-0 p-3 grid gap-3 sm:grid-cols-2">
+          <DemoCard />
           {DATASETS.map((d) => {
             const isLoaded = loaded.has(d.id)
             return (
@@ -80,6 +82,60 @@ export function CatalogDialog() {
         </ul>
       </div>
     </div>
+  )
+}
+
+/** The demo shop: lives with the user's own tables (no schema), and is hidden rather than removed. */
+function DemoCard() {
+  const here = useLab((s) => hasDemoTables(s.tables))
+  const hidden = useLab((s) => s.demoHidden)
+  const shown = here && !hidden
+  const newQuery = () => {
+    openCatalog(false)
+    addTab(WELCOME_SQL, 'Demo shop')
+  }
+  return (
+    <li className="rounded-lg p-3 flex flex-col gap-2" style={{ border: '1px solid var(--line)', background: 'var(--panel-2)' }}>
+      <div className="flex items-baseline gap-2">
+        <Store size={14} className="self-center shrink-0" style={{ color: 'var(--accent)' }} />
+        <span className="font-semibold text-[14px]">Demo shop</span>
+        <span className="mono" style={{ color: 'var(--muted)', fontSize: 11 }}>customers, orders…</span>
+        {here && (
+          <span className="ml-auto flex items-center gap-1" style={{ color: hidden ? 'var(--muted)' : 'var(--accent)', fontSize: 12 }}>
+            {hidden ? <EyeOff size={13} /> : <Check size={13} />} {hidden ? 'hidden' : 'loaded'}
+          </span>
+        )}
+      </div>
+      <p>A small coffee shop: customers, products, orders and their lines. Made-up data, the same for everyone, so answers can be compared.</p>
+      <p style={{ color: 'var(--muted)' }}>First JOINs and GROUP BY, revenue by category or month, order statuses, repeat customers.</p>
+      <p style={{ color: 'var(--muted)', fontSize: 12 }}>
+        4 tables · 200 customers, 1,500 orders · generated in this browser, nothing to download{hidden && here ? ' · hidden from the table list, queries on it still work' : ''}
+      </p>
+      <div className="flex items-center gap-2 mt-auto pt-1">
+        {shown ? (
+          <button className="btn btn-primary" onClick={newQuery}>
+            New query
+          </button>
+        ) : (
+          <button className="btn btn-primary" onClick={() => void showDemo()}>
+            {here ? 'Show' : 'Load'}
+          </button>
+        )}
+        {here && (
+          <button className="btn" onClick={() => confirm('Load the demo shop again? Changes made to its tables are lost.') && void loadDemo()}>
+            Reload
+          </button>
+        )}
+        <button className="btn btn-ghost" onClick={() => { openCatalog(false); openPractice() }} title="Worked examples and tasks with a check of your answer">
+          Practice…
+        </button>
+        {shown && (
+          <button className="btn btn-ghost ml-auto" onClick={hideDemo} title="Take the demo tables out of the table list. Nothing is deleted.">
+            <EyeOff size={14} /> Hide
+          </button>
+        )}
+      </div>
+    </li>
   )
 }
 

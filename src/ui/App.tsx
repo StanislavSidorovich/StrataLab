@@ -10,6 +10,7 @@ import { DdlDialog } from './DdlDialog'
 import { GenerateDialog } from './GenerateDialog'
 import { CatalogDialog, DatasetProgressCard } from './CatalogDialog'
 import { WelcomeDialog } from './WelcomeDialog'
+import { PracticeDialog, TaskBar } from './Practice'
 import { DialectBar } from './DialectBar'
 import { applyUpdate, useUpdateReady } from '../pwa/register'
 import { engineLoadingLabel, engineLoadingShort } from './EngineLoading'
@@ -92,6 +93,7 @@ export function App() {
         <div ref={main} className="flex-1 min-w-0 flex flex-col">
           <Tabs />
           <DialectBar />
+          <TaskBar />
           <div style={{ height: `${split * 100}%` }} className="min-h-0">
             <SqlEditor />
           </div>
@@ -123,6 +125,7 @@ export function App() {
       <CatalogDialog />
       <DatasetProgressCard />
       <WelcomeDialog />
+      <PracticeDialog />
     </div>
   )
 }

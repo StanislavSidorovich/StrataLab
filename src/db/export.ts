@@ -18,7 +18,8 @@ export function download(data: BlobPart, fileName: string, type: string) {
   setTimeout(() => URL.revokeObjectURL(url), 5000)
 }
 
-function resultRows(table: Table): { header: string[]; rows: (string | number | null)[][] } {
+/** A result's header and rows as the grid shows them (dates as ISO text, DECIMAL as text). */
+export function resultRows(table: Table): { header: string[]; rows: (string | number | null)[][] } {
   const fields = table.schema.fields
   const fmt = fields.map(formatterFor)
   const cols = fields.map((_, i) => table.getChildAt(i))

@@ -21,7 +21,9 @@ import { copyToPostgres, getPostgres, postgresCatalog, runPostgres } from '../di
 import { copyTitle, rememberClosed } from '../core/tabs'
 import { backupFileName } from '../core/backup'
 import { backupDatabase, restoreDatabase } from '../db/backup'
-import { download } from '../db/export'
+import { download, resultRows } from '../db/export'
+import { compareResults, type Verdict } from '../core/check'
+import { hashWithoutTask, taskById, taskFromHash, taskStarter, type PracticeExample, type PracticeTask } from '../data/practice'
 
 /** What a query tab speaks (stage 4): DuckDB itself, T-SQL translated to DuckDB, or PostgreSQL (PGlite). */
 export type Dialect = 'duckdb' | 'tsql' | 'postgres'
@@ -32,6 +34,8 @@ export interface QueryTab {
   sql: string
   /** missing in tabs saved before stage 4: DuckDB */
   dialect?: Dialect
+  /** a practice task's tab: the task's id (src/data/practice.ts) */
+  task?: string
 }
 
 /** A T-SQL tab's translation to DuckDB: being made, made, or failed. */
@@ -113,11 +117,38 @@ interface State {
   closedTabs: QueryTab[]
   /** a database backup or restore in progress */
   backup: 'saving' | 'restoring' | null
+  /** the demo shop's tables are kept but left out of the tree (Sample datasets shows them again) */
+  demoHidden: boolean
+  /** the practice dialog (examples and tasks on the demo shop) is open */
+  practiceOpen: boolean
+  practice: PracticeProgress
+  /** per tab, a practice task's last Check */
+  checks: Record<string, CheckState>
 }
+
+export interface PracticeProgress {
+  solved: string[]
+  /** hints shown so far, per task */
+  hints: Record<string, number>
+}
+
+export type CheckState = { status: 'running' } | { status: 'done'; verdict: Verdict } | { status: 'error'; message: string }
 
 const TABS_KEY = 'stratalab.tabs.v1'
 const WELCOME_KEY = 'stratalab.welcome-seen'
 const THEME_KEY = 'stratalab.theme'
+const DEMO_HIDDEN_KEY = 'stratalab.demo-hidden'
+const PRACTICE_KEY = 'stratalab.practice.v1'
+
+function loadPractice(): PracticeProgress {
+  try {
+    const saved = JSON.parse(localStorage.getItem(PRACTICE_KEY) ?? 'null')
+    if (Array.isArray(saved?.solved)) return { solved: saved.solved, hints: saved.hints ?? {} }
+  } catch {
+    /* ignore */
+  }
+  return { solved: [], hints: {} }
+}
 
 function loadTabs(): { tabs: QueryTab[]; activeTab: string } {
   try {
@@ -134,6 +165,14 @@ function firstVisit(): boolean {
   if (ddlDataFromHash(location.hash) !== null || datasetFromHash(location.hash)) return false
   try {
     return localStorage.getItem(WELCOME_KEY) !== '1'
+  } catch {
+    return false
+  }
+}
+
+function initialDemoHidden(): boolean {
+  try {
+    return localStorage.getItem(DEMO_HIDDEN_KEY) === '1'
   } catch {
     return false
   }
@@ -175,6 +214,10 @@ export const useLab = create<State>(() => ({
   pgCopy: null,
   closedTabs: [],
   backup: null,
+  demoHidden: initialDemoHidden(),
+  practiceOpen: false,
+  practice: loadPractice(),
+  checks: {},
 }))
 
 /** The user's own tables and views (schema main), without the catalog datasets. */
@@ -187,6 +230,21 @@ useLab.subscribe((s, prev) => {
   if (s.tabs !== prev.tabs || s.activeTab !== prev.activeTab) {
     try {
       localStorage.setItem(TABS_KEY, JSON.stringify({ tabs: s.tabs, activeTab: s.activeTab }))
+    } catch {
+      /* ignore */
+    }
+  }
+  if (s.practice !== prev.practice) {
+    try {
+      localStorage.setItem(PRACTICE_KEY, JSON.stringify(s.practice))
+    } catch {
+      /* ignore */
+    }
+  }
+  if (s.demoHidden !== prev.demoHidden) {
+    try {
+      if (s.demoHidden) localStorage.setItem(DEMO_HIDDEN_KEY, '1')
+      else localStorage.removeItem(DEMO_HIDDEN_KEY)
     } catch {
       /* ignore */
     }
@@ -215,9 +273,11 @@ export async function initEngine() {
     if (get().tabs.some((t) => t.dialect === 'postgres')) void startPostgres()
     const fromModel = await openDdlFromHash()
     const fromLink = await openDatasetFromHash()
+    const fromTask = await openTaskFromHash()
     window.addEventListener('hashchange', () => {
       void openDdlFromHash()
       void openDatasetFromHash()
+      void openTaskFromHash()
     })
     // First visit: an empty database gets the demo shop, so the welcome query works.
     // A user who dropped the demo tables in a saved database does not get them back.
@@ -229,7 +289,7 @@ export async function initEngine() {
       /* ignore */
     }
     // Someone arriving with a model came for that model, not for the demo shop.
-    if (!fromModel && !fromLink && ownTables(get().tables).length === 0 && (!e.persistent || !offered)) await loadDemo()
+    if (!fromModel && !fromLink && !fromTask && ownTables(get().tables).length === 0 && (!e.persistent || !offered)) await loadDemo()
   } catch (e) {
     set({ engine: { status: 'error', error: String(e instanceof Error ? e.message : e) } })
   }
@@ -498,19 +558,28 @@ export function openAndRun(sql: string, title: string, dialect?: Dialect) {
   void runSql(id, sql)
 }
 
+/** Loads the demo shop again (fresh rows) and shows it in the tree. */
 export async function loadDemo() {
   await query(DEMO_SQL)
   await checkpoint()
   await refreshCatalog()
+  set({ demoHidden: false })
   addLog({ sql: '-- demo shop', ok: true, text: 'Demo shop loaded: customers, products, orders, order_items' })
 }
 
-/** Drops the demo shop's tables, the ones that refer to others first. */
-export async function removeDemo() {
-  for (const name of [...DEMO_TABLES].reverse()) await query(`DROP TABLE IF EXISTS ${name}`)
-  await checkpoint()
-  await refreshCatalog()
-  addLog({ sql: '-- remove demo shop', ok: true, text: 'Demo shop removed (“Load demo shop” brings it back)' })
+/** All four demo tables are in the database (hidden or not). */
+export const hasDemoTables = (tables: TableInfo[]) => DEMO_TABLES.every((n) => ownTables(tables).some((t) => t.name === n))
+
+/** Takes the demo shop out of the tree; its tables stay, so it comes back as it was. */
+export function hideDemo() {
+  set({ demoHidden: true })
+  addLog({ sql: '-- hide demo shop', ok: true, text: 'Demo shop hidden (Sample datasets → Demo shop → Show brings it back)' })
+}
+
+/** Shows the demo shop in the tree again, loading it first when its tables are gone. */
+export async function showDemo() {
+  if (!hasDemoTables(get().tables)) return loadDemo()
+  set({ demoHidden: false })
 }
 
 export async function dropObject(t: TableInfo) {
@@ -848,5 +917,81 @@ export async function restoreBackup(file: File) {
   } finally {
     set({ backup: null })
     await refreshCatalog()
+  }
+}
+
+// ------------------------------------------------------------------ practice (stage 5)
+
+export function openPractice(open = true) {
+  set({ practiceOpen: open })
+}
+
+/** The demo shop's tables must be there for examples and tasks (hidden is fine: queries work). */
+async function ensureDemo() {
+  if (!hasDemoTables(get().tables)) await loadDemo()
+}
+
+export async function openExample(e: PracticeExample) {
+  set({ practiceOpen: false })
+  await ensureDemo()
+  openAndRun(e.sql, e.title)
+}
+
+/** Opens a task in its own tab, or switches to the tab already open on it. */
+export async function openTask(t: PracticeTask) {
+  set({ practiceOpen: false })
+  await ensureDemo()
+  const open = get().tabs.find((tab) => tab.task === t.id)
+  if (open) return set({ activeTab: open.id })
+  const id = addTab(taskStarter(t), t.title)
+  set((s) => ({ tabs: s.tabs.map((tab) => (tab.id === id ? { ...tab, task: t.id } : tab)) }))
+}
+
+export async function openTaskFromHash(): Promise<boolean> {
+  const id = taskFromHash(location.hash)
+  if (!id) return false
+  history.replaceState(null, '', location.pathname + location.search + hashWithoutTask(location.hash))
+  const t = taskById(id)
+  if (!t) {
+    set({ importError: `The link asks for a practice task called “${id}”, which Quaera Lab doesn't have.` })
+    return false
+  }
+  await openTask(t)
+  return true
+}
+
+/** Shows the task's next hint (they come one at a time). */
+export function nextHint(t: PracticeTask) {
+  set((s) => {
+    const shown = Math.min(t.hints.length, (s.practice.hints[t.id] ?? 0) + 1)
+    return { practice: { ...s.practice, hints: { ...s.practice.hints, [t.id]: shown } } }
+  })
+}
+
+/**
+ * Check: runs the tab (as Run does) and the task's reference query on the same tables, and
+ * compares the two results. A right answer marks the task solved.
+ */
+export async function checkTask(tabId: string, sql: string) {
+  const tab = get().tabs.find((t) => t.id === tabId)
+  const task = tab?.task ? taskById(tab.task) : undefined
+  if (!task) return
+  const put = (c: CheckState) => set((s) => ({ checks: { ...s.checks, [tabId]: c } }))
+  put({ status: 'running' })
+  await ensureDemo()
+  await runSql(tabId, sql)
+  const result = get().results[tabId]
+  if (result?.status !== 'done' || !result.table) {
+    return put({ status: 'error', message: result?.error === STOPPED ? 'The query was stopped.' : 'Your query did not run: fix the error shown under Result, then Check again.' })
+  }
+  if (result.table.numCols === 0) return put({ status: 'error', message: 'Your query returned no result: the last statement should be a SELECT.' })
+  try {
+    const expected = resultRows(await query(task.solution))
+    const verdict = compareResults(resultRows(result.table), expected, task.ordered)
+    put({ status: 'done', verdict })
+    if (verdict.ok && !get().practice.solved.includes(task.id)) set((s) => ({ practice: { ...s.practice, solved: [...s.practice.solved, task.id] } }))
+    addLog({ sql: `-- check: ${task.title}`, ok: verdict.ok, text: verdict.ok ? 'Correct' : 'Not yet' })
+  } catch (e) {
+    put({ status: 'error', message: `The reference answer could not be computed (were the demo tables changed?): ${String(e instanceof Error ? e.message : e).split('\n')[0]}` })
   }
 }
