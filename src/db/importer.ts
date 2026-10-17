@@ -16,12 +16,14 @@ export interface ImportSource {
   /** name of the file inside DuckDB's virtual file system */
   regName: string
   tableName: string
+  /** the schema the table goes into: main (My tables) or one of the user's datasets */
+  schema: string
   csv?: CsvOptions
   sheets?: string[]
   sheet?: string
   /** 0-based row of the sheet that holds the column names */
   headerRow?: number
-  /** an existing table to add the rows to (stage 2b), instead of creating a new one */
+  /** an existing table of `schema` to add the rows to (stage 2b), instead of creating a new one */
   target?: string | null
 }
 
@@ -44,7 +46,7 @@ export async function openSource(file: File): Promise<ImportSource> {
   if (!kind) throw new Error(`${file.name}: Quaera Lab reads CSV, Excel, Parquet and JSON files`)
   const id = `src${++counter}`
   const bytes = new Uint8Array(await file.arrayBuffer())
-  const base: ImportSource = { id, fileName: file.name, kind, regName: '', tableName: tableNameFrom(file.name) }
+  const base: ImportSource = { id, fileName: file.name, kind, regName: '', tableName: tableNameFrom(file.name), schema: 'main' }
 
   if (kind === 'csv') {
     const { text, options } = sniffCsv(bytes)
@@ -117,7 +119,7 @@ export async function previewSource(src: ImportSource, limit = 50) {
 
 export async function createTable(src: ImportSource, replace: boolean): Promise<void> {
   const verb = replace ? 'CREATE OR REPLACE TABLE' : 'CREATE TABLE'
-  await query(`${verb} ${quoteIdent(src.tableName)} AS SELECT * FROM ${readExpr(src)}`)
+  await query(`${verb} ${src.schema === 'main' ? quoteIdent(src.tableName) : `${quoteIdent(src.schema)}.${quoteIdent(src.tableName)}`} AS SELECT * FROM ${readExpr(src)}`)
   await checkpoint()
 }
 

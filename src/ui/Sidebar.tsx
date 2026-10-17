@@ -1,9 +1,11 @@
-// Object Explorer: the user's tables and views with their columns, then each loaded catalog
-// dataset as a folder (its own schema), and what you can do with each one (the SSMS
-// right-click menu, as a small menu button).
+// Object Explorer: the user's tables and views with their columns, then each dataset as a
+// folder (its own schema): the user's own, made with New dataset and filled a table at a time,
+// and the loaded catalog datasets; and what you can do with each one (the SSMS right-click
+// menu, as a small menu button).
 import { createContext, useContext, useRef, useState } from 'react'
-import { ChevronDown, ChevronRight, ClipboardPaste, Database, DatabaseZap, Eye, Folder, GraduationCap, Library, Loader2, MoreHorizontal, Network, RefreshCw, Search, Sparkles, Store, Table2, Upload, X } from 'lucide-react'
-import { copySchemaToPostgres, downloadBackup, dropPgObject, dropDataset, dropObject, enqueueFiles, hasDemoTables, hideDemo, loadDemo, openAndRun, openAsModel, openCatalog, openDataset, openGenerate, openPractice, ownTables, pasteTableFromClipboard, refreshTree, renameObject, restoreBackup, useLab } from './store'
+import { ChevronDown, ChevronRight, ClipboardPaste, Database, DatabaseZap, Eye, Folder, FolderPlus, GraduationCap, Library, Loader2, MoreHorizontal, Network, RefreshCw, Search, Sparkles, Store, Table2, Upload, X } from 'lucide-react'
+import { CATALOG_IDS, copySchemaToPostgres, downloadBackup, dropPgObject, dropDataset, dropObject, enqueueFiles, hasDemoTables, hideDemo, loadDemo, newDataset, openAndRun, openAsModel, openCatalog, openDataset, openGenerate, openMove, openPractice, ownTables, pasteTableFromClipboard, refreshTree, renameDataset, renameObject, restoreBackup, useLab } from './store'
+import { isOwnSchema } from '../core/ownDatasets'
 import { qualifiedName } from '../core/sql'
 import { treeMatch, type TreeMatch } from '../core/tree'
 import { isDatabaseFile } from '../core/backup'
@@ -40,13 +42,13 @@ function matching(tables: TableInfo[], search: string): [TableInfo, TreeMatch][]
   })
 }
 
-/** Opens the file picker; the chosen files become tables, or fill `table` (stage 2b). */
-export function pickFilesFor(table?: string) {
+/** Opens the file picker; the chosen files become tables of `schema`, or fill `table` (stage 2b). */
+export function pickFilesFor(table?: string, schema = 'main') {
   const input = document.createElement('input')
   input.type = 'file'
   input.accept = ACCEPT
   input.multiple = !table
-  input.onchange = () => void enqueueFiles([...(input.files ?? [])], table)
+  input.onchange = () => void enqueueFiles([...(input.files ?? [])], table, schema)
   input.click()
 }
 
@@ -59,13 +61,14 @@ export function Sidebar() {
   // A hidden demo shop keeps its tables (queries on them still work); only the tree leaves them out.
   const tables = ownTables(all).filter((t) => !(demoHidden && demoHere && DEMO_TABLES.includes(t.name)))
   const hasDemo = demoHere && !demoHidden
-  const schemas = [...new Set(all.map((t) => t.schema).filter((s) => s !== 'main'))]
+  const schemas = useLab((s) => s.schemas)
   const empty = tables.filter((t) => t.kind === 'table' && t.rows === 0)
   const backup = useLab((s) => s.backup)
   const [search, setSearch] = useState('')
   const searching = search.trim() !== ''
   const shown = matching(tables, search)
-  const shownSchemas = schemas.map((s) => [s, matching(all.filter((t) => t.schema === s), search)] as const).filter(([, list]) => list.length > 0)
+  // While searching, only folders with a match; otherwise every one, empty ones too (yours, waiting for tables).
+  const shownSchemas = schemas.map((s) => [s, matching(all.filter((t) => t.schema === s), search)] as const).filter(([, list]) => !searching || list.length > 0)
 
   return (
     <aside className="h-full flex flex-col" style={{ background: 'var(--panel)', borderRight: '1px solid var(--line)' }}>
@@ -154,10 +157,24 @@ export function Sidebar() {
         {shown.map(([t, m]) => (
           <TableNode key={t.name} t={t} demo={hasDemo && DEMO_TABLES.includes(t.name)} match={searching ? m : undefined} />
         ))}
-        {shownSchemas.length > 0 && (
+        {(!searching || shownSchemas.length > 0) && engine.status === 'ready' && (
           <div className="px-3 pt-4 pb-1 flex items-center gap-2 font-semibold" style={{ color: 'var(--muted)', fontSize: 11, letterSpacing: 0.4 }}>
-            <Library size={13} /> DATASETS ({shownSchemas.length})
+            <Library size={13} className="shrink-0" />
+            <span className="whitespace-nowrap">DATASETS{shownSchemas.length > 0 && ` (${shownSchemas.length})`}</span>
+            <button
+              className="ml-auto flex items-center gap-1 font-normal hover:underline whitespace-nowrap"
+              style={{ color: 'var(--accent)', letterSpacing: 0 }}
+              onClick={() => void newDataset()}
+              title="Make an empty dataset (a schema: a folder for your tables), then add tables to it one at a time"
+            >
+              <FolderPlus size={12} /> New dataset
+            </button>
           </div>
+        )}
+        {!searching && shownSchemas.length === 0 && engine.status === 'ready' && (
+          <p className="px-3 py-1" style={{ color: 'var(--muted)', fontSize: 12 }}>
+            Group tables into a dataset of your own, or load a sample one.
+          </p>
         )}
         {shownSchemas.map(([s, list]) => (
           <SchemaNode key={s} schema={s} tables={all.filter((t) => t.schema === s)} shown={searching ? list : undefined} />
@@ -169,34 +186,69 @@ export function Sidebar() {
   )
 }
 
-/** A loaded dataset: a folder with its tables, and a menu to open its starter query, reload or remove it. */
+/**
+ * A dataset: a folder with its tables. A catalog one's menu opens its starter query, reloads or
+ * removes it; one of the user's takes files (from the menu, or dropped on it), is renamed, removed.
+ */
 function SchemaNode({ schema, tables, shown }: { schema: string; tables: TableInfo[]; shown?: [TableInfo, TreeMatch][] }) {
-  const [userOpen, setOpen] = useState(false)
+  const own = isOwnSchema(schema, CATALOG_IDS)
+  const [userOpen, setOpen] = useState(own && tables.length === 0)
   // While searching, a folder with matches is open and shows only them.
   const open = userOpen || !!shown
   const [menu, setMenu] = useState(false)
-  const d = datasetById(schema)
+  const [dropHere, setDropHere] = useState(0)
+  const d = own ? undefined : datasetById(schema)
+  const hasTables = tables.some((t) => t.kind === 'table')
+  const empty = tables.filter((t) => t.kind === 'table' && t.rows === 0)
   const items: MenuItem[] = [
     ...(d
       ? ([
           ['New query on this dataset', () => void openDataset(d)],
           ['Reload (undo my changes)…', () => confirm(`Load ${d.title} again? Changes made to its tables are lost.`) && void openDataset(d, true)],
         ] as [string, () => void][])
+      : ([
+          ['Add CSV / Excel…', () => pickFilesFor(undefined, schema)],
+          ...(empty.length ? [['Generate sample rows…', () => void openGenerate(undefined, schema)]] : []),
+          ['Rename…', () => void renameDataset(schema)],
+        ] as [string, () => void][])),
+    ...(hasTables
+      ? ([
+          ['Show as model in model.quaera.app ↗', () => openAsModel(schema)],
+          ['Copy dataset to PostgreSQL', () => void copySchemaToPostgres(schema)],
+        ] as [string, () => void][])
       : []),
-    ['Show as model in model.quaera.app ↗', () => openAsModel(schema)],
-    ['Copy dataset to PostgreSQL', () => void copySchemaToPostgres(schema)],
-    ['Remove from this browser…', () => confirm(`Remove ${d?.title ?? schema} and its ${tables.length} tables from this browser?`) && void dropDataset(schema)],
+    [
+      'Remove from this browser…',
+      () => confirm(tables.length ? `Remove ${d?.title ?? schema} and its ${tables.length} tables from this browser?` : `Remove the empty dataset ${schema}?`) && void dropDataset(schema),
+    ],
   ]
   return (
     <div>
-      <div className="group flex items-center gap-1 pl-2 pr-1 py-1 hover:bg-[var(--panel-2)]">
+      {/* A file dropped on one of the user's folders becomes a table in it (the page-wide drop handler reads data-fill-schema). */}
+      <div
+        className="group flex items-center gap-1 pl-2 pr-1 py-1 hover:bg-[var(--panel-2)]"
+        data-fill-schema={own ? schema : undefined}
+        style={dropHere > 0 && own ? { background: 'var(--accent-soft)', outline: '2px dashed var(--accent)', outlineOffset: -2 } : undefined}
+        onDragEnter={() => setDropHere((n) => n + 1)}
+        onDragLeave={() => setDropHere((n) => Math.max(0, n - 1))}
+        onDrop={() => setDropHere(0)}
+      >
         <button className="p-0.5" onClick={() => setOpen(!open)} aria-label={open ? 'Collapse' : 'Expand'}>
           {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         </button>
         <Folder size={14} style={{ color: 'var(--accent)' }} className="shrink-0" />
-        <button className="truncate text-left flex-1" onClick={() => setOpen(!open)} title={`${d?.title ?? schema}: tables are in the schema ${schema} (${schema}.table_name)`}>
+        <button
+          className="truncate text-left flex-1"
+          onClick={() => setOpen(!open)}
+          title={own ? `Your dataset ${schema}: its tables are ${schema}.table_name; drop files here to add tables` : `${d?.title ?? schema}: tables are in the schema ${schema} (${schema}.table_name)`}
+        >
           {schema}
         </button>
+        {own && (
+          <span className="shrink-0 px-1 rounded" style={{ background: 'var(--panel-2)', color: 'var(--muted)', fontSize: 10 }} title="Your own dataset (not a sample one)">
+            my
+          </span>
+        )}
         <span className="shrink-0" style={{ color: 'var(--muted)', fontSize: 11 }}>
           {shown ? `${shown.length}/${tables.length}` : tables.length}
         </span>
@@ -212,6 +264,15 @@ function SchemaNode({ schema, tables, shown }: { schema: string; tables: TableIn
           {(shown ?? tables.map((t) => [t, undefined] as const)).map(([t, m]) => (
             <TableNode key={t.name} t={t} match={m} />
           ))}
+          {!shown && tables.length === 0 && (
+            <p className="pl-6 pr-2 py-1" style={{ color: 'var(--muted)', fontSize: 12 }}>
+              Empty. Drop CSV or Excel files on the folder, or{' '}
+              <button className="hover:underline" style={{ color: 'var(--accent)' }} onClick={() => pickFilesFor(undefined, schema)}>
+                add a file
+              </button>
+              .
+            </p>
+          )}
         </div>
       )}
     </div>
@@ -226,8 +287,7 @@ function TableNode({ t, demo = false, match }: { t: TableInfo; demo?: boolean; m
   const [menu, setMenu] = useState(false)
   const [dropHere, setDropHere] = useState(0)
   const name = qualifiedName(t.schema, t.name)
-  const own = t.schema === 'main'
-  const fillable = own && t.kind === 'table'
+  const fillable = isOwnSchema(t.schema, CATALOG_IDS) && t.kind === 'table'
   const Icon = t.kind === 'view' ? Eye : Table2
 
   return (
@@ -236,6 +296,7 @@ function TableNode({ t, demo = false, match }: { t: TableInfo; demo?: boolean; m
       <div
         className="group flex items-center gap-1 pl-2 pr-1 py-1 hover:bg-[var(--panel-2)]"
         data-fill-table={fillable ? t.name : undefined}
+        data-fill-schema={fillable ? t.schema : undefined}
         style={dropHere > 0 && fillable ? { background: 'var(--accent-soft)', outline: '2px dashed var(--accent)', outlineOffset: -2 } : undefined}
         onDragEnter={() => setDropHere((n) => n + 1)}
         onDragLeave={() => setDropHere((n) => Math.max(0, n - 1))}
@@ -284,7 +345,7 @@ function TableNode({ t, demo = false, match }: { t: TableInfo; demo?: boolean; m
 
 function TableMenu({ t, name, close }: { t: TableInfo; name: string; close: () => void }) {
   const cols = t.columns.map((c) => c.name).join(', ')
-  const fillable = t.schema === 'main' && t.kind === 'table'
+  const fillable = isOwnSchema(t.schema, CATALOG_IDS) && t.kind === 'table'
   const items: MenuItem[] = [
     ['Select first 100 rows', () => openAndRun(`SELECT * FROM ${name} LIMIT 100;`, t.name)],
     ['Count rows', () => openAndRun(`SELECT count(*) AS rows FROM ${name};`, `count ${t.name}`)],
@@ -294,8 +355,9 @@ FROM ${name}
 LIMIT 100;`, t.name)],
     ...(fillable
       ? ([
-          ['Add rows from CSV / Excel…', () => pickFilesFor(t.name)],
-          ['Generate sample rows…', () => void openGenerate(t.name)],
+          ['Add rows from CSV / Excel…', () => pickFilesFor(t.name, t.schema)],
+          ['Generate sample rows…', () => void openGenerate(t.name, t.schema)],
+          ['Move to dataset…', () => void openMove(t)],
         ] as [string, () => void][])
       : []),
     ...(t.kind === 'table' ? ([['Copy to PostgreSQL', () => void copySchemaToPostgres(t.schema, [t.name])]] as [string, () => void][]) : []),

@@ -26,6 +26,8 @@ Static site (Vite + React + TypeScript), GitHub Pages, custom domain via Cloudfl
  ├─ data generator (stage 2)  src/core/generate.ts (keys + CHECKs → SQL), src/db/generate.ts
  ├─ dataset catalog (stage 3): Parquet in public/datasets/<id>/, one schema per dataset
  │    src/data/datasets.ts (+ datasets.json from scripts/build-datasets.py), src/db/datasets.ts
+ ├─ the user's own datasets: schemas made in the tree, tables moved / renamed by copying
+ │    src/core/ownDatasets.ts, src/db/ownDatasets.ts
  ├─ dialects (stage 4), per query tab: DuckDB · T-SQL · PostgreSQL
  │    ├─ T-SQL → DuckDB: sqlglot in Pyodide, in a Web Worker   src/dialects/translate.py, sqlglotWorker.ts, tsql.ts
  │    │    side-by-side word diff                                src/core/diff.ts

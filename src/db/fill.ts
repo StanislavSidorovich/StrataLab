@@ -30,10 +30,10 @@ export const SHOWN_PROBLEMS = 500
 
 const list = (v: unknown): string[] => (v == null ? [] : Array.from(v as Iterable<string>))
 
-/** Columns and constraints of a table in the main schema. */
-export async function loadTarget(table: string): Promise<FillTarget> {
+/** Columns and constraints of a table of the user's: in main, or in one of their datasets. */
+export async function loadTarget(table: string, schema = 'main'): Promise<FillTarget> {
   const t = quoteString(table)
-  const where = `schema_name = 'main' AND database_name = current_database() AND table_name = ${t}`
+  const where = `schema_name = ${quoteString(schema)} AND database_name = current_database() AND table_name = ${t}`
   const [cols, cons] = await Promise.all([
     query(`SELECT column_name, data_type, is_nullable, column_default IS NOT NULL AS has_default FROM duckdb_columns() WHERE ${where} ORDER BY column_index`),
     query(`SELECT constraint_type, expression, constraint_column_names, referenced_table, referenced_column_names FROM duckdb_constraints() WHERE ${where}`),
@@ -53,6 +53,7 @@ export async function loadTarget(table: string): Promise<FillTarget> {
   }
   return {
     table,
+    ...(schema !== 'main' ? { schema } : {}),
     columns: cols.toArray().map((c) => ({ name: c.column_name, type: c.data_type, nullable: !!c.is_nullable, hasDefault: !!c.has_default })),
     constraints,
   }
@@ -64,7 +65,7 @@ export async function sourceColumns(src: ImportSource): Promise<SourceColumn[]> 
   return t.toArray().map((r) => ({ name: r.column_name, type: r.column_type }))
 }
 
-let prepared: { target: string; inserts: (skip: string | null) => string } | null = null
+let prepared: { target: string; schema: string; inserts: (skip: string | null) => string } | null = null
 // Checks share the temp tables, so one runs at a time (the dialog re-checks on every change).
 let queue: Promise<unknown> = Promise.resolve()
 
@@ -81,7 +82,7 @@ async function runCheck(src: ImportSource, target: FillTarget, mapping: Mapping)
   const sql = fillSql(target, mapping, source, STAGED, VIEW, fileRowExpr(src), src.kind === 'csv' && !!src.csv?.decimalComma)
   await query(sql.view)
   await query(`CREATE OR REPLACE TEMP TABLE ${PROBLEMS} AS ${sql.problems}`)
-  prepared = { target: target.table, inserts: sql.insert }
+  prepared = { target: target.table, schema: target.schema ?? 'main', inserts: sql.insert }
   const [total, bad, counts, first] = await Promise.all([
     query(`SELECT count(*)::INTEGER AS n FROM ${STAGED}`),
     query(`SELECT count(DISTINCT __row)::INTEGER AS n FROM ${PROBLEMS}`),
@@ -99,7 +100,7 @@ async function runCheck(src: ImportSource, target: FillTarget, mapping: Mapping)
 /** Inserts the checked rows (leaving out the ones with problems when `skipBad`); returns how many. */
 export async function insertFill(skipBad: boolean): Promise<number> {
   if (!prepared) throw new Error('Check the rows first')
-  const before = await countRows(prepared.target)
+  const before = await countRows(prepared.schema, prepared.target)
   await query('BEGIN TRANSACTION')
   try {
     await query(prepared.inserts(skipBad ? PROBLEMS : null))
@@ -109,11 +110,12 @@ export async function insertFill(skipBad: boolean): Promise<number> {
     throw e
   }
   await checkpoint()
-  return (await countRows(prepared.target)) - before
+  return (await countRows(prepared.schema, prepared.target)) - before
 }
 
-async function countRows(table: string): Promise<number> {
-  const t = await query(`SELECT count(*)::BIGINT AS n FROM ${quoteIdent(table)}`)
+async function countRows(schema: string, table: string): Promise<number> {
+  const name = schema === 'main' ? quoteIdent(table) : `${quoteIdent(schema)}.${quoteIdent(table)}`
+  const t = await query(`SELECT count(*)::BIGINT AS n FROM ${name}`)
   return Number(t.get(0)?.n ?? 0)
 }
 

@@ -7,11 +7,13 @@
 //   * simple CHECKs (ranges, BETWEEN, IN lists) steer the values; every CHECK filters the rows,
 //   * column names give plausible values: email, city, first_name, price, quantity, status…
 import type { ModelTable } from './modelLink'
-import { quoteIdent, quoteString, sqlName } from './sql'
+import { qualifiedName, quoteIdent, quoteString } from './sql'
 
 export interface GenTable extends ModelTable {
   /** rows already in the table */
   rows: number
+  /** main (the user's own tables) when left out, or one of their datasets */
+  schema?: string
 }
 
 export interface Hint {
@@ -183,6 +185,8 @@ export function valueSql(col: string, type: string, hint: Hint | undefined, uniq
 
 export interface GenStep {
   table: string
+  /** as on the table: left out for main */
+  schema?: string
   count: number
   /** statements to run in order; the last one inserts */
   sql: string[]
@@ -259,7 +263,8 @@ const STAGE = 'strata_gen_stage'
 const ROW = 'strata_row'
 
 function tableSql(t: GenTable, count: number): GenStep | { problem: string } {
-  const target = sqlName(t.name)
+  const schema = t.schema ?? 'main'
+  const target = qualifiedName(schema, t.name)
   const hints = checkHints(t.checks)
   const fkCols = new Map<string, { k: number; ref: string }>()
   t.foreignKeys.forEach((fk, k) => fk.columns.forEach((c, j) => fkCols.set(c, { k, ref: fk.refColumns[j] })))
@@ -292,7 +297,7 @@ function tableSql(t: GenTable, count: number): GenStep | { problem: string } {
   t.foreignKeys.forEach((fk, k) => {
     const nullable = fk.columns.every((c) => !t.columns.find((x) => x.name === c)?.notNull)
     const keys = fk.refColumns.map(quoteIdent).join(', ')
-    const parent = `(SELECT ${keys}, row_number() OVER (ORDER BY random()) - 1 AS rn, count(*) OVER () AS n FROM ${sqlName(fk.refTable)})`
+    const parent = `(SELECT ${keys}, row_number() OVER (ORDER BY random()) - 1 AS rn, count(*) OVER () AS n FROM ${qualifiedName(schema, fk.refTable)})`
     joins.push(`${nullable ? 'LEFT JOIN' : 'JOIN'} ${parent} p${k} ON p${k}.rn = hash(${I} * 7919 + ${k + 1}) % p${k}.n`)
   })
   // CHECKs and duplicate keys drop rows (two date CHECKs keep about a quarter), so make plenty
@@ -311,7 +316,7 @@ function tableSql(t: GenTable, count: number): GenStep | { problem: string } {
     (where.length ? `\nWHERE ${where.join('\n  AND ')}` : '') +
     (qualify.length ? `\nQUALIFY ${qualify.join(' AND ')}` : '') +
     `\nORDER BY s.${ROW}\nLIMIT ${count}`
-  return { table: t.name, count, sql: [stage, insert] }
+  return { table: t.name, ...(t.schema && t.schema !== 'main' ? { schema: t.schema } : {}), count, sql: [stage, insert] }
 }
 
 export const GEN_STAGE = STAGE

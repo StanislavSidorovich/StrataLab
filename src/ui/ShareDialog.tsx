@@ -3,7 +3,8 @@
 // tables can't travel that way, and the dialog says which ones the queries use.
 import { useEffect, useState } from 'react'
 import { AlertTriangle, Check, Copy, Info, Link2, X } from 'lucide-react'
-import { openShare, ownTables, tabDialect, useLab } from './store'
+import { CATALOG_IDS, openShare, ownTables, tabDialect, useLab } from './store'
+import { isOwnSchema } from '../core/ownDatasets'
 import { encodeShare, planShare, shareUrl } from '../core/shareLink'
 import { DEMO_TABLES } from '../data/demo'
 import { datasetById } from '../data/datasets'
@@ -22,11 +23,12 @@ export function ShareDialog() {
 
   const chosen = scope === 'all' ? tabs : tabs.filter((t) => t.id === activeTab)
   const datasets = [...new Set(tables.map((t) => t.schema))].filter((s) => datasetById(s))
+  const ownDatasetTables = tables.filter((t) => t.schema !== 'main' && isOwnSchema(t.schema, CATALOG_IDS))
   const own = ownTables(tables).map((t) => t.name)
   const hasDemo = DEMO_TABLES.every((n) => own.includes(n))
   const { share, notShared } = planShare(
     chosen.map((t) => ({ title: t.title, sql: t.sql, dialect: tabDialect(t) })),
-    { datasets, demoTables: hasDemo ? DEMO_TABLES : [], ownTables: own },
+    { datasets, demoTables: hasDemo ? DEMO_TABLES : [], ownTables: own, ownDatasetTables },
   )
   const key = JSON.stringify(share)
 

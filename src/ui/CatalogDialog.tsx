@@ -2,7 +2,7 @@
 // schema, with where they come from and their licence. Also the card shown while one loads.
 import { useState } from 'react'
 import { AlertTriangle, Check, EyeOff, ExternalLink, Library, Link2, Loader2, Store, X } from 'lucide-react'
-import { addTab, closeDatasetError, hasDemoTables, hideDemo, loadDemo, openCatalog, openDataset, openPractice, showDemo, useLab } from './store'
+import { addTab, catalogState, closeDatasetError, hasDemoTables, hideDemo, loadDemo, openCatalog, openDataset, openPractice, showDemo, useLab } from './store'
 import { WELCOME_SQL } from '../data/demo'
 import { DATASETS, datasetBytes, datasetRows } from '../data/datasets'
 
@@ -10,10 +10,12 @@ const size = (bytes: number) => (bytes < 1024 * 1024 ? `${Math.max(1, Math.round
 
 export function CatalogDialog() {
   const open = useLab((s) => s.catalogOpen)
-  const tables = useLab((s) => s.tables)
+  useLab((s) => s.tables)
+  useLab((s) => s.schemas)
   const [copied, setCopied] = useState<string | null>(null)
   if (!open) return null
-  const loaded = new Set(tables.map((t) => t.schema))
+  // A schema of the user's that only shares the name is not the dataset.
+  const loaded = new Set(DATASETS.filter((d) => catalogState(d).state === 'loaded').map((d) => d.id))
 
   const copyLink = (id: string) => {
     void navigator.clipboard.writeText(`${location.origin}${location.pathname}#ds=${id}`)

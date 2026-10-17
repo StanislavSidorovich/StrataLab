@@ -11,8 +11,10 @@ import { ddlDataFromHash, decodeDdl, hashWithoutDdl } from '../core/ddlLink'
 import { planDdl, starterSql, type DdlNote, type DdlPlan } from '../core/ddlPlan'
 import { applyPlan, type Existing } from '../db/ddl'
 import { clearFill } from '../db/fill'
-import { datasetById, datasetFromHash, hashWithoutDataset, type Dataset } from '../data/datasets'
-import { isLoaded, loadDataset, removeDataset, type DatasetProgress } from '../db/datasets'
+import { DATASETS, datasetById, datasetFromHash, hashWithoutDataset, type Dataset } from '../data/datasets'
+import { loadDataset, removeDataset, type DatasetProgress } from '../db/datasets'
+import { createSchema, listSchemas, moveTables, renameSchema } from '../db/ownDatasets'
+import { catalogSchemaState, datasetName, isOwnSchema, linkedTables } from '../core/ownDatasets'
 import { schemaForModel, showAsModel } from '../db/modelExport'
 import { planGeneration, type GenPlan, type GenTable } from '../core/generate'
 import { runGeneration, type GenOutcome } from '../db/generate'
@@ -87,6 +89,15 @@ export type GenerateState =
   | { phase: 'running'; plan: GenPlan; step: number }
   | { phase: 'report'; outcomes: GenOutcome[]; problems: GenPlan['problems'] }
 
+/** “Move to dataset”: the tables that go (the one chosen and the ones linked to it by keys). */
+export interface MoveState {
+  schema: string
+  table: string
+  tables: string[]
+  busy: boolean
+  error: string | null
+}
+
 /** A catalog dataset being loaded (or what went wrong). */
 export type DatasetState =
   | { phase: 'loading'; dataset: Dataset; progress: DatasetProgress }
@@ -100,6 +111,9 @@ type EngineState =
 interface State {
   engine: EngineState
   tables: TableInfo[]
+  /** every schema but main, empty ones too: the catalog datasets and the user's own */
+  schemas: string[]
+  move: MoveState | null
   tabs: QueryTab[]
   activeTab: string
   results: Record<string, TabResult>
@@ -222,6 +236,8 @@ export const useLab = create<State>(() => ({
     withDataset: datasetById(datasetFromHash(location.hash) ?? '')?.title ?? null,
   },
   tables: [],
+  schemas: [],
+  move: null,
   ...loadTabs(),
   results: {},
   log: [],
@@ -252,6 +268,17 @@ export const useLab = create<State>(() => ({
 
 /** The user's own tables and views (schema main), without the catalog datasets. */
 export const ownTables = (tables: TableInfo[]) => tables.filter((t) => t.schema === 'main')
+
+/** The tables and views of one schema. */
+export const tablesIn = (tables: TableInfo[], schema: string) => tables.filter((t) => t.schema === schema)
+
+export const CATALOG_IDS = DATASETS.map((d) => d.id)
+
+/** The user's own datasets: schemas they made, not the catalog's. */
+export const ownDatasets = (schemas: string[]) => schemas.filter((s) => isOwnSchema(s, CATALOG_IDS))
+
+/** “My tables” for main, the schema's name for a dataset. */
+export const schemaLabel = (schema: string) => (schema === 'main' ? 'My tables' : schema)
 
 const set = useLab.setState
 const get = useLab.getState
@@ -356,7 +383,8 @@ export async function initEngine() {
 }
 
 export async function refreshCatalog() {
-  set({ tables: await loadCatalog() })
+  const [tables, schemas] = await Promise.all([loadCatalog(), listSchemas()])
+  set({ tables, schemas })
 }
 
 /** The tree's Refresh: reads both databases again (changes made from another tab, say). */
@@ -703,16 +731,18 @@ export async function renameObject(t: TableInfo, to: string) {
 }
 
 /**
- * Queues files for the import dialog. `target`: add the rows to this table. Without it, a file
- * named like an existing empty table (a model's table waiting for data) goes into that table.
+ * Queues files for the import dialog, for `schema` (My tables, or one of the user's datasets).
+ * `target`: add the rows to this table. Without it, a file named like an existing empty table
+ * (a model's table waiting for data) goes into that table.
  */
-export async function enqueueFiles(files: File[], target?: string) {
+export async function enqueueFiles(files: File[], target?: string, schema = 'main') {
   set({ importError: null })
   for (const f of files) {
     try {
       const src = await openSource(f)
-      src.target = target ?? emptyTableNamed(src.tableName)
-      const taken = [...ownTables(get().tables).map((t) => t.name), ...get().imports.map((i) => i.tableName)]
+      src.schema = schema
+      src.target = target ?? emptyTableNamed(src.tableName, schema)
+      const taken = [...tablesIn(get().tables, schema).map((t) => t.name), ...get().imports.filter((i) => i.schema === schema).map((i) => i.tableName)]
       src.tableName = uniqueName(src.tableName, taken)
       set((s) => ({ imports: [...s.imports, src] }))
     } catch (e) {
@@ -742,9 +772,9 @@ export async function pasteTableFromClipboard() {
   await pasteTable(text)
 }
 
-/** The name of an existing table called `name` that has no rows yet, or null. */
-export function emptyTableNamed(name: string): string | null {
-  const t = ownTables(get().tables).find((t) => t.kind === 'table' && t.name.toLowerCase() === name.toLowerCase())
+/** The name of an existing table of `schema` called `name` that has no rows yet, or null. */
+export function emptyTableNamed(name: string, schema = 'main'): string | null {
+  const t = tablesIn(get().tables, schema).find((t) => t.kind === 'table' && t.name.toLowerCase() === name.toLowerCase())
   return t && t.rows === 0 ? t.name : null
 }
 
@@ -757,8 +787,9 @@ export async function confirmImport(src: ImportSource, replace: boolean) {
   await closeSource(src)
   set((s) => ({ imports: s.imports.filter((i) => i.id !== src.id) }))
   await refreshCatalog()
-  const info = ownTables(get().tables).find((t) => t.name === src.tableName)
-  addLog({ sql: `-- import ${src.fileName}`, ok: true, text: `${src.tableName}: ${info?.rows?.toLocaleString() ?? '?'} rows from ${src.fileName}` })
+  const info = tablesIn(get().tables, src.schema).find((t) => t.name === src.tableName)
+  const name = qualifiedName(src.schema, src.tableName)
+  addLog({ sql: `-- import ${src.fileName}`, ok: true, text: `${name}: ${info?.rows?.toLocaleString() ?? '?'} rows from ${src.fileName}` })
 }
 
 /** After the rows were inserted into an existing table (stage 2b). */
@@ -767,13 +798,13 @@ export async function finishFill(src: ImportSource, added: number, skipped: numb
   await closeSource(src)
   set((s) => ({ imports: s.imports.filter((i) => i.id !== src.id) }))
   await refreshCatalog()
-  const table = src.target!
+  const table = qualifiedName(src.schema, src.target!)
   addLog({
     sql: `-- fill ${table} from ${src.fileName}`,
     ok: true,
     text: `${table}: ${added.toLocaleString()} rows added from ${src.fileName}${skipped ? `, ${skipped.toLocaleString()} rows with problems skipped` : ''}`,
   })
-  openAndRun(`SELECT * FROM ${sqlName(table)} LIMIT 100;`, table)
+  openAndRun(`SELECT * FROM ${table} LIMIT 100;`, src.target!)
 }
 
 export async function cancelImport(src: ImportSource) {
@@ -854,12 +885,12 @@ export function closeDdl() {
 // ------------------------------------------------------------------ data generator (stage 2)
 
 /**
- * Opens the generator over the user's own tables. With `focus`, that table and the empty tables
+ * Opens the generator over the user's own tables (main, or one of their datasets). With `focus`, that table and the empty tables
  * it needs (its NOT NULL foreign keys, all the way up) are ticked; without, every empty table.
  */
-export async function openGenerate(focus?: string) {
-  const rows = new Map(ownTables(get().tables).map((t) => [t.name, t.rows ?? 0]))
-  const tables: GenTable[] = (await schemaForModel('main')).map((t) => ({ ...t, rows: rows.get(t.name) ?? 0 }))
+export async function openGenerate(focus?: string, schema = 'main') {
+  const rows = new Map(tablesIn(get().tables, schema).map((t) => [t.name, t.rows ?? 0]))
+  const tables: GenTable[] = (await schemaForModel(schema)).map((t) => ({ ...t, rows: rows.get(t.name) ?? 0, ...(schema !== 'main' ? { schema } : {}) }))
   const byName = new Map(tables.map((t) => [t.name, t]))
   const chosen = new Set<string>()
   const need = (name: string) => {
@@ -898,7 +929,7 @@ export async function runGenerate() {
     text: outcomes.map((o) => `${o.table}: ${o.error ? o.error : `${o.added} rows`}`).join(' · ') || 'nothing generated',
   })
   const filled = outcomes.filter((o) => o.added > 0)
-  if (filled.length) addTab(filled.map((o) => `SELECT * FROM ${sqlName(o.table)} LIMIT 100;`).join('\n\n') + '\n', 'Generated rows')
+  if (filled.length) addTab(filled.map((o) => `SELECT * FROM ${qualifiedName(plan.steps.find((s) => s.table === o.table)?.schema ?? 'main', o.table)} LIMIT 100;`).join('\n\n') + '\n', 'Generated rows')
   set({ generate: { phase: 'report', outcomes, problems: plan.problems } })
   if (added && !plan.problems.length && outcomes.every((o) => !o.error && o.added === o.asked)) set({ generate: null })
 }
@@ -917,11 +948,23 @@ export function openCatalog(open = true) {
 export async function openDataset(d: Dataset, reload = false) {
   if (get().dataset?.phase === 'loading') return
   set({ catalogOpen: false })
-  if (!reload && (await isLoaded(d.id))) {
+  const { state, extra } = catalogState(d)
+  if (!reload && state === 'loaded') {
     addTab(d.starter, d.title)
     return
   }
+  // A schema of the user's with the dataset's name: loading would drop their tables.
+  if (state === 'foreign' && !confirm(`There is already a schema called ${d.id} with your table${extra.length === 1 ? '' : 's'} ${extra.join(', ')}. Loading ${d.title} replaces it and ${extra.length === 1 ? 'that table is' : 'those tables are'} lost. Load anyway?`)) return
   if (await fetchDataset(d)) openAndRun(d.starter, d.title)
+}
+
+/** Whether a catalog dataset is in its schema (src/core/ownDatasets.ts). */
+export function catalogState(d: Dataset) {
+  const { tables, schemas } = get()
+  return catalogSchemaState(
+    d.tables.map((t) => t.name),
+    schemas.includes(d.id) ? tablesIn(tables, d.id).map((t) => t.name) : null,
+  )
 }
 
 /** Loads a dataset with the progress card; false (and the card shows why) if it failed. */
@@ -950,6 +993,96 @@ export async function dropDataset(id: string) {
   await removeDataset(id)
   await refreshCatalog()
   addLog({ sql: `DROP SCHEMA ${id} CASCADE`, ok: true, text: `${datasetById(id)?.title ?? id} removed` })
+}
+
+// ------------------------------------------------------------------ the user's own datasets
+
+/**
+ * “New dataset”: asks for a name (again, with why, when it can't be used) and makes an empty
+ * schema; null when the user cancelled. `ask` is window.prompt, passed in for the import dialog.
+ */
+export async function newDataset(ask: (text: string, value: string) => string | null = (t, v) => prompt(t, v)): Promise<string | null> {
+  let text = 'Name of the new dataset (a folder for your tables: sales, hr, project_x)'
+  let value = ''
+  for (;;) {
+    const raw = ask(text, value)
+    if (raw === null) return null
+    const r = datasetName(raw, get().schemas, CATALOG_IDS)
+    if ('problem' in r) {
+      text = r.problem
+      value = raw
+      continue
+    }
+    try {
+      await createSchema(r.name)
+    } catch (e) {
+      text = String(e instanceof Error ? e.message : e)
+      value = raw
+      continue
+    }
+    await refreshCatalog()
+    addLog({ sql: `CREATE SCHEMA ${r.name}`, ok: true, text: `Dataset ${r.name} made: add tables to it from its ⋯ menu, by dropping files on it, or in the import dialog` })
+    return r.name
+  }
+}
+
+/** Opens “Move to dataset” for a table: it goes with every table linked to it by keys. */
+export async function openMove(t: TableInfo) {
+  const tables = await schemaForModel(t.schema)
+  const linked = t.kind === 'table' ? linkedTables(tables, t.name) : [t.name]
+  set({ move: { schema: t.schema, table: t.name, tables: linked.length ? linked : [t.name], busy: false, error: null } })
+}
+
+export function closeMove() {
+  set({ move: null })
+}
+
+/** Moves the dialog's tables to `to` (a schema that exists). */
+export async function runMove(to: string) {
+  const m = get().move
+  if (!m || m.busy) return
+  set({ move: { ...m, busy: true, error: null } })
+  try {
+    const r = await moveTables(m.schema, m.tables, to)
+    await refreshCatalog()
+    set({ move: null })
+    addLog({
+      sql: `-- move ${r.tables.join(', ')} to ${to}`,
+      ok: true,
+      text: `${r.tables.join(', ')}: moved from ${schemaLabel(m.schema)} to ${schemaLabel(to)} (${r.rows.toLocaleString()} rows)` + (r.notes.length ? `\n${r.notes.join('\n')}` : ''),
+    })
+  } catch (e) {
+    await refreshCatalog()
+    set({ move: { ...m, busy: false, error: String(e instanceof Error ? e.message : e) } })
+  }
+}
+
+/** Renames one of the user's datasets (asks for the name); the new name, or null. */
+export async function renameDataset(from: string): Promise<string | null> {
+  let text = `New name for the dataset ${from}`
+  let value = from
+  for (;;) {
+    const raw = prompt(text, value)
+    if (raw === null || raw.trim() === from) return null
+    const r = datasetName(raw, get().schemas.filter((s) => s !== from), CATALOG_IDS)
+    if ('problem' in r) {
+      text = r.problem
+      value = raw
+      continue
+    }
+    set({ backup: 'saving' })
+    try {
+      const out = await renameSchema(from, r.name)
+      addLog({ sql: `-- rename dataset ${from} to ${r.name}`, ok: true, text: `Dataset ${from} is now ${r.name} (${out.tables.length} tables)` + (out.notes.length ? `\n${out.notes.join('\n')}` : '') })
+      return r.name
+    } catch (e) {
+      addLog({ sql: `-- rename dataset ${from}`, ok: false, text: String(e instanceof Error ? e.message : e) })
+      return null
+    } finally {
+      set({ backup: null })
+      await refreshCatalog()
+    }
+  }
 }
 
 /**
@@ -995,10 +1128,18 @@ export async function openShareFromHash(): Promise<boolean> {
     return false
   }
   const loadedNow: string[] = []
+  const blocked: string[] = []
   const unknown = share.datasets.filter((id) => !datasetById(id))
   for (const id of share.datasets) {
     const d = datasetById(id)
-    if (!d || (await isLoaded(id))) continue
+    if (!d) continue
+    const { state } = catalogState(d)
+    // Never drop a schema of the user's for a link: the queries just won't find the dataset.
+    if (state === 'loaded') continue
+    if (state === 'foreign') {
+      blocked.push(d.id)
+      continue
+    }
     if (await fetchDataset(d)) loadedNow.push(d.title)
   }
   const demoMissing = share.demo && !DEMO_TABLES.every((n) => ownTables(get().tables).some((t) => t.name === n))
@@ -1013,7 +1154,7 @@ export async function openShareFromHash(): Promise<boolean> {
   const parts = [n === 1 ? 'The shared query opened in a new tab' : `${n} shared queries opened in new tabs`]
   if (loadedNow.length) parts.push(`${loadedNow.join(', ')} loaded`)
   if (demoMissing) parts.push('the demo shop loaded')
-  set({ notice: `${parts.join('; ')}. Nothing has run yet: read the query, then press Run.${unknown.length ? ` This version has no dataset called ${unknown.join(', ')}.` : ''}` })
+  set({ notice: `${parts.join('; ')}. Nothing has run yet: read the query, then press Run.${unknown.length ? ` This version has no dataset called ${unknown.join(', ')}.` : ''}${blocked.length ? ` Not loaded: ${blocked.join(', ')}, because your own schema has that name (Sample datasets can replace it).` : ''}` })
   addLog({ sql: '-- shared link', ok: true, text: parts.join('; ') })
   return true
 }
