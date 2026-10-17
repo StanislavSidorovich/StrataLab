@@ -17,7 +17,7 @@ import { schemaForModel, showAsModel } from '../db/modelExport'
 import { planGeneration, type GenPlan, type GenTable } from '../core/generate'
 import { runGeneration, type GenOutcome } from '../db/generate'
 import { duckdbScript, translateTsql, type TranslatedStatement, type TranslatorProgress } from '../dialects/tsql'
-import { copyToPostgres, getPostgres, postgresCatalog, runPostgres } from '../dialects/postgres'
+import { copyToPostgres, explainPostgres, getPostgres, postgresCatalog, runPostgres } from '../dialects/postgres'
 import { copyTitle, rememberClosed } from '../core/tabs'
 import { backupFileName } from '../core/backup'
 import { backupDatabase, restoreDatabase } from '../db/backup'
@@ -26,6 +26,7 @@ import { compareResults, type Verdict } from '../core/check'
 import { hashWithoutTask, taskById, taskFromHash, taskStarter, type PracticeExample, type PracticeTask } from '../data/practice'
 import { decodeShare, hashWithoutShare, shareDataFromHash } from '../core/shareLink'
 import { historyTabTitle, parseHistory, remember, type HistoryEntry } from '../core/history'
+import { explainStatement, lastStatement, parseDuckPlan, parsePgPlan, readsOnly, type Plan } from '../core/plan'
 
 /** What a query tab speaks (stage 4): DuckDB itself, T-SQL translated to DuckDB, or PostgreSQL (PGlite). */
 export type Dialect = 'duckdb' | 'tsql' | 'postgres'
@@ -59,6 +60,12 @@ export interface TabResult {
   error?: string
   hints?: DialectHint[]
 }
+
+/** A tab's query plan (Explain): being made, made, or failed. */
+export type PlanState =
+  | { status: 'running' }
+  | { status: 'done'; plan: Plan; notes: string[] }
+  | { status: 'error'; error: string }
 
 export interface LogEntry {
   at: number
@@ -114,7 +121,9 @@ interface State {
   postgres: PostgresState
   pgTables: TableInfo[]
   /** what the result pane shows */
-  resultView: 'result' | 'chart' | 'translation' | 'messages' | 'history'
+  resultView: 'result' | 'chart' | 'plan' | 'translation' | 'messages' | 'history'
+  /** per tab, its last Explain */
+  plans: Record<string, PlanState>
   /** a copy to PostgreSQL in progress: the table being copied */
   pgCopy: string | null
   /** tabs closed this visit, newest last (the tab menu's “Reopen closed tab”) */
@@ -229,6 +238,7 @@ export const useLab = create<State>(() => ({
   postgres: { status: 'off' },
   pgTables: [],
   resultView: 'result',
+  plans: {},
   pgCopy: null,
   closedTabs: [],
   backup: null,
@@ -419,11 +429,57 @@ export const STOPPED = 'Stopped: the query was cancelled before it finished.'
 /** Tabs whose run was stopped: a T-SQL script checks this between its statements. */
 const stopped = new Set<string>()
 
-/** The Stop button (Esc in the editor): cancels the tab's DuckDB query. PostgreSQL tabs can't be stopped. */
+/** The Stop button (Esc in the editor): cancels the tab's DuckDB query or Explain. PostgreSQL tabs can't be stopped. */
 export async function stopQuery(tabId: string) {
-  if (get().results[tabId]?.status !== 'running') return
+  if (get().results[tabId]?.status !== 'running' && get().plans[tabId]?.status !== 'running') return
   stopped.add(tabId)
   await cancelQuery(tabId)
+}
+
+/**
+ * The Explain button: the plan of the tab's last statement (or the selection's), shown under the
+ * editor. A query that only reads is run (EXPLAIN ANALYZE: real rows and times); one that could
+ * change data is only planned, so Explain never changes a table. A T-SQL tab explains its DuckDB
+ * translation.
+ */
+export async function explainSql(tabId: string, sql: string) {
+  if (!sql.trim() || get().plans[tabId]?.status === 'running') return
+  const dialect = tabDialect(get().tabs.find((t) => t.id === tabId))
+  const put = (p: PlanState) => set((s) => ({ plans: { ...s.plans, [tabId]: p } }))
+  stopped.delete(tabId)
+  set({ resultView: 'plan' })
+  put({ status: 'running' })
+  const notes: string[] = []
+  try {
+    let script = sql
+    if (dialect === 'tsql') {
+      const translated = await translate(tabId, sql)
+      if (!translated) throw new Error('the T-SQL could not be translated to DuckDB (see T-SQL → DuckDB)')
+      const bad = translated.findIndex((st) => st.error)
+      if (bad >= 0) throw new Error(`statement ${bad + 1} could not be read as T-SQL: ${translated[bad].error}`)
+      script = translated.map((st) => st.target).join(';\n')
+      notes.push('This is the plan of the DuckDB translation, which is what runs here. SQL Server makes its own plan for the T-SQL (in SSMS: Include Actual Execution Plan, Ctrl+M).')
+    }
+    const { statement, count } = lastStatement(script)
+    if (!statement) throw new Error('there is no statement to explain')
+    if (count > 1) notes.push(`Only the last of the ${count} statements is explained; the ones before it were not run.`)
+    const analyze = readsOnly(statement)
+    if (!analyze) notes.push('Not run: this statement could change data, so the plan shows the estimated rows, not real rows and times. Explain never changes your tables.')
+    const explain = explainStatement(statement, analyze)
+    let plan: Plan
+    if (dialect === 'postgres') {
+      await startPostgres()
+      plan = parsePgPlan(await explainPostgres(explain), analyze)
+    } else {
+      const table = await queryCancellable(explain, tabId, () => stopped.has(tabId))
+      // DuckDB: one row, the plan's JSON in the last column (explain_value / analyzed_plan).
+      plan = parseDuckPlan(String(table.getChildAt(table.numCols - 1)?.get(0) ?? ''), analyze)
+    }
+    put({ status: 'done', plan, notes })
+  } catch (e) {
+    const error = isCancelled(e) ? STOPPED : dialect === 'postgres' ? pgError(e) : String(e instanceof Error ? e.message : e)
+    put({ status: 'error', error })
+  }
 }
 
 /** Translates a T-SQL tab's script to DuckDB (loading Python the first time); null if that failed. */
