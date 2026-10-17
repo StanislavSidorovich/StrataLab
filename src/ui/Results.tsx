@@ -1,16 +1,17 @@
 import { useState } from 'react'
-import { AlertTriangle, ArrowLeftRight, ChartColumn, ChevronDown, ClipboardCopy, Download, History, Lightbulb, ListTree, Loader2, Search, TableProperties, Trash2, X } from 'lucide-react'
+import { AlertTriangle, ArrowLeftRight, ChartColumn, ChevronDown, ClipboardCopy, Download, History, Lightbulb, ListTree, Loader2, MessageSquareText, Search, TableProperties, Trash2, X } from 'lucide-react'
 import { ChartView } from './Chart'
 import { DataGrid } from './DataGrid'
 import { PlanView } from './PlanView'
 import { EngineLoading } from './EngineLoading'
 import { Menu, type MenuItem } from './Menu'
-import { STOPPED, clearHistory, openFromHistory, ownTables, runSql, saveResultAsTable, setResultView, setTabDialect, tabDialect, useLab } from './store'
+import { STOPPED, clearHistory, setNextRowLimit, openFromHistory, ownTables, runSql, saveResultAsTable, setResultView, setTabDialect, tabDialect, useLab } from './store'
 import { historyDay, searchHistory } from '../core/history'
 import { TranslationView } from './TranslationView'
 import { sideBySide } from '../core/diff'
 import { splitError } from '../core/dialect'
 import { tableNameFrom } from '../core/sql'
+import { limitLabel, moreLimits, safeToRerun } from '../core/rowLimit'
 import { exportResultCsv, exportResultJson, exportResultParquet, exportResultXlsx } from '../db/export'
 import { formatterFor } from '../db/format'
 import type { Table } from 'apache-arrow'
@@ -53,6 +54,8 @@ export function Results() {
   return (
     <div className="h-full flex flex-col" style={{ background: 'var(--panel)' }} key={activeTab}>
       <div className="result-bar flex items-center gap-0.5 sm:gap-1 px-1 sm:px-2 shrink-0" style={{ borderBottom: '1px solid var(--line)', height: 36 }}>
+        {/* On a phone the views scroll sideways inside the bar, never the page. */}
+        <div className="result-views flex items-center gap-0.5 sm:gap-1 min-w-0 overflow-x-auto">
         {views.map((v) => (
           <button
             key={v}
@@ -76,21 +79,30 @@ export function Results() {
                 <ArrowLeftRight size={13} /> <span className="hidden sm:inline">T-SQL → </span>DuckDB{changes != null && ` (${changes})`}
               </>
             )}
-            {v === 'messages' && `Messages${log.length ? ` (${log.length})` : ''}`}
+            {v === 'messages' && (
+              <span className="flex items-center gap-1.5" title="Every query and import of this visit" aria-label="Messages">
+                <MessageSquareText size={13} className="sm:hidden" />
+                <span className="hidden sm:inline">Messages</span>
+                {log.length > 0 && <span className="hidden sm:inline">({log.length})</span>}
+              </span>
+            )}
             {v === 'history' && (
               <span className="flex items-center gap-1.5" title="Queries you ran, kept in this browser between visits" aria-label="History">
-                <History size={13} /> <span className={dialect === 'tsql' ? 'hidden sm:inline' : ''}>History</span>
+                <History size={13} /> <span className="hidden sm:inline">History</span>
               </span>
             )}
           </button>
         ))}
+        </div>
         <div className="flex-1" />
         {view === 'result' && res?.status === 'done' && res.table && res.table.numCols > 0 && (
           <>
-            <span style={{ color: 'var(--muted)' }} className="mr-1 whitespace-nowrap">
-              {res.table.numRows.toLocaleString()} rows<span className="hidden sm:inline"> · {res.ms?.toFixed(0)} ms</span>
+            <span style={{ color: 'var(--muted)' }} className="ml-1 mr-1 whitespace-nowrap" title={`${res.table.numRows.toLocaleString()}${res.more ? '+' : ''} rows · ${res.ms?.toFixed(0)} ms`}>
+              {res.table.numRows.toLocaleString()}
+              {res.more && '+'}
+              <span className="hidden sm:inline"> rows · {res.ms?.toFixed(0)} ms</span>
             </span>
-            <ResultActions table={res.table} title={title} fileName={fileName} />
+            <ResultActions table={res.table} title={title} fileName={fileName} cut={res.more ? res.table.numRows : null} />
           </>
         )}
       </div>
@@ -102,7 +114,7 @@ export function Results() {
 }
 
 /** Copy ▾, Export ▾ and Save as table, over the result grid. */
-function ResultActions({ table, title, fileName }: { table: Table; title: string; fileName: string }) {
+function ResultActions({ table, title, fileName, cut }: { table: Table; title: string; fileName: string; cut: number | null }) {
   const [open, setOpen] = useState<'copy' | 'export' | null>(null)
   const [copied, setCopied] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -122,6 +134,7 @@ function ResultActions({ table, title, fileName }: { table: Table; title: string
     ['Copy without headers', () => copy(false)],
   ]
   const exportItems: MenuItem[] = [
+    ...(cut ? [[`The ${cut.toLocaleString()} rows shown`, () => {}, { disabled: true }] as MenuItem, 'separator' as const] : []),
     ['CSV (.csv)', exportAs(() => exportResultCsv(table, fileName))],
     ['Excel (.xlsx)', exportAs(() => exportResultXlsx(table, fileName))],
     ['JSON (.json)', exportAs(() => exportResultJson(table, fileName))],
@@ -200,8 +213,51 @@ function ResultBody() {
         <Empty text="The query returned no rows." />
       </div>
     )
+  if (res.more)
+    return (
+      <div className="h-full flex flex-col">
+        <MoreRows />
+        <div className="flex-1 min-h-0">
+          <GridWithMenu table={t} />
+        </div>
+      </div>
+    )
   return <GridWithMenu table={t} />
 }
+
+/**
+ * Over a result cut at the row limit (src/core/rowLimit.ts): what was left out and how to see more.
+ * A query that only reads runs again with the higher limit; a script that changes data is not run
+ * again by itself (its changes would happen twice): the next Run uses the higher limit instead.
+ */
+function MoreRows() {
+  const tabId = useLab((s) => s.activeTab)
+  const res = useLab((s) => s.results[s.activeTab])
+  const [armed, setArmed] = useState<number | null>(null)
+  if (!res?.table || !res.sql) return null
+  const shown = res.table.numRows.toLocaleString()
+  const rerun = safeToRerun(res.sql)
+  const show = (limit: number) => {
+    if (rerun) void runSql(tabId, res.sql!, limit)
+    else (setNextRowLimit(tabId, limit), setArmed(limit))
+  }
+  return (
+    <div className="shrink-0 flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-1.5" style={{ background: 'var(--warn-soft)', color: 'var(--warn-text)', fontSize: 12.5 }} role="status">
+      <AlertTriangle size={14} className="shrink-0" />
+      <span className="mr-1">
+        The first {shown} rows: the query returned more.{' '}
+        {armed != null ? `The next Run of this tab shows ${limitLabel(armed)}.` : rerun ? 'Add a WHERE or LIMIT, or show more:' : 'This script changes data, so it is not run again by itself. Show more on the next Run:'}
+      </span>
+      {armed == null &&
+        moreLimits(res.limit ?? res.table.numRows).map((n) => (
+          <button key={n} className="btn" style={{ padding: '2px 8px' }} onClick={() => show(n)} title={Number.isFinite(n) ? `Run again and bring in up to ${limitLabel(n)} rows` : 'Run again and bring in every row: a very large result can slow the tab down'}>
+            {Number.isFinite(n) ? `Up to ${limitLabel(n)}` : 'All rows'}
+          </button>
+        ))}
+    </div>
+  )
+}
+
 
 function GridWithMenu({ table }: { table: Table }) {
   const [menu, setMenu] = useState<{ row: number; col: number; at: { x: number; y: number } } | null>(null)

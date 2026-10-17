@@ -11,12 +11,13 @@ import { DdlDialog } from './DdlDialog'
 import { GenerateDialog } from './GenerateDialog'
 import { CatalogDialog, DatasetProgressCard } from './CatalogDialog'
 import { WelcomeDialog } from './WelcomeDialog'
+import { AboutDialog } from './AboutDialog'
 import { ShareDialog } from './ShareDialog'
 import { PracticeDialog, TaskBar } from './Practice'
 import { DialectBar } from './DialectBar'
 import { applyUpdate, useUpdateReady } from '../pwa/register'
 import { engineLoadingLabel, engineLoadingShort } from './EngineLoading'
-import { addTab, closeTabs, downloadBackup, duplicateTab, enqueueFiles, openCatalog, openShare, openWelcome, pasteTable, pasteTableFromClipboard, renameTab, reopenClosedTab, useLab } from './store'
+import { addTab, closeTabs, downloadBackup, duplicateTab, enqueueFiles, openAbout, openCatalog, openShare, openWelcome, pasteTable, pasteTableFromClipboard, renameTab, reopenClosedTab, useLab } from './store'
 import { AppearanceButton } from './Appearance'
 import { Menu, useLongPress, type MenuItem } from './Menu'
 import { tabsToClose } from '../core/tabs'
@@ -139,6 +140,7 @@ export function App() {
       <CatalogDialog />
       <DatasetProgressCard />
       <WelcomeDialog />
+      <AboutDialog />
       <ShareDialog />
       <PracticeDialog />
     </div>
@@ -228,9 +230,7 @@ function TopBar() {
           <RefreshCw size={14} /> <span className="hidden sm:inline">Update</span>
         </button>
       )}
-      <button className="btn btn-ghost" onClick={openWelcome} aria-label="How to use Quaera Lab" title="How to use Quaera Lab">
-        <HelpCircle size={16} />
-      </button>
+      <HelpMenu />
       {/* On a phone the header is full: the appearance button steps aside while Update shows. */}
       <AppearanceButton className={updateReady ? 'phone-hidden' : ''} />
     </header>
@@ -270,6 +270,25 @@ function FileMenu() {
         {saved ? <Check size={15} /> : <FileText size={15} />} {saved ? 'Saved' : 'File'} <ChevronDown size={13} />
       </button>
       {open && <Menu items={items} close={() => setOpen(false)} label="File" align="left" />}
+    </div>
+  )
+}
+
+/** Help: the guide, About & licences, Privacy (src/ui/AboutDialog.tsx). */
+function HelpMenu() {
+  const [open, setOpen] = useState(false)
+  const items: MenuItem[] = [
+    ['How to use Quaera Lab', openWelcome],
+    'separator',
+    ['About & licences', () => openAbout('about')],
+    ['Privacy: your data stays here', () => openAbout('privacy')],
+  ]
+  return (
+    <div className="relative">
+      <button className="btn btn-ghost" onClick={() => setOpen(!open)} aria-haspopup="menu" aria-expanded={open} aria-label="Help" title="Help: how to use, about & licences, privacy">
+        <HelpCircle size={16} />
+      </button>
+      {open && <Menu items={items} close={() => setOpen(false)} label="Help" />}
     </div>
   )
 }
