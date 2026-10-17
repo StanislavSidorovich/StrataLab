@@ -113,11 +113,14 @@ interface State {
   closedTabs: QueryTab[]
   /** a database backup or restore in progress */
   backup: 'saving' | 'restoring' | null
+  /** the demo shop's tables are kept but left out of the tree (Sample datasets shows them again) */
+  demoHidden: boolean
 }
 
 const TABS_KEY = 'stratalab.tabs.v1'
 const WELCOME_KEY = 'stratalab.welcome-seen'
 const THEME_KEY = 'stratalab.theme'
+const DEMO_HIDDEN_KEY = 'stratalab.demo-hidden'
 
 function loadTabs(): { tabs: QueryTab[]; activeTab: string } {
   try {
@@ -134,6 +137,14 @@ function firstVisit(): boolean {
   if (ddlDataFromHash(location.hash) !== null || datasetFromHash(location.hash)) return false
   try {
     return localStorage.getItem(WELCOME_KEY) !== '1'
+  } catch {
+    return false
+  }
+}
+
+function initialDemoHidden(): boolean {
+  try {
+    return localStorage.getItem(DEMO_HIDDEN_KEY) === '1'
   } catch {
     return false
   }
@@ -175,6 +186,7 @@ export const useLab = create<State>(() => ({
   pgCopy: null,
   closedTabs: [],
   backup: null,
+  demoHidden: initialDemoHidden(),
 }))
 
 /** The user's own tables and views (schema main), without the catalog datasets. */
@@ -187,6 +199,14 @@ useLab.subscribe((s, prev) => {
   if (s.tabs !== prev.tabs || s.activeTab !== prev.activeTab) {
     try {
       localStorage.setItem(TABS_KEY, JSON.stringify({ tabs: s.tabs, activeTab: s.activeTab }))
+    } catch {
+      /* ignore */
+    }
+  }
+  if (s.demoHidden !== prev.demoHidden) {
+    try {
+      if (s.demoHidden) localStorage.setItem(DEMO_HIDDEN_KEY, '1')
+      else localStorage.removeItem(DEMO_HIDDEN_KEY)
     } catch {
       /* ignore */
     }
@@ -498,19 +518,28 @@ export function openAndRun(sql: string, title: string, dialect?: Dialect) {
   void runSql(id, sql)
 }
 
+/** Loads the demo shop again (fresh rows) and shows it in the tree. */
 export async function loadDemo() {
   await query(DEMO_SQL)
   await checkpoint()
   await refreshCatalog()
+  set({ demoHidden: false })
   addLog({ sql: '-- demo shop', ok: true, text: 'Demo shop loaded: customers, products, orders, order_items' })
 }
 
-/** Drops the demo shop's tables, the ones that refer to others first. */
-export async function removeDemo() {
-  for (const name of [...DEMO_TABLES].reverse()) await query(`DROP TABLE IF EXISTS ${name}`)
-  await checkpoint()
-  await refreshCatalog()
-  addLog({ sql: '-- remove demo shop', ok: true, text: 'Demo shop removed (“Load demo shop” brings it back)' })
+/** All four demo tables are in the database (hidden or not). */
+export const hasDemoTables = (tables: TableInfo[]) => DEMO_TABLES.every((n) => ownTables(tables).some((t) => t.name === n))
+
+/** Takes the demo shop out of the tree; its tables stay, so it comes back as it was. */
+export function hideDemo() {
+  set({ demoHidden: true })
+  addLog({ sql: '-- hide demo shop', ok: true, text: 'Demo shop hidden (Sample datasets → Demo shop → Show brings it back)' })
+}
+
+/** Shows the demo shop in the tree again, loading it first when its tables are gone. */
+export async function showDemo() {
+  if (!hasDemoTables(get().tables)) return loadDemo()
+  set({ demoHidden: false })
 }
 
 export async function dropObject(t: TableInfo) {
