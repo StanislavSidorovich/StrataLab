@@ -2,8 +2,8 @@
 // dataset as a folder (its own schema), and what you can do with each one (the SSMS
 // right-click menu, as a small menu button).
 import { createContext, useContext, useRef, useState } from 'react'
-import { ChevronDown, ChevronRight, ClipboardPaste, Database, DatabaseZap, Eye, Folder, Library, Loader2, MoreHorizontal, Network, RefreshCw, Search, Sparkles, Store, Table2, Upload, X } from 'lucide-react'
-import { copySchemaToPostgres, downloadBackup, dropPgObject, dropDataset, dropObject, removeDemo, enqueueFiles, loadDemo, openAndRun, openAsModel, openCatalog, openDataset, openGenerate, ownTables, pasteTableFromClipboard, refreshTree, renameObject, restoreBackup, useLab } from './store'
+import { ChevronDown, ChevronRight, ClipboardPaste, Database, DatabaseZap, Eye, Folder, GraduationCap, Library, Loader2, MoreHorizontal, Network, RefreshCw, Search, Sparkles, Store, Table2, Upload, X } from 'lucide-react'
+import { copySchemaToPostgres, downloadBackup, dropPgObject, dropDataset, dropObject, enqueueFiles, hasDemoTables, hideDemo, loadDemo, openAndRun, openAsModel, openCatalog, openDataset, openGenerate, openPractice, ownTables, pasteTableFromClipboard, refreshTree, renameObject, restoreBackup, useLab } from './store'
 import { qualifiedName } from '../core/sql'
 import { treeMatch, type TreeMatch } from '../core/tree'
 import { isDatabaseFile } from '../core/backup'
@@ -53,8 +53,11 @@ export function Sidebar() {
   const all = useLab((s) => s.tables)
   const engine = useLab((s) => s.engine)
   const fileInput = useRef<HTMLInputElement>(null)
-  const tables = ownTables(all)
-  const hasDemo = DEMO_TABLES.every((n) => tables.some((t) => t.name === n))
+  const demoHidden = useLab((s) => s.demoHidden)
+  const demoHere = hasDemoTables(all)
+  // A hidden demo shop keeps its tables (queries on them still work); only the tree leaves them out.
+  const tables = ownTables(all).filter((t) => !(demoHidden && demoHere && DEMO_TABLES.includes(t.name)))
+  const hasDemo = demoHere && !demoHidden
   const schemas = [...new Set(all.map((t) => t.schema).filter((s) => s !== 'main'))]
   const empty = tables.filter((t) => t.kind === 'table' && t.rows === 0)
   const backup = useLab((s) => s.backup)
@@ -92,7 +95,10 @@ export function Sidebar() {
         <button className="btn w-full justify-center" disabled={engine.status !== 'ready'} onClick={() => openCatalog()}>
           <Library size={14} /> Sample datasets…
         </button>
-        {!hasDemo && (
+        <button className="btn w-full justify-center" disabled={engine.status !== 'ready'} onClick={() => openPractice()} title="Business questions on the demo shop: worked examples, and tasks with a check of your answer and hints">
+          <GraduationCap size={14} /> Practice…
+        </button>
+        {!demoHere && !demoHidden && (
           <button className="btn w-full justify-center" disabled={engine.status !== 'ready'} onClick={() => void loadDemo()}>
             <Store size={14} /> Load demo shop
           </button>
@@ -120,6 +126,7 @@ export function Sidebar() {
         {tables.length === 0 && engine.status === 'ready' && (
           <p className="px-3 py-2" style={{ color: 'var(--muted)' }}>
             No tables yet. Drop CSV or Excel files anywhere on the page.
+            {demoHidden && demoHere && ' The demo shop is hidden: Sample datasets shows it again.'}
           </p>
         )}
         {searching && shown.length === 0 && shownSchemas.length === 0 && (
@@ -137,8 +144,8 @@ export function Sidebar() {
             <Store size={12} className="shrink-0 mt-0.5" />
             <span>
               <b>demo</b> = the demo shop: made-up practice data, the same for everyone.{' '}
-              <button className="hover:underline" style={{ color: 'var(--accent)' }} onClick={() => confirm('Remove the demo shop tables (customers, products, orders, order_items)?') && void removeDemo()}>
-                Remove
+              <button className="hover:underline" style={{ color: 'var(--accent)' }} onClick={hideDemo} title="Take the demo tables out of this list. Nothing is deleted: Sample datasets → Demo shop shows them again.">
+                Hide
               </button>
             </span>
           </p>

@@ -3,9 +3,9 @@
 // for that), and again from the “?” button in the header.
 import { useState } from 'react'
 import { Database, Download, FileUp, HelpCircle, Library, Play, Store, X } from 'lucide-react'
-import { closeWelcome, enqueueFiles, loadDemo, openAndRun, openCatalog, ownTables, useLab } from './store'
+import { closeWelcome, enqueueFiles, hasDemoTables, openAndRun, openCatalog, showDemo, useLab } from './store'
 import { ACCEPT } from './Sidebar'
-import { DEMO_TABLES, WELCOME_SQL } from '../data/demo'
+import { WELCOME_SQL } from '../data/demo'
 import { installApp } from '../pwa/register'
 
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform)
@@ -45,12 +45,12 @@ const PLACES: [string, string, string][] = [
 export function WelcomeDialog() {
   const open = useLab((s) => s.welcomeOpen)
   const ready = useLab((s) => s.engine.status === 'ready')
-  const hasDemo = useLab((s) => DEMO_TABLES.every((n) => ownTables(s.tables).some((t) => t.name === n)))
+  const hasDemo = useLab((s) => hasDemoTables(s.tables))
   const [installNote, setInstallNote] = useState<string | null>(null)
   if (!open) return null
 
   const tryDemo = async () => {
-    if (!hasDemo) await loadDemo()
+    await showDemo()
     openAndRun(WELCOME_SQL, 'Demo shop')
   }
 
