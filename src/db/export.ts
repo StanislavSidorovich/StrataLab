@@ -3,7 +3,7 @@
 // limited by the grid). Parquet is the hand-over format to pandas.
 import type { Table } from 'apache-arrow'
 import { csvField } from '../core/csvWrite'
-import { quoteIdent, quoteString } from '../core/sql'
+import { quoteString } from '../core/sql'
 import { dropFile, query, readFile } from './engine'
 import { formatterFor } from './format'
 
@@ -45,11 +45,12 @@ export async function exportResultXlsx(table: Table, name: string) {
   download(out, `${name}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 }
 
-export async function exportTable(name: string, format: 'csv' | 'parquet') {
+/** `sqlName`: the table as written in SQL (maybe schema-qualified); `fileName` without extension. */
+export async function exportTable(sqlName: string, fileName: string, format: 'csv' | 'parquet') {
   const file = `export_${Date.now()}.${format}`
   const opts = format === 'csv' ? '(FORMAT csv, HEADER true)' : '(FORMAT parquet)'
-  await query(`COPY ${quoteIdent(name)} TO ${quoteString(file)} ${opts}`)
+  await query(`COPY ${sqlName} TO ${quoteString(file)} ${opts}`)
   const bytes = await readFile(file)
   await dropFile(file).catch(() => {})
-  download(bytes as BlobPart, `${name}.${format}`, format === 'csv' ? 'text/csv' : 'application/octet-stream')
+  download(bytes as BlobPart, `${fileName}.${format}`, format === 'csv' ? 'text/csv' : 'application/octet-stream')
 }

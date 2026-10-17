@@ -5,15 +5,25 @@ Stages follow SPEC §6. A stage is done only when its acceptance criteria pass.
 | Stage | Status | Acceptance |
 |---|---|---|
 | 1. MVP workbench | ✅ done (2026-10-17, v0.1.0) · live at https://lab.quaera.app | Drop a CSV/Excel file, see a preview with types, create a table, JOIN it with another, export the result; tables survive a reload |
-| 2. Ecosystem hops | ⏳ in progress · 2a ✅ (2026-10-17) | model.quaera.app → “Open in StrataLab” creates the tables; StrataLab → “Show as model” opens the schema in model.quaera.app; fill a modelled table from Excel with key checks |
-| 3. Dataset catalog | ⬜ | Chinook, Northwind, AdventureWorks, Sakila and Quaera's own dataset load in one click (Parquet on our CDN) |
+| 2. Ecosystem hops | ⏳ in progress · 2a ✅ 2b ✅ (2026-10-17) · 2c and the data generator left | model.quaera.app → “Open in StrataLab” creates the tables; StrataLab → “Show as model” opens the schema in model.quaera.app; fill a modelled table from Excel with key checks |
+| 3. Dataset catalog | ⏳ 4 of 5 datasets (2026-10-17) · AdventureWorks left | Chinook, Northwind, AdventureWorks, Sakila and Quaera's own dataset load in one click (Parquet served with the site) |
 | 4. Dialects | ⬜ | PostgreSQL mode (PGlite) and T-SQL → DuckDB translation (sqlglot) with a side-by-side diff |
 | 5. Share and practise | ⬜ | Share link (data + query, DB Fiddle style); tasks with automatic result check, linked from quaera.app |
 | 6. Polish | ⬜ | PWA (offline), query history and snippets, EXPLAIN as a tree, charts on results, RU/PT interface |
 
-**Overall progress: stage 1 of 6, stage 2 under way (2a done).** The full application = all six stages.
+**Overall progress: stage 1 of 6 done; stage 2 half done (2a, 2b); stage 3 nearly done (AdventureWorks left).** Roughly two stages' worth of the six. The full application = all six stages.
 
-## Where we are (2026-10-17, stage 2a + loading progress)
+## Where we are (2026-10-17, stage 2b + stage 3 without AdventureWorks)
+
+**Stage 2b done: fill an existing table from a file.** Drop a CSV / Excel file onto a table in the tree (or table menu → “Add rows from CSV / Excel…”, or “Put the rows into: an existing table” in the import dialog; a file named like an *empty* table goes there by itself). The dialog matches file columns to table columns by name (case, spaces, underscores and Cyrillic transliteration ignored; by position when no name matches and the counts agree), shows each column's type and PK / UNIQUE / → FK / NOT NULL, and checks **every** row in DuckDB before anything is written: wrong type (5.6 into an INTEGER is reported, not rounded), empty NOT NULL, key repeated in the file (“repeats row 3”), key already in the table, value not in the referenced table (“customer_id = 999 is not in customers”), failed CHECK. Rows are numbered as in the file (Excel's own row numbers, blank rows included). Then “Insert 1 200 rows, skip 3” in one transaction; the problems can be copied into Excel. Checked in the browser on dev and on the production build: CSV with `;` and decimal comma, Excel with a title row and a blank row, drop onto a tree node.
+
+**Stage 3 (4 of 5): sample datasets in one click.** “Sample datasets…” (sidebar, or the header icon on a phone) lists **Chinook** (MIT), **Northwind** (Microsoft, MIT), **Sakila** (jOOQ, BSD-2) and **Kaiyo Trading** (Quaera's own, CC BY-NC-SA). Each loads into its own schema (`chinook.Track`, `northwind."Order Details"`) with its primary keys, foreign keys and CHECKs, appears as a folder in the tree, completes as `schema.table` in the editor, and opens a starter query. `#ds=northwind` in the address loads one directly (for links from quaera.app). Files: Parquet (zstd) in `public/datasets/`, 2.3 MB for all four, built by `scripts/build-datasets.py` from the original sources; licences in `public/datasets/NOTICE.md`. A load takes 1–1.5 s once DuckDB is up; every table's row count matched the source after load, reload, and remove + load (dev and production build).
+
+**Fixed on the way: saved tables could vanish after a reload.** DuckDB-WASM's CHECKPOINT empties the WAL only in its own bookkeeping; the OPFS file keeps its bytes, and on a later start DuckDB replayed that stale tail (“Table … already exists”), failed to open the file, and the app fell back to an empty in-memory database (the tables were still in the file). Now the WAL is emptied before opening, and every query is followed by a CHECKPOINT (before, only queries that looked like writes were, and `TRUNCATE` was missed). Checked: three rounds of writes + reloads, saved database each time.
+
+44 unit tests green (new: column matching and check SQL, dataset manifest and files, `#ds=` links, qualified names).
+
+### Earlier (2026-10-17, stage 2a + loading progress)
 
 **Publishing finished:** Cloudflare Web Analytics is on (cookieless page views; the script loads only on lab.quaera.app, so local runs aren't counted).
 
@@ -47,6 +57,17 @@ The MVP works locally (dev and production build checked in the browser): DuckDB 
 - ✱ **No demo shop when arriving with a model**: whoever came from model.quaera.app came for that model, and the demo's `customers` / `orders` could clash with it.
 - ✱ **One StrataLab tab**: StrataSQL's link opens a named window (`stratalab`), and StrataLab also reads `#ddl=` on `hashchange`, so a second click lands in the same tab (a second tab could not lock the saved database and would fall back to memory).
 - ✱ **We download DuckDB's .wasm ourselves** (`src/db/engine.ts`) and hand DuckDB a `blob:` URL, counting bytes on the way. DuckDB's own progress callback only fires when chunks arrive more than 20 ms apart, so on a decent connection it stays silent. The file comes gzip-compressed, so Content-Length is useless for a percentage; `vite.config.ts` puts the unpacked sizes of both .wasm builds into the bundle at build time (`__DUCKDB_WASM_BYTES__`). The bar stops at 99% until the engine has started.
+- ✱ **Check everything, then insert** (stage 2b, `src/core/fill.ts`): the file is copied into a temp table and each rule is one SQL query over a view that casts every column to the table's type, so a big file is checked by DuckDB, not row by row in JavaScript. The report lists rows by the number the user sees in the file.
+- ✱ **Insert the good rows, skip the bad ones** rather than all-or-nothing (SSMS's import fails as a whole): the button says how many go in and how many are left out. Of two rows with the same key, the first is kept.
+- ✱ **A file named like an empty table fills it** (a modelled table waiting for data); a table with rows is only filled when chosen (dropped onto, menu, or the dialog's select).
+- ✱ **No silent rounding**: a fractional number going into an integer column is a problem. A decimal-comma file whose number column became text (one stray value) is still read with the comma, spaces as thousands separators.
+- ✱ **One schema per dataset** (`chinook.Track`): datasets never clash with each other (Chinook and Sakila both have `customer`) or with the user's tables, and `schema.table` reads like SQL Server's `dbo.`. The user's own tables stay in `main`, unqualified.
+- ✱ **Datasets served with the site** (GitHub Pages, `public/datasets/`), not a separate CDN: 2.3 MB of Parquet, same origin, no CORS question. **Original table and column names** kept (Chinook's PascalCase, Northwind's `"Order Details"`) so tutorials' queries carry over.
+- ✱ **Built offline by `scripts/build-datasets.py`** with the browser's DuckDB version (1.5.4): Northwind from Microsoft's T-SQL script (m/d/yyyy dates → DATE, money → DECIMAL(10,2) checked for lost cents, pictures left out), Chinook / Sakila / Quaera from SQLite (Quaera's ISO-text dates → DATE). Sakila's `store.manager_staff_id` FK is left out: it closes a circle with `staff.store_id`, and DuckDB can't add a key later.
+- ✱ **Self-referencing tables load in rounds** (bosses first): DuckDB checks a foreign key against rows already in the table, not rows of the same INSERT.
+- ✱ **A dataset load is not one transaction**: after a dataset was dropped from a reopened file, DuckDB 1.5 refuses to commit several CREATE TABLEs with foreign keys together (“subject … has been deleted”). One statement at a time works; a failed load drops its schema again.
+- ✱ **WAL emptied on start, CHECKPOINT after every query** (`src/db/engine.ts`), see “Where we are”. A crash between a write and its checkpoint loses that one write; a stale WAL lost the whole database.
+- ✱ **AdventureWorks later**: Microsoft ships it as a .bak or as UTF-16 CSVs with custom delimiters (~70 tables in 5 schemas); worth its own step, probably as AdventureWorksLT.
 - Name **StrataLab**, subdomain **lab.quaera.app** (owner, 2026-10-17), in line with StrataSQL and StrataFlow.
 
 ## Next steps (by priority)
@@ -54,10 +75,12 @@ The MVP works locally (dev and production build checked in the browser): DuckDB 
 1. ✅ **Name + subdomain**: StrataLab · lab.quaera.app (owner, 2026-10-17)
 2. **Publish**: ✅ GitHub repo, ✅ Pages via Actions, ✅ custom domain on GitHub · ✅ Cloudflare DNS `CNAME lab` (live 2026-10-17, http redirects to https) · ✅ Cloudflare Web Analytics (2026-10-17): beacon in `index.html`, loaded only on lab.quaera.app, like StrataSQL
 3. ✅ **Stage 2a — from model.quaera.app** (2026-10-17): “Open in StrataLab ↗” in StrataSQL's SQL tab → `#ddl=` → empty tables with PK / UNIQUE / CHECK / FK, a starter SELECT tab, a note per statement DuckDB couldn't take. ✅ Live: checked on model.quaera.app → lab.quaera.app (2026-10-17).
-4. **Stage 2b — fill a table from Excel**: drop a file onto an existing table → map file columns to table columns → type / NOT NULL / FK / UNIQUE check with a row-by-row report (“row 47: customer_id 999 not in customers”) → INSERT.
-5. **Stage 2c — to model.quaera.app**: “Show as model” sends the current tables' DDL to StrataSQL's SQL → model import (its roadmap #32).
-6. **Data generator** for empty modelled tables (respects FKs).
-7. Lazy-load DuckDB's JS and CodeMirror to cut the 290 kB (gzip) first chunk; the .wasm (~8 MB gzip) is already fetched in parallel. ✅ The .wasm download shows its progress (2026-10-17).
+4. ✅ **Stage 2b — fill a table from Excel** (2026-10-17): drop onto a table → match columns → type / NOT NULL / PK / UNIQUE / FK / CHECK report by file row → insert the good rows.
+5. ✅ **Stage 3 — catalog with 4 datasets** (2026-10-17): Chinook, Northwind, Sakila, Kaiyo Trading; `#ds=` links. **Owner, after deploy:** try `https://lab.quaera.app/#ds=quaera`; quaera.app's SQL track can link to it.
+6. **Stage 2c — to model.quaera.app**: “Show as model” sends the current tables' DDL to StrataSQL's SQL → model import (its roadmap #32).
+7. **Data generator** for empty modelled tables (respects FKs): pairs with 2b, generate or fill from Excel.
+8. **Stage 3 — AdventureWorks** (LT) in `scripts/build-datasets.py`. Optional: NYC Taxi sample.
+9. Lazy-load DuckDB's JS and CodeMirror to cut the 304 kB (gzip) first chunk (stages 2b and 3 added ~14 kB, about 4 kB of it the datasets' CREATE TABLEs, which could load with the catalog). ✅ The .wasm download shows its progress (2026-10-17).
 
 ## Known gaps
 
@@ -67,4 +90,7 @@ The MVP works locally (dev and production build checked in the browser): DuckDB 
 - Not tried yet on Safari / Firefox (OPFS sync access handles are supported there, but untested).
 - `#ddl=` opened while StrataLab is already open in a tab **not** started from StrataSQL's link (typed address, bookmark) opens a second tab, which gets an in-memory database (the badge says so).
 - DuckDB foreign keys only block: `ON DELETE CASCADE / SET NULL` from a model are left out (noted in the dialog).
-- Mobile: usable to look, not to work (sidebar hidden below 768 px).
+- Mobile: usable to look, not to work (sidebar hidden below 768 px; the catalog has a header button).
+- Filling works only into the user's own tables (schema `main`), not into a dataset's.
+- Filling a table that refers to itself: rows pointing at other rows of the same file pass the check, but DuckDB rejects them in one INSERT; the insert then fails as a whole with DuckDB's message (nothing written).
+- Reloading or removing a dataset loses changes made to its tables (the app asks first).

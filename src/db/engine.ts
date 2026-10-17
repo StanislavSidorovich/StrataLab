@@ -99,11 +99,27 @@ async function downloadWasm(url: string, knownSize: number, onProgress: (p: Engi
 async function openPersistent(db: duckdb.AsyncDuckDB) {
   if (!('getDirectory' in (navigator.storage ?? {}))) throw new Error('OPFS is not supported')
   const dir = await navigator.storage.getDirectory()
+  await emptyWal(dir)
   for (const name of [DB_FILE, `${DB_FILE}.wal`]) {
     const handle = await dir.getFileHandle(name, { create: true })
     await db.registerFileHandle(name, handle, duckdb.DuckDBDataProtocol.BROWSER_FSACCESS, true)
   }
   await db.open({ path: DB_FILE, accessMode: duckdb.DuckDBAccessMode.READ_WRITE, useDirectIO: true })
+}
+
+/**
+ * After a CHECKPOINT, DuckDB-WASM empties the WAL only in its own bookkeeping: the OPFS file
+ * keeps its old bytes. On the next start DuckDB may replay that stale tail and refuse to open
+ * ("Failure while replaying WAL file: Table … already exists"), and the app fell back to an
+ * empty in-memory database. Every write here is followed by a CHECKPOINT, so the database file
+ * already holds everything: the WAL is emptied before opening. If another tab has the file
+ * open, this throws, and that tab keeps the saved database (we fall back to memory).
+ */
+async function emptyWal(dir: FileSystemDirectoryHandle) {
+  const wal = await dir.getFileHandle(`${DB_FILE}.wal`, { create: true })
+  if (!('createWritable' in wal) || (await wal.getFile()).size === 0) return
+  const w = await wal.createWritable({ keepExistingData: false })
+  await w.close()
 }
 
 export async function query(sql: string): Promise<Table> {

@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, HardDrive, Loader2, Moon, Play, Plus, Sun, Upload, X, Zap } from 'lucide-react'
+import { AlertTriangle, HardDrive, Library, Loader2, Moon, Play, Plus, Sun, Upload, X, Zap } from 'lucide-react'
 import { Sidebar } from './Sidebar'
 import { SqlEditor, runActive } from './SqlEditor'
 import { Results } from './Results'
 import { ImportDialog } from './ImportDialog'
 import { DdlDialog } from './DdlDialog'
+import { CatalogDialog, DatasetProgressCard } from './CatalogDialog'
 import { engineLoadingLabel, engineLoadingShort } from './EngineLoading'
-import { addTab, closeTab, enqueueFiles, renameTab, toggleTheme, useLab } from './store'
+import { addTab, closeTab, enqueueFiles, openCatalog, renameTab, toggleTheme, useLab } from './store'
 
 export function App() {
   const theme = useLab((s) => s.theme)
@@ -75,12 +76,14 @@ export function App() {
       {dragging && (
         <div className="fixed inset-0 z-40 flex items-center justify-center pointer-events-none" style={{ background: 'rgba(5,150,105,0.12)', border: '3px dashed var(--accent)' }}>
           <div className="rounded-xl px-6 py-4 flex items-center gap-3 text-base font-semibold shadow-xl" style={{ background: 'var(--panel)' }}>
-            <Upload size={20} style={{ color: 'var(--accent)' }} /> Drop CSV, Excel, Parquet or JSON files to make tables
+            <Upload size={20} style={{ color: 'var(--accent)' }} /> Drop CSV, Excel, Parquet or JSON files to make tables, or onto a table to add rows
           </div>
         </div>
       )}
       <ImportDialog />
       <DdlDialog />
+      <CatalogDialog />
+      <DatasetProgressCard />
     </div>
   )
 }
@@ -108,7 +111,9 @@ function useDropZone() {
       e.preventDefault()
       depth = 0
       setDragging(false)
-      void enqueueFiles([...(e.dataTransfer?.files ?? [])])
+      // Dropped on a table in the object tree: add the rows to it.
+      const table = (e.target as Element | null)?.closest?.('[data-fill-table]')?.getAttribute('data-fill-table') ?? undefined
+      void enqueueFiles([...(e.dataTransfer?.files ?? [])], table)
     }
     window.addEventListener('dragenter', enter)
     window.addEventListener('dragleave', leave)
@@ -152,6 +157,10 @@ function TopBar() {
         <Play size={14} /> Run
       </button>
       <EngineBadge />
+      {/* The sidebar (with its catalog button) is hidden on a phone. */}
+      <button className="btn btn-ghost md:hidden" onClick={() => openCatalog()} disabled={engine.status !== 'ready'} aria-label="Sample datasets" title="Sample datasets">
+        <Library size={16} />
+      </button>
       <button className="btn btn-ghost" onClick={toggleTheme} aria-label="Switch theme" title="Light / dark">
         {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
       </button>

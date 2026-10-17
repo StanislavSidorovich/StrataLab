@@ -38,7 +38,13 @@ export function SqlEditor() {
   const tables = useLab((s) => s.tables)
   const dark = useLab((s) => s.theme === 'dark')
 
-  const schema = Object.fromEntries(tables.map((t) => [t.name, t.columns.map((c) => c.name)]))
+  // The user's tables complete as they are; a dataset's after its schema name (chinook.Track).
+  const schema: Record<string, string[] | Record<string, string[]>> = {}
+  for (const t of tables) {
+    const cols = t.columns.map((c) => c.name)
+    if (t.schema === 'main') schema[t.name] = cols
+    else ((schema[t.schema] ??= {}) as Record<string, string[]>)[t.name] = cols
+  }
   const langExt = () => sql({ dialect: PostgreSQL, schema, upperCaseKeywords: false })
   const themeExt = () => (dark ? oneDark : lightTheme)
 

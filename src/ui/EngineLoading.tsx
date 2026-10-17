@@ -20,7 +20,7 @@ export function engineLoadingShort(p: EngineProgress): string {
 export function EngineLoading() {
   const engine = useLab((s) => s.engine)
   if (engine.status !== 'loading') return null
-  const { progress, withModel } = engine
+  const { progress, withModel, withDataset } = engine
   const percent = progress.step === 'download' ? progress.percent : 100
   const known = percent !== null
   return (
@@ -54,6 +54,11 @@ export function EngineLoading() {
         {withModel && (
           <p className="rounded-md px-3 py-2" style={{ background: 'var(--accent-soft)', color: 'var(--accent)', fontSize: 13 }}>
             Your model from model.quaera.app opens as soon as the engine is ready.
+          </p>
+        )}
+        {withDataset && (
+          <p className="rounded-md px-3 py-2" style={{ background: 'var(--accent-soft)', color: 'var(--accent)', fontSize: 13 }}>
+            The {withDataset} dataset loads as soon as the engine is ready.
           </p>
         )}
       </div>

@@ -21,10 +21,14 @@ export interface ImportSource {
   sheet?: string
   /** 0-based row of the sheet that holds the column names */
   headerRow?: number
+  /** an existing table to add the rows to (stage 2b), instead of creating a new one */
+  target?: string | null
 }
 
 let counter = 0
 const workbooks = new Map<string, WorkBook>()
+/** Excel: the sheet row (1-based, as Excel shows it) of every data row, by source id. */
+const sheetRows = new Map<string, number[]>()
 
 export function kindOf(fileName: string): SourceKind | null {
   const ext = fileName.toLowerCase().split('.').pop() ?? ''
@@ -76,10 +80,12 @@ export async function writeSheet(src: ImportSource, headerRow?: number): Promise
   const rows = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[src.sheet], { header: 1, raw: true, defval: null, blankrows: true })
   const h = headerRow ?? findHeaderRow(rows)
   const header = cleanHeader(rows[h] ?? [])
+  const kept: number[] = []
   const body = rows
     .slice(h + 1)
-    .filter((r) => r.some((c) => c !== null && c !== ''))
+    .filter((r, j) => r.some((c) => c !== null && c !== '') && kept.push(h + 2 + j))
     .map((r) => header.map((_, i) => r[i] ?? null))
+  sheetRows.set(src.id, kept)
   await registerBuffer(src.regName, new TextEncoder().encode(toCsv([header, ...body])))
   return {
     ...src,
@@ -115,7 +121,24 @@ export async function createTable(src: ImportSource, replace: boolean): Promise<
   await checkpoint()
 }
 
+/**
+ * The row number the user sees in the file for row `rowid` (0-based) of a table copied from
+ * the source: the line in a CSV, the row Excel shows (blank rows are skipped on the way).
+ */
+export function fileRowExpr(src: ImportSource, rowid = 'rowid'): string {
+  if (src.kind === 'excel') {
+    const rows = sheetRows.get(src.id) ?? []
+    const first = rows[0] ?? (src.headerRow ?? 0) + 2
+    // Usually the rows follow each other; otherwise look the number up in a list.
+    if (rows.every((r, i) => r === first + i)) return `${rowid} + ${first}`
+    return `[${rows.join(',')}][${rowid} + 1]`
+  }
+  if (src.kind === 'csv') return `${rowid} + ${src.csv?.header ? 2 : 1}`
+  return `${rowid} + 1`
+}
+
 export async function closeSource(src: ImportSource): Promise<void> {
   workbooks.delete(src.id)
+  sheetRows.delete(src.id)
   await dropFile(src.regName).catch(() => {})
 }

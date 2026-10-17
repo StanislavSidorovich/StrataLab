@@ -21,7 +21,10 @@ Static site (Vite + React + TypeScript), GitHub Pages, custom domain via Cloudfl
  ├─ importer: CSV / Excel / Parquet / JSON   src/db/importer.ts
  │    ├─ sniffing (encoding, delimiter, decimal comma, dates)   src/core/sniff.ts
  │    └─ Excel via SheetJS → CSV with ISO dates                 src/core/csvWrite.ts
- ├─ catalog (tables, views, columns)    src/db/catalog.ts
+ ├─ fill an existing table from a file (stage 2b)  src/core/fill.ts (rules → SQL), src/db/fill.ts
+ ├─ dataset catalog (stage 3): Parquet in public/datasets/<id>/, one schema per dataset
+ │    src/data/datasets.ts (+ datasets.json from scripts/build-datasets.py), src/db/datasets.ts
+ ├─ catalog (tables, views, columns of every schema)    src/db/catalog.ts
  ├─ exports (CSV, Excel, Parquet)       src/db/export.ts
  └─ UI: object tree, query tabs (CodeMirror 6), results grid (virtualised), import dialog
 ```

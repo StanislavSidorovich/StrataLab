@@ -1,0 +1,412 @@
+{
+ "chinook": {
+  "ddl": [
+   "CREATE TABLE chinook.\"Artist\" (\n  \"ArtistId\" INTEGER NOT NULL,\n  \"Name\" VARCHAR,\n  PRIMARY KEY (\"ArtistId\")\n)",
+   "CREATE TABLE chinook.\"Album\" (\n  \"AlbumId\" INTEGER NOT NULL,\n  \"Title\" VARCHAR NOT NULL,\n  \"ArtistId\" INTEGER NOT NULL,\n  PRIMARY KEY (\"AlbumId\"),\n  FOREIGN KEY (\"ArtistId\") REFERENCES chinook.\"Artist\" (\"ArtistId\")\n)",
+   "CREATE TABLE chinook.\"Employee\" (\n  \"EmployeeId\" INTEGER NOT NULL,\n  \"LastName\" VARCHAR NOT NULL,\n  \"FirstName\" VARCHAR NOT NULL,\n  \"Title\" VARCHAR,\n  \"ReportsTo\" INTEGER,\n  \"BirthDate\" TIMESTAMP,\n  \"HireDate\" TIMESTAMP,\n  \"Address\" VARCHAR,\n  \"City\" VARCHAR,\n  \"State\" VARCHAR,\n  \"Country\" VARCHAR,\n  \"PostalCode\" VARCHAR,\n  \"Phone\" VARCHAR,\n  \"Fax\" VARCHAR,\n  \"Email\" VARCHAR,\n  PRIMARY KEY (\"EmployeeId\"),\n  FOREIGN KEY (\"ReportsTo\") REFERENCES chinook.\"Employee\" (\"EmployeeId\")\n)",
+   "CREATE TABLE chinook.\"Customer\" (\n  \"CustomerId\" INTEGER NOT NULL,\n  \"FirstName\" VARCHAR NOT NULL,\n  \"LastName\" VARCHAR NOT NULL,\n  \"Company\" VARCHAR,\n  \"Address\" VARCHAR,\n  \"City\" VARCHAR,\n  \"State\" VARCHAR,\n  \"Country\" VARCHAR,\n  \"PostalCode\" VARCHAR,\n  \"Phone\" VARCHAR,\n  \"Fax\" VARCHAR,\n  \"Email\" VARCHAR NOT NULL,\n  \"SupportRepId\" INTEGER,\n  PRIMARY KEY (\"CustomerId\"),\n  FOREIGN KEY (\"SupportRepId\") REFERENCES chinook.\"Employee\" (\"EmployeeId\")\n)",
+   "CREATE TABLE chinook.\"Genre\" (\n  \"GenreId\" INTEGER NOT NULL,\n  \"Name\" VARCHAR,\n  PRIMARY KEY (\"GenreId\")\n)",
+   "CREATE TABLE chinook.\"Invoice\" (\n  \"InvoiceId\" INTEGER NOT NULL,\n  \"CustomerId\" INTEGER NOT NULL,\n  \"InvoiceDate\" TIMESTAMP NOT NULL,\n  \"BillingAddress\" VARCHAR,\n  \"BillingCity\" VARCHAR,\n  \"BillingState\" VARCHAR,\n  \"BillingCountry\" VARCHAR,\n  \"BillingPostalCode\" VARCHAR,\n  \"Total\" DECIMAL(10,2) NOT NULL,\n  PRIMARY KEY (\"InvoiceId\"),\n  FOREIGN KEY (\"CustomerId\") REFERENCES chinook.\"Customer\" (\"CustomerId\")\n)",
+   "CREATE TABLE chinook.\"MediaType\" (\n  \"MediaTypeId\" INTEGER NOT NULL,\n  \"Name\" VARCHAR,\n  PRIMARY KEY (\"MediaTypeId\")\n)",
+   "CREATE TABLE chinook.\"Playlist\" (\n  \"PlaylistId\" INTEGER NOT NULL,\n  \"Name\" VARCHAR,\n  PRIMARY KEY (\"PlaylistId\")\n)",
+   "CREATE TABLE chinook.\"Track\" (\n  \"TrackId\" INTEGER NOT NULL,\n  \"Name\" VARCHAR NOT NULL,\n  \"AlbumId\" INTEGER,\n  \"MediaTypeId\" INTEGER NOT NULL,\n  \"GenreId\" INTEGER,\n  \"Composer\" VARCHAR,\n  \"Milliseconds\" INTEGER NOT NULL,\n  \"Bytes\" INTEGER,\n  \"UnitPrice\" DECIMAL(10,2) NOT NULL,\n  PRIMARY KEY (\"TrackId\"),\n  FOREIGN KEY (\"MediaTypeId\") REFERENCES chinook.\"MediaType\" (\"MediaTypeId\"),\n  FOREIGN KEY (\"GenreId\") REFERENCES chinook.\"Genre\" (\"GenreId\"),\n  FOREIGN KEY (\"AlbumId\") REFERENCES chinook.\"Album\" (\"AlbumId\")\n)",
+   "CREATE TABLE chinook.\"InvoiceLine\" (\n  \"InvoiceLineId\" INTEGER NOT NULL,\n  \"InvoiceId\" INTEGER NOT NULL,\n  \"TrackId\" INTEGER NOT NULL,\n  \"UnitPrice\" DECIMAL(10,2) NOT NULL,\n  \"Quantity\" INTEGER NOT NULL,\n  PRIMARY KEY (\"InvoiceLineId\"),\n  FOREIGN KEY (\"TrackId\") REFERENCES chinook.\"Track\" (\"TrackId\"),\n  FOREIGN KEY (\"InvoiceId\") REFERENCES chinook.\"Invoice\" (\"InvoiceId\")\n)",
+   "CREATE TABLE chinook.\"PlaylistTrack\" (\n  \"PlaylistId\" INTEGER NOT NULL,\n  \"TrackId\" INTEGER NOT NULL,\n  PRIMARY KEY (\"PlaylistId\", \"TrackId\"),\n  FOREIGN KEY (\"TrackId\") REFERENCES chinook.\"Track\" (\"TrackId\"),\n  FOREIGN KEY (\"PlaylistId\") REFERENCES chinook.\"Playlist\" (\"PlaylistId\")\n)"
+  ],
+  "tables": [
+   {
+    "name": "Artist",
+    "file": "Artist.parquet",
+    "rows": 275,
+    "bytes": 4300
+   },
+   {
+    "name": "Album",
+    "file": "Album.parquet",
+    "rows": 347,
+    "bytes": 6386
+   },
+   {
+    "name": "Employee",
+    "file": "Employee.parquet",
+    "rows": 8,
+    "bytes": 3240,
+    "selfRef": {
+     "columns": [
+      "ReportsTo"
+     ],
+     "refColumns": [
+      "EmployeeId"
+     ],
+     "key": [
+      "EmployeeId"
+     ]
+    }
+   },
+   {
+    "name": "Customer",
+    "file": "Customer.parquet",
+    "rows": 59,
+    "bytes": 6748
+   },
+   {
+    "name": "Genre",
+    "file": "Genre.parquet",
+    "rows": 25,
+    "bytes": 620
+   },
+   {
+    "name": "Invoice",
+    "file": "Invoice.parquet",
+    "rows": 412,
+    "bytes": 8842
+   },
+   {
+    "name": "MediaType",
+    "file": "MediaType.parquet",
+    "rows": 5,
+    "bytes": 479
+   },
+   {
+    "name": "Playlist",
+    "file": "Playlist.parquet",
+    "rows": 18,
+    "bytes": 572
+   },
+   {
+    "name": "Track",
+    "file": "Track.parquet",
+    "rows": 3503,
+    "bytes": 82343
+   },
+   {
+    "name": "InvoiceLine",
+    "file": "InvoiceLine.parquet",
+    "rows": 2240,
+    "bytes": 13142
+   },
+   {
+    "name": "PlaylistTrack",
+    "file": "PlaylistTrack.parquet",
+    "rows": 8715,
+    "bytes": 9691
+   }
+  ]
+ },
+ "northwind": {
+  "ddl": [
+   "CREATE TABLE northwind.\"Categories\" (\n  \"CategoryID\" INTEGER NOT NULL PRIMARY KEY,\n  \"CategoryName\" VARCHAR NOT NULL,\n  \"Description\" VARCHAR\n)",
+   "CREATE TABLE northwind.\"Customers\" (\n  \"CustomerID\" VARCHAR NOT NULL PRIMARY KEY,\n  \"CompanyName\" VARCHAR NOT NULL,\n  \"ContactName\" VARCHAR,\n  \"ContactTitle\" VARCHAR,\n  \"Address\" VARCHAR,\n  \"City\" VARCHAR,\n  \"Region\" VARCHAR,\n  \"PostalCode\" VARCHAR,\n  \"Country\" VARCHAR,\n  \"Phone\" VARCHAR,\n  \"Fax\" VARCHAR\n)",
+   "CREATE TABLE northwind.\"Employees\" (\n  \"EmployeeID\" INTEGER NOT NULL PRIMARY KEY,\n  \"LastName\" VARCHAR NOT NULL,\n  \"FirstName\" VARCHAR NOT NULL,\n  \"Title\" VARCHAR,\n  \"TitleOfCourtesy\" VARCHAR,\n  \"BirthDate\" DATE,\n  \"HireDate\" DATE,\n  \"Address\" VARCHAR,\n  \"City\" VARCHAR,\n  \"Region\" VARCHAR,\n  \"PostalCode\" VARCHAR,\n  \"Country\" VARCHAR,\n  \"HomePhone\" VARCHAR,\n  \"Extension\" VARCHAR,\n  \"Notes\" VARCHAR,\n  \"ReportsTo\" INTEGER REFERENCES northwind.\"Employees\" (\"EmployeeID\"),\n  \"PhotoPath\" VARCHAR\n)",
+   "CREATE TABLE northwind.\"Shippers\" (\n  \"ShipperID\" INTEGER NOT NULL PRIMARY KEY,\n  \"CompanyName\" VARCHAR NOT NULL,\n  \"Phone\" VARCHAR\n)",
+   "CREATE TABLE northwind.\"Suppliers\" (\n  \"SupplierID\" INTEGER NOT NULL PRIMARY KEY,\n  \"CompanyName\" VARCHAR NOT NULL,\n  \"ContactName\" VARCHAR,\n  \"ContactTitle\" VARCHAR,\n  \"Address\" VARCHAR,\n  \"City\" VARCHAR,\n  \"Region\" VARCHAR,\n  \"PostalCode\" VARCHAR,\n  \"Country\" VARCHAR,\n  \"Phone\" VARCHAR,\n  \"Fax\" VARCHAR,\n  \"HomePage\" VARCHAR\n)",
+   "CREATE TABLE northwind.\"Orders\" (\n  \"OrderID\" INTEGER NOT NULL PRIMARY KEY,\n  \"CustomerID\" VARCHAR REFERENCES northwind.\"Customers\" (\"CustomerID\"),\n  \"EmployeeID\" INTEGER REFERENCES northwind.\"Employees\" (\"EmployeeID\"),\n  \"OrderDate\" DATE,\n  \"RequiredDate\" DATE,\n  \"ShippedDate\" DATE,\n  \"ShipVia\" INTEGER REFERENCES northwind.\"Shippers\" (\"ShipperID\"),\n  \"Freight\" DECIMAL(10,2) DEFAULT 0,\n  \"ShipName\" VARCHAR,\n  \"ShipAddress\" VARCHAR,\n  \"ShipCity\" VARCHAR,\n  \"ShipRegion\" VARCHAR,\n  \"ShipPostalCode\" VARCHAR,\n  \"ShipCountry\" VARCHAR\n)",
+   "CREATE TABLE northwind.\"Products\" (\n  \"ProductID\" INTEGER NOT NULL PRIMARY KEY,\n  \"ProductName\" VARCHAR NOT NULL,\n  \"SupplierID\" INTEGER REFERENCES northwind.\"Suppliers\" (\"SupplierID\"),\n  \"CategoryID\" INTEGER REFERENCES northwind.\"Categories\" (\"CategoryID\"),\n  \"QuantityPerUnit\" VARCHAR,\n  \"UnitPrice\" DECIMAL(10,2) DEFAULT 0 CHECK (\"UnitPrice\" >= 0),\n  \"UnitsInStock\" SMALLINT DEFAULT 0 CHECK (\"UnitsInStock\" >= 0),\n  \"UnitsOnOrder\" SMALLINT DEFAULT 0 CHECK (\"UnitsOnOrder\" >= 0),\n  \"ReorderLevel\" SMALLINT DEFAULT 0 CHECK (\"ReorderLevel\" >= 0),\n  \"Discontinued\" BOOLEAN NOT NULL DEFAULT false\n)",
+   "CREATE TABLE northwind.\"Order Details\" (\n  \"OrderID\" INTEGER NOT NULL REFERENCES northwind.\"Orders\" (\"OrderID\"),\n  \"ProductID\" INTEGER NOT NULL REFERENCES northwind.\"Products\" (\"ProductID\"),\n  \"UnitPrice\" DECIMAL(10,2) NOT NULL DEFAULT 0 CHECK (\"UnitPrice\" >= 0),\n  \"Quantity\" SMALLINT NOT NULL DEFAULT 1 CHECK (\"Quantity\" > 0),\n  \"Discount\" DOUBLE NOT NULL DEFAULT 0 CHECK (\"Discount\" >= 0 AND \"Discount\" <= 1),\n  PRIMARY KEY (\"OrderID\", \"ProductID\")\n)",
+   "CREATE TABLE northwind.\"CustomerDemographics\" (\n  \"CustomerTypeID\" VARCHAR NOT NULL PRIMARY KEY,\n  \"CustomerDesc\" VARCHAR\n)",
+   "CREATE TABLE northwind.\"CustomerCustomerDemo\" (\n  \"CustomerID\" VARCHAR NOT NULL REFERENCES northwind.\"Customers\" (\"CustomerID\"),\n  \"CustomerTypeID\" VARCHAR NOT NULL REFERENCES northwind.\"CustomerDemographics\" (\"CustomerTypeID\"),\n  PRIMARY KEY (\"CustomerID\", \"CustomerTypeID\")\n)",
+   "CREATE TABLE northwind.\"Region\" (\n  \"RegionID\" INTEGER NOT NULL PRIMARY KEY,\n  \"RegionDescription\" VARCHAR NOT NULL\n)",
+   "CREATE TABLE northwind.\"Territories\" (\n  \"TerritoryID\" VARCHAR NOT NULL PRIMARY KEY,\n  \"TerritoryDescription\" VARCHAR NOT NULL,\n  \"RegionID\" INTEGER NOT NULL REFERENCES northwind.\"Region\" (\"RegionID\")\n)",
+   "CREATE TABLE northwind.\"EmployeeTerritories\" (\n  \"EmployeeID\" INTEGER NOT NULL REFERENCES northwind.\"Employees\" (\"EmployeeID\"),\n  \"TerritoryID\" VARCHAR NOT NULL REFERENCES northwind.\"Territories\" (\"TerritoryID\"),\n  PRIMARY KEY (\"EmployeeID\", \"TerritoryID\")\n)"
+  ],
+  "tables": [
+   {
+    "name": "Categories",
+    "file": "Categories.parquet",
+    "rows": 8,
+    "bytes": 961
+   },
+   {
+    "name": "Customers",
+    "file": "Customers.parquet",
+    "rows": 91,
+    "bytes": 8744
+   },
+   {
+    "name": "Employees",
+    "file": "Employees.parquet",
+    "rows": 9,
+    "bytes": 5679,
+    "selfRef": {
+     "columns": [
+      "ReportsTo"
+     ],
+     "refColumns": [
+      "EmployeeID"
+     ],
+     "key": [
+      "EmployeeID"
+     ]
+    }
+   },
+   {
+    "name": "Shippers",
+    "file": "Shippers.parquet",
+    "rows": 3,
+    "bytes": 632
+   },
+   {
+    "name": "Suppliers",
+    "file": "Suppliers.parquet",
+    "rows": 29,
+    "bytes": 5006
+   },
+   {
+    "name": "Orders",
+    "file": "Orders.parquet",
+    "rows": 830,
+    "bytes": 19920
+   },
+   {
+    "name": "Products",
+    "file": "Products.parquet",
+    "rows": 77,
+    "bytes": 4111
+   },
+   {
+    "name": "Order Details",
+    "file": "Order_Details.parquet",
+    "rows": 2155,
+    "bytes": 9345
+   },
+   {
+    "name": "CustomerDemographics",
+    "file": "CustomerDemographics.parquet",
+    "rows": 0,
+    "bytes": 135
+   },
+   {
+    "name": "CustomerCustomerDemo",
+    "file": "CustomerCustomerDemo.parquet",
+    "rows": 0,
+    "bytes": 133
+   },
+   {
+    "name": "Region",
+    "file": "Region.parquet",
+    "rows": 4,
+    "bytes": 413
+   },
+   {
+    "name": "Territories",
+    "file": "Territories.parquet",
+    "rows": 53,
+    "bytes": 1238
+   },
+   {
+    "name": "EmployeeTerritories",
+    "file": "EmployeeTerritories.parquet",
+    "rows": 49,
+    "bytes": 675
+   }
+  ]
+ },
+ "sakila": {
+  "ddl": [
+   "CREATE TABLE sakila.\"actor\" (\n  \"actor_id\" INTEGER NOT NULL,\n  \"first_name\" VARCHAR NOT NULL,\n  \"last_name\" VARCHAR NOT NULL,\n  \"last_update\" TIMESTAMP NOT NULL,\n  PRIMARY KEY (\"actor_id\")\n)",
+   "CREATE TABLE sakila.\"country\" (\n  \"country_id\" INTEGER NOT NULL,\n  \"country\" VARCHAR NOT NULL,\n  \"last_update\" TIMESTAMP,\n  PRIMARY KEY (\"country_id\")\n)",
+   "CREATE TABLE sakila.\"city\" (\n  \"city_id\" INTEGER NOT NULL,\n  \"city\" VARCHAR NOT NULL,\n  \"country_id\" INTEGER NOT NULL,\n  \"last_update\" TIMESTAMP NOT NULL,\n  PRIMARY KEY (\"city_id\"),\n  FOREIGN KEY (\"country_id\") REFERENCES sakila.\"country\" (\"country_id\")\n)",
+   "CREATE TABLE sakila.\"address\" (\n  \"address_id\" INTEGER NOT NULL,\n  \"address\" VARCHAR NOT NULL,\n  \"address2\" VARCHAR,\n  \"district\" VARCHAR NOT NULL,\n  \"city_id\" INTEGER NOT NULL,\n  \"postal_code\" VARCHAR,\n  \"phone\" VARCHAR NOT NULL,\n  \"last_update\" TIMESTAMP NOT NULL,\n  PRIMARY KEY (\"address_id\"),\n  FOREIGN KEY (\"city_id\") REFERENCES sakila.\"city\" (\"city_id\")\n)",
+   "CREATE TABLE sakila.\"language\" (\n  \"language_id\" INTEGER NOT NULL,\n  \"name\" VARCHAR NOT NULL,\n  \"last_update\" TIMESTAMP NOT NULL,\n  PRIMARY KEY (\"language_id\")\n)",
+   "CREATE TABLE sakila.\"category\" (\n  \"category_id\" INTEGER NOT NULL,\n  \"name\" VARCHAR NOT NULL,\n  \"last_update\" TIMESTAMP NOT NULL,\n  PRIMARY KEY (\"category_id\")\n)",
+   "CREATE TABLE sakila.\"film\" (\n  \"film_id\" INTEGER NOT NULL,\n  \"title\" VARCHAR NOT NULL,\n  \"release_year\" VARCHAR,\n  \"language_id\" INTEGER NOT NULL,\n  \"original_language_id\" INTEGER,\n  \"rental_duration\" SMALLINT NOT NULL,\n  \"rental_rate\" DECIMAL(4,2) NOT NULL,\n  \"length\" SMALLINT,\n  \"replacement_cost\" DECIMAL(5,2) NOT NULL,\n  \"rating\" VARCHAR,\n  \"special_features\" VARCHAR,\n  \"last_update\" TIMESTAMP NOT NULL,\n  PRIMARY KEY (\"film_id\"),\n  FOREIGN KEY (\"original_language_id\") REFERENCES sakila.\"language\" (\"language_id\"),\n  FOREIGN KEY (\"language_id\") REFERENCES sakila.\"language\" (\"language_id\")\n)",
+   "CREATE TABLE sakila.\"film_actor\" (\n  \"actor_id\" INTEGER NOT NULL,\n  \"film_id\" INTEGER NOT NULL,\n  \"last_update\" TIMESTAMP NOT NULL,\n  PRIMARY KEY (\"actor_id\", \"film_id\"),\n  FOREIGN KEY (\"film_id\") REFERENCES sakila.\"film\" (\"film_id\"),\n  FOREIGN KEY (\"actor_id\") REFERENCES sakila.\"actor\" (\"actor_id\")\n)",
+   "CREATE TABLE sakila.\"film_category\" (\n  \"film_id\" INTEGER NOT NULL,\n  \"category_id\" INTEGER NOT NULL,\n  \"last_update\" TIMESTAMP NOT NULL,\n  PRIMARY KEY (\"film_id\", \"category_id\"),\n  FOREIGN KEY (\"category_id\") REFERENCES sakila.\"category\" (\"category_id\"),\n  FOREIGN KEY (\"film_id\") REFERENCES sakila.\"film\" (\"film_id\")\n)",
+   "CREATE TABLE sakila.\"store\" (\n  \"store_id\" INTEGER NOT NULL,\n  \"manager_staff_id\" INTEGER NOT NULL,\n  \"address_id\" INTEGER NOT NULL,\n  \"last_update\" TIMESTAMP NOT NULL,\n  PRIMARY KEY (\"store_id\"),\n  FOREIGN KEY (\"address_id\") REFERENCES sakila.\"address\" (\"address_id\")\n)",
+   "CREATE TABLE sakila.\"customer\" (\n  \"customer_id\" INTEGER NOT NULL,\n  \"store_id\" INTEGER NOT NULL,\n  \"first_name\" VARCHAR NOT NULL,\n  \"last_name\" VARCHAR NOT NULL,\n  \"email\" VARCHAR,\n  \"address_id\" INTEGER NOT NULL,\n  \"active\" VARCHAR NOT NULL,\n  \"create_date\" TIMESTAMP NOT NULL,\n  \"last_update\" TIMESTAMP NOT NULL,\n  PRIMARY KEY (\"customer_id\"),\n  FOREIGN KEY (\"address_id\") REFERENCES sakila.\"address\" (\"address_id\"),\n  FOREIGN KEY (\"store_id\") REFERENCES sakila.\"store\" (\"store_id\")\n)",
+   "CREATE TABLE sakila.\"inventory\" (\n  \"inventory_id\" INTEGER NOT NULL,\n  \"film_id\" INTEGER NOT NULL,\n  \"store_id\" INTEGER NOT NULL,\n  \"last_update\" TIMESTAMP NOT NULL,\n  PRIMARY KEY (\"inventory_id\"),\n  FOREIGN KEY (\"film_id\") REFERENCES sakila.\"film\" (\"film_id\"),\n  FOREIGN KEY (\"store_id\") REFERENCES sakila.\"store\" (\"store_id\")\n)",
+   "CREATE TABLE sakila.\"staff\" (\n  \"staff_id\" INTEGER NOT NULL,\n  \"first_name\" VARCHAR NOT NULL,\n  \"last_name\" VARCHAR NOT NULL,\n  \"address_id\" INTEGER NOT NULL,\n  \"email\" VARCHAR,\n  \"store_id\" INTEGER NOT NULL,\n  \"active\" SMALLINT NOT NULL,\n  \"username\" VARCHAR NOT NULL,\n  \"password\" VARCHAR,\n  \"last_update\" TIMESTAMP NOT NULL,\n  PRIMARY KEY (\"staff_id\"),\n  FOREIGN KEY (\"address_id\") REFERENCES sakila.\"address\" (\"address_id\"),\n  FOREIGN KEY (\"store_id\") REFERENCES sakila.\"store\" (\"store_id\")\n)",
+   "CREATE TABLE sakila.\"rental\" (\n  \"rental_id\" INTEGER NOT NULL,\n  \"rental_date\" TIMESTAMP NOT NULL,\n  \"inventory_id\" INTEGER NOT NULL,\n  \"customer_id\" INTEGER NOT NULL,\n  \"return_date\" TIMESTAMP,\n  \"staff_id\" INTEGER NOT NULL,\n  \"last_update\" TIMESTAMP NOT NULL,\n  PRIMARY KEY (\"rental_id\"),\n  FOREIGN KEY (\"customer_id\") REFERENCES sakila.\"customer\" (\"customer_id\"),\n  FOREIGN KEY (\"inventory_id\") REFERENCES sakila.\"inventory\" (\"inventory_id\"),\n  FOREIGN KEY (\"staff_id\") REFERENCES sakila.\"staff\" (\"staff_id\")\n)",
+   "CREATE TABLE sakila.\"payment\" (\n  \"payment_id\" INTEGER NOT NULL,\n  \"customer_id\" INTEGER NOT NULL,\n  \"staff_id\" INTEGER NOT NULL,\n  \"rental_id\" INTEGER,\n  \"amount\" DECIMAL(5,2) NOT NULL,\n  \"payment_date\" TIMESTAMP NOT NULL,\n  \"last_update\" TIMESTAMP NOT NULL,\n  PRIMARY KEY (\"payment_id\"),\n  FOREIGN KEY (\"staff_id\") REFERENCES sakila.\"staff\" (\"staff_id\"),\n  FOREIGN KEY (\"customer_id\") REFERENCES sakila.\"customer\" (\"customer_id\"),\n  FOREIGN KEY (\"rental_id\") REFERENCES sakila.\"rental\" (\"rental_id\")\n)"
+  ],
+  "tables": [
+   {
+    "name": "actor",
+    "file": "actor.parquet",
+    "rows": 200,
+    "bytes": 2718
+   },
+   {
+    "name": "country",
+    "file": "country.parquet",
+    "rows": 109,
+    "bytes": 1604
+   },
+   {
+    "name": "city",
+    "file": "city.parquet",
+    "rows": 600,
+    "bytes": 6859
+   },
+   {
+    "name": "address",
+    "file": "address.parquet",
+    "rows": 603,
+    "bytes": 11853
+   },
+   {
+    "name": "language",
+    "file": "language.parquet",
+    "rows": 6,
+    "bytes": 666
+   },
+   {
+    "name": "category",
+    "file": "category.parquet",
+    "rows": 16,
+    "bytes": 732
+   },
+   {
+    "name": "film",
+    "file": "film.parquet",
+    "rows": 1000,
+    "bytes": 16402
+   },
+   {
+    "name": "film_actor",
+    "file": "film_actor.parquet",
+    "rows": 5462,
+    "bytes": 12725
+   },
+   {
+    "name": "film_category",
+    "file": "film_category.parquet",
+    "rows": 1000,
+    "bytes": 3268
+   },
+   {
+    "name": "store",
+    "file": "store.parquet",
+    "rows": 2,
+    "bytes": 643
+   },
+   {
+    "name": "customer",
+    "file": "customer.parquet",
+    "rows": 599,
+    "bytes": 15377
+   },
+   {
+    "name": "inventory",
+    "file": "inventory.parquet",
+    "rows": 4581,
+    "bytes": 12931
+   },
+   {
+    "name": "staff",
+    "file": "staff.parquet",
+    "rows": 2,
+    "bytes": 1731
+   },
+   {
+    "name": "rental",
+    "file": "rental.parquet",
+    "rows": 16044,
+    "bytes": 249557
+   },
+   {
+    "name": "payment",
+    "file": "payment.parquet",
+    "rows": 16049,
+    "bytes": 181824
+   }
+  ]
+ },
+ "quaera": {
+  "ddl": [
+   "CREATE TABLE quaera.\"dim_date\" (\n  \"date_id\" DATE NOT NULL,\n  \"year\" INTEGER,\n  \"quarter\" INTEGER,\n  \"month\" INTEGER,\n  \"month_name\" VARCHAR,\n  \"month_start\" DATE,\n  \"week_start\" DATE,\n  \"iso_week\" INTEGER,\n  \"day_of_week\" INTEGER,\n  \"day_name\" VARCHAR,\n  \"is_weekend\" INTEGER,\n  PRIMARY KEY (\"date_id\")\n)",
+   "CREATE TABLE quaera.\"dim_product\" (\n  \"product_id\" INTEGER NOT NULL,\n  \"sku_code\" VARCHAR,\n  \"product_name\" VARCHAR,\n  \"brand\" VARCHAR,\n  \"category\" VARCHAR,\n  \"subcategory\" VARCHAR,\n  \"division\" VARCHAR,\n  \"pack_size\" DOUBLE,\n  \"unit\" VARCHAR,\n  \"list_price\" DOUBLE,\n  \"launch_date\" DATE,\n  PRIMARY KEY (\"product_id\")\n)",
+   "CREATE TABLE quaera.\"dim_region\" (\n  \"region_id\" INTEGER NOT NULL,\n  \"region_name\" VARCHAR,\n  \"macro_region\" VARCHAR,\n  \"population\" INTEGER,\n  \"tier\" INTEGER,\n  PRIMARY KEY (\"region_id\")\n)",
+   "CREATE TABLE quaera.\"dim_customer\" (\n  \"customer_id\" INTEGER NOT NULL,\n  \"customer_name\" VARCHAR,\n  \"customer_type\" VARCHAR,\n  \"channel\" VARCHAR,\n  \"chain_name\" VARCHAR,\n  \"region_id\" INTEGER,\n  \"city\" VARCHAR,\n  \"opened_date\" DATE,\n  \"is_active\" INTEGER,\n  \"served_by_distributor_id\" INTEGER,\n  \"rep_id\" INTEGER,\n  PRIMARY KEY (\"customer_id\")\n)",
+   "CREATE TABLE quaera.\"dim_rep\" (\n  \"rep_id\" INTEGER NOT NULL,\n  \"rep_name\" VARCHAR,\n  \"team\" VARCHAR,\n  \"role\" VARCHAR,\n  \"region_id\" INTEGER,\n  \"hired_date\" DATE,\n  \"manager_id\" INTEGER,\n  PRIMARY KEY (\"rep_id\")\n)",
+   "CREATE TABLE quaera.\"dim_promo\" (\n  \"promo_id\" INTEGER NOT NULL,\n  \"promo_name\" VARCHAR,\n  \"brand\" VARCHAR,\n  \"mechanic\" VARCHAR,\n  \"start_date\" DATE,\n  \"end_date\" DATE,\n  \"discount_pct\" DOUBLE,\n  \"channel\" VARCHAR,\n  PRIMARY KEY (\"promo_id\")\n)",
+   "CREATE TABLE quaera.\"fact_sellout\" (\n  \"sellout_id\" INTEGER NOT NULL,\n  \"week_start\" DATE,\n  \"customer_id\" INTEGER,\n  \"product_id\" INTEGER,\n  \"units\" INTEGER,\n  \"revenue\" DOUBLE,\n  \"avg_price\" DOUBLE,\n  \"promo_id\" INTEGER,\n  PRIMARY KEY (\"sellout_id\")\n)",
+   "CREATE TABLE quaera.\"fact_sellin\" (\n  \"sellin_id\" INTEGER NOT NULL,\n  \"order_date\" DATE,\n  \"ship_date\" DATE,\n  \"month_start\" DATE,\n  \"distributor_id\" INTEGER,\n  \"product_id\" INTEGER,\n  \"units\" INTEGER,\n  \"gross_amount\" DOUBLE,\n  \"discount_amount\" DOUBLE,\n  \"net_amount\" DOUBLE,\n  PRIMARY KEY (\"sellin_id\")\n)",
+   "CREATE TABLE quaera.\"fact_stock\" (\n  \"stock_id\" INTEGER NOT NULL,\n  \"month_start\" DATE,\n  \"month_end\" DATE,\n  \"distributor_id\" INTEGER,\n  \"product_id\" INTEGER,\n  \"units_on_hand\" INTEGER,\n  \"units_in_transit\" INTEGER,\n  PRIMARY KEY (\"stock_id\")\n)",
+   "CREATE TABLE quaera.\"fact_target\" (\n  \"target_id\" INTEGER NOT NULL,\n  \"month_start\" DATE,\n  \"rep_id\" INTEGER,\n  \"division\" VARCHAR,\n  \"target_units\" INTEGER,\n  \"target_revenue\" DOUBLE,\n  PRIMARY KEY (\"target_id\")\n)",
+   "CREATE TABLE quaera.\"fact_forecast_snapshot\" (\n  \"forecast_id\" INTEGER NOT NULL,\n  \"snapshot_month\" DATE,\n  \"month_start\" DATE,\n  \"lag_months\" INTEGER,\n  \"product_id\" INTEGER,\n  \"forecast_units\" INTEGER,\n  PRIMARY KEY (\"forecast_id\")\n)",
+   "CREATE TABLE quaera.\"fact_price\" (\n  \"price_id\" INTEGER NOT NULL,\n  \"month_start\" DATE,\n  \"product_id\" INTEGER,\n  \"list_price\" DOUBLE,\n  \"promo_price\" DOUBLE,\n  PRIMARY KEY (\"price_id\")\n)",
+   "CREATE TABLE quaera.\"staging_raw_sellout\" (\n  \"raw_id\" INTEGER NOT NULL,\n  \"sale_date\" VARCHAR,\n  \"customer_name\" VARCHAR,\n  \"sku_code\" VARCHAR,\n  \"units\" VARCHAR,\n  \"revenue\" VARCHAR,\n  \"source_file\" VARCHAR,\n  PRIMARY KEY (\"raw_id\")\n)"
+  ],
+  "tables": [
+   {
+    "name": "dim_date",
+    "file": "dim_date.parquet",
+    "rows": 912,
+    "bytes": 5677
+   },
+   {
+    "name": "dim_product",
+    "file": "dim_product.parquet",
+    "rows": 47,
+    "bytes": 3388
+   },
+   {
+    "name": "dim_region",
+    "file": "dim_region.parquet",
+    "rows": 16,
+    "bytes": 1115
+   },
+   {
+    "name": "dim_customer",
+    "file": "dim_customer.parquet",
+    "rows": 144,
+    "bytes": 4821
+   },
+   {
+    "name": "dim_rep",
+    "file": "dim_rep.parquet",
+    "rows": 31,
+    "bytes": 1814
+   },
+   {
+    "name": "dim_promo",
+    "file": "dim_promo.parquet",
+    "rows": 89,
+    "bytes": 2928
+   },
+   {
+    "name": "fact_sellout",
+    "file": "fact_sellout.parquet",
+    "rows": 118449,
+    "bytes": 1193033
+   },
+   {
+    "name": "fact_sellin",
+    "file": "fact_sellin.parquet",
+    "rows": 15362,
+    "bytes": 288134
+   },
+   {
+    "name": "fact_stock",
+    "file": "fact_stock.parquet",
+    "rows": 15546,
+    "bytes": 69780
+   },
+   {
+    "name": "fact_target",
+    "file": "fact_target.parquet",
+    "rows": 750,
+    "bytes": 8075
+   },
+   {
+    "name": "fact_forecast_snapshot",
+    "file": "fact_forecast_snapshot.parquet",
+    "rows": 3894,
+    "bytes": 19050
+   },
+   {
+    "name": "fact_price",
+    "file": "fact_price.parquet",
+    "rows": 1390,
+    "bytes": 13373
+   },
+   {
+    "name": "staging_raw_sellout",
+    "file": "staging_raw_sellout.parquet",
+    "rows": 3110,
+    "bytes": 35153
+   }
+  ]
+ }
+}

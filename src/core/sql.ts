@@ -37,3 +37,13 @@ export function uniqueName(name: string, taken: Iterable<string>): string {
   if (!set.has(name.toLowerCase())) return name
   for (let i = 2; ; i++) if (!set.has(`${name}_${i}`.toLowerCase())) return `${name}_${i}`
 }
+
+/** A name as it can be typed in a query: quoted only when it has to be. */
+export function sqlName(name: string): string {
+  return /^[a-z_][a-z0-9_]*$/.test(name) ? name : quoteIdent(name)
+}
+
+/** "orders" for the user's own tables (schema main), "chinook.Album" → chinook."Album" for a dataset's. */
+export function qualifiedName(schema: string, name: string): string {
+  return schema === 'main' ? sqlName(name) : `${sqlName(schema)}.${sqlName(name)}`
+}
