@@ -17,6 +17,8 @@
   --warn-text: #7a4b00;
   --grid-alt: #fafbfc;
   --sel: #e0f2fe;
+  /* the SQL editor's background (Appearance: src/core/look.ts) */
+  --code-bg: #ffffff;
   /* chart series, in this order (validated for colour-blind separation on --panel) */
   --series-1: #2a78d6;
   --series-2: #eb6834;
@@ -40,6 +42,7 @@
   --warn-text: #fcd34d;
   --grid-alt: #19202a;
   --sel: #10324a;
+  --code-bg: #282c34;
   --series-1: #3987e5;
   --series-2: #d95926;
   --series-3: #199e70;
