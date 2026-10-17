@@ -4,7 +4,7 @@ Stages follow SPEC §6. A stage is done only when its acceptance criteria pass.
 
 | Stage | Status | Acceptance |
 |---|---|---|
-| 1. MVP workbench | ✅ done (2026-10-17, v0.1.0) · not deployed yet | Drop a CSV/Excel file, see a preview with types, create a table, JOIN it with another, export the result; tables survive a reload |
+| 1. MVP workbench | ✅ done (2026-10-17, v0.1.0) · deployed to GitHub Pages; live at https://lab.quaera.app once the Cloudflare CNAME is added | Drop a CSV/Excel file, see a preview with types, create a table, JOIN it with another, export the result; tables survive a reload |
 | 2. Ecosystem hops | ⏳ next | model.quaera.app → “Open in StrataLab” creates the tables; StrataLab → “Show as model” opens the schema in model.quaera.app; fill a modelled table from Excel with key checks |
 | 3. Dataset catalog | ⬜ | Chinook, Northwind, AdventureWorks, Sakila and Quaera's own dataset load in one click (Parquet on our CDN) |
 | 4. Dialects | ⬜ | PostgreSQL mode (PGlite) and T-SQL → DuckDB translation (sqlglot) with a side-by-side diff |
@@ -15,7 +15,7 @@ Stages follow SPEC §6. A stage is done only when its acceptance criteria pass.
 
 ## Where we are (2026-10-17, v0.1.0)
 
-The MVP works locally (dev and production build checked in the browser): DuckDB 1.5.4 in a Web Worker, tables kept in the browser (OPFS), import of CSV / Excel / Parquet / JSON with automatic detection of Russian and Portuguese Excel habits, editor with completion, virtualised results, exports, T-SQL hints. Next: name and subdomain, GitHub repo + Pages + Cloudflare DNS, then stage 2.
+The MVP works locally (dev and production build checked in the browser): DuckDB 1.5.4 in a Web Worker, tables kept in the browser (OPFS), import of CSV / Excel / Parquet / JSON with automatic detection of Russian and Portuguese Excel habits, editor with completion, virtualised results, exports, T-SQL hints. Repo https://github.com/StanislavSidorovich/StrataLab, Pages deploy green, custom domain lab.quaera.app set on the GitHub side. Waiting for the owner's Cloudflare DNS record, then stage 2.
 
 ## Decisions
 
@@ -33,7 +33,7 @@ The MVP works locally (dev and production build checked in the browser): DuckDB 
 ## Next steps (by priority)
 
 1. ✅ **Name + subdomain**: StrataLab · lab.quaera.app (owner, 2026-10-17)
-2. **Publish**: GitHub repo, Pages via Actions (`deploy.yml` ready), custom domain + CNAME record on Cloudflare, Cloudflare Web Analytics only on the live host.
+2. **Publish**: ✅ GitHub repo, ✅ Pages via Actions, ✅ custom domain on GitHub · ⏳ owner: Cloudflare DNS `CNAME lab → stanislavsidorovich.github.io`, proxy off (DNS only, like `model`), then tick “Enforce HTTPS” · ⏳ Cloudflare Web Analytics token (beacon only on lab.quaera.app, like StrataSQL)
 3. **Stage 2a — from model.quaera.app**: StrataSQL gets an “Open in StrataLab” button that packs the generated DDL (Postgres flavour) into `#ddl=` (compressed, like its share links); StrataLab reads the hash, runs the DDL, shows the empty tables. Different subdomains are different origins: no shared localStorage.
 4. **Stage 2b — fill a table from Excel**: drop a file onto an existing table → map file columns to table columns → type / NOT NULL / FK / UNIQUE check with a row-by-row report (“row 47: customer_id 999 not in customers”) → INSERT.
 5. **Stage 2c — to model.quaera.app**: “Show as model” sends the current tables' DDL to StrataSQL's SQL → model import (its roadmap #32).
