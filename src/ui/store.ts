@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { Table } from 'apache-arrow'
-import { cancelQuery, checkpoint, getEngine, insertArrow, isCancelled, query, queryCancellable, type EngineProgress } from '../db/engine'
+import { cancelQuery, checkpoint, getEngine, insertArrow, isCancelled, query, queryCancellable, queryLimited, type EngineProgress } from '../db/engine'
+import { ROW_LIMIT } from '../core/rowLimit'
 import { loadCatalog, type TableInfo } from '../db/catalog'
 import { closeSource, createTable, openSource, type ImportSource } from '../db/importer'
 import { dialectHints, type DialectHint } from '../core/dialect'
@@ -61,6 +62,12 @@ export interface TabResult {
   ms?: number
   error?: string
   hints?: DialectHint[]
+  /** the SQL that ran (the selection or the whole tab), for “Show more” */
+  sql?: string
+  /** the most rows the run brought in (src/core/rowLimit.ts) */
+  limit?: number
+  /** the result had more rows than `limit`: `table` holds the first `limit` */
+  more?: boolean
 }
 
 /** A tab's query plan (Explain): being made, made, or failed. */
@@ -146,6 +153,8 @@ interface State {
   backup: 'saving' | 'restoring' | null
   /** the Share dialog is open */
   shareOpen: boolean
+  /** About & licences: closed, or the tab it shows (src/ui/AboutDialog.tsx) */
+  aboutOpen: AboutTab | false
   /** a passing message that is not an error (what a shared link opened) */
   notice: string | null
   /** the demo shop's tables are kept but left out of the tree (Sample datasets shows them again) */
@@ -259,6 +268,7 @@ export const useLab = create<State>(() => ({
   closedTabs: [],
   backup: null,
   shareOpen: false,
+  aboutOpen: false,
   notice: null,
   demoHidden: initialDemoHidden(),
   practiceOpen: false,
@@ -397,12 +407,22 @@ const WRITES = /\b(create|drop|alter|insert|update|delete|copy|attach|detach|imp
 
 export const tabDialect = (tab: QueryTab | undefined): Dialect => tab?.dialect ?? 'duckdb'
 
-export async function runSql(tabId: string, sql: string) {
+/** The rows line of a run in Messages and History: “10,000+ rows (first 10,000 shown)” when cut. */
+const rowsText = (rows: number, more: boolean) => (more ? `${rows.toLocaleString()}+ rows (first ${rows.toLocaleString()} shown)` : `${rows.toLocaleString()} rows`)
+
+/** A higher row limit for a tab's next Run (“Show more” on a script that changes data, so not run again by itself). */
+const nextRowLimit = new Map<string, number>()
+export const setNextRowLimit = (tabId: string, limit: number) => nextRowLimit.set(tabId, limit)
+
+/** Runs a tab's SQL (or its selection). At most `limit` rows of the result come into the page. */
+export async function runSql(tabId: string, sql: string, limit?: number) {
   if (!sql.trim()) return
+  limit ??= nextRowLimit.get(tabId) ?? ROW_LIMIT
+  nextRowLimit.delete(tabId)
   const dialect = tabDialect(get().tabs.find((t) => t.id === tabId))
   stopped.delete(tabId)
   set((s) => ({ results: { ...s.results, [tabId]: { ...s.results[tabId], status: 'running' } } }))
-  if (dialect === 'postgres') return runOnPostgres(tabId, sql)
+  if (dialect === 'postgres') return runOnPostgres(tabId, sql, limit)
   let toRun = sql
   let statements: string[] = [sql]
   if (dialect === 'tsql') {
@@ -423,14 +443,14 @@ export async function runSql(tabId: string, sql: string) {
   const t0 = performance.now()
   const isStopped = () => stopped.has(tabId)
   try {
-    let table = await queryCancellable(statements[0], tabId, isStopped)
+    let { table, more } = await queryLimited(statements[0], tabId, isStopped, limit)
     for (const st of statements.slice(1)) {
-      const next = await queryCancellable(st, tabId, isStopped)
-      if (next.numCols > 0) table = next
+      const next = await queryLimited(st, tabId, isStopped, limit)
+      if (next.table.numCols > 0) ({ table, more } = next)
     }
     const ms = performance.now() - t0
-    set((s) => ({ results: { ...s.results, [tabId]: { status: 'done', table, ms } } }))
-    logRun(tabId, { sql, ok: true, text: `${table.numRows.toLocaleString()} rows · ${ms.toFixed(0)} ms${dialect === 'tsql' ? ' · T-SQL translated to DuckDB' : ''}` })
+    set((s) => ({ results: { ...s.results, [tabId]: { status: 'done', table, ms, sql, limit, more } } }))
+    logRun(tabId, { sql, ok: true, text: `${rowsText(table.numRows, more)} · ${ms.toFixed(0)} ms${dialect === 'tsql' ? ' · T-SQL translated to DuckDB' : ''}` })
     // Always: the saved database must hold every change (src/db/engine.ts empties the WAL on
     // start), and a CHECKPOINT with nothing to write costs next to nothing.
     await checkpoint()
@@ -561,14 +581,17 @@ export async function refreshPgCatalog() {
   set({ pgTables: await postgresCatalog() })
 }
 
-async function runOnPostgres(tabId: string, sql: string) {
+async function runOnPostgres(tabId: string, sql: string, limit: number) {
   const t0 = performance.now()
   try {
     await startPostgres()
-    const table = await runPostgres(sql)
+    // PGlite hands over the whole result at once: only the grid is spared the rows past the limit.
+    const all = await runPostgres(sql)
+    const more = all.numRows > limit
+    const table = more ? all.slice(0, limit) : all
     const ms = performance.now() - t0
-    set((s) => ({ results: { ...s.results, [tabId]: { status: 'done', table, ms } } }))
-    logRun(tabId, { sql, ok: true, text: `${table.numRows.toLocaleString()} rows · ${ms.toFixed(0)} ms · PostgreSQL` })
+    set((s) => ({ results: { ...s.results, [tabId]: { status: 'done', table, ms, sql, limit, more } } }))
+    logRun(tabId, { sql, ok: true, text: `${rowsText(table.numRows, more)} · ${ms.toFixed(0)} ms · PostgreSQL` })
     if (WRITES.test(sql)) await refreshPgCatalog()
   } catch (e) {
     const error = pgError(e)
@@ -1157,6 +1180,12 @@ export async function openShareFromHash(): Promise<boolean> {
   set({ notice: `${parts.join('; ')}. Nothing has run yet: read the query, then press Run.${unknown.length ? ` This version has no dataset called ${unknown.join(', ')}.` : ''}${blocked.length ? ` Not loaded: ${blocked.join(', ')}, because your own schema has that name (Sample datasets can replace it).` : ''}` })
   addLog({ sql: '-- shared link', ok: true, text: parts.join('; ') })
   return true
+}
+
+export type AboutTab = 'about' | 'licences' | 'privacy'
+
+export function openAbout(tab: AboutTab | false = 'about') {
+  set({ aboutOpen: tab })
 }
 
 export function openShare(open = true) {

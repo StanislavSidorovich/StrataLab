@@ -2,13 +2,14 @@
 // file system (OPFS) when it can, so tables survive a reload; otherwise it
 // stays in memory for this tab only.
 import * as duckdb from '@duckdb/duckdb-wasm'
-import { tableFromIPC, type Table } from 'apache-arrow'
+import { Table, tableFromIPC } from 'apache-arrow'
 import mvpWasm from '@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm?url'
 import mvpWorker from '@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?url'
 import ehWasm from '@duckdb/duckdb-wasm/dist/duckdb-eh.wasm?url'
 import ehWorker from '@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url'
 import { downloadPercent } from '../core/progress'
 import { EXTENSIONS_DIR, hasOwnExtensions } from '../core/extensions'
+import { takeRows } from '../core/rowLimit'
 
 /** Decompressed sizes of the two .wasm files, filled in by vite.config.ts. */
 declare const __DUCKDB_WASM_BYTES__: { eh: number; mvp: number }
@@ -158,6 +159,27 @@ export function queryCancellable(sql: string, tag: string, stopped: () => boolea
     sending = tag
     try {
       return await tableFromIPC(await conn.send(sql))
+    } finally {
+      sending = null
+    }
+  })
+}
+
+/**
+ * `queryCancellable` that brings in at most `limit` rows of the last statement's result
+ * (src/core/rowLimit.ts): DuckDB streams it and stops making rows once the limit is passed,
+ * so a `SELECT *` on millions of rows costs no more than the rows shown. `more`: it had more.
+ */
+export function queryLimited(sql: string, tag: string, stopped: () => boolean, limit: number): Promise<{ table: Table; more: boolean }> {
+  return serial(async () => {
+    if (stopped()) throw new Error('query was canceled')
+    const { conn } = await getEngine()
+    sending = tag
+    try {
+      const reader = await conn.send(sql, true)
+      const { batches, more } = await takeRows(reader, limit)
+      // The rows past the limit are never fetched; the next query on the connection drops them.
+      return { table: new Table(reader.schema, batches), more }
     } finally {
       sending = null
     }

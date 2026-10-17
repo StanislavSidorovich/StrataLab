@@ -126,6 +126,9 @@ button:disabled {
   header .phone-hidden {
     display: none;
   }
+  .result-views {
+    scrollbar-width: none;
+  }
 }
 /* Run / Stop sits in the bar above the editor (h-9), so it is a little lower. */
 .btn-run {

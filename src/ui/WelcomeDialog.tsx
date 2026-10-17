@@ -1,6 +1,6 @@
 // The welcome screen: what Quaera Lab is, three ways to start, and where things are on the page.
 // Shown once on a first visit (not to someone arriving with a model or a dataset link: they came
-// for that), and again from the “?” button in the header.
+// for that), and again from the Help (?) menu in the header.
 import { useState } from 'react'
 import { Database, Download, FileUp, HelpCircle, Library, Play, Store, X } from 'lucide-react'
 import { closeWelcome, enqueueFiles, hasDemoTables, openAndRun, openCatalog, showDemo, useLab } from './store'
@@ -38,7 +38,7 @@ function pickFiles() {
 const PLACES: [string, string, string][] = [
   ['Left', 'Object tree', 'Your tables, the demo shop and loaded datasets; the box above them finds a table or a column. Paste a table copied in Excel (Ctrl+V outside the editor). Click a table to see its columns, double-click for its first 100 rows; its ⋯ menu profiles, exports, renames, adds rows from a file or generates sample rows. The ⋯ next to TABLES downloads the whole database as one file and restores it: keep a copy before clearing the browser.'],
   ['Top', 'Query tabs', 'Each tab speaks DuckDB, SQL Server (T-SQL) or PostgreSQL: the switch is above the editor, next to Run (while a query runs, Run becomes Stop; Esc in the editor stops it too). Write SQL here, with completion of table and column names. Ctrl+Enter or F5 runs the selection, or the whole tab when nothing is selected. Explain, next to Run, shows how the database runs the query: its steps, the rows at each step and where the time goes, with a plain-words note on each step (a query that would change data is only planned, not run). Tabs are kept between visits; double-click a tab to rename it, right-click it to duplicate, close others or reopen a closed one. The buttons at the editor’s right undo, redo, comment lines, format the SQL and find.'],
-  ['Bottom', 'Result, Chart, Plan, Messages and History', 'The result grid shows each column’s type; Chart draws it, Plan shows the last Explain. Copy pastes straight into Excel (right-click a cell for one value, a row or a column); Export downloads CSV, Excel, JSON or Parquet; Save as table keeps the result as a new table. Messages lists every query and import of this visit with its time; History keeps the queries you ran between visits (search it, click one to open it in a new tab).'],
+  ['Bottom', 'Result, Chart, Plan, Messages and History', 'The result grid shows each column’s type and up to 10,000 rows (a note offers more when the query returned more); Chart draws it, Plan shows the last Explain. Copy pastes straight into Excel (right-click a cell for one value, a row or a column); Export downloads CSV, Excel, JSON or Parquet; Save as table keeps the result as a new table. Messages lists every query and import of this visit with its time; History keeps the queries you ran between visits (search it, click one to open it in a new tab).'],
   ['Header', 'The File menu and the engine', 'File opens and saves .sql files (Ctrl+O, Ctrl+S), adds CSV / Excel or a pasted table, opens the sample datasets, makes a Share link with the queries and the datasets they use, and downloads or restores the whole database. “DuckDB · saved in this browser” means your tables survive a reload. Nothing is uploaded: the database lives in this browser only.'],
 ]
 
@@ -153,7 +153,7 @@ export function WelcomeDialog() {
 
         <div className="flex items-center gap-2 px-5 py-3" style={{ borderTop: '1px solid var(--line)' }}>
           <span className="flex items-center gap-1" style={{ color: 'var(--muted)', fontSize: 12 }}>
-            <HelpCircle size={13} /> This guide is under the ? button at the top right.
+            <HelpCircle size={13} /> This guide, About & licences and Privacy are under the ? button at the top right.
           </span>
           <div className="flex-1" />
           {installNote && (

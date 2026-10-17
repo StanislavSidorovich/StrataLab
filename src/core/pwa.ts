@@ -3,7 +3,8 @@
 // and a visit uses only some of them, so they are cached on first use, not on install.
 
 /** Files fetched only when a feature needs them: kept after their first download. */
-export const isOnDemand = (path: string) => /^(pyodide|sqlglot|datasets)\//.test(path) || /\.(wasm|data|parquet|whl|zip)$/.test(path)
+export const isOnDemand = (path: string) =>
+  /^(pyodide|sqlglot|datasets|duckdb-ext)\//.test(path) || /\.(wasm|data|parquet|whl|zip)$/.test(path) || path === 'third-party-licenses.txt'
 
 export interface SwFiles {
   /** Downloaded when the service worker installs: the page, its scripts and styles. */
