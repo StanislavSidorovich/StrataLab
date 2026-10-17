@@ -1,8 +1,10 @@
 import { useState } from 'react'
-import { AlertTriangle, ClipboardCopy, FileSpreadsheet, FileText, Lightbulb, Loader2 } from 'lucide-react'
+import { AlertTriangle, ArrowLeftRight, ClipboardCopy, FileSpreadsheet, FileText, Lightbulb, Loader2 } from 'lucide-react'
 import { DataGrid } from './DataGrid'
 import { EngineLoading } from './EngineLoading'
-import { useLab } from './store'
+import { runSql, setResultView, setTabDialect, tabDialect, useLab } from './store'
+import { TranslationView } from './TranslationView'
+import { sideBySide } from '../core/diff'
 import { splitError } from '../core/dialect'
 import { exportResultCsv, exportResultXlsx } from '../db/export'
 import { formatterFor } from '../db/format'
@@ -23,21 +25,32 @@ export function Results() {
   const res = useLab((s) => s.results[s.activeTab])
   const title = useLab((s) => s.tabs.find((t) => t.id === s.activeTab)?.title ?? 'result')
   const log = useLab((s) => s.log)
-  const [view, setView] = useState<'result' | 'messages'>('result')
+  const dialect = useLab((s) => tabDialect(s.tabs.find((t) => t.id === s.activeTab)))
+  const translation = useLab((s) => s.translations[s.activeTab])
+  const stored = useLab((s) => s.resultView)
+  const view = stored === 'translation' && dialect !== 'tsql' ? 'result' : stored
   const [copied, setCopied] = useState(false)
+  const changes = translation?.status === 'done' ? translation.statements.reduce((n, st) => n + (st.target == null ? 1 : sideBySide(st.source, st.target).changes), 0) : null
+  const views = dialect === 'tsql' ? (['result', 'translation', 'messages'] as const) : (['result', 'messages'] as const)
   const fileName = title.replace(/[^\w-]+/g, '_').toLowerCase()
 
   return (
     <div className="h-full flex flex-col" style={{ background: 'var(--panel)' }} key={activeTab}>
       <div className="flex items-center gap-1 px-2 shrink-0" style={{ borderBottom: '1px solid var(--line)', height: 36 }}>
-        {(['result', 'messages'] as const).map((v) => (
+        {views.map((v) => (
           <button
             key={v}
-            className="px-3 py-1.5 rounded-md"
+            className="px-3 py-1.5 rounded-md flex items-center gap-1.5 whitespace-nowrap"
             style={view === v ? { background: 'var(--panel-2)', fontWeight: 600 } : { color: 'var(--muted)' }}
-            onClick={() => setView(v)}
+            onClick={() => setResultView(v)}
           >
-            {v === 'result' ? 'Result' : `Messages${log.length ? ` (${log.length})` : ''}`}
+            {v === 'result' && 'Result'}
+            {v === 'translation' && (
+              <>
+                <ArrowLeftRight size={13} /> T-SQL → DuckDB{changes != null && ` (${changes})`}
+              </>
+            )}
+            {v === 'messages' && `Messages${log.length ? ` (${log.length})` : ''}`}
           </button>
         ))}
         <div className="flex-1" />
@@ -59,7 +72,7 @@ export function Results() {
         )}
       </div>
       <div className="flex-1 min-h-0">
-        {view === 'messages' ? <Messages /> : <ResultBody />}
+        {view === 'messages' ? <Messages /> : view === 'translation' ? <TranslationView /> : <ResultBody />}
       </div>
     </div>
   )
@@ -68,12 +81,20 @@ export function Results() {
 function ResultBody() {
   const res = useLab((s) => s.results[s.activeTab])
   const loading = useLab((s) => s.engine.status === 'loading')
+  const dialect = useLab((s) => tabDialect(s.tabs.find((t) => t.id === s.activeTab)))
+  const pgStarting = useLab((s) => s.postgres.status === 'loading')
+  const translating = useLab((s) => s.translations[s.activeTab]?.status === 'loading')
   if (loading) return <EngineLoading />
-  if (!res) return <Empty text="Run a query to see its result here — Ctrl+Enter or F5." />
+  if (!res) return <Empty text={`Run a query to see its result here — Ctrl+Enter or F5.${dialect === 'tsql' ? ' It is translated to DuckDB first.' : dialect === 'postgres' ? ' It runs on PostgreSQL.' : ''}`} />
   if (res.status === 'running')
     return (
-      <div className="h-full flex items-center justify-center gap-2" style={{ color: 'var(--muted)' }}>
-        <Loader2 size={16} className="animate-spin" /> Running…
+      <div className="h-full flex items-center justify-center gap-2 p-6 text-center" style={{ color: 'var(--muted)' }}>
+        <Loader2 size={16} className="animate-spin shrink-0" />
+        {dialect === 'postgres' && pgStarting
+          ? 'Starting PostgreSQL: a ~10 MB download the first time, then from the browser’s cache…'
+          : dialect === 'tsql' && translating
+            ? 'Translating T-SQL to DuckDB: the translator (Python + sqlglot, ~12 MB) downloads once…'
+            : 'Running…'}
       </div>
     )
   if (res.status === 'error') return <ErrorBox error={res.error!} hints={res.hints ?? []} />
@@ -94,6 +115,14 @@ function ResultBody() {
 
 function ErrorBox({ error, hints }: { error: string; hints: { id: string; found: string; use: string }[] }) {
   const { kind, text } = splitError(error)
+  const tab = useLab((s) => s.tabs.find((t) => t.id === s.activeTab))
+  // The hints said “this is T-SQL”: run the tab as T-SQL, translated to DuckDB.
+  const runAsTsql = () => {
+    if (!tab) return
+    setTabDialect(tab.id, 'tsql')
+    setResultView('translation')
+    void runSql(tab.id, tab.sql)
+  }
   return (
     <div className="h-full overflow-auto p-4 space-y-3">
       <div className="rounded-lg p-3 flex gap-3" style={{ background: 'var(--danger-soft)', color: 'var(--danger)' }}>
@@ -115,6 +144,9 @@ function ErrorBox({ error, hints }: { error: string; hints: { id: string; found:
               </li>
             ))}
           </ul>
+          <button className="btn mt-3" onClick={runAsTsql} title="Switch this tab to T-SQL: it is translated to DuckDB before it runs, and you see both side by side">
+            <ArrowLeftRight size={13} /> Run this tab as T-SQL (translated to DuckDB)
+          </button>
         </div>
       )}
     </div>

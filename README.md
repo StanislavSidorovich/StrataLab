@@ -18,8 +18,9 @@ SQL Server Management Studio is a ~2 GB install plus a database server, a licenc
 - **Generate** sample rows for empty tables (a model you just drew, or your own CREATE TABLE): foreign keys point at existing rows, keys don't repeat, CHECKs hold.
 - **Show as model**: one click opens your tables (or a dataset) as an entity-relationship model in [model.quaera.app](https://model.quaera.app); its “Open in StrataLab” brings a model back as empty tables with their keys.
 - **Keep** your tables between visits (stored in the browser's private file system).
-- **Learn** the dialect: coming from SQL Server? `TOP`, `[brackets]`, `ISNULL`, `GETDATE()` get a "use this instead" hint.
-- A **demo shop** dataset is loaded on the first visit.
+- **Three dialects** per tab: DuckDB; **SQL Server (T-SQL)**, translated to DuckDB by [sqlglot](https://github.com/tobymao/sqlglot) before it runs, with the T-SQL and the DuckDB SQL side by side and what changed highlighted; and **PostgreSQL**, a real PostgreSQL 18 ([PGlite](https://pglite.dev)) in the page. Copy your tables or a dataset into it, keys included, from the tree.
+- **Learn** the dialect: in a DuckDB tab, SQL Server habits (`TOP`, `[brackets]`, `ISNULL`, `GETDATE()`) get a "use this instead" hint and a button to run the tab as T-SQL.
+- A **welcome screen** (the ? button) says where things are; a **demo shop** dataset is loaded on the first visit.
 
 ## Run locally
 
@@ -32,8 +33,8 @@ npm run dev
 
 ## Stack
 
-Vite · React · TypeScript · Tailwind CSS · DuckDB-WASM · CodeMirror 6 · TanStack Virtual · SheetJS CE · Zustand. All MIT / Apache-2.0.
+Vite · React · TypeScript · Tailwind CSS · DuckDB-WASM · PGlite · Pyodide + sqlglot · CodeMirror 6 · TanStack Virtual · SheetJS CE · Zustand. MIT / Apache-2.0, Pyodide MPL-2.0 (served unmodified).
 
 ## Licence
 
-Code: [Apache-2.0](LICENSE). Sample datasets keep their own licences (MIT, BSD-2-Clause, CC BY-NC-SA 4.0): see [public/datasets/NOTICE.md](public/datasets/NOTICE.md). `scripts/build-datasets.py` rebuilds them from their sources.
+Code: [Apache-2.0](LICENSE). Sample datasets keep their own licences (MIT, BSD-2-Clause, CC BY-NC-SA 4.0): see [public/datasets/NOTICE.md](public/datasets/NOTICE.md). `scripts/build-datasets.py` rebuilds them from their sources. The dialect engines: [public/sqlglot/NOTICE.md](public/sqlglot/NOTICE.md).

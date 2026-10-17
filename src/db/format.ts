@@ -68,12 +68,16 @@ export function formatterFor(field: Field): CellFormatter {
 }
 
 export function isNumericField(field: Field): boolean {
+  if (field.metadata.has('numeric')) return true
   const t = field.type
   return DataType.isInt(t) || DataType.isFloat(t) || DataType.isDecimal(t)
 }
 
 /** Short type label for column headers: "INTEGER", "DECIMAL(10,2)", "DATE"… */
 export function typeLabel(field: Field): string {
+  // PostgreSQL results (src/dialects/pgResult.ts) carry PostgreSQL's own type name.
+  const pg = field.metadata.get('pg_type')
+  if (pg) return pg
   const t = field.type
   if (DataType.isDecimal(t)) return `DECIMAL(${t.precision},${t.scale})`
   if (DataType.isInt(t)) return t.bitWidth === 64 ? 'BIGINT' : t.bitWidth === 32 ? 'INTEGER' : t.bitWidth === 16 ? 'SMALLINT' : 'TINYINT'

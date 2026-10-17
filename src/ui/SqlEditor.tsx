@@ -5,9 +5,10 @@ import { useEffect, useRef } from 'react'
 import { EditorView, basicSetup } from 'codemirror'
 import { keymap } from '@codemirror/view'
 import { Compartment, EditorState, Prec } from '@codemirror/state'
-import { PostgreSQL, sql } from '@codemirror/lang-sql'
+import { MSSQL, PostgreSQL, sql } from '@codemirror/lang-sql'
 import { oneDark } from '@codemirror/theme-one-dark'
-import { runSql, setTabSql, useLab } from './store'
+import { runSql, setTabSql, tabDialect, useLab } from './store'
+import type { TableInfo } from '../db/catalog'
 
 const language = new Compartment()
 const theme = new Compartment()
@@ -25,6 +26,22 @@ export function runActive() {
   if (activeView) void runSql(id, currentSql(activeView))
 }
 
+/** What the active tab would run: the selection, or the whole tab. */
+export function activeSql(): string {
+  return activeView ? currentSql(activeView) : ''
+}
+
+/** Completion: the default schema's tables as they are, others after their schema name (chinook.Track). */
+function completionSchema(tables: TableInfo[], plain: string) {
+  const schema: Record<string, string[] | Record<string, string[]>> = {}
+  for (const t of tables) {
+    const cols = t.columns.map((c) => c.name)
+    if (t.schema === plain) schema[t.name] = cols
+    else ((schema[t.schema] ??= {}) as Record<string, string[]>)[t.name] = cols
+  }
+  return schema
+}
+
 const lightTheme = EditorView.theme({
   '&': { backgroundColor: 'var(--panel)', color: 'var(--text)' },
   '.cm-gutters': { backgroundColor: 'var(--panel)', color: 'var(--muted)', border: 'none' },
@@ -36,16 +53,15 @@ export function SqlEditor() {
   const view = useRef<EditorView | null>(null)
   const activeTab = useLab((s) => s.activeTab)
   const tables = useLab((s) => s.tables)
+  const pgTables = useLab((s) => s.pgTables)
+  const dialect = useLab((s) => tabDialect(s.tabs.find((t) => t.id === s.activeTab)))
   const dark = useLab((s) => s.theme === 'dark')
 
-  // The user's tables complete as they are; a dataset's after its schema name (chinook.Track).
-  const schema: Record<string, string[] | Record<string, string[]>> = {}
-  for (const t of tables) {
-    const cols = t.columns.map((c) => c.name)
-    if (t.schema === 'main') schema[t.name] = cols
-    else ((schema[t.schema] ??= {}) as Record<string, string[]>)[t.name] = cols
-  }
-  const langExt = () => sql({ dialect: PostgreSQL, schema, upperCaseKeywords: false })
+  // A PostgreSQL tab completes PostgreSQL's tables; T-SQL highlights as SQL Server.
+  const langExt = () =>
+    dialect === 'postgres'
+      ? sql({ dialect: PostgreSQL, schema: completionSchema(pgTables, 'public'), upperCaseKeywords: false })
+      : sql({ dialect: dialect === 'tsql' ? MSSQL : PostgreSQL, schema: completionSchema(tables, 'main'), upperCaseKeywords: false })
   const themeExt = () => (dark ? oneDark : lightTheme)
 
   const makeState = (id: string, doc: string) =>
@@ -102,7 +118,7 @@ export function SqlEditor() {
   useEffect(() => {
     view.current?.dispatch({ effects: language.reconfigure(langExt()) })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tables])
+  }, [tables, pgTables, dialect])
 
   useEffect(() => {
     view.current?.dispatch({ effects: theme.reconfigure(themeExt()) })

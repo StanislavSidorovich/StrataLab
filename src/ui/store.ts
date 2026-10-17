@@ -15,12 +15,31 @@ import { isLoaded, loadDataset, removeDataset, type DatasetProgress } from '../d
 import { schemaForModel, showAsModel } from '../db/modelExport'
 import { planGeneration, type GenPlan, type GenTable } from '../core/generate'
 import { runGeneration, type GenOutcome } from '../db/generate'
+import { duckdbScript, translateTsql, type TranslatedStatement, type TranslatorProgress } from '../dialects/tsql'
+import { copyToPostgres, getPostgres, postgresCatalog, runPostgres } from '../dialects/postgres'
+
+/** What a query tab speaks (stage 4): DuckDB itself, T-SQL translated to DuckDB, or PostgreSQL (PGlite). */
+export type Dialect = 'duckdb' | 'tsql' | 'postgres'
 
 export interface QueryTab {
   id: string
   title: string
   sql: string
+  /** missing in tabs saved before stage 4: DuckDB */
+  dialect?: Dialect
 }
+
+/** A T-SQL tab's translation to DuckDB: being made, made, or failed. */
+export type TranslationState =
+  | { status: 'loading'; progress: TranslatorProgress }
+  | { status: 'done'; statements: TranslatedStatement[]; ms: number }
+  | { status: 'error'; error: string }
+
+type PostgresState =
+  | { status: 'off' }
+  | { status: 'loading' }
+  | { status: 'ready'; version: string; persistent: boolean }
+  | { status: 'error'; error: string }
 
 export interface TabResult {
   status: 'running' | 'done' | 'error'
@@ -77,6 +96,14 @@ interface State {
   generate: GenerateState | null
   /** the welcome screen (what's where, how to start) is open */
   welcomeOpen: boolean
+  /** per tab, for T-SQL tabs */
+  translations: Record<string, TranslationState>
+  postgres: PostgresState
+  pgTables: TableInfo[]
+  /** what the result pane shows */
+  resultView: 'result' | 'translation' | 'messages'
+  /** a copy to PostgreSQL in progress: the table being copied */
+  pgCopy: string | null
 }
 
 const TABS_KEY = 'stratalab.tabs.v1'
@@ -132,6 +159,11 @@ export const useLab = create<State>(() => ({
   catalogOpen: false,
   generate: null,
   welcomeOpen: firstVisit(),
+  translations: {},
+  postgres: { status: 'off' },
+  pgTables: [],
+  resultView: 'result',
+  pgCopy: null,
 }))
 
 /** The user's own tables and views (schema main), without the catalog datasets. */
@@ -168,6 +200,8 @@ export async function initEngine() {
     )
     set({ engine: { status: 'ready', version: e.version, persistent: e.persistent } })
     await refreshCatalog()
+    // Tabs kept from the last visit that speak PostgreSQL: start it now rather than on the first run.
+    if (get().tabs.some((t) => t.dialect === 'postgres')) void startPostgres()
     const fromModel = await openDdlFromHash()
     const fromLink = await openDatasetFromHash()
     window.addEventListener('hashchange', () => {
@@ -196,34 +230,173 @@ export async function refreshCatalog() {
 
 const WRITES = /\b(create|drop|alter|insert|update|delete|copy|attach|detach|import|truncate|merge)\b/i
 
+export const tabDialect = (tab: QueryTab | undefined): Dialect => tab?.dialect ?? 'duckdb'
+
 export async function runSql(tabId: string, sql: string) {
   if (!sql.trim()) return
+  const dialect = tabDialect(get().tabs.find((t) => t.id === tabId))
   set((s) => ({ results: { ...s.results, [tabId]: { ...s.results[tabId], status: 'running' } } }))
+  if (dialect === 'postgres') return runOnPostgres(tabId, sql)
+  let toRun = sql
+  let statements: string[] = [sql]
+  if (dialect === 'tsql') {
+    const translated = await translate(tabId, sql)
+    if (!translated) return
+    const bad = translated.find((st) => st.error)
+    if (bad) {
+      const n = translated.indexOf(bad) + 1
+      set((s) => ({ resultView: 'translation', results: { ...s.results, [tabId]: { status: 'error', error: `Translation Error: statement ${n} could not be read as T-SQL: ${bad.error}` } } }))
+      addLog({ sql, ok: false, text: `T-SQL statement ${n}: ${bad.error}` })
+      return
+    }
+    toRun = duckdbScript(translated)
+    // One at a time, so the result shown is the last one that returns rows (as in PostgreSQL
+    // tabs; DuckDB-WASM's own multi-statement query returns the first).
+    statements = translated.map((st) => st.target!)
+  }
   const t0 = performance.now()
   try {
-    const table = await query(sql)
+    let table = await query(statements[0])
+    for (const st of statements.slice(1)) {
+      const next = await query(st)
+      if (next.numCols > 0) table = next
+    }
     const ms = performance.now() - t0
     set((s) => ({ results: { ...s.results, [tabId]: { status: 'done', table, ms } } }))
-    addLog({ sql, ok: true, text: `${table.numRows.toLocaleString()} rows · ${ms.toFixed(0)} ms` })
+    addLog({ sql, ok: true, text: `${table.numRows.toLocaleString()} rows · ${ms.toFixed(0)} ms${dialect === 'tsql' ? ' · T-SQL translated to DuckDB' : ''}` })
     // Always: the saved database must hold every change (src/db/engine.ts empties the WAL on
     // start), and a CHECKPOINT with nothing to write costs next to nothing.
     await checkpoint()
-    if (WRITES.test(sql)) await refreshCatalog()
+    if (WRITES.test(toRun)) await refreshCatalog()
   } catch (e) {
     const error = String(e instanceof Error ? e.message : e)
-    set((s) => ({ results: { ...s.results, [tabId]: { status: 'error', error, hints: dialectHints(sql), ms: performance.now() - t0 } } }))
+    // In a T-SQL tab the hints are what the translation is for; they'd only repeat it.
+    set((s) => ({ results: { ...s.results, [tabId]: { status: 'error', error, hints: dialect === 'tsql' ? [] : dialectHints(sql), ms: performance.now() - t0 } } }))
     addLog({ sql, ok: false, text: error.split('\n')[0] })
   }
 }
 
+/** Translates a T-SQL tab's script to DuckDB (loading Python the first time); null if that failed. */
+export async function translate(tabId: string, sql: string): Promise<TranslatedStatement[] | null> {
+  const t0 = performance.now()
+  const put = (t: TranslationState) => set((s) => ({ translations: { ...s.translations, [tabId]: t } }))
+  put({ status: 'loading', progress: 'download' })
+  try {
+    const statements = await translateTsql(sql, (progress) => put({ status: 'loading', progress }))
+    put({ status: 'done', statements, ms: performance.now() - t0 })
+    return statements
+  } catch (e) {
+    const error = String(e instanceof Error ? e.message : e)
+    put({ status: 'error', error })
+    set((s) => ({ results: { ...s.results, [tabId]: { status: 'error', error: `Translation Error: ${error}` } } }))
+    return null
+  }
+}
+
+/** The “Translate” button: the side-by-side view without running anything. */
+export async function showTranslation(tabId: string, sql: string) {
+  set({ resultView: 'translation' })
+  if (sql.trim()) await translate(tabId, sql)
+}
+
+export function setResultView(view: State['resultView']) {
+  set({ resultView: view })
+}
+
+export function setTabDialect(id: string, dialect: Dialect) {
+  set((s) => ({ tabs: s.tabs.map((t) => (t.id === id ? { ...t, dialect } : t)), resultView: s.resultView === 'translation' && dialect !== 'tsql' ? 'result' : s.resultView }))
+  if (dialect === 'postgres') void startPostgres()
+}
+
+// ------------------------------------------------------------------ PostgreSQL mode (stage 4)
+
+export async function startPostgres() {
+  if (get().postgres.status === 'ready' || get().postgres.status === 'loading') return
+  set({ postgres: { status: 'loading' } })
+  try {
+    const pg = await getPostgres()
+    set({ postgres: { status: 'ready', version: pg.version, persistent: pg.persistent } })
+    await refreshPgCatalog()
+  } catch (e) {
+    set({ postgres: { status: 'error', error: String(e instanceof Error ? e.message : e) } })
+  }
+}
+
+export async function refreshPgCatalog() {
+  if (get().postgres.status !== 'ready') return
+  set({ pgTables: await postgresCatalog() })
+}
+
+async function runOnPostgres(tabId: string, sql: string) {
+  const t0 = performance.now()
+  try {
+    await startPostgres()
+    const table = await runPostgres(sql)
+    const ms = performance.now() - t0
+    set((s) => ({ results: { ...s.results, [tabId]: { status: 'done', table, ms } } }))
+    addLog({ sql, ok: true, text: `${table.numRows.toLocaleString()} rows · ${ms.toFixed(0)} ms · PostgreSQL` })
+    if (WRITES.test(sql)) await refreshPgCatalog()
+  } catch (e) {
+    const error = pgError(e)
+    set((s) => ({ results: { ...s.results, [tabId]: { status: 'error', error, ms: performance.now() - t0 } } }))
+    addLog({ sql, ok: false, text: error.split('\n')[0] })
+  }
+}
+
+/** PostgreSQL's message as “PostgreSQL Error: …”, with its hint when it gives one. */
+function pgError(e: unknown): string {
+  const err = e as { message?: string; hint?: string; position?: string }
+  let text = `PostgreSQL Error: ${err.message ?? String(e)}`
+  if (err.position) text += ` (at character ${err.position})`
+  if (err.hint) text += `\nHint: ${err.hint}`
+  return text
+}
+
+/** “Copy to PostgreSQL”: one DuckDB schema (or some of its tables) into the PostgreSQL database. */
+export async function copySchemaToPostgres(duckSchema: string, only?: string[]) {
+  if (get().pgCopy) return
+  const label = only?.length === 1 ? only[0] : duckSchema === 'main' ? 'my tables' : datasetById(duckSchema)?.title ?? duckSchema
+  set({ pgCopy: label })
+  try {
+    await startPostgres()
+    const r = await copyToPostgres(duckSchema, only, (table) => set({ pgCopy: table }))
+    await refreshPgCatalog()
+    const rows = r.copied.reduce((n, t) => n + t.rows, 0)
+    addLog({
+      sql: `-- copy ${label} to PostgreSQL`,
+      ok: true,
+      text: `${r.copied.length} table(s), ${rows.toLocaleString()} rows copied to PostgreSQL (schema ${r.schema})` + (r.notes.length ? `\n${r.notes.join('\n')}` : ''),
+    })
+    const first = r.copied[0]?.name
+    if (first) {
+      const name = r.schema === 'public' ? sqlName(first) : `${sqlName(r.schema)}.${sqlName(first)}`
+      const id = addTab(`-- ${r.copied.length} table(s) copied from DuckDB to PostgreSQL${r.notes.length ? ' (notes in Messages)' : ''}\nSELECT * FROM ${name} LIMIT 100;\n`, `${label} · PostgreSQL`, 'postgres')
+      void runSql(id, `SELECT * FROM ${name} LIMIT 100;`)
+    }
+  } catch (e) {
+    addLog({ sql: `-- copy ${label} to PostgreSQL`, ok: false, text: pgError(e) })
+    set({ importError: `Could not copy to PostgreSQL: ${String(e instanceof Error ? e.message : e)}` })
+  } finally {
+    set({ pgCopy: null })
+  }
+}
+
+export async function dropPgObject(t: TableInfo) {
+  const name = `${quoteIdent(t.schema)}.${quoteIdent(t.name)}`
+  await runPostgres(`DROP ${t.kind === 'view' ? 'VIEW' : 'TABLE'} ${name}`)
+  await refreshPgCatalog()
+  addLog({ sql: `DROP ${t.kind.toUpperCase()} ${name}`, ok: true, text: `${name} dropped from PostgreSQL` })
+}
+
 let tabCounter = Date.now()
 
-export function addTab(sql = '', title?: string) {
+export function addTab(sql = '', title?: string, dialect?: Dialect) {
   const id = `t${++tabCounter}`
   set((s) => {
     const n = s.tabs.length + 1
-    return { tabs: [...s.tabs, { id, title: title ?? `Query ${n}`, sql }], activeTab: id }
+    return { tabs: [...s.tabs, { id, title: title ?? `Query ${n}`, sql, ...(dialect && dialect !== 'duckdb' ? { dialect } : {}) }], activeTab: id }
   })
+  if (dialect === 'postgres') void startPostgres()
   return id
 }
 
@@ -235,7 +408,9 @@ export function closeTab(id: string) {
     const activeTab = s.activeTab === id ? tabs[Math.max(0, idx - 1)].id : s.activeTab
     const results = { ...s.results }
     delete results[id]
-    return { tabs, activeTab, results }
+    const translations = { ...s.translations }
+    delete translations[id]
+    return { tabs, activeTab, results, translations }
   })
 }
 
@@ -248,8 +423,8 @@ export function renameTab(id: string, title: string) {
 }
 
 /** Opens a new tab with the query and runs it (used by the object tree). */
-export function openAndRun(sql: string, title: string) {
-  const id = addTab(sql, title)
+export function openAndRun(sql: string, title: string, dialect?: Dialect) {
+  const id = addTab(sql, title, dialect)
   void runSql(id, sql)
 }
 

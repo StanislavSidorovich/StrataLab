@@ -17,7 +17,7 @@ function pickFiles() {
 
 const PLACES: [string, string, string][] = [
   ['Left', 'Object tree', 'Your tables, the demo shop and loaded datasets. Click a table to see its columns, double-click for its first 100 rows; the ⋯ menu profiles, exports, renames, adds rows from a file or generates sample rows.'],
-  ['Top', 'Query tabs', 'Write SQL here, with completion of table and column names. Ctrl+Enter or F5 runs the selection, or the whole tab when nothing is selected. Tabs are kept between visits; double-click a tab to rename it.'],
+  ['Top', 'Query tabs', 'Each tab speaks DuckDB, SQL Server (T-SQL) or PostgreSQL: the switch is above the editor. Write SQL here, with completion of table and column names. Ctrl+Enter or F5 runs the selection, or the whole tab when nothing is selected. Tabs are kept between visits; double-click a tab to rename it.'],
   ['Bottom', 'Result and Messages', 'The result grid shows each column’s type. Copy pastes straight into Excel; CSV and Excel download the result. Messages lists every query and import with its time.'],
   ['Header', 'Run and the engine', '“DuckDB · saved in this browser” means your tables survive a reload. Nothing is uploaded: the database lives in this browser only.'],
 ]
@@ -103,8 +103,9 @@ export function WelcomeDialog() {
 
           <section style={{ color: 'var(--muted)' }} className="space-y-1">
             <p>
-              <b style={{ color: 'var(--text)' }}>Coming from SQL Server?</b> Quaera Lab speaks DuckDB, close to PostgreSQL. When a query with <code className="mono">TOP</code>,{' '}
-              <code className="mono">GETDATE()</code> or <code className="mono">[brackets]</code> fails, the error says what to write instead.
+              <b style={{ color: 'var(--text)' }}>Coming from SQL Server or PostgreSQL?</b> Above the editor, switch a tab to <b>SQL Server (T-SQL)</b>: your T-SQL is
+              translated to DuckDB before it runs, and you see both side by side. <b>PostgreSQL</b> runs on a real PostgreSQL in this browser; copy tables into it from a
+              table's ⋯ menu.
             </p>
             <p>
               <b style={{ color: 'var(--text)' }}>Show as model ↗</b> (above the tables) opens them as an entity–relationship model in{' '}

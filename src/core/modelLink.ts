@@ -79,7 +79,7 @@ export function postgresType(duck: string): string | null {
 }
 
 /** Referenced tables first; a circle keeps the order it has. */
-function ordered(tables: ModelTable[]): ModelTable[] {
+export function ordered(tables: ModelTable[]): ModelTable[] {
   const byName = new Map(tables.map((t) => [t.name, t]))
   const done: ModelTable[] = []
   const seen = new Set<string>()

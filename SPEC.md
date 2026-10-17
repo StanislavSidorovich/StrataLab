@@ -26,6 +26,11 @@ Static site (Vite + React + TypeScript), GitHub Pages, custom domain via Cloudfl
  ├─ data generator (stage 2)  src/core/generate.ts (keys + CHECKs → SQL), src/db/generate.ts
  ├─ dataset catalog (stage 3): Parquet in public/datasets/<id>/, one schema per dataset
  │    src/data/datasets.ts (+ datasets.json from scripts/build-datasets.py), src/db/datasets.ts
+ ├─ dialects (stage 4), per query tab: DuckDB · T-SQL · PostgreSQL
+ │    ├─ T-SQL → DuckDB: sqlglot in Pyodide, in a Web Worker   src/dialects/translate.py, sqlglotWorker.ts, tsql.ts
+ │    │    side-by-side word diff                                src/core/diff.ts
+ │    └─ PostgreSQL: PGlite (IndexedDB), results as Arrow       src/dialects/postgres.ts, pgResult.ts
+ │         copy DuckDB tables in (keys, CHECKs, rows by CSV)    src/core/pgCopy.ts
  ├─ catalog (tables, views, columns of every schema)    src/db/catalog.ts
  ├─ exports (CSV, Excel, Parquet)       src/db/export.ts
  └─ UI: object tree, query tabs (CodeMirror 6), results grid (virtualised), import dialog
@@ -59,7 +64,7 @@ Exports to pandas: Parquet (keeps types).
 1. MVP workbench — section 4.
 2. Ecosystem hops — open DDL from model.quaera.app; fill modelled tables from Excel with type and key checks; send tables back as DDL to model.quaera.app; data generator.
 3. Dataset catalog — Chinook (MIT), Northwind and AdventureWorks (Microsoft sql-server-samples, MIT), Sakila / Pagila (BSD), NYC Taxi sample, Quaera's dataset; Parquet files served with the site or from a CDN with CORS.
-4. Dialects — PostgreSQL mode via PGlite; T-SQL → DuckDB via sqlglot (Pyodide) with a diff.
+4. Dialects — PostgreSQL mode via PGlite; T-SQL → DuckDB via sqlglot (Pyodide) with a diff. Pyodide, sqlglot and PGlite are served with the site and downloaded only when a tab switches dialect.
 5. Share and practise — share links; tasks with result comparison; links from quaera.app lessons.
 6. Polish — PWA, history, snippets, EXPLAIN tree, charts, RU / PT interface.
 
