@@ -2,8 +2,8 @@
 // dataset as a folder (its own schema), and what you can do with each one (the SSMS
 // right-click menu, as a small menu button).
 import { useEffect, useRef, useState } from 'react'
-import { ChevronDown, ChevronRight, Database, DatabaseZap, Eye, Folder, Library, Loader2, MoreHorizontal, Network, Sparkles, Store, Table2, Upload } from 'lucide-react'
-import { copySchemaToPostgres, dropPgObject, dropDataset, dropObject, removeDemo, enqueueFiles, loadDemo, openAndRun, openAsModel, openCatalog, openDataset, openGenerate, ownTables, renameObject, useLab } from './store'
+import { ChevronDown, ChevronRight, ClipboardPaste, Database, DatabaseZap, Eye, Folder, Library, Loader2, MoreHorizontal, Network, Sparkles, Store, Table2, Upload } from 'lucide-react'
+import { copySchemaToPostgres, dropPgObject, dropDataset, dropObject, removeDemo, enqueueFiles, loadDemo, openAndRun, openAsModel, openCatalog, openDataset, openGenerate, ownTables, pasteTableFromClipboard, renameObject, useLab } from './store'
 import { qualifiedName } from '../core/sql'
 import { exportTable } from '../db/export'
 import type { TableInfo } from '../db/catalog'
@@ -48,6 +48,14 @@ export function Sidebar() {
             void enqueueFiles(files)
           }}
         />
+        <button
+          className="btn w-full justify-center"
+          disabled={engine.status !== 'ready'}
+          onClick={() => void pasteTableFromClipboard()}
+          title="Make a table from cells copied in Excel or Google Sheets (or press Ctrl+V outside the editor)"
+        >
+          <ClipboardPaste size={14} /> Paste a table
+        </button>
         <button className="btn w-full justify-center" disabled={engine.status !== 'ready'} onClick={() => openCatalog()}>
           <Library size={14} /> Sample datasets…
         </button>

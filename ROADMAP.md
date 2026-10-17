@@ -13,7 +13,20 @@ Stages follow SPEC §6. A stage is done only when its acceptance criteria pass.
 
 **Overall progress: stages 1–4 of 6 done.** Two thirds of the six stages; next is stage 5 (share links, practice tasks with an automatic result check). The full application = all six stages.
 
-## Where we are (2026-10-17, installable app with an Update button)
+## Where we are (2026-10-17, interface buttons: Stop, Open / Save, Paste a table, Format)
+
+**The buttons SSMS, DBeaver and pgAdmin users reach for first** (comparison in the project's notes, priority P1):
+
+- **Stop.** While a query runs, **Run** becomes a red **Stop** (Esc in the editor does the same). DuckDB tabs now run through DuckDB-WASM's `send`, which works in steps, and Stop cancels between two steps; the pane says “Stopped after 1.8 s”. A T-SQL script stops between statements too. Queries go to DuckDB one at a time in the order asked (`src/db/engine.ts`), as the worker did before, so a query waiting in another tab is not the one cancelled. PostgreSQL tabs can't be stopped (PGlite has no cancel).
+- **Open / Save .sql** in the header (Ctrl+O, Ctrl+S; Shift+click or Ctrl+Shift+S: save as). In Chrome and Edge Save writes back to the file the tab was opened from or first saved to, and the tab takes the file's name; elsewhere Save downloads `<tab>.sql`. A `.sql` file dropped on the page opens as a tab instead of being imported.
+- **Paste a table**: cells copied in Excel, Google Sheets or a web page, pasted with Ctrl+V outside the editor or with the new sidebar button, go to the import dialog as `pasted.tsv` (tab separator, decimal comma and dates detected as for files).
+- **Editor toolbar** at the right of the dialect bar: Undo, Redo, Comment, **Format SQL** (Shift+Alt+F; `sql-formatter`, MIT, in the tab's dialect, loaded on first use, ~75 kB gzip) and Find. On a phone these are the only way to the editor's commands.
+
+**Fixed on the way:** a script in a DuckDB tab now shows its **last** statement's result, like T-SQL and PostgreSQL tabs (DuckDB-WASM's `query` returned the first).
+
+How it was checked: 74 unit tests green (new: tab and file names, what counts as a pasted table). In Chromium with Playwright on the dev server and the production build, light and dark, desktop and 390 px (no page scroll): a `range(10^11) × range(10)` count stopped by the button and by Esc; a count in a second tab queued behind it ran after the stop and gave 200; a T-SQL script stopped in its second statement; Format turned a one-line JOIN into the usual layout and one Undo brought it back; Save downloaded `Query 1.sql`, Open (file picker fallback) opened `Monthly report.sql` in a tab of that name; a pasted Excel range with decimal commas opened the import dialog with a DOUBLE column. Not tried: writing back through the File System Access picker (a native dialog Playwright can't answer). First chunk 328.6 → 331.8 kB (gzip). Merged with the PWA work (#1): on a phone the theme button steps aside while **Update** shows, so the header still fits 390 px (checked by changing `sw.js` under a running preview: Update appeared, a click reloaded on the new version). Local builds here used the npm `xlsx` 0.18.5 because cdn.sheetjs.com is blocked in this session; `package.json` is unchanged on that point.
+
+### Earlier (2026-10-17, installable app with an Update button)
 
 **Quaera Lab is a PWA, as StrataFlow is** (the owner's request; same code pattern, no new dependencies). `vite.config.ts → pwaPlugin` writes `sw.js` at build time from `src/pwa/sw.js`; `src/pwa/register.ts` registers it in the production build only. A new deploy no longer switches an open tab by itself: once it is downloaded, an **Update** button appears in the header (only then), and a click reloads every open tab on the new version (query tabs are in localStorage, tables in OPFS, so nothing is lost). An open tab checks for a new deploy every hour. The guide (? button) has **Install as app**: the browser's own install dialog in Chrome / Edge, the steps on Safari and Firefox. `public/manifest.webmanifest` and `public/icon.svg` added; the tab icon is unchanged.
 
@@ -140,6 +153,10 @@ The MVP works locally (dev and production build checked in the browser): DuckDB 
 - ✱ **PWA: the shell up front, the engines on first use** (`src/core/pwa.ts`). The build is ~110 MB (DuckDB's eh and mvp .wasm ~75 MB, Pyodide ~13 MB, PGlite ~17 MB, datasets), and a visit uses one DuckDB build and maybe none of the rest, so precaching every file as StrataFlow does would mean 110 MB on a first visit. Install caches the page, scripts and styles (~5 MB); `.wasm`, `.data`, `pyodide/`, `sqlglot/` and `datasets/` are cached when first fetched, keyed by content hash in a cache that survives deploys, so an unchanged engine is not downloaded again and a changed one (Pyodide files keep their names) is. Range requests and other sites (extensions.duckdb.org) are not touched.
 - ✱ **Update waits for a click** (no `skipWaiting` on install), as in StrataFlow: an open tab may still lazy-load its own version's chunks (the translator, PGlite).
 - ✱ **Install as app sits in the guide** (? button): StrataLab has no Help menu.
+- ✱ **Stop by DuckDB's own cancel, not by killing the worker**: restarting the worker would cost the 2 s start and any unsaved write. The price: in a DuckDB script, the statements before the last run in one go when it starts and can't be stopped midway (T-SQL tabs run statement by statement, so every one can).
+- ✱ **Format makes keywords upper case** (`SELECT`, `FROM`), the usual SSMS / textbook look; names and functions are left as written. One Undo step.
+- ✱ **Pasted text becomes a table only outside the editor**, and only when it looks like one (two lines with the same number of tabs); inside the editor Ctrl+V pastes text as always.
+- ✱ **Save without a picker downloads**, named after the tab (`Query 1.sql`); with a picker, the file a tab came from is remembered for this visit only.
 - Name **StrataLab**, subdomain **lab.quaera.app** (owner, 2026-10-17), in line with StrataSQL and StrataFlow.
 
 ## Next steps (by priority)
@@ -164,7 +181,9 @@ The MVP works locally (dev and production build checked in the browser): DuckDB 
 
 - Numbers with a space as thousands separator (`1 234,50`) stay text: DuckDB has no thousands option. Could be cleaned before import.
 - A query result is held in memory in full; `SELECT *` on tens of millions of rows will be slow. A row cap with “show more” is a candidate.
-- A multi-statement script in a DuckDB tab shows the **first** statement's result (DuckDB-WASM's own behaviour; every statement does run). T-SQL and PostgreSQL tabs show the last. Running DuckDB tabs statement by statement needs a splitter (DuckDB-WASM's `extractStatements` is a candidate).
+- A multi-statement script in a DuckDB tab runs its statements before the last in one go: Stop only interrupts the last one. Running DuckDB tabs statement by statement needs a splitter (DuckDB-WASM's `extractStatements` is a candidate).
+- PostgreSQL tabs have no Stop (PGlite can't cancel a query).
+- A tab opened from a .sql file forgets the file on reload: the next Save asks where to save again.
 - T-SQL that has no DuckDB counterpart is passed on and fails in DuckDB with DuckDB's error: variables (`DECLARE @x`), `MERGE … OUTPUT inserted.…`, `BEGIN TRY … END CATCH`. The translation view says so where sqlglot warns; `EXEC` (stored procedures) is stopped before running with a note. `SELECT … INTO #tmp` works (a temporary table).
 - `'text' + column` is turned into `||` only when one side is a string literal (or already a `||`): `first_name + last_name` stays `+` and fails in DuckDB with the T-SQL hint. sqlglot doesn't know column types.
 - The PostgreSQL database is one per browser (IndexedDB) and not locked: two tabs of Quaera Lab writing to PostgreSQL at once could overwrite each other's changes. PostgreSQL's data is separate from DuckDB's: a change in one is not seen in the other until copied again (the copy replaces).
