@@ -1,0 +1,9 @@
+node_modules
+dist
+*.log
+.vite
+.playwright-mcp
+tsconfig.tsbuildinfo
+
+# local data files used for manual tests: never committed
+/data-local/

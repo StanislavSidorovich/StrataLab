@@ -1,0 +1,120 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --bg: #f6f7f9;
+  --panel: #ffffff;
+  --panel-2: #f1f3f6;
+  --line: #e2e5ea;
+  --text: #1c2330;
+  --muted: #667085;
+  --accent: #059669;
+  --accent-soft: #d1fae5;
+  --danger: #b42318;
+  --danger-soft: #fee4e2;
+  --warn-soft: #fef3c7;
+  --warn-text: #7a4b00;
+  --grid-alt: #fafbfc;
+  --sel: #e0f2fe;
+  color-scheme: light;
+}
+
+.dark {
+  --bg: #0f1218;
+  --panel: #161b23;
+  --panel-2: #1c222c;
+  --line: #2a313d;
+  --text: #e6e9ef;
+  --muted: #98a2b3;
+  --accent: #34d399;
+  --accent-soft: #0d3b2e;
+  --danger: #fda29b;
+  --danger-soft: #3b1513;
+  --warn-soft: #3a2a07;
+  --warn-text: #fcd34d;
+  --grid-alt: #19202a;
+  --sel: #10324a;
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: Inter, 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-size: 13px;
+}
+
+.mono {
+  font-family: 'JetBrains Mono', 'Cascadia Code', Consolas, 'SFMono-Regular', monospace;
+}
+
+.cm-editor {
+  height: 100%;
+  font-size: 13.5px;
+}
+.cm-editor.cm-focused {
+  outline: none;
+}
+.cm-scroller {
+  font-family: 'JetBrains Mono', 'Cascadia Code', Consolas, monospace;
+}
+
+button {
+  cursor: pointer;
+}
+button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  white-space: nowrap;
+}
+.btn:hover:not(:disabled) {
+  background: var(--panel-2);
+}
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+.dark .btn-primary {
+  color: #062b1f;
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent);
+  filter: brightness(1.08);
+}
+.btn-ghost {
+  border-color: transparent;
+  background: transparent;
+}
+
+.field {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+.field:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
