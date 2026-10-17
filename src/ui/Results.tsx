@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { AlertTriangle, ArrowLeftRight, ChevronDown, ClipboardCopy, Download, Lightbulb, Loader2, TableProperties } from 'lucide-react'
+import { AlertTriangle, ArrowLeftRight, ChevronDown, ClipboardCopy, Download, History, Lightbulb, Loader2, Search, TableProperties, Trash2, X } from 'lucide-react'
 import { DataGrid } from './DataGrid'
 import { EngineLoading } from './EngineLoading'
 import { Menu, type MenuItem } from './Menu'
-import { STOPPED, ownTables, runSql, saveResultAsTable, setResultView, setTabDialect, tabDialect, useLab } from './store'
+import { STOPPED, clearHistory, openFromHistory, ownTables, runSql, saveResultAsTable, setResultView, setTabDialect, tabDialect, useLab } from './store'
+import { historyDay, searchHistory } from '../core/history'
 import { TranslationView } from './TranslationView'
 import { sideBySide } from '../core/diff'
 import { splitError } from '../core/dialect'
@@ -44,7 +45,7 @@ export function Results() {
   const stored = useLab((s) => s.resultView)
   const view = stored === 'translation' && dialect !== 'tsql' ? 'result' : stored
   const changes = translation?.status === 'done' ? translation.statements.reduce((n, st) => n + (st.target == null ? 1 : sideBySide(st.source, st.target).changes), 0) : null
-  const views = dialect === 'tsql' ? (['result', 'translation', 'messages'] as const) : (['result', 'messages'] as const)
+  const views = dialect === 'tsql' ? (['result', 'translation', 'messages', 'history'] as const) : (['result', 'messages', 'history'] as const)
   const fileName = title.replace(/[^\w-]+/g, '_').toLowerCase()
 
   return (
@@ -64,6 +65,11 @@ export function Results() {
               </>
             )}
             {v === 'messages' && `Messages${log.length ? ` (${log.length})` : ''}`}
+            {v === 'history' && (
+              <span className="flex items-center gap-1.5" title="Queries you ran, kept in this browser between visits" aria-label="History">
+                <History size={13} /> <span className={dialect === 'tsql' ? 'hidden sm:inline' : ''}>History</span>
+              </span>
+            )}
           </button>
         ))}
         <div className="flex-1" />
@@ -77,7 +83,7 @@ export function Results() {
         )}
       </div>
       <div className="flex-1 min-h-0">
-        {view === 'messages' ? <Messages /> : view === 'translation' ? <TranslationView /> : <ResultBody />}
+        {view === 'history' ? <HistoryView /> : view === 'messages' ? <Messages /> : view === 'translation' ? <TranslationView /> : <ResultBody />}
       </div>
     </div>
   )
@@ -248,6 +254,76 @@ function Messages() {
           <span style={{ color: e.ok ? 'var(--muted)' : 'var(--danger)' }}>{e.text}</span>
         </div>
       ))}
+    </div>
+  )
+}
+
+const DIALECT_LABEL: Record<string, string> = { tsql: 'T-SQL', postgres: 'PostgreSQL' }
+
+/** Queries run from tabs, newest first, grouped by day: click one to open it in a new tab. */
+function HistoryView() {
+  const history = useLab((s) => s.history)
+  const [search, setSearch] = useState('')
+  const shown = searchHistory(history, search)
+  if (!history.length) return <Empty text="No queries yet: every query you run is kept here, in this browser, between visits." />
+  let day = ''
+  return (
+    <div className="h-full flex flex-col">
+      <div className="flex items-center gap-2 px-2 py-1.5 shrink-0" style={{ borderBottom: '1px solid var(--line)' }}>
+        <div className="relative flex-1 max-w-sm">
+          <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2" style={{ color: 'var(--muted)' }} />
+          <input
+            className="field w-full"
+            style={{ paddingLeft: 26, paddingTop: 3, paddingBottom: 3 }}
+            placeholder="Search the history"
+            aria-label="Search the history"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => e.key === 'Escape' && setSearch('')}
+          />
+          {search && (
+            <button className="absolute right-1.5 top-1/2 -translate-y-1/2" style={{ color: 'var(--muted)' }} onClick={() => setSearch('')} aria-label="Clear the search">
+              <X size={13} />
+            </button>
+          )}
+        </div>
+        <span className="whitespace-nowrap" style={{ color: 'var(--muted)', fontSize: 12 }}>
+          {search ? `${shown.length} of ${history.length}` : `${history.length} quer${history.length === 1 ? 'y' : 'ies'}`}
+        </span>
+        <div className="flex-1" />
+        <button className="btn btn-ghost" onClick={() => confirm('Clear the query history in this browser?') && clearHistory()} title="Forget every query in the history (tabs and tables are not touched)">
+          <Trash2 size={13} /> <span className="hidden sm:inline">Clear</span>
+        </button>
+      </div>
+      <div className="flex-1 min-h-0 overflow-auto">
+        {!shown.length && <Empty text="No query in the history matches." />}
+        {shown.map((e, i) => {
+          const heading = historyDay(e.at)
+          const first = heading !== day
+          day = heading
+          return (
+            <div key={`${e.at}-${i}`}>
+              {first && (
+                <div className="px-3 pt-2 pb-1 sticky top-0" style={{ background: 'var(--panel)', color: 'var(--muted)', fontSize: 11, fontWeight: 600, letterSpacing: 0.4, textTransform: 'uppercase' }}>
+                  {heading}
+                </div>
+              )}
+              <button className="w-full text-left px-3 py-1.5 hover:bg-[var(--panel-2)] block" style={{ borderBottom: '1px solid var(--line)' }} onClick={() => openFromHistory(e)} title="Open in a new tab (it does not run)">
+                <div className="flex items-center gap-2" style={{ fontSize: 12 }}>
+                  <span className="tabular-nums whitespace-nowrap" style={{ color: 'var(--muted)' }}>{new Date(e.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  <span style={{ color: e.ok ? 'var(--accent)' : 'var(--danger)' }}>{e.ok ? '✓' : '✗'}</span>
+                  {DIALECT_LABEL[e.dialect] && (
+                    <span className="px-1.5 rounded" style={{ background: 'var(--panel-2)', color: 'var(--muted)', fontSize: 11 }}>{DIALECT_LABEL[e.dialect]}</span>
+                  )}
+                  <span className="truncate" style={{ color: e.ok ? 'var(--muted)' : 'var(--danger)' }}>{e.text}</span>
+                  {e.tab && <span className="ml-auto truncate shrink-0 max-w-[40%]" style={{ color: 'var(--muted)' }}>{e.tab}</span>}
+                </div>
+                <pre className="mono whitespace-pre-wrap break-words mt-0.5" style={{ fontSize: 12, maxHeight: '4.5em', overflow: 'hidden' }}>{e.sql.trim().split('\n').slice(0, 3).join('\n')}</pre>
+              </button>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
