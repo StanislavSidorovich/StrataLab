@@ -9,11 +9,17 @@ Stages follow SPEC §6. A stage is done only when its acceptance criteria pass.
 | 3. Dataset catalog | ✅ done (2026-10-17) · 5 of 5 datasets · AdventureWorks to be tried once on lab.quaera.app after deploy | Chinook, Northwind, AdventureWorks, Sakila and Quaera's own dataset load in one click (Parquet served with the site) |
 | 4. Dialects | ✅ done (2026-10-17) · T-SQL → DuckDB (sqlglot), PostgreSQL 18 (PGlite) | PostgreSQL mode (PGlite) and T-SQL → DuckDB translation (sqlglot) with a side-by-side diff |
 | 5. Share and practise | ✅ done in StrataLab (2026-10-17) · `#s=` share links, 13 checked tasks + `#task=` links · quaera.app lessons still to link to them | Share link (data + query, DB Fiddle style); tasks with automatic result check, linked from quaera.app |
-| 6. Polish | ⬜ · started: installable app with an Update button, File menu, DuckDB extensions served with the site (2026-10-17, v0.5.0) | PWA (offline), query history and snippets, EXPLAIN as a tree, charts on results, RU/PT interface |
+| 6. Polish | ⬜ · started: installable app with an Update button, File menu, DuckDB extensions served with the site (2026-10-17, v0.5.0), query history | PWA (offline), query history and snippets, EXPLAIN as a tree, charts on results, RU/PT interface |
 
 **Overall progress: stages 1–5 of 6 done** (stage 6 started: PWA). Next is stage 6 (history, snippets, EXPLAIN, charts, RU / PT interface). The full application = all six stages.
 
-## Where we are (2026-10-17, v0.5.0: File menu, Run above the editor, DuckDB extensions with the site)
+## Where we are (2026-10-17, stage 6: query history)
+
+**History** next to Result and Messages under the editor: every query run from a tab (DuckDB, T-SQL, PostgreSQL), with its time, ✓ / ✗, rows and time or the error, the tab it ran in and the first three lines of SQL, grouped by Today / Yesterday / date. It is kept in this browser between visits (localStorage, `stratalab.history.v1`), newest first, up to 500 queries; running the same SQL again moves it to the top instead of adding a copy; scripts over 20,000 characters are not kept. A search box filters by every word in the SQL or the tab title; a click opens the query in a new tab of its dialect, **without running it**; Clear forgets the history (tabs and tables untouched). Rules in `src/core/history.ts`. Messages stays as it was: this visit only, imports included.
+
+How it was checked: 123 unit tests green (8 new, `tests/history.test.ts`). In Chromium, dev server and production build, 390 px light and 1280 px dark: four runs (one an error, one repeated) → three entries after a reload, the repeated one on top; search “group status” found one; a click opened it in a new tab with its SQL; Clear emptied the list; no page scroll on the phone.
+
+### Earlier (2026-10-17, v0.5.0: File menu, Run above the editor, DuckDB extensions with the site)
 
 **File menu** in the header, as in a desktop program: New query tab, Open a .sql file… (Ctrl+O), Save (Ctrl+S), Save as… (Ctrl+Shift+S), Add CSV / Excel…, Paste a table, Sample datasets…, Share a link…, Download database (.duckdb), Restore from a backup…. It replaces the separate Open, Save and Share buttons, so on a phone Share is back in the header (inside File). **Run / Stop** moved from the header to the left of the bar above the editor, next to the dialect switch (as in Azure Data Studio): it acts on the tab, so it sits with the tab. The welcome guide says so.
 
@@ -144,6 +150,8 @@ The MVP works locally (dev and production build checked in the browser): DuckDB 
 
 ## Decisions
 
+- ✱ **History is a third view under the editor, not a side panel** (as Azure Data Studio's Query History pane): the sidebar is the database tree and a phone has no room for another panel. Clicking an entry opens a new tab and does not run it: the query may write or be slow, and the user's current tab is not overwritten. Kept in localStorage, not in DuckDB: it must survive a database restore, and a full storage keeps the newer half.
+
 - ✱ **A File menu instead of Open / Save / Share buttons** (owner asked for “File with open, save… as in programs”): one place for files, data in and out and the whole database, and it fits a 390 px header. Ctrl+O / Ctrl+S stay.
 - ✱ **Run / Stop above the editor, left of the dialect switch** (Azure Data Studio's place; owner agreed to move it): it runs this tab, in this tab's dialect.
 - ✱ **DuckDB extensions downloaded at build time, not committed**: binary files tied to one DuckDB version; the deploy fetches the ones for the DuckDB it ships. If extensions.duckdb.org is down at deploy time, the deploy fails rather than shipping a site that silently depends on it. All or nothing per build: with one file missing the app keeps the default repository.
@@ -233,7 +241,7 @@ The MVP works locally (dev and production build checked in the browser): DuckDB 
 12. ✅ **PWA: Update button and Install as app** (2026-10-17, stage 6 started). **Owner, after deploy:** open lab.quaera.app once, then after the next deploy the **Update** button should appear; try Install as app on a computer and a phone. Datasets offline: ✅ the Parquet extension is served with the site (v0.5.0).
 13. ✅ **Interface buttons P1 and P2** (2026-10-17): Stop, Open / Save .sql, Paste a table, Format, editor toolbar; tree search, result and tab menus, database backup, shortcuts in the guide. **Owner, after deploy:** export a result as Parquet once (the cloud session can't reach the extension).
 14. ✅ **Stage 5 — share and practise** (2026-10-17): `#s=` share links and 13 tasks with a result check (`#task=`). **Owner, after deploy:** share a query over a sample dataset and open it in another browser; link quaera.app's SQL lessons to `#task=…`.
-15. **Stage 6 — polish**: ✅ File menu, Run above the editor, DuckDB extensions with the site (2026-10-17). Next: query history, charts on results, column profile, a small ER diagram of a schema, RU / PT interface, EXPLAIN as a tree and snippets, a result row cap, DuckDB scripts statement by statement.
+15. **Stage 6 — polish**: ✅ File menu, Run above the editor, DuckDB extensions with the site, ✅ query history (2026-10-17). Next: charts on results, column profile, a small ER diagram of a schema, RU / PT interface, EXPLAIN as a tree and snippets, a result row cap, DuckDB scripts statement by statement.
 
 ## Known gaps
 

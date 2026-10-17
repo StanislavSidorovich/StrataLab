@@ -25,6 +25,7 @@ import { download, resultRows } from '../db/export'
 import { compareResults, type Verdict } from '../core/check'
 import { hashWithoutTask, taskById, taskFromHash, taskStarter, type PracticeExample, type PracticeTask } from '../data/practice'
 import { decodeShare, hashWithoutShare, shareDataFromHash } from '../core/shareLink'
+import { historyTabTitle, parseHistory, remember, type HistoryEntry } from '../core/history'
 
 /** What a query tab speaks (stage 4): DuckDB itself, T-SQL translated to DuckDB, or PostgreSQL (PGlite). */
 export type Dialect = 'duckdb' | 'tsql' | 'postgres'
@@ -96,6 +97,8 @@ interface State {
   activeTab: string
   results: Record<string, TabResult>
   log: LogEntry[]
+  /** queries run from tabs, newest first, kept between visits (src/core/history.ts) */
+  history: HistoryEntry[]
   imports: ImportSource[]
   importError: string | null
   theme: 'light' | 'dark'
@@ -111,7 +114,7 @@ interface State {
   postgres: PostgresState
   pgTables: TableInfo[]
   /** what the result pane shows */
-  resultView: 'result' | 'translation' | 'messages'
+  resultView: 'result' | 'translation' | 'messages' | 'history'
   /** a copy to PostgreSQL in progress: the table being copied */
   pgCopy: string | null
   /** tabs closed this visit, newest last (the tab menu's “Reopen closed tab”) */
@@ -144,6 +147,15 @@ const WELCOME_KEY = 'stratalab.welcome-seen'
 const THEME_KEY = 'stratalab.theme'
 const DEMO_HIDDEN_KEY = 'stratalab.demo-hidden'
 const PRACTICE_KEY = 'stratalab.practice.v1'
+const HISTORY_KEY = 'stratalab.history.v1'
+
+function loadHistory(): HistoryEntry[] {
+  try {
+    return parseHistory(localStorage.getItem(HISTORY_KEY))
+  } catch {
+    return []
+  }
+}
 
 function loadPractice(): PracticeProgress {
   try {
@@ -204,6 +216,7 @@ export const useLab = create<State>(() => ({
   ...loadTabs(),
   results: {},
   log: [],
+  history: loadHistory(),
   imports: [],
   importError: null,
   theme: initialTheme(),
@@ -256,6 +269,16 @@ useLab.subscribe((s, prev) => {
       /* ignore */
     }
   }
+  if (s.history !== prev.history) {
+    // Full storage: keep the newer half rather than nothing.
+    for (const list of [s.history, s.history.slice(0, s.history.length >> 1)])
+      try {
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(list))
+        break
+      } catch {
+        /* try the shorter list */
+      }
+  }
   if (s.theme !== prev.theme) {
     try {
       localStorage.setItem(THEME_KEY, s.theme)
@@ -267,6 +290,24 @@ useLab.subscribe((s, prev) => {
 
 function addLog(entry: Omit<LogEntry, 'at'>) {
   set((s) => ({ log: [{ ...entry, at: Date.now() }, ...s.log].slice(0, 200) }))
+}
+
+/** A query run from a tab: to Messages, and to the history. */
+function logRun(tabId: string, entry: Omit<LogEntry, 'at'>) {
+  addLog(entry)
+  const tab = get().tabs.find((t) => t.id === tabId)
+  set((s) => ({ history: remember(s.history, { sql: entry.sql, dialect: tabDialect(tab), at: Date.now(), ok: entry.ok, text: entry.text, tab: tab?.title ?? '' }) }))
+}
+
+export function clearHistory() {
+  set({ history: [] })
+}
+
+/** A query from the history, in a new tab of its dialect (not run). */
+export function openFromHistory(e: HistoryEntry) {
+  const dialect = (['duckdb', 'tsql', 'postgres'] as const).find((d) => d === e.dialect)
+  addTab(e.sql, historyTabTitle(e), dialect)
+  set({ resultView: 'result' })
 }
 
 export async function initEngine() {
@@ -333,7 +374,7 @@ export async function runSql(tabId: string, sql: string) {
     if (bad) {
       const n = translated.indexOf(bad) + 1
       set((s) => ({ resultView: 'translation', results: { ...s.results, [tabId]: { status: 'error', error: `Translation Error: statement ${n} could not be read as T-SQL: ${bad.error}` } } }))
-      addLog({ sql, ok: false, text: `T-SQL statement ${n}: ${bad.error}` })
+      logRun(tabId, { sql, ok: false, text: `T-SQL statement ${n}: ${bad.error}` })
       return
     }
     toRun = duckdbScript(translated)
@@ -351,7 +392,7 @@ export async function runSql(tabId: string, sql: string) {
     }
     const ms = performance.now() - t0
     set((s) => ({ results: { ...s.results, [tabId]: { status: 'done', table, ms } } }))
-    addLog({ sql, ok: true, text: `${table.numRows.toLocaleString()} rows · ${ms.toFixed(0)} ms${dialect === 'tsql' ? ' · T-SQL translated to DuckDB' : ''}` })
+    logRun(tabId, { sql, ok: true, text: `${table.numRows.toLocaleString()} rows · ${ms.toFixed(0)} ms${dialect === 'tsql' ? ' · T-SQL translated to DuckDB' : ''}` })
     // Always: the saved database must hold every change (src/db/engine.ts empties the WAL on
     // start), and a CHECKPOINT with nothing to write costs next to nothing.
     await checkpoint()
@@ -360,7 +401,7 @@ export async function runSql(tabId: string, sql: string) {
     if (isCancelled(e)) {
       const ms = performance.now() - t0
       set((s) => ({ results: { ...s.results, [tabId]: { status: 'error', error: STOPPED, ms } } }))
-      addLog({ sql, ok: false, text: `Stopped after ${(ms / 1000).toFixed(1)} s` })
+      logRun(tabId, { sql, ok: false, text: `Stopped after ${(ms / 1000).toFixed(1)} s` })
       // Statements of a script that ran before the stop may have changed tables.
       await checkpoint()
       if (WRITES.test(toRun)) await refreshCatalog()
@@ -369,7 +410,7 @@ export async function runSql(tabId: string, sql: string) {
     const error = String(e instanceof Error ? e.message : e)
     // In a T-SQL tab the hints are what the translation is for; they'd only repeat it.
     set((s) => ({ results: { ...s.results, [tabId]: { status: 'error', error, hints: dialect === 'tsql' ? [] : dialectHints(sql), ms: performance.now() - t0 } } }))
-    addLog({ sql, ok: false, text: error.split('\n')[0] })
+    logRun(tabId, { sql, ok: false, text: error.split('\n')[0] })
   }
 }
 
@@ -443,12 +484,12 @@ async function runOnPostgres(tabId: string, sql: string) {
     const table = await runPostgres(sql)
     const ms = performance.now() - t0
     set((s) => ({ results: { ...s.results, [tabId]: { status: 'done', table, ms } } }))
-    addLog({ sql, ok: true, text: `${table.numRows.toLocaleString()} rows · ${ms.toFixed(0)} ms · PostgreSQL` })
+    logRun(tabId, { sql, ok: true, text: `${table.numRows.toLocaleString()} rows · ${ms.toFixed(0)} ms · PostgreSQL` })
     if (WRITES.test(sql)) await refreshPgCatalog()
   } catch (e) {
     const error = pgError(e)
     set((s) => ({ results: { ...s.results, [tabId]: { status: 'error', error, ms: performance.now() - t0 } } }))
-    addLog({ sql, ok: false, text: error.split('\n')[0] })
+    logRun(tabId, { sql, ok: false, text: error.split('\n')[0] })
   }
 }
 
