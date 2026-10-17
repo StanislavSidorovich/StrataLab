@@ -1,0 +1,12 @@
+{
+  "name": "Quaera Lab: SQL on your CSV and Excel files",
+  "short_name": "Quaera Lab",
+  "description": "Practise SQL in the browser on your own CSV and Excel files: drop a file, write a JOIN. Your data never leaves the browser.",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#10b981",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

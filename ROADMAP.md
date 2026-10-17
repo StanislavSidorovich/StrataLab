@@ -9,11 +9,19 @@ Stages follow SPEC §6. A stage is done only when its acceptance criteria pass.
 | 3. Dataset catalog | ✅ done (2026-10-17) · 5 of 5 datasets · AdventureWorks to be tried once on lab.quaera.app after deploy | Chinook, Northwind, AdventureWorks, Sakila and Quaera's own dataset load in one click (Parquet served with the site) |
 | 4. Dialects | ✅ done (2026-10-17) · T-SQL → DuckDB (sqlglot), PostgreSQL 18 (PGlite) | PostgreSQL mode (PGlite) and T-SQL → DuckDB translation (sqlglot) with a side-by-side diff |
 | 5. Share and practise | ⬜ | Share link (data + query, DB Fiddle style); tasks with automatic result check, linked from quaera.app |
-| 6. Polish | ⬜ | PWA (offline), query history and snippets, EXPLAIN as a tree, charts on results, RU/PT interface |
+| 6. Polish | ⬜ · started: installable app with an Update button (2026-10-17) | PWA (offline), query history and snippets, EXPLAIN as a tree, charts on results, RU/PT interface |
 
 **Overall progress: stages 1–4 of 6 done.** Two thirds of the six stages; next is stage 5 (share links, practice tasks with an automatic result check). The full application = all six stages.
 
-## Where we are (2026-10-17, stage 4 done: dialects; welcome screen)
+## Where we are (2026-10-17, installable app with an Update button)
+
+**Quaera Lab is a PWA, as StrataFlow is** (the owner's request; same code pattern, no new dependencies). `vite.config.ts → pwaPlugin` writes `sw.js` at build time from `src/pwa/sw.js`; `src/pwa/register.ts` registers it in the production build only. A new deploy no longer switches an open tab by itself: once it is downloaded, an **Update** button appears in the header (only then), and a click reloads every open tab on the new version (query tabs are in localStorage, tables in OPFS, so nothing is lost). An open tab checks for a new deploy every hour. The guide (? button) has **Install as app**: the browser's own install dialog in Chrome / Edge, the steps on Safari and Firefox. `public/manifest.webmanifest` and `public/icon.svg` added; the tab icon is unchanged.
+
+What works offline: after one visit the page opens and DuckDB starts with no network, as do T-SQL and PostgreSQL once used. Loading a dataset still needs extensions.duckdb.org (Parquet; see Known gaps).
+
+How it was checked: 71 unit tests green (3 new, `tests/pwa.test.ts`). In Chromium on the production preview (5181): the first visit is taken over by the worker, the shell (14 files) is cached and DuckDB's .wasm on its first download; a reload offline starts the engine; a changed `sw.js` shows **Update**, a click reloads the page on the new version, the old shell cache is deleted and the .wasm stays (no 35 MB again). No console errors. Not tried: the install dialog itself (headless browser), Safari, a phone.
+
+### Earlier (2026-10-17, stage 4 done: dialects; welcome screen)
 
 **Stage 4 done: each query tab speaks DuckDB, SQL Server (T-SQL) or PostgreSQL.** A switch above the editor (DuckDB · SQL Server (T-SQL) · PostgreSQL) is kept per tab.
 
@@ -129,6 +137,9 @@ The MVP works locally (dev and production build checked in the browser): DuckDB 
 - ✱ **PostgreSQL results as Arrow** (`src/dialects/pgResult.ts`): one grid, copy and export path for both engines; bigint read as BigInt (no silent rounding past 2^53); the header shows PostgreSQL's type name; duplicate column names become `id`, `id_2`.
 - ✱ **PGlite without `relaxedDurability`**: with it, starting on an IndexedDB store raised an uncaught `ErrnoError` in Chromium.
 - ✱ **Welcome screen once**, then behind the ? button; not shown to someone arriving from model.quaera.app or a `#ds=` link (they came for that). The demo shop stays the default first query, now labelled as made-up data.
+- ✱ **PWA: the shell up front, the engines on first use** (`src/core/pwa.ts`). The build is ~110 MB (DuckDB's eh and mvp .wasm ~75 MB, Pyodide ~13 MB, PGlite ~17 MB, datasets), and a visit uses one DuckDB build and maybe none of the rest, so precaching every file as StrataFlow does would mean 110 MB on a first visit. Install caches the page, scripts and styles (~5 MB); `.wasm`, `.data`, `pyodide/`, `sqlglot/` and `datasets/` are cached when first fetched, keyed by content hash in a cache that survives deploys, so an unchanged engine is not downloaded again and a changed one (Pyodide files keep their names) is. Range requests and other sites (extensions.duckdb.org) are not touched.
+- ✱ **Update waits for a click** (no `skipWaiting` on install), as in StrataFlow: an open tab may still lazy-load its own version's chunks (the translator, PGlite).
+- ✱ **Install as app sits in the guide** (? button): StrataLab has no Help menu.
 - Name **StrataLab**, subdomain **lab.quaera.app** (owner, 2026-10-17), in line with StrataSQL and StrataFlow.
 
 ## Next steps (by priority)
@@ -144,11 +155,12 @@ The MVP works locally (dev and production build checked in the browser): DuckDB 
 9. Lazy-load DuckDB's JS and CodeMirror to cut the first chunk, now 329 kB (gzip) (stages 2b and 3 added ~14 kB, about 4 kB of it the datasets' CREATE TABLEs, which could load with the catalog; stage 4 another ~14 kB). ✅ The .wasm download shows its progress (2026-10-17).
 10. ✅ **Welcome screen** (2026-10-17): three ways to start, where things are, ? button; demo shop labelled.
 11. ✅ **Stage 4 — dialects** (2026-10-17): T-SQL → DuckDB with a side-by-side diff; PostgreSQL 18 (PGlite) with copy from DuckDB. **Owner, after deploy:** on lab.quaera.app switch a tab to T-SQL and run something (the first time downloads the translator), and copy a dataset to PostgreSQL from its folder's ⋯ menu (not possible in the cloud session, see “How it was checked”).
-12. **Stage 5 — share and practise**: `#s=` share links (datasets by id + queries + dialect), tasks with an automatic result check, links from quaera.app lessons.
+12. ✅ **PWA: Update button and Install as app** (2026-10-17, stage 6 started). **Owner, after deploy:** open lab.quaera.app once, then after the next deploy the **Update** button should appear; try Install as app on a computer and a phone. Full offline datasets need the Parquet extension served with the site (Known gaps).
+13. **Stage 5 — share and practise**: `#s=` share links (datasets by id + queries + dialect), tasks with an automatic result check, links from quaera.app lessons.
 
 ## Known gaps
 
-- Reading Parquet (the datasets, dropped .parquet files) makes DuckDB-WASM download its Parquet extension from extensions.duckdb.org on first use (and the ICU extension for `current_date`, time zones…). A network that blocks that host breaks dataset loading. Serving the extensions with the site (`custom_extension_repository`) would also be needed for the offline PWA of stage 6.
+- Reading Parquet (the datasets, dropped .parquet files) makes DuckDB-WASM download its Parquet extension from extensions.duckdb.org on first use (and the ICU extension for `current_date`, time zones…). A network that blocks that host breaks dataset loading. Serving the extensions with the site (`custom_extension_repository`) would also make datasets load offline (the PWA caches everything else, 2026-10-17).
 
 - Numbers with a space as thousands separator (`1 234,50`) stay text: DuckDB has no thousands option. Could be cleaned before import.
 - A query result is held in memory in full; `SELECT *` on tens of millions of rows will be slow. A row cap with “show more” is a candidate.
