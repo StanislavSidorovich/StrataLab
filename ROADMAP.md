@@ -4,7 +4,7 @@ Stages follow SPEC §6. A stage is done only when its acceptance criteria pass.
 
 | Stage | Status | Acceptance |
 |---|---|---|
-| 1. MVP workbench | ✅ done (2026-10-17, v0.1.0) · deployed to GitHub Pages; live at https://lab.quaera.app once the Cloudflare CNAME is added | Drop a CSV/Excel file, see a preview with types, create a table, JOIN it with another, export the result; tables survive a reload |
+| 1. MVP workbench | ✅ done (2026-10-17, v0.1.0) · live at https://lab.quaera.app | Drop a CSV/Excel file, see a preview with types, create a table, JOIN it with another, export the result; tables survive a reload |
 | 2. Ecosystem hops | ⏳ in progress · 2a ✅ (2026-10-17) | model.quaera.app → “Open in StrataLab” creates the tables; StrataLab → “Show as model” opens the schema in model.quaera.app; fill a modelled table from Excel with key checks |
 | 3. Dataset catalog | ⬜ | Chinook, Northwind, AdventureWorks, Sakila and Quaera's own dataset load in one click (Parquet on our CDN) |
 | 4. Dialects | ⬜ | PostgreSQL mode (PGlite) and T-SQL → DuckDB translation (sqlglot) with a side-by-side diff |
@@ -45,8 +45,8 @@ The MVP works locally (dev and production build checked in the browser): DuckDB 
 ## Next steps (by priority)
 
 1. ✅ **Name + subdomain**: StrataLab · lab.quaera.app (owner, 2026-10-17)
-2. **Publish**: ✅ GitHub repo, ✅ Pages via Actions, ✅ custom domain on GitHub · ⏳ owner: Cloudflare DNS `CNAME lab → stanislavsidorovich.github.io`, proxy off (DNS only, like `model`), then tick “Enforce HTTPS” · ⏳ Cloudflare Web Analytics token (beacon only on lab.quaera.app, like StrataSQL)
-3. ✅ **Stage 2a — from model.quaera.app** (2026-10-17): “Open in StrataLab ↗” in StrataSQL's SQL tab → `#ddl=` → empty tables with PK / UNIQUE / CHECK / FK, a starter SELECT tab, a note per statement DuckDB couldn't take. Goes live once both sites deploy (lab.quaera.app needs the owner's Cloudflare record first).
+2. **Publish**: ✅ GitHub repo, ✅ Pages via Actions, ✅ custom domain on GitHub · ✅ Cloudflare DNS `CNAME lab` (live 2026-10-17, http redirects to https) · ⏳ Cloudflare Web Analytics token (beacon only on lab.quaera.app, like StrataSQL)
+3. ✅ **Stage 2a — from model.quaera.app** (2026-10-17): “Open in StrataLab ↗” in StrataSQL's SQL tab → `#ddl=` → empty tables with PK / UNIQUE / CHECK / FK, a starter SELECT tab, a note per statement DuckDB couldn't take. ✅ Live: checked on model.quaera.app → lab.quaera.app (2026-10-17).
 4. **Stage 2b — fill a table from Excel**: drop a file onto an existing table → map file columns to table columns → type / NOT NULL / FK / UNIQUE check with a row-by-row report (“row 47: customer_id 999 not in customers”) → INSERT.
 5. **Stage 2c — to model.quaera.app**: “Show as model” sends the current tables' DDL to StrataSQL's SQL → model import (its roadmap #32).
 6. **Data generator** for empty modelled tables (respects FKs).
@@ -57,6 +57,7 @@ The MVP works locally (dev and production build checked in the browser): DuckDB 
 - Numbers with a space as thousands separator (`1 234,50`) stay text: DuckDB has no thousands option. Could be cleaned before import.
 - A query result is held in memory in full; `SELECT *` on tens of millions of rows will be slow. A row cap with “show more” is a candidate.
 - Multi-statement scripts show only the last statement's result.
+- On a first visit DuckDB (~8 MB) loads before the model is created: for a few seconds the page shows no sign that a model is on its way.
 - Not tried yet on Safari / Firefox (OPFS sync access handles are supported there, but untested).
 - `#ddl=` opened while StrataLab is already open in a tab **not** started from StrataSQL's link (typed address, bookmark) opens a second tab, which gets an in-memory database (the badge says so).
 - DuckDB foreign keys only block: `ON DELETE CASCADE / SET NULL` from a model are left out (noted in the dialog).
