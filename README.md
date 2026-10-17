@@ -1,4 +1,4 @@
-# SQL Lab
+# StrataLab
 
 **Practise SQL in the browser on your own CSV and Excel files.** Drop a file, write a JOIN. No install, no account, no server: your data never leaves the browser.
 
@@ -6,7 +6,7 @@ Part of [Quaera](https://quaera.app) — together with [model.quaera.app](https:
 
 ## Why
 
-SQL Server Management Studio is a ~2 GB install plus a database server, a licence or a student setup. To practise a `JOIN` on two spreadsheets you need none of that. SQL Lab runs [DuckDB](https://duckdb.org) compiled to WebAssembly right in the page.
+SQL Server Management Studio is a ~2 GB install plus a database server, a licence or a student setup. To practise a `JOIN` on two spreadsheets you need none of that. StrataLab runs [DuckDB](https://duckdb.org) compiled to WebAssembly right in the page.
 
 ## What it does
 

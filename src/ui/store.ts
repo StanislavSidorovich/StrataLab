@@ -45,8 +45,8 @@ interface State {
   theme: 'light' | 'dark'
 }
 
-const TABS_KEY = 'sql-lab.tabs.v1'
-const THEME_KEY = 'sql-lab.theme'
+const TABS_KEY = 'stratalab.tabs.v1'
+const THEME_KEY = 'stratalab.theme'
 
 function loadTabs(): { tabs: QueryTab[]; activeTab: string } {
   try {
@@ -112,8 +112,8 @@ export async function initEngine() {
     // A user who dropped the demo tables in a saved database does not get them back.
     let offered = false
     try {
-      offered = localStorage.getItem('sql-lab.demo-offered') === '1'
-      localStorage.setItem('sql-lab.demo-offered', '1')
+      offered = localStorage.getItem('stratalab.demo-offered') === '1'
+      localStorage.setItem('stratalab.demo-offered', '1')
     } catch {
       /* ignore */
     }

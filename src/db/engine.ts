@@ -8,7 +8,7 @@ import mvpWorker from '@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?url
 import ehWasm from '@duckdb/duckdb-wasm/dist/duckdb-eh.wasm?url'
 import ehWorker from '@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url'
 
-const DB_FILE = 'sql-lab.duckdb'
+const DB_FILE = 'stratalab.duckdb'
 
 export interface Engine {
   db: duckdb.AsyncDuckDB

@@ -47,7 +47,7 @@ FROM orders o, range(1, 4) r(n)
 WHERE n = 1 OR random() < 0.45;
 `
 
-export const WELCOME_SQL = `-- Welcome to SQL Lab: DuckDB in your browser, nothing to install.
+export const WELCOME_SQL = `-- Welcome to StrataLab: DuckDB in your browser, nothing to install.
 -- Run the query: Ctrl+Enter (runs the selection, or the whole tab).
 -- Bring your own data: drop CSV / Excel files anywhere on the page.
 

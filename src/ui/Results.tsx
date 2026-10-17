@@ -103,7 +103,7 @@ function ErrorBox({ error, hints }: { error: string; hints: { id: string; found:
       {hints.length > 0 && (
         <div className="rounded-lg p-3" style={{ background: 'var(--warn-soft)', color: 'var(--warn-text)' }}>
           <div className="flex items-center gap-2 font-semibold mb-2">
-            <Lightbulb size={16} /> Looks like SQL Server (T-SQL). SQL Lab speaks DuckDB, close to PostgreSQL:
+            <Lightbulb size={16} /> Looks like SQL Server (T-SQL). StrataLab speaks DuckDB, close to PostgreSQL:
           </div>
           <ul className="space-y-1">
             {hints.map((h) => (

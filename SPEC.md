@@ -1,4 +1,4 @@
-# SQL Lab — Specification
+# StrataLab — Specification
 
 ## 1. Purpose
 

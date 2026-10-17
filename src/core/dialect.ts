@@ -1,4 +1,4 @@
-// SQL Lab runs DuckDB (PostgreSQL-like). Many learners come from SQL Server
+// StrataLab runs DuckDB (PostgreSQL-like). Many learners come from SQL Server
 // (SSMS courses), so when a query fails we look for T-SQL habits and say what
 // DuckDB expects instead. Hints are shown next to the error, never applied
 // silently: seeing the difference is part of learning.

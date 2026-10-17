@@ -1,11 +1,11 @@
-# SQL Lab — Roadmap
+# StrataLab — Roadmap
 
 Stages follow SPEC §6. A stage is done only when its acceptance criteria pass.
 
 | Stage | Status | Acceptance |
 |---|---|---|
 | 1. MVP workbench | ✅ done (2026-10-17, v0.1.0) · not deployed yet | Drop a CSV/Excel file, see a preview with types, create a table, JOIN it with another, export the result; tables survive a reload |
-| 2. Ecosystem hops | ⏳ next | model.quaera.app → “Open in SQL Lab” creates the tables; SQL Lab → “Show as model” opens the schema in model.quaera.app; fill a modelled table from Excel with key checks |
+| 2. Ecosystem hops | ⏳ next | model.quaera.app → “Open in StrataLab” creates the tables; StrataLab → “Show as model” opens the schema in model.quaera.app; fill a modelled table from Excel with key checks |
 | 3. Dataset catalog | ⬜ | Chinook, Northwind, AdventureWorks, Sakila and Quaera's own dataset load in one click (Parquet on our CDN) |
 | 4. Dialects | ⬜ | PostgreSQL mode (PGlite) and T-SQL → DuckDB translation (sqlglot) with a side-by-side diff |
 | 5. Share and practise | ⬜ | Share link (data + query, DB Fiddle style); tasks with automatic result check, linked from quaera.app |
@@ -28,13 +28,13 @@ The MVP works locally (dev and production build checked in the browser): DuckDB 
 - ✱ **T-SQL hints, not silent rewriting** (`src/core/dialect.ts`): when a query fails, SQL Server habits (`TOP`, `[brackets]`, `ISNULL`, `GETDATE()`, `GO`…) get a “use this instead” note. Seeing the difference is part of learning.
 - ✱ **English UI**, like StrataSQL and StrataFlow (international students); RU/PT in stage 6.
 - ✱ **Demo shop on first visit** (4 tables, fixed seed) so the welcome query works before any file is dropped.
-- Working name **SQL Lab** — final name and subdomain still to choose (owner).
+- Name **StrataLab**, subdomain **lab.quaera.app** (owner, 2026-10-17), in line with StrataSQL and StrataFlow.
 
 ## Next steps (by priority)
 
-1. **Name + subdomain** (owner): e.g. `lab.quaera.app`, `sql.quaera.app`, `studio.quaera.app`, `query.quaera.app`.
+1. ✅ **Name + subdomain**: StrataLab · lab.quaera.app (owner, 2026-10-17)
 2. **Publish**: GitHub repo, Pages via Actions (`deploy.yml` ready), custom domain + CNAME record on Cloudflare, Cloudflare Web Analytics only on the live host.
-3. **Stage 2a — from model.quaera.app**: StrataSQL gets an “Open in SQL Lab” button that packs the generated DDL (Postgres flavour) into `#ddl=` (compressed, like its share links); SQL Lab reads the hash, runs the DDL, shows the empty tables. Different subdomains are different origins: no shared localStorage.
+3. **Stage 2a — from model.quaera.app**: StrataSQL gets an “Open in StrataLab” button that packs the generated DDL (Postgres flavour) into `#ddl=` (compressed, like its share links); StrataLab reads the hash, runs the DDL, shows the empty tables. Different subdomains are different origins: no shared localStorage.
 4. **Stage 2b — fill a table from Excel**: drop a file onto an existing table → map file columns to table columns → type / NOT NULL / FK / UNIQUE check with a row-by-row report (“row 47: customer_id 999 not in customers”) → INSERT.
 5. **Stage 2c — to model.quaera.app**: “Show as model” sends the current tables' DDL to StrataSQL's SQL → model import (its roadmap #32).
 6. **Data generator** for empty modelled tables (respects FKs).
