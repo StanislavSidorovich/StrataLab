@@ -9,11 +9,19 @@ Stages follow SPEC §6. A stage is done only when its acceptance criteria pass.
 | 3. Dataset catalog | ✅ done (2026-10-17) · 5 of 5 datasets · AdventureWorks to be tried once on lab.quaera.app after deploy | Chinook, Northwind, AdventureWorks, Sakila and Quaera's own dataset load in one click (Parquet served with the site) |
 | 4. Dialects | ✅ done (2026-10-17) · T-SQL → DuckDB (sqlglot), PostgreSQL 18 (PGlite) | PostgreSQL mode (PGlite) and T-SQL → DuckDB translation (sqlglot) with a side-by-side diff |
 | 5. Share and practise | ✅ done in StrataLab (2026-10-17) · `#s=` share links, 13 checked tasks + `#task=` links · quaera.app lessons still to link to them | Share link (data + query, DB Fiddle style); tasks with automatic result check, linked from quaera.app |
-| 6. Polish | ⬜ · started: installable app with an Update button (2026-10-17) | PWA (offline), query history and snippets, EXPLAIN as a tree, charts on results, RU/PT interface |
+| 6. Polish | ⬜ · started: installable app with an Update button, File menu, DuckDB extensions served with the site (2026-10-17, v0.5.0) | PWA (offline), query history and snippets, EXPLAIN as a tree, charts on results, RU/PT interface |
 
 **Overall progress: stages 1–5 of 6 done** (stage 6 started: PWA). Next is stage 6 (history, snippets, EXPLAIN, charts, RU / PT interface). The full application = all six stages.
 
-## Where we are (2026-10-17, stage 5 started: share links)
+## Where we are (2026-10-17, v0.5.0: File menu, Run above the editor, DuckDB extensions with the site)
+
+**File menu** in the header, as in a desktop program: New query tab, Open a .sql file… (Ctrl+O), Save (Ctrl+S), Save as… (Ctrl+Shift+S), Add CSV / Excel…, Paste a table, Sample datasets…, Share a link…, Download database (.duckdb), Restore from a backup…. It replaces the separate Open, Save and Share buttons, so on a phone Share is back in the header (inside File). **Run / Stop** moved from the header to the left of the bar above the editor, next to the dialect switch (as in Azure Data Studio): it acts on the tab, so it sits with the tab. The welcome guide says so.
+
+**DuckDB extensions served with the site** (`src/core/extensions.ts`): `npm run extensions` (`scripts/fetch-duckdb-extensions.mjs`) asks the installed DuckDB-WASM its version and downloads Parquet and ICU for both builds (eh, mvp) into `public/duckdb-ext/v1.5.4/…`; the deploy workflow runs it before the build. When the files are there, the engine sets `custom_extension_repository` to the site's `duckdb-ext/`, so datasets and time zones work where extensions.duckdb.org is blocked, and the service worker keeps the files after first use (they are `.wasm`), so datasets load offline. Without them (a dev checkout that didn't run the script) the engine leaves DuckDB's default, extensions.duckdb.org. Version 0.5.0.
+
+How it was checked: 115 unit tests green (4 new, `tests/extensions.test.ts`). In Chromium, dev server and production build: the File menu at 390 px (fits, no page scroll, the editor bar too) and 1280 px, light and dark; Share a link… opens the dialog; Run in the editor bar runs and stops as before. With stand-in files in `public/duckdb-ext/` the production build set `custom_extension_repository = http://localhost:5181/duckdb-ext` and DuckDB asked that address for `v1.5.4/wasm_eh/icu.duckdb_extension.wasm`; without them it asked extensions.duckdb.org. **Not tried:** the real extension files: this session can't reach extensions.duckdb.org, so the download runs first in GitHub Actions. **Owner, after deploy:** load a sample dataset on lab.quaera.app, and once more with the network off (after one load online).
+
+### Earlier (2026-10-17, stage 5 started: share links)
 
 **Share** (stage 5, SPEC §5 `#s=`): a **Share** button in the header (on a phone, in the tab menu: long-press a tab) opens a dialog with a link to **this tab** or **all tabs**. The link carries the queries (title, SQL, dialect), the catalog datasets they name (`chinook.`, `sakila.`…) and whether they use the demo shop; it is packed like `#ddl=` (deflate-raw, base64url) in the fragment, so nothing reaches a server (`src/core/shareLink.ts`). The dialog lists what goes in, warns about the user's own tables a query uses (their data can't travel in a link: send the file or a backup) and about long links (over 8,000 characters). Opening a link loads the missing datasets and the demo shop, adds the queries as new tabs next to the user's own and says so in a note; **nothing runs by itself**, since a link comes from anyone. A damaged, cut, oversized (over 1 MB inflated) or unknown link is refused with a plain message; every field is checked.
 
@@ -136,6 +144,10 @@ The MVP works locally (dev and production build checked in the browser): DuckDB 
 
 ## Decisions
 
+- ✱ **A File menu instead of Open / Save / Share buttons** (owner asked for “File with open, save… as in programs”): one place for files, data in and out and the whole database, and it fits a 390 px header. Ctrl+O / Ctrl+S stay.
+- ✱ **Run / Stop above the editor, left of the dialect switch** (Azure Data Studio's place; owner agreed to move it): it runs this tab, in this tab's dialect.
+- ✱ **DuckDB extensions downloaded at build time, not committed**: binary files tied to one DuckDB version; the deploy fetches the ones for the DuckDB it ships. If extensions.duckdb.org is down at deploy time, the deploy fails rather than shipping a site that silently depends on it. All or nothing per build: with one file missing the app keeps the default repository.
+
 - ✱ **Engine: DuckDB-WASM** (MIT) rather than SQLite (too weak) or PGlite (kept for stage 4 as a dialect). Reads CSV/Parquet/JSON natively, fast on millions of rows.
 - ✱ **No server.** Static site on GitHub Pages; the user's data never leaves the browser (no GDPR question, zero hosting cost).
 - ✱ **OPFS registered by hand** (`src/db/engine.ts`): DuckDB-WASM 1.33's own `opfs://` path never registers a new, empty database file (it checks `getSize()`), so everything silently stayed in memory while the UI said “saved”. We create both files (`.duckdb`, `.wal`) and register them under plain names. A second tab cannot lock the same file, so it falls back to an in-memory database and the badge says so.
@@ -218,14 +230,14 @@ The MVP works locally (dev and production build checked in the browser): DuckDB 
 9. Lazy-load DuckDB's JS and CodeMirror to cut the first chunk, now 329 kB (gzip) (stages 2b and 3 added ~14 kB, about 4 kB of it the datasets' CREATE TABLEs, which could load with the catalog; stage 4 another ~14 kB). ✅ The .wasm download shows its progress (2026-10-17).
 10. ✅ **Welcome screen** (2026-10-17): three ways to start, where things are, ? button; demo shop labelled.
 11. ✅ **Stage 4 — dialects** (2026-10-17): T-SQL → DuckDB with a side-by-side diff; PostgreSQL 18 (PGlite) with copy from DuckDB. **Owner, after deploy:** on lab.quaera.app switch a tab to T-SQL and run something (the first time downloads the translator), and copy a dataset to PostgreSQL from its folder's ⋯ menu (not possible in the cloud session, see “How it was checked”).
-12. ✅ **PWA: Update button and Install as app** (2026-10-17, stage 6 started). **Owner, after deploy:** open lab.quaera.app once, then after the next deploy the **Update** button should appear; try Install as app on a computer and a phone. Full offline datasets need the Parquet extension served with the site (Known gaps).
+12. ✅ **PWA: Update button and Install as app** (2026-10-17, stage 6 started). **Owner, after deploy:** open lab.quaera.app once, then after the next deploy the **Update** button should appear; try Install as app on a computer and a phone. Datasets offline: ✅ the Parquet extension is served with the site (v0.5.0).
 13. ✅ **Interface buttons P1 and P2** (2026-10-17): Stop, Open / Save .sql, Paste a table, Format, editor toolbar; tree search, result and tab menus, database backup, shortcuts in the guide. **Owner, after deploy:** export a result as Parquet once (the cloud session can't reach the extension).
 14. ✅ **Stage 5 — share and practise** (2026-10-17): `#s=` share links and 13 tasks with a result check (`#task=`). **Owner, after deploy:** share a query over a sample dataset and open it in another browser; link quaera.app's SQL lessons to `#task=…`.
-15. **Stage 6 — polish**: query history and snippets, EXPLAIN as a tree, charts on results, RU / PT interface, datasets offline (serve the DuckDB extensions with the site).
+15. **Stage 6 — polish**: ✅ File menu, Run above the editor, DuckDB extensions with the site (2026-10-17). Next: query history, charts on results, column profile, a small ER diagram of a schema, RU / PT interface, EXPLAIN as a tree and snippets, a result row cap, DuckDB scripts statement by statement.
 
 ## Known gaps
 
-- Reading Parquet (the datasets, dropped .parquet files) makes DuckDB-WASM download its Parquet extension from extensions.duckdb.org on first use (and the ICU extension for `current_date`, time zones…). A network that blocks that host breaks dataset loading. Serving the extensions with the site (`custom_extension_repository`) would also make datasets load offline (the PWA caches everything else, 2026-10-17).
+- Only Parquet and ICU are served with the site; any other extension a query autoloads (`spatial`, `httpfs`…) is still fetched from extensions.duckdb.org, and with the site's repository set it is looked for on the site first and fails. Add it to `OWN_EXTENSIONS` when a feature needs one.
 
 - Numbers with a space as thousands separator (`1 234,50`) stay text: DuckDB has no thousands option. Could be cleaned before import.
 - A query result is held in memory in full; `SELECT *` on tens of millions of rows will be slow. A row cap with “show more” is a candidate.

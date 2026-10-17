@@ -16,7 +16,7 @@ import { datasetById } from '../data/datasets'
 export const ACCEPT = '.csv,.tsv,.txt,.xlsx,.xlsm,.xls,.ods,.parquet,.json,.jsonl,.ndjson'
 
 /** Restore from a backup: a .duckdb file replaces every table, after a confirmation. */
-function pickBackup() {
+export function pickBackup() {
   const input = document.createElement('input')
   input.type = 'file'
   input.accept = '.duckdb,.ddb,.db'
@@ -40,11 +40,12 @@ function matching(tables: TableInfo[], search: string): [TableInfo, TreeMatch][]
   })
 }
 
-/** Opens the file picker; the chosen files fill `table` (stage 2b). */
-function pickFilesFor(table: string) {
+/** Opens the file picker; the chosen files become tables, or fill `table` (stage 2b). */
+export function pickFilesFor(table?: string) {
   const input = document.createElement('input')
   input.type = 'file'
   input.accept = ACCEPT
+  input.multiple = !table
   input.onchange = () => void enqueueFiles([...(input.files ?? [])], table)
   input.click()
 }

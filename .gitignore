@@ -7,3 +7,6 @@ tsconfig.tsbuildinfo
 
 # local data files used for manual tests: never committed
 /data-local/
+
+# DuckDB extensions served with the site: downloaded before a build (npm run extensions)
+/public/duckdb-ext/

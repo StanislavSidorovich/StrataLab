@@ -8,9 +8,12 @@ import mvpWorker from '@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?url
 import ehWasm from '@duckdb/duckdb-wasm/dist/duckdb-eh.wasm?url'
 import ehWorker from '@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url'
 import { downloadPercent } from '../core/progress'
+import { EXTENSIONS_DIR, hasOwnExtensions } from '../core/extensions'
 
 /** Decompressed sizes of the two .wasm files, filled in by vite.config.ts. */
 declare const __DUCKDB_WASM_BYTES__: { eh: number; mvp: number }
+/** Paths under duckdb-ext/ served with the site (vite.config.ts). */
+declare const __OWN_DUCKDB_EXTENSIONS__: string[]
 
 const DB_FILE = 'stratalab.duckdb'
 
@@ -60,6 +63,9 @@ async function start(onProgress: (p: EngineProgress) => void): Promise<Engine> {
 
   const conn = await db.connect()
   const version = (await db.getVersion()).replace(/^v/, '')
+  // Parquet and ICU from this site, not extensions.duckdb.org (src/core/extensions.ts).
+  if (hasOwnExtensions(__OWN_DUCKDB_EXTENSIONS__, version, bundle.mainModule === ehWasm ? 'wasm_eh' : 'wasm_mvp'))
+    await conn.query(`SET custom_extension_repository = '${new URL(EXTENSIONS_DIR, new URL(import.meta.env.BASE_URL, location.href)).href}'`)
   return { db, conn, version, persistent }
 }
 
