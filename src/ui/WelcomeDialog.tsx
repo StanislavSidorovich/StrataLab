@@ -1,10 +1,12 @@
 // The welcome screen: what Quaera Lab is, three ways to start, and where things are on the page.
 // Shown once on a first visit (not to someone arriving with a model or a dataset link: they came
 // for that), and again from the “?” button in the header.
-import { Database, FileUp, HelpCircle, Library, Play, Store, X } from 'lucide-react'
+import { useState } from 'react'
+import { Database, Download, FileUp, HelpCircle, Library, Play, Store, X } from 'lucide-react'
 import { closeWelcome, enqueueFiles, loadDemo, openAndRun, openCatalog, ownTables, useLab } from './store'
 import { ACCEPT } from './Sidebar'
 import { DEMO_TABLES, WELCOME_SQL } from '../data/demo'
+import { installApp } from '../pwa/register'
 
 function pickFiles() {
   const input = document.createElement('input')
@@ -26,6 +28,7 @@ export function WelcomeDialog() {
   const open = useLab((s) => s.welcomeOpen)
   const ready = useLab((s) => s.engine.status === 'ready')
   const hasDemo = useLab((s) => DEMO_TABLES.every((n) => ownTables(s.tables).some((t) => t.name === n)))
+  const [installNote, setInstallNote] = useState<string | null>(null)
   if (!open) return null
 
   const tryDemo = async () => {
@@ -119,6 +122,14 @@ export function WelcomeDialog() {
             <HelpCircle size={13} /> This guide is under the ? button at the top right.
           </span>
           <div className="flex-1" />
+          {installNote && (
+            <span style={{ color: 'var(--muted)', fontSize: 12 }} className="max-w-xs text-right">
+              {installNote}
+            </span>
+          )}
+          <button className="btn btn-ghost" onClick={() => void installApp().then(setInstallNote)} title="Open Quaera Lab in its own window, from the home screen or the app list">
+            <Download size={14} /> Install as app
+          </button>
           <button className="btn btn-primary" onClick={closeWelcome}>
             Got it
           </button>

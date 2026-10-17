@@ -2,9 +2,11 @@
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
-import { createReadStream, readFileSync, statSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { createReadStream, readdirSync, readFileSync, statSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
+import { swFiles } from './src/core/pwa'
 
 // The .wasm is served gzip-compressed, so the browser can't tell how big it is
 // once unpacked; the loading bar needs that number (src/db/engine.ts).
@@ -39,9 +41,36 @@ function pyodideFiles(): Plugin {
   }
 }
 
+// PWA without extra dependencies (as in StrataFlow): emits sw.js with the shell to download on install
+// and the on-demand files with their content hashes (src/core/pwa.ts).
+function pwaPlugin(): Plugin {
+  const sha = (data: string | Uint8Array) => createHash('sha256').update(data).digest('hex').slice(0, 12)
+  return {
+    name: 'stratalab-pwa',
+    apply: 'build',
+    enforce: 'post',
+    generateBundle(_, bundle) {
+      const files: Record<string, string> = {}
+      for (const [name, out] of Object.entries(bundle)) files[name] = sha(out.type === 'chunk' ? out.code : out.source)
+      for (const f of readdirSync('public', { recursive: true, withFileTypes: true }))
+        if (f.isFile()) {
+          const path = join(f.parentPath, f.name)
+          files[path.slice('public/'.length).replace(/\\/g, '/')] = sha(readFileSync(path))
+        }
+      const { shell, onDemand } = swFiles(files)
+      const version = sha(JSON.stringify([shell.map((f) => [f, files[f]]), onDemand]))
+      const source = readFileSync('src/pwa/sw.js', 'utf8')
+        .replace("'__VERSION__'", JSON.stringify(version))
+        .replace('__SHELL__', JSON.stringify(shell, null, 2))
+        .replace('__ON_DEMAND__', JSON.stringify(onDemand, null, 2))
+      this.emitFile({ type: 'asset', fileName: 'sw.js', source })
+    },
+  }
+}
+
 export default defineConfig({
   base: './',
-  plugins: [react(), tailwindcss(), pyodideFiles()],
+  plugins: [react(), tailwindcss(), pyodideFiles(), pwaPlugin()],
   worker: { format: 'es' },
   // DuckDB-WASM ships its own workers and .wasm files; they are imported with ?url.
   optimizeDeps: { exclude: ['@duckdb/duckdb-wasm', '@electric-sql/pglite', 'pyodide'] },
