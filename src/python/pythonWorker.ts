@@ -93,7 +93,10 @@ self.onmessage = async (e: MessageEvent<ToWorker>) => {
   const msg = e.data
   if (msg.type === 'init') {
     ready = start(msg).catch((err) => {
-      post({ type: 'failed', error: String(err instanceof Error ? err.message : err) })
+      // Pyodide's own failures can be plain objects (ExitStatus when python_stdlib.zip came back empty:
+      // an antivirus or download manager that takes .zip downloads), which String() turns into "[object Object]".
+      const text = err instanceof Error ? err.message : typeof err === 'string' ? err : ''
+      post({ type: 'failed', error: text || 'Python could not start. If an antivirus or a download manager is set to take .zip files, let this site through and reload.' })
       throw err
     })
     return

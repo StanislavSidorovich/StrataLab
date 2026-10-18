@@ -53,7 +53,8 @@ self.addEventListener('fetch', (event) => {
         const hit = await cache.match(key)
         if (hit) return hit
         const res = await fetch(req)
-        if (res.ok) event.waitUntil(cache.put(key, res.clone()))
+        // Only a full 200: a 204 from something that takes the download (a download manager) must not be kept.
+        if (res.status === 200) event.waitUntil(cache.put(key, res.clone()))
         return res
       }),
     )
