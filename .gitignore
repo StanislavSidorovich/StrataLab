@@ -10,3 +10,6 @@ tsconfig.tsbuildinfo
 
 # DuckDB extensions served with the site: downloaded before a build (npm run extensions)
 /public/duckdb-ext/
+
+# Python packages served with the site (pandas, matplotlib, seaborn…): downloaded before a build (npm run python-packages)
+/public/pyodide/

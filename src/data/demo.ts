@@ -94,3 +94,39 @@ WHERE o.status = 'delivered'
 GROUP BY p.category
 ORDER BY revenue DESC;
 `
+
+/** A new Python tab (stage 7): cells over the demo shop, with lab.table, lab.sql and a seaborn chart. */
+export const PYTHON_STARTER = `# %% [markdown]
+# Python in Quaera Lab: pandas, matplotlib and seaborn over the same tables as SQL.
+# lab.table("orders") gives a table as a DataFrame; lab.sql("SELECT …") runs SQL first;
+# lab.save(df, "name") writes a DataFrame back as a table. Cells start at # %% lines.
+# Run every cell: Ctrl+Enter · this cell, then on to the next: Shift+Enter.
+
+# %%
+import pandas as pd
+
+orders = lab.table("orders")
+items = lab.table("order_items")
+products = lab.table("products")
+orders.head()
+
+# %%
+lines = items.merge(products, on="product_id").merge(orders, on="order_id")
+lines["revenue"] = lines["quantity"] * lines["price"]
+by_month = (
+    lines[lines["status"] == "delivered"]
+    .groupby([lines["ordered_at"].dt.to_period("M").dt.to_timestamp(), "category"])["revenue"]
+    .sum()
+    .reset_index()
+)
+by_month
+
+# %%
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+sns.lineplot(data=by_month, x="ordered_at", y="revenue", hue="category")
+plt.title("Delivered revenue by month")
+plt.xticks(rotation=30)
+plt.show()
+`

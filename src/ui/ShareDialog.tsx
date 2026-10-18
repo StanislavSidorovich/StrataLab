@@ -21,13 +21,16 @@ export function ShareDialog() {
   const [url, setUrl] = useState('')
   const [copied, setCopied] = useState(false)
 
-  const chosen = scope === 'all' ? tabs : tabs.filter((t) => t.id === activeTab)
+  // Python tabs stay out of links (stage 7): the #s= format is unchanged; .ipynb carries them.
+  const picked = scope === 'all' ? tabs : tabs.filter((t) => t.id === activeTab)
+  const chosen = picked.filter((t) => tabDialect(t) !== 'python')
+  const pythonLeftOut = picked.length - chosen.length
   const datasets = [...new Set(tables.map((t) => t.schema))].filter((s) => datasetById(s))
   const ownDatasetTables = tables.filter((t) => t.schema !== 'main' && isOwnSchema(t.schema, CATALOG_IDS))
   const own = ownTables(tables).map((t) => t.name)
   const hasDemo = DEMO_TABLES.every((n) => own.includes(n))
   const { share, notShared } = planShare(
-    chosen.map((t) => ({ title: t.title, sql: t.sql, dialect: tabDialect(t) })),
+    chosen.map((t) => ({ title: t.title, sql: t.sql, dialect: tabDialect(t) as Exclude<ReturnType<typeof tabDialect>, 'python'> })),
     { datasets, demoTables: hasDemo ? DEMO_TABLES : [], ownTables: own, ownDatasetTables },
   )
   const key = JSON.stringify(share)
@@ -49,6 +52,7 @@ export function ShareDialog() {
     setTimeout(() => setCopied(false), 1500)
   }
   const empty = chosen.every((t) => !t.sql.trim())
+  const onlyPython = pythonLeftOut > 0 && !chosen.length
   const postgres = chosen.some((t) => tabDialect(t) === 'postgres')
 
   return (
@@ -116,6 +120,14 @@ export function ShareDialog() {
               </span>
             </div>
           )}
+          {pythonLeftOut > 0 && (
+            <div className="rounded-lg p-2.5 flex gap-2" style={{ background: 'var(--panel-2)', color: 'var(--muted)' }}>
+              <Info size={15} className="shrink-0 mt-0.5" />
+              <span>
+                {onlyPython ? 'Python tabs can’t be shared by link yet' : `${pythonLeftOut} Python tab${pythonLeftOut === 1 ? ' is' : 's are'} left out: Python tabs can’t be shared by link yet`}. Send it as a notebook instead: File → Download as notebook (.ipynb).
+              </span>
+            </div>
+          )}
           {postgres && (
             <div className="rounded-lg p-2.5 flex gap-2" style={{ background: 'var(--panel-2)', color: 'var(--muted)' }}>
               <Info size={15} className="shrink-0 mt-0.5" />
@@ -134,7 +146,7 @@ export function ShareDialog() {
                 {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? 'Copied' : 'Copy link'}
               </button>
             </div>
-            {empty && <p style={{ color: 'var(--muted)', fontSize: 12 }}>The tab is empty: write a query first.</p>}
+            {empty && !onlyPython && <p style={{ color: 'var(--muted)', fontSize: 12 }}>The tab is empty: write a query first.</p>}
           </div>
         </div>
       </div>

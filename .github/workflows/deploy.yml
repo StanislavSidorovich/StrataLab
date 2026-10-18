@@ -27,6 +27,8 @@ jobs:
       - run: npm test
       # Parquet and ICU served with the site, not from extensions.duckdb.org (src/core/extensions.ts)
       - run: npm run extensions
+      # pandas, matplotlib, seaborn for Python tabs, served next to Pyodide (src/core/python.ts)
+      - run: npm run python-packages
       - run: npm run build
       - uses: actions/upload-pages-artifact@v5
         with:

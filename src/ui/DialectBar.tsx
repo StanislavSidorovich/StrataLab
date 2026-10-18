@@ -1,14 +1,16 @@
 // Above the editor (stage 4): what this tab speaks. DuckDB runs as written; T-SQL is translated
 // to DuckDB first (sqlglot) and the translation can be seen side by side; PostgreSQL runs on a
 // real PostgreSQL (PGlite), a separate database that tables are copied into.
-import { ArrowLeftRight, Copy, ListTree, Loader2, Play, Redo2, Search, Square, SquareSlash, Undo2, WandSparkles } from 'lucide-react'
-import { copySchemaToPostgres, explainSql, ownTables, setTabDialect, showTranslation, stopQuery, tabDialect, useLab, type Dialect } from './store'
+import { useEffect } from 'react'
+import { ArrowLeftRight, Copy, ListTree, Loader2, Play, Redo2, RotateCcw, Search, Square, SquareSlash, Undo2, WandSparkles } from 'lucide-react'
+import { copySchemaToPostgres, explainSql, ownTables, restartPython, setTabDialect, showTranslation, startPython, stopQuery, tabDialect, useLab, type Dialect } from './store'
 import { activeSql, editorCommand, formatActiveTab, runActive } from './SqlEditor'
 
 const DIALECTS: { id: Dialect; label: string; short: string; title: string }[] = [
   { id: 'duckdb', label: 'DuckDB', short: 'DuckDB', title: 'Run as written on DuckDB (close to PostgreSQL)' },
   { id: 'tsql', label: 'SQL Server (T-SQL)', short: 'T-SQL', title: 'Write SQL Server’s T-SQL: it is translated to DuckDB (by sqlglot) before it runs, and you can see the translation side by side' },
   { id: 'postgres', label: 'PostgreSQL', short: 'Postgres', title: 'Run on a real PostgreSQL in this browser (PGlite): a separate database, copy tables into it from the tree' },
+  { id: 'python', label: 'Python', short: 'Python', title: 'Python with pandas, matplotlib and seaborn over the same tables: lab.table("orders"), lab.sql("SELECT …"). # %% lines split the tab into cells' },
 ]
 
 export function DialectBar() {
@@ -18,13 +20,20 @@ export function DialectBar() {
   const hasOwn = useLab((s) => ownTables(s.tables).some((t) => t.kind === 'table'))
   const copying = useLab((s) => s.pgCopy)
   const translation = useLab((s) => (tab ? s.translations[tab.id] : undefined))
-  if (!tab) return null
+  const python = useLab((s) => s.python)
   const dialect = tabDialect(tab)
+  // A Python tab starts Python (a download the first time) as soon as it is shown.
+  const pythonOff = python.status === 'off'
+  useEffect(() => {
+    if (dialect === 'python' && pythonOff) startPython()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dialect, tab?.id])
+  if (!tab) return null
 
   return (
     <div className="h-9 shrink-0 flex items-center gap-1 sm:gap-2 px-2 overflow-x-auto" style={{ background: 'var(--panel)', borderBottom: '1px solid var(--line)', fontSize: 12 }}>
       <RunButton />
-      <ExplainButton />
+      {dialect !== 'python' && <ExplainButton />}
       <div role="radiogroup" aria-label="Dialect of this tab" className="flex shrink-0 rounded-md p-0.5" style={{ background: 'var(--panel-2)' }}>
         {DIALECTS.map((d) => (
           <button
@@ -72,7 +81,31 @@ export function DialectBar() {
         </>
       )}
 
-      <EditorTools />
+      {dialect === 'python' && (
+        <>
+          <span className="truncate" style={{ color: python.status === 'error' ? 'var(--danger)' : 'var(--muted)' }} title={python.status === 'error' ? python.error : 'Run every cell: Ctrl+Enter · the cell at the cursor: Shift+Enter'}>
+            {python.status === 'ready' && (
+              <>
+                Python {python.version.replace(/^(\d+)\.(\d+).*/, '$1.$2')} with pandas<span className="hidden lg:inline"> · Shift+Enter runs a cell</span>
+              </>
+            )}
+            {python.status === 'off' && 'Python starts on the first run'}
+            {python.status === 'loading' && (
+              <span className="flex items-center gap-1.5">
+                <Loader2 size={13} className="animate-spin" /> {python.text}…<span className="hidden lg:inline"> (once, then kept in this browser)</span>
+              </span>
+            )}
+            {python.status === 'error' && `Python failed to start: ${python.error}`}
+          </span>
+          {(python.status === 'ready' || python.status === 'error') && (
+            <button className="btn btn-ghost shrink-0" onClick={restartPython} title="Restart Python: forget every variable, as a new notebook session">
+              <RotateCcw size={13} /> <span className="hidden sm:inline">Restart</span>
+            </button>
+          )}
+        </>
+      )}
+
+      <EditorTools python={dialect === 'python'} />
     </div>
   )
 }
@@ -82,15 +115,17 @@ function RunButton() {
   const engine = useLab((s) => s.engine)
   const tabId = useLab((s) => s.activeTab)
   const running = useLab((s) => s.results[s.activeTab]?.status === 'running' || s.plans[s.activeTab]?.status === 'running')
-  const pg = useLab((s) => tabDialect(s.tabs.find((t) => t.id === s.activeTab)) === 'postgres')
+  const dialect = useLab((s) => tabDialect(s.tabs.find((t) => t.id === s.activeTab)))
+  const pg = dialect === 'postgres'
+  const python = dialect === 'python'
   if (running && !pg)
     return (
-      <button className="btn btn-danger btn-run shrink-0" onClick={() => void stopQuery(tabId)} title="Stop the running query (Esc in the editor)">
+      <button className="btn btn-danger btn-run shrink-0" onClick={() => void stopQuery(tabId)} title={python ? 'Stop: restarts Python, so its variables are gone (Esc in the editor)' : 'Stop the running query (Esc in the editor)'}>
         <Square size={12} fill="currentColor" /> Stop
       </button>
     )
   return (
-    <button className="btn btn-primary btn-run shrink-0" onClick={runActive} disabled={engine.status !== 'ready' || running} title="Run the selection, or the whole tab (Ctrl+Enter, F5)">
+    <button className="btn btn-primary btn-run shrink-0" onClick={runActive} disabled={engine.status !== 'ready' || running} title={python ? 'Run the selection, or every cell in order (Ctrl+Enter, F5); the cell at the cursor: Shift+Enter' : 'Run the selection, or the whole tab (Ctrl+Enter, F5)'}>
       {running ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />} Run
     </button>
   )
@@ -118,12 +153,12 @@ const isMac = /Mac|iPhone|iPad/.test(navigator.platform)
 const mod = isMac ? '⌘' : 'Ctrl+'
 
 /** The editor's own commands as buttons: hints at the keys on a computer, the only way on a phone. */
-function EditorTools() {
+function EditorTools({ python }: { python: boolean }) {
   const tools: [string, string, React.ReactNode, () => void][] = [
     ['Undo', `${mod}Z`, <Undo2 size={14} />, () => editorCommand('undo')],
     ['Redo', isMac ? '⇧⌘Z' : 'Ctrl+Y', <Redo2 size={14} />, () => editorCommand('redo')],
     ['Comment or uncomment the lines', `${mod}/`, <SquareSlash size={14} />, () => editorCommand('comment')],
-    ['Format SQL (the selection, or the whole tab)', isMac ? '⇧⌥F' : 'Shift+Alt+F', <WandSparkles size={14} />, formatActiveTab],
+    ...(python ? [] : [['Format SQL (the selection, or the whole tab)', isMac ? '⇧⌥F' : 'Shift+Alt+F', <WandSparkles size={14} />, formatActiveTab] as [string, string, React.ReactNode, () => void]]),
     ['Find and replace', `${mod}F`, <Search size={14} />, () => editorCommand('find')],
   ]
   return (

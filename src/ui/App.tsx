@@ -17,6 +17,7 @@ import { PracticeDialog, TaskBar } from './Practice'
 import { DialectBar } from './DialectBar'
 import { applyUpdate, useUpdateReady } from '../pwa/register'
 import { engineLoadingLabel, engineLoadingShort } from './EngineLoading'
+import { PYTHON_STARTER } from '../data/demo'
 import { addTab, closeTabs, downloadBackup, duplicateTab, enqueueFiles, openAbout, openCatalog, openShare, openWelcome, pasteTable, pasteTableFromClipboard, renameTab, reopenClosedTab, useLab } from './store'
 import { AppearanceButton } from './Appearance'
 import { Menu, useLongPress, type MenuItem } from './Menu'
@@ -234,6 +235,7 @@ function FileMenu() {
   }
   const items: MenuItem[] = [
     ['New query tab', () => addTab()],
+    ['New Python tab', () => addTab(PYTHON_STARTER, `Python ${useLab.getState().tabs.filter((t) => t.dialect === 'python').length + 1}`, 'python')],
     ['Open a .sql file…', () => void openSqlFile(), { keys: `${mod}O` }],
     ['Save', () => void save(false), { keys: `${mod}S` }],
     ['Save as…', () => void save(true), { keys: isMac ? '⇧⌘S' : 'Ctrl+Shift+S' }],

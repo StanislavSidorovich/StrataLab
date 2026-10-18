@@ -30,9 +30,14 @@ import { hashWithoutTask, taskById, taskFromHash, taskStarter, type PracticeExam
 import { decodeShare, hashWithoutShare, shareDataFromHash } from '../core/shareLink'
 import { historyTabTitle, parseHistory, remember, type HistoryEntry } from '../core/history'
 import { explainStatement, lastStatement, parseDuckPlan, parsePgPlan, readsOnly, type Plan } from '../core/plan'
+import { onKernelState, runCell, startKernel, stopKernel, STOPPED_PY, type KernelState } from '../python/kernel'
+import type { CellRun, Output } from '../core/ipynb'
 
-/** What a query tab speaks (stage 4): DuckDB itself, T-SQL translated to DuckDB, or PostgreSQL (PGlite). */
-export type Dialect = 'duckdb' | 'tsql' | 'postgres'
+/** What a tab speaks: DuckDB itself, T-SQL translated to DuckDB, PostgreSQL (PGlite) (stage 4), or Python (stage 7). */
+export type Dialect = 'duckdb' | 'tsql' | 'postgres' | 'python'
+
+/** The SQL dialects (the ones a share link and Explain know). */
+export const isSqlDialect = (d: Dialect): d is Exclude<Dialect, 'python'> => d !== 'python'
 
 export interface QueryTab {
   id: string
@@ -68,6 +73,20 @@ export interface TabResult {
   limit?: number
   /** the result had more rows than `limit`: `table` holds the first `limit` */
   more?: boolean
+  /** a Python tab's run: the cells it ran, with their outputs (the grid shows the last DataFrame) */
+  cells?: PyCellRun[]
+}
+
+/** One cell of a Python run: where it is in the tab, its number in the session ([3]) and its outputs. */
+export interface PyCellRun {
+  /** the cell's index in the tab (src/core/pyCells.ts), or -1 for a selection */
+  index: number
+  line: number
+  count: number
+  outputs: Output[]
+  /** the output shown in the grid (the run's last DataFrame), if it is this cell's */
+  gridAt?: number
+  running?: boolean
 }
 
 /** A tab's query plan (Explain): being made, made, or failed. */
@@ -164,6 +183,10 @@ interface State {
   practice: PracticeProgress
   /** per tab, a practice task's last Check */
   checks: Record<string, CheckState>
+  /** the Python session of Python tabs (stage 7) */
+  python: KernelState
+  /** per Python tab, each cell's last run, by its source (for Download as notebook) */
+  cellRuns: Record<string, Record<string, CellRun>>
 }
 
 export interface PracticeProgress {
@@ -274,6 +297,8 @@ export const useLab = create<State>(() => ({
   practiceOpen: false,
   practice: loadPractice(),
   checks: {},
+  python: { status: 'off' },
+  cellRuns: {},
 }))
 
 /** The user's own tables and views (schema main), without the catalog datasets. */
@@ -352,7 +377,7 @@ export function clearHistory() {
 
 /** A query from the history, in a new tab of its dialect (not run). */
 export function openFromHistory(e: HistoryEntry) {
-  const dialect = (['duckdb', 'tsql', 'postgres'] as const).find((d) => d === e.dialect)
+  const dialect = (['duckdb', 'tsql', 'postgres', 'python'] as const).find((d) => d === e.dialect)
   addTab(e.sql, historyTabTitle(e), dialect)
   set({ resultView: 'result' })
 }
@@ -420,6 +445,7 @@ export async function runSql(tabId: string, sql: string, limit?: number) {
   limit ??= nextRowLimit.get(tabId) ?? ROW_LIMIT
   nextRowLimit.delete(tabId)
   const dialect = tabDialect(get().tabs.find((t) => t.id === tabId))
+  if (dialect === 'python') return runPython(tabId, [{ code: sql, line: 1, index: -1 }])
   stopped.delete(tabId)
   set((s) => ({ results: { ...s.results, [tabId]: { ...s.results[tabId], status: 'running' } } }))
   if (dialect === 'postgres') return runOnPostgres(tabId, sql, limit)
@@ -480,6 +506,7 @@ const stopped = new Set<string>()
 /** The Stop button (Esc in the editor): cancels the tab's DuckDB query or Explain. PostgreSQL tabs can't be stopped. */
 export async function stopQuery(tabId: string) {
   if (get().results[tabId]?.status !== 'running' && get().plans[tabId]?.status !== 'running') return
+  if (tabDialect(get().tabs.find((t) => t.id === tabId)) === 'python') return restartPython()
   stopped.add(tabId)
   await cancelQuery(tabId)
 }
@@ -493,6 +520,7 @@ export async function stopQuery(tabId: string) {
 export async function explainSql(tabId: string, sql: string) {
   if (!sql.trim() || get().plans[tabId]?.status === 'running') return
   const dialect = tabDialect(get().tabs.find((t) => t.id === tabId))
+  if (dialect === 'python') return
   const put = (p: PlanState) => set((s) => ({ plans: { ...s.plans, [tabId]: p } }))
   stopped.delete(tabId)
   set({ resultView: 'plan' })
@@ -558,8 +586,110 @@ export function setResultView(view: State['resultView']) {
 }
 
 export function setTabDialect(id: string, dialect: Dialect) {
-  set((s) => ({ tabs: s.tabs.map((t) => (t.id === id ? { ...t, dialect } : t)), resultView: s.resultView === 'translation' && dialect !== 'tsql' ? 'result' : s.resultView }))
+  const view = (v: State['resultView']) => (v === 'translation' && dialect !== 'tsql') || (v === 'plan' && dialect === 'python') ? 'result' : v
+  set((s) => ({ tabs: s.tabs.map((t) => (t.id === id ? { ...t, dialect } : t)), resultView: view(s.resultView) }))
   if (dialect === 'postgres') void startPostgres()
+  if (dialect === 'python') void startPython()
+}
+
+// ------------------------------------------------------------------ Python tabs (stage 7)
+
+onKernelState((python) => set({ python }))
+
+/** Starts the Python session (a download the first time); errors show in the bar above the editor. */
+export function startPython() {
+  startKernel().catch(() => {})
+}
+
+/** Restart Python (and Stop of a Python run): the session's variables are gone. */
+export function restartPython() {
+  stopKernel()
+  set((s) => {
+    const results = { ...s.results }
+    for (const [id, r] of Object.entries(results))
+      if (r.status === 'running') results[id] = { ...r, status: 'error', error: STOPPED_PY, cells: r.cells?.filter((c) => !c.running) }
+    return { results }
+  })
+}
+
+/** The tables and views Python's lab.tables() lists: `name` in My tables, `schema.name` elsewhere. */
+const pythonNames = () => get().tables.map((t) => (t.schema === 'main' ? t.name : `${t.schema}.${t.name}`))
+
+/**
+ * Runs cells of a Python tab in order (all of them, one, or a selection as one cell), stopping at
+ * the first that fails, as Jupyter's Run All does. Each cell's outputs show as it ends; the grid
+ * shows the last DataFrame a cell showed; lab.save calls are written to DuckDB after their cell.
+ */
+export async function runPython(tabId: string, cells: { code: string; line: number; index: number; source?: string }[]) {
+  const todo = cells.filter((c) => c.code.trim())
+  if (!todo.length || get().results[tabId]?.status === 'running') return
+  const t0 = performance.now()
+  const runs: PyCellRun[] = []
+  let table: Table | undefined
+  let more = false
+  const put = (status: TabResult['status'], extra: Partial<TabResult> = {}) =>
+    set((s) => ({ results: { ...s.results, [tabId]: { status, cells: [...runs], table, more, limit: ROW_LIMIT, ms: performance.now() - t0, ...extra } } }))
+  set({ resultView: 'result' })
+  put('running')
+  const what = todo.length === 1 ? (todo[0].index >= 0 ? `cell ${todo[0].index + 1}` : 'selection') : `${todo.length} cells`
+  const sql = todo.map((c) => c.code).join('\n\n')
+  try {
+    for (const c of todo) {
+      runs.push({ index: c.index, line: c.line, count: 0, outputs: [], running: true })
+      put('running')
+      const r = await runCell(c.code, c.line, pythonNames())
+      runs[runs.length - 1] = { index: c.index, line: c.line, count: r.count, outputs: r.result.outputs }
+      if (r.grid) {
+        table = r.grid
+        more = r.gridTotal > r.grid.numRows
+        for (let k = 0; k < runs.length; k++) runs[k] = { ...runs[k], gridAt: k === runs.length - 1 ? (r.result.grid_at ?? undefined) : undefined }
+      }
+      if (c.source != null)
+        set((s) => ({ cellRuns: { ...s.cellRuns, [tabId]: { ...s.cellRuns[tabId], [c.source!]: { count: r.count, outputs: r.result.outputs } } } }))
+      for (const sv of r.saves) {
+        const error = await writeTable(sv.table, sv.name)
+        const last = runs[runs.length - 1]
+        runs[runs.length - 1] = { ...last, outputs: [...last.outputs] }
+        runs[runs.length - 1].outputs.push(
+          error
+            ? { output_type: 'stream', name: 'stderr', text: `lab.save: could not save ${sv.name}: ${error}\n` }
+            : { output_type: 'stream', name: 'stdout', text: `lab.save: ${sv.table.numRows.toLocaleString()} rows saved as table ${sv.name}\n` },
+        )
+      }
+      put('running')
+      const failed = r.result.outputs.find((o) => o.output_type === 'error')
+      if (failed) {
+        put('done')
+        logRun(tabId, { sql, ok: false, text: `${failed.ename}: ${failed.evalue}`.split('\n')[0] })
+        return
+      }
+    }
+    put('done')
+    logRun(tabId, { sql, ok: true, text: `Python, ${what} · ${((performance.now() - t0) / 1000).toFixed(1)} s${table ? ` · ${rowsText(table.numRows, more)}` : ''}` })
+  } catch (e) {
+    const error = String(e instanceof Error ? e.message : e)
+    put('error', { error: error === STOPPED_PY ? error : `Python Error: ${error}`, cells: runs.filter((c) => !c.running) })
+    logRun(tabId, { sql, ok: false, text: error.split('\n')[0] })
+  }
+}
+
+/** A DataFrame from lab.save into My tables, replacing a table of that name; the error, if any. */
+async function writeTable(table: Table, name: string): Promise<string | null> {
+  const same = ownTables(get().tables).find((t) => t.name.toLowerCase() === name.toLowerCase())
+  if (same?.kind === 'view') return `${same.name} is a view`
+  const target = quoteIdent(name)
+  const tmp = `__save_${Date.now()}`
+  try {
+    await insertArrow(table, tmp)
+    await query(`DROP TABLE IF EXISTS ${target}`)
+    await query(`ALTER TABLE ${quoteIdent(tmp)} RENAME TO ${target}`)
+    await checkpoint()
+    await refreshCatalog()
+    return null
+  } catch (e) {
+    await query(`DROP TABLE IF EXISTS ${quoteIdent(tmp)}`).catch(() => {})
+    return String(e instanceof Error ? e.message : e)
+  }
 }
 
 // ------------------------------------------------------------------ PostgreSQL mode (stage 4)
@@ -654,6 +784,7 @@ export function addTab(sql = '', title?: string, dialect?: Dialect) {
     return { tabs: [...s.tabs, { id, title: title ?? `Query ${n}`, sql, ...(dialect && dialect !== 'duckdb' ? { dialect } : {}) }], activeTab: id }
   })
   if (dialect === 'postgres') void startPostgres()
+  if (dialect === 'python') startPython()
   return id
 }
 

@@ -8,6 +8,7 @@ import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { swFiles } from './src/core/pwa.ts'
 import { EXTENSIONS_DIR } from './src/core/extensions.ts'
+import { hasOwnPackages, PYODIDE_DIR as PY_DIR, servedImports } from './src/core/python.ts'
 import { isLicenseFile, licenseOf, licensesText, packageOf, sourceUrl, type Notice } from './src/core/licenses.ts'
 
 // The .wasm is served gzip-compressed, so the browser can't tell how big it is
@@ -33,6 +34,13 @@ const PYODIDE_FILES: Record<string, string> = {
   'python_stdlib.zip': 'application/zip',
   'pyodide-lock.json': 'application/json',
 }
+
+// Pandas, matplotlib and seaborn for Python tabs (stage 7), next to Pyodide in public/pyodide/
+// (scripts/fetch-python-packages.mjs); without all of them the worker takes them from jsDelivr.
+const PYODIDE_VERSION = JSON.parse(readFileSync(join(PYODIDE_DIR, 'package.json'), 'utf8')).version
+const pyDir = join('public', PY_DIR)
+const pyodideLock = JSON.parse(readFileSync(join(PYODIDE_DIR, 'pyodide-lock.json'), 'utf8'))
+const ownPython = hasOwnPackages(existsSync(pyDir) ? readdirSync(pyDir) : [], pyodideLock)
 
 function pyodideFiles(): Plugin {
   return {
@@ -91,6 +99,10 @@ function thirdPartyLicenses(packages: Map<string, string>): string {
     { name: 'DuckDB extensions: parquet, icu (duckdb-ext/)', license: 'MIT; ICU: Unicode-3.0 and others', url: 'https://github.com/duckdb/duckdb', texts: [DUCKDB_EXT_NOTICE()] },
     { name: 'CPython standard library (in Pyodide)', license: 'PSF-2.0', url: 'https://github.com/python/cpython', texts: [legal('cpython.txt')] },
     { name: 'sqlglot (sqlglot/)', license: 'MIT', url: 'https://github.com/tobymao/sqlglot', texts: [readFileSync('public/sqlglot/NOTICE.md', 'utf8')] },
+    // Pandas, matplotlib, seaborn and what they need (scripts/fetch-python-packages.mjs writes the notice).
+    ...(existsSync(join(pyDir, 'python-packages-NOTICE.txt'))
+      ? [{ name: 'Python packages for Python tabs (pyodide/*.whl)', license: 'BSD-3-Clause, MIT, matplotlib License and others: see below', url: 'https://github.com/pyodide/pyodide', texts: [readFileSync(join(pyDir, 'python-packages-NOTICE.txt'), 'utf8')] }]
+      : []),
     { name: 'Sample datasets (datasets/)', license: 'MIT, BSD-2-Clause, CC BY-NC-SA 4.0: see below', texts: [readFileSync('public/datasets/NOTICE.md', 'utf8')] },
   )
   return licensesText(
@@ -174,6 +186,9 @@ export default defineConfig({
   define: {
     __DUCKDB_WASM_BYTES__: JSON.stringify({ eh: wasmBytes('duckdb-eh.wasm'), mvp: wasmBytes('duckdb-mvp.wasm') }),
     __OWN_DUCKDB_EXTENSIONS__: JSON.stringify(ownExtensions),
+    __OWN_PYTHON_PACKAGES__: JSON.stringify(ownPython),
+    __PYODIDE_VERSION__: JSON.stringify(PYODIDE_VERSION),
+    __PYTHON_IMPORTS__: JSON.stringify(servedImports(pyodideLock)),
     __APP_VERSION__: JSON.stringify(JSON.parse(readFileSync('package.json', 'utf8')).version),
   },
   build: { chunkSizeWarningLimit: 2000 },
