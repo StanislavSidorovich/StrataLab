@@ -127,7 +127,7 @@ export function App() {
         </div>
       )}
       {dragging && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center pointer-events-none" style={{ background: 'rgba(5,150,105,0.12)', border: '3px dashed var(--accent)' }}>
+        <div className="fixed inset-0 z-40 flex items-center justify-center pointer-events-none" style={{ background: 'color-mix(in srgb, var(--q-accent) 12%, transparent)', border: '3px dashed var(--accent)' }}>
           <div className="rounded-xl px-6 py-4 flex items-center gap-3 text-base font-semibold shadow-xl" style={{ background: 'var(--panel)' }}>
             <Upload size={20} style={{ color: 'var(--accent)' }} /> Drop CSV, Excel, Parquet or JSON files to make tables, or onto a table to add rows; .sql files open as query tabs
           </div>
@@ -199,25 +199,8 @@ function TopBar() {
   const updateReady = useUpdateReady()
   return (
     <header className="h-12 shrink-0 flex items-center gap-1 sm:gap-3 px-2 sm:px-3" style={{ background: 'var(--panel)', borderBottom: '1px solid var(--line)' }}>
-      <div className="flex items-center gap-2 font-bold text-[15px] whitespace-nowrap">
-        <svg width="22" height="22" viewBox="0 0 32 32" aria-hidden>
-          <ellipse cx="16" cy="7" rx="11" ry="4" fill="var(--accent)" />
-          <path d="M5 7v18c0 2.2 4.9 4 11 4s11-1.8 11-4V7" fill="none" stroke="var(--accent)" strokeWidth="3" />
-          <path d="M5 16c0 2.2 4.9 4 11 4s11-1.8 11-4" fill="none" stroke="var(--accent)" strokeWidth="2" opacity="0.6" />
-        </svg>
-        Quaera Lab
-      </div>
+      <quaera-switcher app="lab" />
       <FileMenu />
-      <nav className="hidden lg:flex items-center gap-1 ml-2" style={{ color: 'var(--muted)', fontSize: 12 }}>
-        <span>part of</span>
-        <a className="hover:underline" href="https://quaera.app" target="_blank" rel="noreferrer">Quaera</a>
-        <span>·</span>
-        <a className="hover:underline" href="https://model.quaera.app" target="_blank" rel="noreferrer">model</a>
-        <span>·</span>
-        <a className="hover:underline" href="https://flow.quaera.app" target="_blank" rel="noreferrer">flow</a>
-        <span>·</span>
-        <a className="hover:underline" href="https://pandas.quaera.app" target="_blank" rel="noreferrer">pandas</a>
-      </nav>
       <div className="flex-1" />
       <EngineBadge />
       {/* The sidebar (with its catalog button) is hidden on a phone. */}

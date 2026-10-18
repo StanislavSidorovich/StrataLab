@@ -24,7 +24,7 @@ export const SWATCHES: Record<LookPart, Record<Theme, string[]>> = {
   },
   panels: {
     light: ['#ffffff', '#f6f1e4', '#e8f3ec', '#e7eff9', '#efe9f8', '#f9eaec', '#eceef2'],
-    dark: ['#161b23', '#24211b', '#18251f', '#18212e', '#231d2d', '#121418', '#2b3038'],
+    dark: ['#1b1f27', '#24211b', '#18251f', '#18212e', '#231d2d', '#121418', '#2b3038'],
   },
 }
 

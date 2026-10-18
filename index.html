@@ -1,11 +1,12 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-app="lab">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><ellipse cx='16' cy='7' rx='11' ry='4' fill='%2310b981'/><path d='M5 7v18c0 2.2 4.9 4 11 4s11-1.8 11-4V7' fill='none' stroke='%2310b981' stroke-width='3'/><path d='M5 16c0 2.2 4.9 4 11 4s11-1.8 11-4' fill='none' stroke='%2334d399' stroke-width='3'/></svg>" />
+    <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
     <link rel="manifest" href="./manifest.webmanifest" />
-    <meta name="theme-color" content="#10b981" />
+    <meta name="theme-color" content="#15803d" />
     <title>Quaera Lab</title>
     <meta name="description" content="Practise SQL in the browser on your own CSV and Excel files: drop a file, write a JOIN. Free, no install, your data never leaves the browser." />
     <meta property="og:type" content="website" />
@@ -25,7 +26,7 @@
   </head>
   <body>
     <!-- Shown until the app's script arrives; React replaces it. -->
-    <div id="root"><div style="height:100vh;display:flex;align-items:center;justify-content:center;font:14px system-ui,sans-serif;color:#667085">Loading Quaera Lab…</div></div>
+    <div id="root"><div style="height:100vh;display:flex;align-items:center;justify-content:center;font:14px 'IBM Plex Sans',system-ui,sans-serif;color:#667085">Loading Quaera Lab…</div></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

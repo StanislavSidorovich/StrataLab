@@ -109,7 +109,7 @@ function completionSchema(tables: TableInfo[], plain: string) {
 const lightTheme = EditorView.theme({
   '&': { backgroundColor: 'var(--code-bg)', color: 'var(--text)' },
   '.cm-gutters': { backgroundColor: 'var(--code-bg)', color: 'var(--muted)', border: 'none' },
-  '.cm-activeLine, .cm-activeLineGutter': { backgroundColor: 'rgba(5,150,105,0.06)' },
+  '.cm-activeLine, .cm-activeLineGutter': { backgroundColor: 'color-mix(in srgb, var(--q-accent) 7%, transparent)' },
 })
 
 // One Dark with its background taken from --code-bg (One Dark's own #282c34 unless changed).

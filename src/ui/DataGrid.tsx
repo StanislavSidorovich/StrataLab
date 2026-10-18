@@ -55,7 +55,7 @@ export function DataGrid({ table, compact = false, onCellMenu }: { table: Table;
           <div className="sticky left-0 shrink-0" style={{ width: numW, background: 'var(--panel-2)' }} />
           {cols.map((c, i) => (
             <div key={i} className="shrink-0 px-2 py-1 truncate" style={{ width: c.width, borderLeft: '1px solid var(--line)', textAlign: c.num ? 'right' : 'left' }} title={`${c.field.name} · ${typeLabel(c.field)}`}>
-              <div className="font-semibold truncate" style={{ fontFamily: 'Inter, Segoe UI, sans-serif' }}>{c.field.name}</div>
+              <div className="font-semibold truncate" style={{ fontFamily: 'var(--q-font-sans)' }}>{c.field.name}</div>
               <div className="truncate" style={{ color: 'var(--muted)', fontSize: 10.5 }}>{typeLabel(c.field)}</div>
             </div>
           ))}

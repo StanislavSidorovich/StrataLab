@@ -189,7 +189,7 @@ function SeriesPicker({ spec, cols, numberCols, onChange }: { spec: ChartSpec; c
   )
 }
 
-const FONT = "Inter, 'Segoe UI', system-ui, -apple-system, sans-serif"
+const FONT = 'var(--q-font-sans)'
 const fmtValue = (v: number | null) => (v == null ? '—' : v.toLocaleString(undefined, { maximumFractionDigits: 4 }))
 
 /** The rounded data end of a bar from `base` to `top` (either way up): square at the baseline. */

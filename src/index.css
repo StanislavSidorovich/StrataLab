@@ -2,15 +2,20 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Neutrals, fonts and the accent come from the family kit (src/family/tokens.css, <html data-app="lab">);
+   the app's own names stay and point at the shared --q-* ones. Chart series, SQL highlighting and the
+   danger / warning colours are Lab's own. Appearance tints (look.ts) override --panel / --code-bg on top. */
+
 :root {
-  --bg: #f6f7f9;
-  --panel: #ffffff;
-  --panel-2: #f1f3f6;
-  --line: #e2e5ea;
-  --text: #1c2330;
-  --muted: #667085;
-  --accent: #059669;
-  --accent-soft: #d1fae5;
+  --bg: var(--q-bg);
+  --panel: var(--q-surface);
+  --panel-2: var(--q-surface-2);
+  --line: var(--q-line);
+  --text: var(--q-text);
+  --muted: var(--q-muted);
+  --accent: var(--q-accent);
+  --accent-soft: color-mix(in srgb, var(--q-accent) 14%, var(--q-surface));
+  --accent-ink: var(--q-accent-ink);
   --danger: #b42318;
   --danger-soft: #fee4e2;
   --warn-soft: #fef3c7;
@@ -28,14 +33,7 @@
 }
 
 .dark {
-  --bg: #0f1218;
-  --panel: #161b23;
-  --panel-2: #1c222c;
-  --line: #2a313d;
-  --text: #e6e9ef;
-  --muted: #98a2b3;
-  --accent: #34d399;
-  --accent-soft: #0d3b2e;
+  --accent-soft: color-mix(in srgb, var(--q-accent) 20%, var(--q-surface));
   --danger: #fda29b;
   --danger-soft: #3b1513;
   --warn-soft: #3a2a07;
@@ -60,12 +58,12 @@ body,
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: Inter, 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-family: var(--q-font-sans);
   font-size: 13px;
 }
 
 .mono {
-  font-family: 'JetBrains Mono', 'Cascadia Code', Consolas, 'SFMono-Regular', monospace;
+  font-family: var(--q-font-mono);
 }
 
 .cm-editor {
@@ -76,7 +74,7 @@ body {
   outline: none;
 }
 .cm-scroller {
-  font-family: 'JetBrains Mono', 'Cascadia Code', Consolas, monospace;
+  font-family: var(--q-font-mono);
 }
 
 button {
@@ -104,11 +102,8 @@ button:disabled {
 .btn-primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--accent-ink);
   font-weight: 600;
-}
-.dark .btn-primary {
-  color: #062b1f;
 }
 .btn-primary:hover:not(:disabled) {
   background: var(--accent);
