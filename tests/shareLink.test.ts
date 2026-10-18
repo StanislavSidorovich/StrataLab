@@ -20,6 +20,12 @@ describe('Share: what a link needs', () => {
     expect(share).toMatchObject({ datasets: [], demo: false })
     expect(notShared).toEqual([])
   })
+  it('takes the trainer’s dataset for a SQLite (Quaera) tab, which names its tables bare', () => {
+    const sqlite = [{ title: 'q', sql: 'SELECT brand, COUNT(*) FROM dim_product GROUP BY brand', dialect: 'sqlite' as const }]
+    expect(planShare(sqlite, loaded).share.datasets).toEqual(['quaera'])
+    expect(planShare(sqlite, { ...loaded, datasets: ['quaera', 'chinook'] }).share.datasets).toEqual(['quaera'])
+    expect(planShare([{ title: 'q', sql: 'SELECT * FROM dim_product' }], { ...loaded, datasets: ['quaera'] }).share.datasets).toEqual([])
+  })
   it('keeps the dialect only when it is not DuckDB', () => {
     const { share } = planShare([{ title: 'a', sql: 'SELECT 1', dialect: 'duckdb' }, { title: 'b', sql: 'SELECT TOP 1 1', dialect: 'tsql' }], loaded)
     expect(share.tabs).toEqual([{ title: 'a', sql: 'SELECT 1' }, { title: 'b', sql: 'SELECT TOP 1 1', dialect: 'tsql' }])
@@ -39,6 +45,15 @@ describe('Share: the link', () => {
     expect(() => parseShare('{"v":1,"t":[{"q":"x","l":"oracle"}]}')).toThrow(/dialect/)
     expect(() => parseShare(JSON.stringify({ v: 1, t: Array.from({ length: MAX_SHARED_TABS + 1 }, () => ({ q: 'x' })) }))).toThrow(/more than/)
     await expect(decodeShare(await packText('x'.repeat(2_000_000)))).rejects.toThrow(/too large/)
+  })
+  it('carries a SQLite (Quaera) tab as l:"sqlite", and reads links made before it', async () => {
+    const share = { datasets: ['quaera'], demo: false, tabs: [{ title: 'sql-010', sql: 'SELECT substr(week_start, 1, 7) FROM fact_sellout', dialect: 'sqlite' as const }] }
+    expect(await decodeShare(await encodeShare(share))).toEqual(share)
+    expect(parseShare('{"v":1,"d":["quaera"],"t":[{"n":"a","q":"SELECT 7 / 2","l":"sqlite"}]}').tabs[0]).toEqual({ title: 'a', sql: 'SELECT 7 / 2', dialect: 'sqlite' })
+    expect(parseShare('{"v":1,"d":[],"t":[{"n":"a","q":"SELECT TOP 1 1","l":"tsql"},{"q":"SELECT 1"}]}').tabs).toEqual([
+      { title: 'a', sql: 'SELECT TOP 1 1', dialect: 'tsql' },
+      { title: 'Shared query', sql: 'SELECT 1' },
+    ])
   })
   it('names an untitled query', () => {
     expect(parseShare('{"v":1,"t":[{"q":"SELECT 1"}]}').tabs[0].title).toBe('Shared query')

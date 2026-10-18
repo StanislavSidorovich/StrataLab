@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { Table } from 'apache-arrow'
-import { cancelQuery, checkpoint, getEngine, insertArrow, isCancelled, query, queryCancellable, queryLimited, type EngineProgress } from '../db/engine'
+import { cancelQuery, checkpoint, getEngine, insertArrow, isCancelled, query, queryCancellable, queryLimited, type EngineProgress, type Session } from '../db/engine'
 import { ROW_LIMIT } from '../core/rowLimit'
 import { loadCatalog, type TableInfo } from '../db/catalog'
 import { closeSource, createTable, openSource, type ImportSource } from '../db/importer'
@@ -19,7 +19,8 @@ import { catalogSchemaState, datasetName, isOwnSchema, linkedTables } from '../c
 import { schemaForModel, showAsModel } from '../db/modelExport'
 import { planGeneration, type GenPlan, type GenTable } from '../core/generate'
 import { runGeneration, type GenOutcome } from '../db/generate'
-import { duckdbScript, translateTsql, type TranslatedStatement, type TranslatorProgress } from '../dialects/tsql'
+import { duckdbScript, translateToDuckdb, type SourceDialect, type TranslatedStatement, type TranslatorProgress } from '../dialects/tsql'
+import { QUAERA_DATASET, sqliteSchema, sqliteSession } from '../core/sqliteDialect'
 import { copyToPostgres, explainPostgres, getPostgres, postgresCatalog, runPostgres } from '../dialects/postgres'
 import { copyTitle, rememberClosed } from '../core/tabs'
 import { backupFileName } from '../core/backup'
@@ -33,8 +34,16 @@ import { explainStatement, lastStatement, parseDuckPlan, parsePgPlan, readsOnly,
 import { onKernelState, runCell, startKernel, stopKernel, STOPPED_PY, type KernelState } from '../python/kernel'
 import type { CellRun, Output } from '../core/ipynb'
 
-/** What a tab speaks: DuckDB itself, T-SQL translated to DuckDB, PostgreSQL (PGlite) (stage 4), or Python (stage 7). */
-export type Dialect = 'duckdb' | 'tsql' | 'postgres' | 'python'
+/**
+ * What a tab speaks: DuckDB itself, T-SQL translated to DuckDB, PostgreSQL (PGlite) (stage 4),
+ * Python (stage 7), or SQLite as the Quaera trainer runs it, translated to DuckDB.
+ */
+export type Dialect = 'duckdb' | 'tsql' | 'postgres' | 'python' | 'sqlite'
+
+/** Dialects sqlglot translates to DuckDB before they run (with the side-by-side view). */
+export const isTranslated = (d: Dialect): d is SourceDialect => d === 'tsql' || d === 'sqlite'
+
+const DIALECT_NAME: Record<SourceDialect, string> = { tsql: 'T-SQL', sqlite: 'SQLite' }
 
 /** The SQL dialects (the ones a share link and Explain know). */
 export const isSqlDialect = (d: Dialect): d is Exclude<Dialect, 'python'> => d !== 'python'
@@ -49,7 +58,7 @@ export interface QueryTab {
   task?: string
 }
 
-/** A T-SQL tab's translation to DuckDB: being made, made, or failed. */
+/** A T-SQL or SQLite tab's translation to DuckDB: being made, made, or failed. */
 export type TranslationState =
   | { status: 'loading'; progress: TranslatorProgress }
   | { status: 'done'; statements: TranslatedStatement[]; ms: number }
@@ -156,7 +165,7 @@ interface State {
   generate: GenerateState | null
   /** the welcome screen (what's where, how to start) is open */
   welcomeOpen: boolean
-  /** per tab, for T-SQL tabs */
+  /** per tab, for T-SQL and SQLite tabs */
   translations: Record<string, TranslationState>
   postgres: PostgresState
   pgTables: TableInfo[]
@@ -377,7 +386,7 @@ export function clearHistory() {
 
 /** A query from the history, in a new tab of its dialect (not run). */
 export function openFromHistory(e: HistoryEntry) {
-  const dialect = (['duckdb', 'tsql', 'postgres', 'python'] as const).find((d) => d === e.dialect)
+  const dialect = (['duckdb', 'tsql', 'postgres', 'python', 'sqlite'] as const).find((d) => d === e.dialect)
   addTab(e.sql, historyTabTitle(e), dialect)
   set({ resultView: 'result' })
 }
@@ -451,14 +460,19 @@ export async function runSql(tabId: string, sql: string, limit?: number) {
   if (dialect === 'postgres') return runOnPostgres(tabId, sql, limit)
   let toRun = sql
   let statements: string[] = [sql]
-  if (dialect === 'tsql') {
+  let session: Session | undefined
+  if (isTranslated(dialect)) {
+    if (dialect === 'sqlite') {
+      await ensureQuaera()
+      session = sqliteSession(get().schemas)
+    }
     const translated = await translate(tabId, sql)
     if (!translated) return
     const bad = translated.find((st) => st.error)
     if (bad) {
       const n = translated.indexOf(bad) + 1
-      set((s) => ({ resultView: 'translation', results: { ...s.results, [tabId]: { status: 'error', error: `Translation Error: statement ${n} could not be read as T-SQL: ${bad.error}` } } }))
-      logRun(tabId, { sql, ok: false, text: `T-SQL statement ${n}: ${bad.error}` })
+      set((s) => ({ resultView: 'translation', results: { ...s.results, [tabId]: { status: 'error', error: `Translation Error: statement ${n} could not be read as ${DIALECT_NAME[dialect]}: ${bad.error}` } } }))
+      logRun(tabId, { sql, ok: false, text: `${DIALECT_NAME[dialect]} statement ${n}: ${bad.error}` })
       return
     }
     toRun = duckdbScript(translated)
@@ -469,14 +483,14 @@ export async function runSql(tabId: string, sql: string, limit?: number) {
   const t0 = performance.now()
   const isStopped = () => stopped.has(tabId)
   try {
-    let { table, more } = await queryLimited(statements[0], tabId, isStopped, limit)
+    let { table, more } = await queryLimited(statements[0], tabId, isStopped, limit, session)
     for (const st of statements.slice(1)) {
-      const next = await queryLimited(st, tabId, isStopped, limit)
+      const next = await queryLimited(st, tabId, isStopped, limit, session)
       if (next.table.numCols > 0) ({ table, more } = next)
     }
     const ms = performance.now() - t0
     set((s) => ({ results: { ...s.results, [tabId]: { status: 'done', table, ms, sql, limit, more } } }))
-    logRun(tabId, { sql, ok: true, text: `${rowsText(table.numRows, more)} · ${ms.toFixed(0)} ms${dialect === 'tsql' ? ' · T-SQL translated to DuckDB' : ''}` })
+    logRun(tabId, { sql, ok: true, text: `${rowsText(table.numRows, more)} · ${ms.toFixed(0)} ms${isTranslated(dialect) ? ` · ${DIALECT_NAME[dialect]} translated to DuckDB` : ''}` })
     // Always: the saved database must hold every change (src/db/engine.ts empties the WAL on
     // start), and a CHECKPOINT with nothing to write costs next to nothing.
     await checkpoint()
@@ -491,16 +505,16 @@ export async function runSql(tabId: string, sql: string, limit?: number) {
       if (WRITES.test(toRun)) await refreshCatalog()
       return
     }
-    const error = String(e instanceof Error ? e.message : e)
-    // In a T-SQL tab the hints are what the translation is for; they'd only repeat it.
-    set((s) => ({ results: { ...s.results, [tabId]: { status: 'error', error, hints: dialect === 'tsql' ? [] : dialectHints(sql), ms: performance.now() - t0 } } }))
+    const error = String(e instanceof Error ? e.message : e) + (dialect === 'sqlite' ? quaeraMissing(e) : '')
+    // In a translated tab the hints (SQL Server habits) are what the translation is for.
+    set((s) => ({ results: { ...s.results, [tabId]: { status: 'error', error, hints: isTranslated(dialect) ? [] : dialectHints(sql), ms: performance.now() - t0 } } }))
     logRun(tabId, { sql, ok: false, text: error.split('\n')[0] })
   }
 }
 
 export const STOPPED = 'Stopped: the query was cancelled before it finished.'
 
-/** Tabs whose run was stopped: a T-SQL script checks this between its statements. */
+/** Tabs whose run was stopped: a translated script checks this between its statements. */
 const stopped = new Set<string>()
 
 /** The Stop button (Esc in the editor): cancels the tab's DuckDB query or Explain. PostgreSQL tabs can't be stopped. */
@@ -514,8 +528,8 @@ export async function stopQuery(tabId: string) {
 /**
  * The Explain button: the plan of the tab's last statement (or the selection's), shown under the
  * editor. A query that only reads is run (EXPLAIN ANALYZE: real rows and times); one that could
- * change data is only planned, so Explain never changes a table. A T-SQL tab explains its DuckDB
- * translation.
+ * change data is only planned, so Explain never changes a table. A T-SQL or SQLite tab explains its
+ * DuckDB translation.
  */
 export async function explainSql(tabId: string, sql: string) {
   if (!sql.trim() || get().plans[tabId]?.status === 'running') return
@@ -526,15 +540,25 @@ export async function explainSql(tabId: string, sql: string) {
   set({ resultView: 'plan' })
   put({ status: 'running' })
   const notes: string[] = []
+  let session: Session | undefined
   try {
     let script = sql
-    if (dialect === 'tsql') {
+    if (isTranslated(dialect)) {
+      const name = DIALECT_NAME[dialect]
+      if (dialect === 'sqlite') {
+        await ensureQuaera()
+        session = sqliteSession(get().schemas)
+      }
       const translated = await translate(tabId, sql)
-      if (!translated) throw new Error('the T-SQL could not be translated to DuckDB (see T-SQL → DuckDB)')
+      if (!translated) throw new Error(`the ${name} could not be translated to DuckDB (see ${name} → DuckDB)`)
       const bad = translated.findIndex((st) => st.error)
-      if (bad >= 0) throw new Error(`statement ${bad + 1} could not be read as T-SQL: ${translated[bad].error}`)
+      if (bad >= 0) throw new Error(`statement ${bad + 1} could not be read as ${name}: ${translated[bad].error}`)
       script = translated.map((st) => st.target).join(';\n')
-      notes.push('This is the plan of the DuckDB translation, which is what runs here. SQL Server makes its own plan for the T-SQL (in SSMS: Include Actual Execution Plan, Ctrl+M).')
+      notes.push(
+        dialect === 'tsql'
+          ? 'This is the plan of the DuckDB translation, which is what runs here. SQL Server makes its own plan for the T-SQL (in SSMS: Include Actual Execution Plan, Ctrl+M).'
+          : 'This is the plan of the DuckDB translation, which is what runs here. SQLite plans the query its own way (EXPLAIN QUERY PLAN in SQLite).',
+      )
     }
     const { statement, count } = lastStatement(script)
     if (!statement) throw new Error('there is no statement to explain')
@@ -547,7 +571,7 @@ export async function explainSql(tabId: string, sql: string) {
       await startPostgres()
       plan = parsePgPlan(await explainPostgres(explain), analyze)
     } else {
-      const table = await queryCancellable(explain, tabId, () => stopped.has(tabId))
+      const table = await queryCancellable(explain, tabId, () => stopped.has(tabId), session)
       // DuckDB: one row, the plan's JSON in the last column (explain_value / analyzed_plan).
       plan = parseDuckPlan(String(table.getChildAt(table.numCols - 1)?.get(0) ?? ''), analyze)
     }
@@ -558,13 +582,15 @@ export async function explainSql(tabId: string, sql: string) {
   }
 }
 
-/** Translates a T-SQL tab's script to DuckDB (loading Python the first time); null if that failed. */
+/** Translates a T-SQL or SQLite tab's script to DuckDB (loading Python the first time); null if that failed. */
 export async function translate(tabId: string, sql: string): Promise<TranslatedStatement[] | null> {
   const t0 = performance.now()
   const put = (t: TranslationState) => set((s) => ({ translations: { ...s.translations, [tabId]: t } }))
+  const dialect = tabDialect(get().tabs.find((t) => t.id === tabId))
+  const read: SourceDialect = dialect === 'sqlite' ? 'sqlite' : 'tsql'
   put({ status: 'loading', progress: 'download' })
   try {
-    const statements = await translateTsql(sql, (progress) => put({ status: 'loading', progress }))
+    const statements = await translateToDuckdb(sql, read, read === 'sqlite' ? sqliteSchema(get().tables) : null, (progress) => put({ status: 'loading', progress }))
     put({ status: 'done', statements, ms: performance.now() - t0 })
     return statements
   } catch (e) {
@@ -586,10 +612,27 @@ export function setResultView(view: State['resultView']) {
 }
 
 export function setTabDialect(id: string, dialect: Dialect) {
-  const view = (v: State['resultView']) => (v === 'translation' && dialect !== 'tsql') || (v === 'plan' && dialect === 'python') ? 'result' : v
+  const view = (v: State['resultView']) => (v === 'translation' && !isTranslated(dialect)) || (v === 'plan' && dialect === 'python') ? 'result' : v
   set((s) => ({ tabs: s.tabs.map((t) => (t.id === id ? { ...t, dialect } : t)), resultView: view(s.resultView) }))
   if (dialect === 'postgres') void startPostgres()
+  if (dialect === 'sqlite') void ensureQuaera()
   if (dialect === 'python') void startPython()
+}
+
+/**
+ * A SQLite (Quaera) tab queries the trainer's tables by their bare names: their dataset is loaded
+ * when it isn't (never over a schema of the user's that has its name; the query then says so).
+ */
+export async function ensureQuaera() {
+  const d = datasetById(QUAERA_DATASET)
+  if (!d || get().dataset?.phase === 'loading' || catalogState(d).state !== 'absent') return
+  await fetchDataset(d)
+}
+
+/** What a SQLite tab adds when a table isn't there and the trainer's dataset isn't loaded. */
+function quaeraMissing(e: unknown): string {
+  if (!/Table with name \S+ does not exist/i.test(String(e instanceof Error ? e.message : e)) || get().schemas.includes(QUAERA_DATASET)) return ''
+  return '\n\nA SQLite (Quaera) tab reads the Quaera trainer’s tables (Kaiyo Trading), and that dataset is not loaded: open it from Sample databases, then run again.'
 }
 
 // ------------------------------------------------------------------ Python tabs (stage 7)

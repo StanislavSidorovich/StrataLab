@@ -5,7 +5,7 @@ import { useEffect, useRef } from 'react'
 import { EditorView, basicSetup } from 'codemirror'
 import { keymap } from '@codemirror/view'
 import { Compartment, EditorState, Prec } from '@codemirror/state'
-import { MSSQL, PostgreSQL, sql } from '@codemirror/lang-sql'
+import { MSSQL, PostgreSQL, SQLite, sql } from '@codemirror/lang-sql'
 import { python } from '@codemirror/lang-python'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { isolateHistory, redo, toggleComment, undo } from '@codemirror/commands'
@@ -13,6 +13,7 @@ import { openSearchPanel } from '@codemirror/search'
 import { runPython, runSql, setTabSql, stopQuery, tabDialect, useLab, type Dialect } from './store'
 import { cellAt, splitCells } from '../core/pyCells'
 import type { TableInfo } from '../db/catalog'
+import { QUAERA_DATASET } from '../core/sqliteDialect'
 
 const language = new Compartment()
 const theme = new Compartment()
@@ -89,7 +90,7 @@ function runIn(v: EditorView, id: string) {
   else void runSql(id, currentSql(v))
 }
 
-const FORMATTER_LANGUAGE = { duckdb: 'duckdb', tsql: 'transactsql', postgres: 'postgresql' } as const
+const FORMATTER_LANGUAGE = { duckdb: 'duckdb', tsql: 'transactsql', postgres: 'postgresql', sqlite: 'sqlite' } as const
 
 /**
  * Format SQL (Shift+Alt+F): the selection, or the whole tab, in the tab's dialect. One change,
@@ -127,14 +128,14 @@ export function formatActiveTab() {
   void formatActive(tabDialect(s.tabs.find((t) => t.id === s.activeTab))).catch(formatError)
 }
 
-/** Completion: the default schema's tables as they are, others after their schema name (chinook.Track). */
-function completionSchema(tables: TableInfo[], plain: string) {
+/**
+ * Completion: the tables of the schemas a bare name reaches as they are (the first schema wins a
+ * name), the others after their schema name (chinook.Track).
+ */
+function completionSchema(tables: TableInfo[], ...plain: string[]) {
   const schema: Record<string, string[] | Record<string, string[]>> = {}
-  for (const t of tables) {
-    const cols = t.columns.map((c) => c.name)
-    if (t.schema === plain) schema[t.name] = cols
-    else ((schema[t.schema] ??= {}) as Record<string, string[]>)[t.name] = cols
-  }
+  for (const t of tables) if (!plain.includes(t.schema)) ((schema[t.schema] ??= {}) as Record<string, string[]>)[t.name] = t.columns.map((c) => c.name)
+  for (const p of plain) for (const t of tables) if (t.schema === p && !(t.name in schema)) schema[t.name] = t.columns.map((c) => c.name)
   return schema
 }
 
@@ -163,13 +164,16 @@ export function SqlEditor() {
   const dialect = useLab((s) => tabDialect(s.tabs.find((t) => t.id === s.activeTab)))
   const dark = useLab((s) => s.theme === 'dark')
 
-  // A PostgreSQL tab completes PostgreSQL's tables; T-SQL highlights as SQL Server.
+  // A PostgreSQL tab completes PostgreSQL's tables; T-SQL highlights as SQL Server; a SQLite tab
+  // names the trainer's tables bare, as its search path does.
   const langExt = () =>
     dialect === 'python'
       ? python()
       : dialect === 'postgres'
       ? sql({ dialect: PostgreSQL, schema: completionSchema(pgTables, 'public'), upperCaseKeywords: false })
-      : sql({ dialect: dialect === 'tsql' ? MSSQL : PostgreSQL, schema: completionSchema(tables, 'main'), upperCaseKeywords: false })
+      : dialect === 'sqlite'
+        ? sql({ dialect: SQLite, schema: completionSchema(tables, QUAERA_DATASET, 'main'), upperCaseKeywords: false })
+        : sql({ dialect: dialect === 'tsql' ? MSSQL : PostgreSQL, schema: completionSchema(tables, 'main'), upperCaseKeywords: false })
   const themeExt = () => (dark ? [Prec.high(darkBackground), oneDark] : lightTheme)
 
   const makeState = (id: string, doc: string) =>

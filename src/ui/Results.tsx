@@ -6,7 +6,7 @@ import { PlanView } from './PlanView'
 import { PythonOutput } from './PythonOutput'
 import { EngineLoading } from './EngineLoading'
 import { Menu, type MenuItem } from './Menu'
-import { STOPPED, clearHistory, setNextRowLimit, openFromHistory, ownTables, runSql, saveResultAsTable, setResultView, setTabDialect, tabDialect, useLab } from './store'
+import { STOPPED, clearHistory, isTranslated, setNextRowLimit, openFromHistory, ownTables, runSql, saveResultAsTable, setResultView, setTabDialect, tabDialect, useLab } from './store'
 import { historyDay, searchHistory } from '../core/history'
 import { TranslationView } from './TranslationView'
 import { sideBySide } from '../core/diff'
@@ -47,10 +47,10 @@ export function Results() {
   const dialect = useLab((s) => tabDialect(s.tabs.find((t) => t.id === s.activeTab)))
   const translation = useLab((s) => s.translations[s.activeTab])
   const stored = useLab((s) => s.resultView)
-  const view = (stored === 'translation' && dialect !== 'tsql') || (stored === 'plan' && dialect === 'python') ? 'result' : stored
+  const view = (stored === 'translation' && !isTranslated(dialect)) || (stored === 'plan' && dialect === 'python') ? 'result' : stored
   const changes = translation?.status === 'done' ? translation.statements.reduce((n, st) => n + (st.target == null ? 1 : sideBySide(st.source, st.target).changes), 0) : null
   const views =
-    dialect === 'tsql'
+    isTranslated(dialect)
       ? (['result', 'chart', 'plan', 'translation', 'messages', 'history'] as const)
       : dialect === 'python'
         ? (['result', 'chart', 'messages', 'history'] as const)
@@ -82,7 +82,7 @@ export function Results() {
             )}
             {v === 'translation' && (
               <>
-                <ArrowLeftRight size={13} /> <span className="hidden sm:inline">T-SQL → </span>DuckDB{changes != null && ` (${changes})`}
+                <ArrowLeftRight size={13} /> <span className="hidden sm:inline">{dialect === 'sqlite' ? 'SQLite' : 'T-SQL'} → </span>DuckDB{changes != null && ` (${changes})`}
               </>
             )}
             {v === 'messages' && (
@@ -195,15 +195,22 @@ function ResultBody() {
     if (!res) return <Empty text={'Run the cells to see their output here: Ctrl+Enter runs every cell, Shift+Enter the cell at the cursor. Tables come in with lab.table("name").'} />
     return <PythonOutput res={res} grid={res.table && res.table.numCols > 0 ? <GridWithMenu table={res.table} /> : null} />
   }
-  if (!res) return <Empty text={`Run a query to see its result here — Ctrl+Enter or F5.${dialect === 'tsql' ? ' It is translated to DuckDB first.' : dialect === 'postgres' ? ' It runs on PostgreSQL.' : ''}`} />
+  if (!res)
+    return (
+      <Empty
+        text={`Run a query to see its result here — Ctrl+Enter or F5.${
+          dialect === 'tsql' ? ' It is translated to DuckDB first.' : dialect === 'sqlite' ? ' It is translated to DuckDB first, over the Quaera trainer’s tables: fact_sellout, dim_product…' : dialect === 'postgres' ? ' It runs on PostgreSQL.' : ''
+        }`}
+      />
+    )
   if (res.status === 'running')
     return (
       <div className="h-full flex items-center justify-center gap-2 p-6 text-center" style={{ color: 'var(--muted)' }}>
         <Loader2 size={16} className="animate-spin shrink-0" />
         {dialect === 'postgres' && pgStarting
           ? 'Starting PostgreSQL: a ~10 MB download the first time, then from the browser’s cache…'
-          : dialect === 'tsql' && translating
-            ? 'Translating T-SQL to DuckDB: the translator (Python + sqlglot, ~12 MB) downloads once…'
+          : isTranslated(dialect) && translating
+            ? `Translating ${dialect === 'sqlite' ? 'SQLite' : 'T-SQL'} to DuckDB: the translator (Python + sqlglot, ~12 MB) downloads once…`
             : dialect === 'postgres'
               ? 'Running…'
               : 'Running… Stop (or Esc in the editor) cancels it.'}
@@ -336,7 +343,7 @@ function Messages() {
   )
 }
 
-const DIALECT_LABEL: Record<string, string> = { tsql: 'T-SQL', postgres: 'PostgreSQL' }
+const DIALECT_LABEL: Record<string, string> = { tsql: 'T-SQL', postgres: 'PostgreSQL', sqlite: 'SQLite' }
 
 /** Queries run from tabs, newest first, grouped by day: click one to open it in a new tab. */
 function HistoryView() {

@@ -1,19 +1,21 @@
-// T-SQL next to the DuckDB SQL it became (stage 4): one row per statement, what was taken out in
-// red on the left, what came in green on the right, and sqlglot's notes under it.
+// T-SQL or SQLite next to the DuckDB SQL it became (stage 4): one row per statement, what was taken
+// out in red on the left, what came in green on the right, and sqlglot's notes under it.
 import { useMemo, useState } from 'react'
 import { AlertTriangle, ClipboardCopy, ExternalLink, Info, Loader2 } from 'lucide-react'
 import { sideBySide, type Segment } from '../core/diff'
 import { SQLGLOT_VERSION, duckdbScript, type TranslatedStatement } from '../dialects/tsql'
-import { addTab, useLab } from './store'
+import { addTab, tabDialect, useLab } from './store'
 
 export function TranslationView() {
   const tabId = useLab((s) => s.activeTab)
   const title = useLab((s) => s.tabs.find((t) => t.id === s.activeTab)?.title ?? 'Query')
   const t = useLab((s) => s.translations[s.activeTab])
+  const sqlite = useLab((s) => tabDialect(s.tabs.find((x) => x.id === s.activeTab)) === 'sqlite')
   const [copied, setCopied] = useState(false)
+  const name = sqlite ? 'SQLite' : 'T-SQL'
 
   if (!t)
-    return <Note>Run the tab, or press “Show translation”, to see the T-SQL next to the DuckDB SQL it becomes.</Note>
+    return <Note>Run the tab, or press “Show translation”, to see the {name} next to the DuckDB SQL it becomes.</Note>
   if (t.status === 'loading')
     return (
       <Note>
@@ -48,23 +50,23 @@ export function TranslationView() {
       </div>
       <div className="flex-1 min-h-0 overflow-auto">
         <div className="hidden sm:grid grid-cols-2 sticky top-0 z-10 font-semibold" style={{ background: 'var(--panel-2)', borderBottom: '1px solid var(--line)', fontSize: 12 }}>
-          <div className="px-3 py-1">SQL Server (T-SQL) — as written</div>
+          <div className="px-3 py-1">{sqlite ? 'SQLite (Quaera trainer)' : 'SQL Server (T-SQL)'} — as written</div>
           <div className="px-3 py-1" style={{ borderLeft: '1px solid var(--line)' }}>DuckDB — what runs</div>
         </div>
         {t.statements.map((st, i) => (
-          <StatementRow key={i} n={i + 1} st={st} />
+          <StatementRow key={i} n={i + 1} st={st} name={name} />
         ))}
       </div>
     </div>
   )
 }
 
-function StatementRow({ n, st }: { n: number; st: TranslatedStatement }) {
+function StatementRow({ n, st, name }: { n: number; st: TranslatedStatement; name: string }) {
   const diff = useMemo(() => (st.target == null ? null : sideBySide(st.source, st.target)), [st])
   return (
     <div style={{ borderBottom: '1px solid var(--line)' }}>
       <div className="grid sm:grid-cols-2">
-        <Code label={`${n} · T-SQL`} segments={diff?.left ?? [{ text: st.source, changed: false }]} kind="old" />
+        <Code label={`${n} · ${name}`} segments={diff?.left ?? [{ text: st.source, changed: false }]} kind="old" />
         <div className="sm:border-l" style={{ borderColor: 'var(--line)' }}>
           {st.target == null ? (
             <div className="p-3 flex gap-2" style={{ color: 'var(--danger)' }}>

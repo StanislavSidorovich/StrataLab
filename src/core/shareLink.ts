@@ -12,7 +12,8 @@ export const MAX_SHARE_BYTES = 1_000_000
 /** More tabs than this in one link are refused (a link is for a few queries, not a workspace). */
 export const MAX_SHARED_TABS = 30
 
-export type SharedDialect = 'duckdb' | 'tsql' | 'postgres'
+/** `sqlite`: SQLite as the Quaera trainer runs it, on its dataset (`quaera`), translated to DuckDB. */
+export type SharedDialect = 'duckdb' | 'tsql' | 'postgres' | 'sqlite'
 
 export interface SharedTab {
   title: string
@@ -29,7 +30,10 @@ export interface Share {
   tabs: SharedTab[]
 }
 
-const DIALECTS = new Set<string>(['duckdb', 'tsql', 'postgres'])
+const DIALECTS = new Set<string>(['duckdb', 'tsql', 'postgres', 'sqlite'])
+
+/** The dataset a SQLite (Quaera) tab reads by bare table names (src/core/sqliteDialect.ts). */
+const SQLITE_DATASET = 'quaera'
 
 /** What a set of tabs needs, and the user's own tables they use that a link can't carry. */
 export function planShare(
@@ -45,7 +49,10 @@ export function planShare(
   const text = tabs.map((t) => stripComments(t.sql)).join('\n')
   const uses = (name: string) => new RegExp(`(^|[^\\w."])"?${escapeRe(name)}"?(?![\\w"])`, 'i').test(text)
   const usesSchema = (schema: string) => new RegExp(`(^|[^\\w."])"?${escapeRe(schema)}"?\\s*\\.`, 'i').test(text)
-  const datasets = loaded.datasets.filter(usesSchema)
+  // A SQLite (Quaera) tab names the trainer's tables bare (fact_sellout), so it needs their dataset.
+  const sqlite = tabs.some((t) => t.dialect === 'sqlite')
+  const datasets = loaded.datasets.filter((id) => usesSchema(id) || (sqlite && id === SQLITE_DATASET))
+  if (sqlite && !datasets.includes(SQLITE_DATASET)) datasets.push(SQLITE_DATASET)
   const demoSet = new Set(loaded.demoTables.map((n) => n.toLowerCase()))
   const demo = loaded.demoTables.some(uses)
   const usesIn = (schema: string, name: string) =>

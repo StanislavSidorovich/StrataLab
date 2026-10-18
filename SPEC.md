@@ -28,9 +28,12 @@ Static site (Vite + React + TypeScript), GitHub Pages, custom domain via Cloudfl
  │    src/data/datasets.ts (+ datasets.json from scripts/build-datasets.py), src/db/datasets.ts
  ├─ the user's own datasets: schemas made in the tree, tables moved / renamed by copying
  │    src/core/ownDatasets.ts, src/db/ownDatasets.ts
- ├─ dialects (stage 4), per query tab: DuckDB · T-SQL · PostgreSQL
+ ├─ dialects (stage 4), per query tab: DuckDB · SQLite (Quaera) · T-SQL · PostgreSQL
  │    ├─ T-SQL → DuckDB: sqlglot in Pyodide, in a Web Worker   src/dialects/translate.py, sqlglotWorker.ts, tsql.ts
  │    │    side-by-side word diff                                src/core/diff.ts
+ │    ├─ SQLite (Quaera) → DuckDB: the same translator (read="sqlite"), the trainer's dataset on the
+ │    │    search path, SQLite's integer division                src/core/sqliteDialect.ts
+ │    │    coverage on the trainer's own queries                 scripts/sqlite-coverage.py
  │    └─ PostgreSQL: PGlite (IndexedDB), results as Arrow       src/dialects/postgres.ts, pgResult.ts
  │         copy DuckDB tables in (keys, CHECKs, rows by CSV)    src/core/pgCopy.ts
  ├─ catalog (tables, views, columns of every schema)    src/db/catalog.ts
@@ -60,7 +63,7 @@ Subdomains are separate origins, so data moves in the URL fragment (never sent t
 - `#ddl=<deflate+base64url>` — CREATE TABLE statements to run on open (from model.quaera.app).
 - `#ds=<dataset id>` — open a catalog dataset (stage 3).
 - To model.quaera.app: `https://model.quaera.app/#sql=<deflate+base64url>&name=<label>` — CREATE TABLE statements of one schema, opened there as a conceptual model (“Show as model”, stage 2c).
-- `#s=<…>` — shared lab: datasets by id + queries (stage 5). Own files can't be shared by link (they stay local); the share dialog says so.
+- `#s=<…>` — shared lab: datasets by id + queries (stage 5), each in its dialect (`l`: `tsql`, `postgres`, `sqlite`; none for DuckDB). `sqlite` is SQLite as the trainer (quaera.app) runs it, over its dataset `quaera` with bare table names: the trainer's “Open in Lab” sends `d:["quaera"]` and its task's SQL as such a tab. Own files can't be shared by link (they stay local); the share dialog says so.
 
 Exports to pandas: Parquet (keeps types).
 
@@ -69,7 +72,7 @@ Exports to pandas: Parquet (keeps types).
 1. MVP workbench — section 4.
 2. Ecosystem hops — open DDL from model.quaera.app; fill modelled tables from Excel with type and key checks; send tables back as DDL to model.quaera.app; data generator.
 3. Dataset catalog — Chinook (MIT), Northwind and AdventureWorks (Microsoft sql-server-samples, MIT), Sakila / Pagila (BSD), NYC Taxi sample, Quaera's dataset; Parquet files served with the site or from a CDN with CORS.
-4. Dialects — PostgreSQL mode via PGlite; T-SQL → DuckDB via sqlglot (Pyodide) with a diff. Pyodide, sqlglot and PGlite are served with the site and downloaded only when a tab switches dialect.
+4. Dialects — PostgreSQL mode via PGlite; T-SQL → DuckDB via sqlglot (Pyodide) with a diff; later SQLite (Quaera) → DuckDB the same way, so a trainer task gives the trainer's result. Pyodide, sqlglot and PGlite are served with the site and downloaded only when a tab switches dialect.
 5. Share and practise — share links; tasks with result comparison; links from quaera.app lessons.
 6. Polish — PWA, history, snippets, EXPLAIN tree, charts, RU / PT interface.
 7. Python next to SQL — section 8.

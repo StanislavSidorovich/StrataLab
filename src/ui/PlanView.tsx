@@ -23,7 +23,7 @@ export function PlanView() {
   if (!state)
     return (
       <div className="h-full flex flex-col items-center justify-center gap-3 p-6 text-center" style={{ color: 'var(--muted)' }}>
-        <div>Explain shows how the database runs this tab’s query: its steps, the rows at each step and where the time goes.{dialect === 'tsql' ? ' A T-SQL tab shows the plan of its DuckDB translation.' : ''}</div>
+        <div>Explain shows how the database runs this tab’s query: its steps, the rows at each step and where the time goes.{dialect === 'tsql' || dialect === 'sqlite' ? ` A ${dialect === 'tsql' ? 'T-SQL' : 'SQLite'} tab shows the plan of its DuckDB translation.` : ''}</div>
         <button className="btn btn-ghost" disabled={!ready} onClick={() => void explainSql(tabId, activeSql())}>
           <ListTree size={14} /> Explain
         </button>
