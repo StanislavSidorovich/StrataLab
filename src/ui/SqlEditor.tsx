@@ -6,10 +6,12 @@ import { EditorView, basicSetup } from 'codemirror'
 import { keymap } from '@codemirror/view'
 import { Compartment, EditorState, Prec } from '@codemirror/state'
 import { MSSQL, PostgreSQL, sql } from '@codemirror/lang-sql'
+import { python } from '@codemirror/lang-python'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { isolateHistory, redo, toggleComment, undo } from '@codemirror/commands'
 import { openSearchPanel } from '@codemirror/search'
-import { runSql, setTabSql, stopQuery, tabDialect, useLab, type Dialect } from './store'
+import { runPython, runSql, setTabSql, stopQuery, tabDialect, useLab, type Dialect } from './store'
+import { cellAt, splitCells } from '../core/pyCells'
 import type { TableInfo } from '../db/catalog'
 
 const language = new Compartment()
@@ -22,10 +24,33 @@ export function currentSql(view: EditorView): string {
   return sel.empty ? view.state.doc.toString() : view.state.sliceDoc(sel.from, sel.to)
 }
 
+/**
+ * A Python tab's Run: the selection as one cell, or every code cell in order; with `cell`, only the
+ * cell at the cursor, and the cursor moves on to the next one (Shift+Enter, as in Jupyter).
+ */
+function runPythonFrom(v: EditorView, id: string, cell = false) {
+  const sel = v.state.selection.main
+  const text = v.state.doc.toString()
+  if (!sel.empty && !cell) return void runPython(id, [{ code: v.state.sliceDoc(sel.from, sel.to), line: v.state.doc.lineAt(sel.from).number, index: -1 }])
+  const cells = splitCells(text)
+  const all = cells.map((c, index) => ({ c, index })).filter(({ c }) => c.kind === 'code')
+  if (!cell) return void runPython(id, all.map(({ c, index }) => ({ code: c.source, line: c.line, index, source: c.source })))
+  const at = cellAt(cells, sel.head)
+  if (at < 0) return
+  const c = cells[at]
+  if (c.kind === 'code') void runPython(id, [{ code: c.source, line: c.line, index: at, source: c.source }])
+  const next = cells[at + 1]
+  // the line after the next cell's `# %%`, or the end of the tab
+  const to = next ? Math.min(text.length, v.state.doc.lineAt(next.from).to + 1) : text.length
+  v.dispatch({ selection: { anchor: to }, scrollIntoView: true })
+}
+
 let activeView: EditorView | null = null
 export function runActive() {
   const id = useLab.getState().activeTab
-  if (activeView) void runSql(id, currentSql(activeView))
+  if (!activeView) return
+  if (tabDialect(useLab.getState().tabs.find((t) => t.id === id)) === 'python') runPythonFrom(activeView, id)
+  else void runSql(id, currentSql(activeView))
 }
 
 /** What the active tab would run: the selection, or the whole tab. */
@@ -56,6 +81,14 @@ export function appendToActive(statement: string) {
   v.focus()
 }
 
+const isPython = (id: string) => tabDialect(useLab.getState().tabs.find((t) => t.id === id)) === 'python'
+
+/** Ctrl+Enter, F5: the selection or the whole tab (every cell of a Python tab). */
+function runIn(v: EditorView, id: string) {
+  if (isPython(id)) runPythonFrom(v, id)
+  else void runSql(id, currentSql(v))
+}
+
 const FORMATTER_LANGUAGE = { duckdb: 'duckdb', tsql: 'transactsql', postgres: 'postgresql' } as const
 
 /**
@@ -64,7 +97,7 @@ const FORMATTER_LANGUAGE = { duckdb: 'duckdb', tsql: 'transactsql', postgres: 'p
  */
 export async function formatActive(dialect: Dialect) {
   const v = activeView
-  if (!v) return
+  if (!v || dialect === 'python') return
   const { format } = await import('sql-formatter')
   const sel = v.state.selection.main
   const from = sel.empty ? 0 : sel.from
@@ -132,7 +165,9 @@ export function SqlEditor() {
 
   // A PostgreSQL tab completes PostgreSQL's tables; T-SQL highlights as SQL Server.
   const langExt = () =>
-    dialect === 'postgres'
+    dialect === 'python'
+      ? python()
+      : dialect === 'postgres'
       ? sql({ dialect: PostgreSQL, schema: completionSchema(pgTables, 'public'), upperCaseKeywords: false })
       : sql({ dialect: dialect === 'tsql' ? MSSQL : PostgreSQL, schema: completionSchema(tables, 'main'), upperCaseKeywords: false })
   const themeExt = () => (dark ? [Prec.high(darkBackground), oneDark] : lightTheme)
@@ -143,8 +178,10 @@ export function SqlEditor() {
       extensions: [
         Prec.highest(
           keymap.of([
-            { key: 'Mod-Enter', run: (v) => (void runSql(id, currentSql(v)), true) },
-            { key: 'F5', run: (v) => (void runSql(id, currentSql(v)), true) },
+            { key: 'Mod-Enter', run: (v) => (runIn(v, id), true) },
+            { key: 'F5', run: (v) => (runIn(v, id), true) },
+            // Python tabs: the cell at the cursor, then on to the next (Jupyter's Shift+Enter).
+            { key: 'Shift-Enter', run: (v) => (isPython(id) ? (runPythonFrom(v, id, true), true) : false) },
             { key: 'Shift-Alt-f', run: () => (formatActiveTab(), true) },
             // Esc stops a running query; otherwise it does what it always does (close completion…).
             {

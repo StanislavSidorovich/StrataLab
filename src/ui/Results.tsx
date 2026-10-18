@@ -3,6 +3,7 @@ import { AlertTriangle, ArrowLeftRight, ChartColumn, ChevronDown, ClipboardCopy,
 import { ChartView } from './Chart'
 import { DataGrid } from './DataGrid'
 import { PlanView } from './PlanView'
+import { PythonOutput } from './PythonOutput'
 import { EngineLoading } from './EngineLoading'
 import { Menu, type MenuItem } from './Menu'
 import { STOPPED, clearHistory, setNextRowLimit, openFromHistory, ownTables, runSql, saveResultAsTable, setResultView, setTabDialect, tabDialect, useLab } from './store'
@@ -46,9 +47,14 @@ export function Results() {
   const dialect = useLab((s) => tabDialect(s.tabs.find((t) => t.id === s.activeTab)))
   const translation = useLab((s) => s.translations[s.activeTab])
   const stored = useLab((s) => s.resultView)
-  const view = stored === 'translation' && dialect !== 'tsql' ? 'result' : stored
+  const view = (stored === 'translation' && dialect !== 'tsql') || (stored === 'plan' && dialect === 'python') ? 'result' : stored
   const changes = translation?.status === 'done' ? translation.statements.reduce((n, st) => n + (st.target == null ? 1 : sideBySide(st.source, st.target).changes), 0) : null
-  const views = dialect === 'tsql' ? (['result', 'chart', 'plan', 'translation', 'messages', 'history'] as const) : (['result', 'chart', 'plan', 'messages', 'history'] as const)
+  const views =
+    dialect === 'tsql'
+      ? (['result', 'chart', 'plan', 'translation', 'messages', 'history'] as const)
+      : dialect === 'python'
+        ? (['result', 'chart', 'messages', 'history'] as const)
+        : (['result', 'chart', 'plan', 'messages', 'history'] as const)
   const fileName = title.replace(/[^\w-]+/g, '_').toLowerCase()
 
   return (
@@ -185,6 +191,10 @@ function ResultBody() {
   const pgStarting = useLab((s) => s.postgres.status === 'loading')
   const translating = useLab((s) => s.translations[s.activeTab]?.status === 'loading')
   if (loading) return <EngineLoading />
+  if (dialect === 'python') {
+    if (!res) return <Empty text={'Run the cells to see their output here: Ctrl+Enter runs every cell, Shift+Enter the cell at the cursor. Tables come in with lab.table("name").'} />
+    return <PythonOutput res={res} grid={res.table && res.table.numCols > 0 ? <GridWithMenu table={res.table} /> : null} />
+  }
   if (!res) return <Empty text={`Run a query to see its result here — Ctrl+Enter or F5.${dialect === 'tsql' ? ' It is translated to DuckDB first.' : dialect === 'postgres' ? ' It runs on PostgreSQL.' : ''}`} />
   if (res.status === 'running')
     return (

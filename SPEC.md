@@ -35,6 +35,9 @@ Static site (Vite + React + TypeScript), GitHub Pages, custom domain via Cloudfl
  │         copy DuckDB tables in (keys, CHECKs, rows by CSV)    src/core/pgCopy.ts
  ├─ catalog (tables, views, columns of every schema)    src/db/catalog.ts
  ├─ exports (CSV, Excel, Parquet)       src/db/export.ts
+ ├─ Python (stage 7): pandas, matplotlib, seaborn in Pyodide, in its own Web Worker
+ │    src/python/kernel.ts (page side), pythonWorker.ts, lab.py (the `lab` module)
+ │    cells, transfer of columns, outputs, .ipynb   src/core/pyCells.ts, pyTransfer.ts, ipynb.ts
  └─ UI: object tree, query tabs (CodeMirror 6), results grid (virtualised), import dialog
 ```
 
@@ -69,9 +72,26 @@ Exports to pandas: Parquet (keeps types).
 4. Dialects — PostgreSQL mode via PGlite; T-SQL → DuckDB via sqlglot (Pyodide) with a diff. Pyodide, sqlglot and PGlite are served with the site and downloaded only when a tab switches dialect.
 5. Share and practise — share links; tasks with result comparison; links from quaera.app lessons.
 6. Polish — PWA, history, snippets, EXPLAIN tree, charts, RU / PT interface.
+7. Python next to SQL — section 8.
 
 ## 7. Out of scope (for now)
 
 - Real SQL Server / T-SQL engine (no WASM build exists; a server sandbox means hosting cost and licence questions).
 - Direct Kaggle download (API needs the user's token and blocks browser requests) — download the file and drop it.
 - BigQuery connection (needs Google sign-in and the user's billing project) — export a CSV from the console and drop it.
+- Python packages beyond pandas, numpy, matplotlib and seaborn; `pip install` from PyPI (stage 7 keeps to what is served with the site).
+
+## 8. Python next to SQL (stage 7)
+
+For students doing homework or practice on a laptop who want SQL and pandas on one dataset without installing anything (today: Colab, which needs a Google account and an upload of the data).
+
+- **A Python tab.** Python is a fourth choice on the tab's language switch (DuckDB · T-SQL · PostgreSQL · Python). The tab is one editor; `# %%` lines split it into cells (the percent format of VS Code, Spyder and Jupytext), `# %% [markdown]` starts a text cell. **Run** (Ctrl+Enter, F5) runs the selection, or every cell in order; **Shift+Enter** runs the cell at the cursor and moves to the next one.
+- **The tables.** `lab.table("orders")` and `lab.table("quaera.fact_sellout")` give a pandas DataFrame of a DuckDB table or view (own tables, own datasets, catalog datasets: what the tree shows); `lab.sql("SELECT …")` runs DuckDB SQL and gives its result as a DataFrame; `lab.save(df, "name")` writes a DataFrame back to My tables (replacing a table of that name), so SQL tabs can query it; `lab.tables()` lists the names. DuckDB stays the one database: Python reads copies, it never holds the data itself.
+- **Packages.** pandas and numpy load on the first run; matplotlib and seaborn when the code imports them. Nothing else for now (no `pip install`).
+- **Output** as in Jupyter, per cell: printed text, the value of the cell's last line, figures (matplotlib / seaborn) as images, errors with the traceback trimmed to the user's code. The last DataFrame shown goes to the result grid, so Chart, Copy, Export and Save as table work on it as on a query result (the row limit applies).
+- **One Python session** for all Python tabs of the page: variables stay between runs, as in a notebook, until **Restart Python**. **Stop** restarts it (Python in a worker can't be interrupted without cross-origin isolation, which GitHub Pages can't turn on).
+- **Notebooks.** File → **Download as notebook (.ipynb)** writes the tab's cells, with the outputs of their last run, and a first cell that defines `lab` with DuckDB, so the notebook runs in Jupyter or Colab: catalog datasets are read from lab.quaera.app, the user's own tables from `<name>.parquet` next to the notebook (Export → Parquet). **Open** takes an `.ipynb` and makes a Python tab of its code and text cells (that first cell is left out).
+- **Offline.** Pyodide and the packages are served with the site, and kept by the service worker after their first use, like DuckDB's extensions.
+- **Not in share links** (`#s=`): the link format stays as it is; a Python tab is left out of a shared link, and the dialog says so.
+
+Acceptance: in the production build, `#ds=quaera`, a Python tab runs `lab.table("quaera.fact_sellout").groupby(…).sum()` into the grid and a seaborn chart below it, offline after the first load; a downloaded .ipynb opens in Jupyter and runs there; an .ipynb opened in Lab becomes a Python tab.
