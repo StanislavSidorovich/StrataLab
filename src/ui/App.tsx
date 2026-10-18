@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle, Check, ChevronDown, FileText, HardDrive, HelpCircle, Library, Loader2, Plus, RefreshCw, Share2, Upload, X, Zap } from 'lucide-react'
 import { Sidebar, pickBackup, pickFilesFor } from './Sidebar'
 import { SqlEditor, runActive } from './SqlEditor'
-import { forgetFile, openSqlFile, openSqlFiles, saveSqlFile } from './sqlFiles'
-import { isSqlFile, looksLikeTable } from '../core/editorFiles'
+import { downloadNotebook, forgetFile, openSqlFile, openSqlFiles, saveSqlFile } from './sqlFiles'
+import { looksLikeTable, opensAsTab } from '../core/editorFiles'
 import { Results } from './Results'
 import { MoveDialog } from './MoveDialog'
 import { ImportDialog } from './ImportDialog'
@@ -176,9 +176,9 @@ function useDropZone() {
       const table = at?.getAttribute('data-fill-table') ?? undefined
       const schema = at?.getAttribute('data-fill-schema') ?? undefined
       const files = [...(e.dataTransfer?.files ?? [])]
-      // .sql scripts open as query tabs; the rest are data.
-      void openSqlFiles(files.filter((f) => isSqlFile(f.name)))
-      const data = files.filter((f) => !isSqlFile(f.name))
+      // .sql scripts open as query tabs, .py and .ipynb as Python tabs; the rest are data.
+      void openSqlFiles(files.filter((f) => opensAsTab(f.name)))
+      const data = files.filter((f) => !opensAsTab(f.name))
       if (data.length) void enqueueFiles(data, table, schema)
     }
     window.addEventListener('dragenter', enter)
@@ -230,15 +230,17 @@ function FileMenu() {
   const [saved, setSaved] = useState(false)
   const ready = useLab((s) => s.engine.status === 'ready')
   const busy = useLab((s) => s.backup !== null)
+  const python = useLab((s) => s.tabs.find((t) => t.id === s.activeTab)?.dialect === 'python')
   const save = async (saveAs: boolean) => {
     if (await saveSqlFile(saveAs)) (setSaved(true), setTimeout(() => setSaved(false), 1500))
   }
   const items: MenuItem[] = [
     ['New query tab', () => addTab()],
     ['New Python tab', () => addTab(PYTHON_STARTER, `Python ${useLab.getState().tabs.filter((t) => t.dialect === 'python').length + 1}`, 'python')],
-    ['Open a .sql file…', () => void openSqlFile(), { keys: `${mod}O` }],
+    ['Open a file (.sql, .py, .ipynb)…', () => void openSqlFile(), { keys: `${mod}O` }],
     ['Save', () => void save(false), { keys: `${mod}S` }],
     ['Save as…', () => void save(true), { keys: isMac ? '⇧⌘S' : 'Ctrl+Shift+S' }],
+    ['Download as notebook (.ipynb)', downloadNotebook, { disabled: !python }],
     'separator',
     ['Add CSV / Excel…', () => pickFilesFor(), { disabled: !ready }],
     ['Paste a table', () => void pasteTableFromClipboard(), { disabled: !ready }],

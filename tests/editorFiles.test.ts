@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isSqlFile, looksLikeTable, sqlFileName, tabTitleFromFile } from '../src/core/editorFiles'
+import { isSqlFile, looksLikeTable, opensAsTab, pythonFileKind, sqlFileName, tabFileName, tabTitleFromFile } from '../src/core/editorFiles'
 
 describe('Open / Save .sql', () => {
   it('names a tab after the file', () => {
@@ -20,6 +20,18 @@ describe('Open / Save .sql', () => {
     expect(isSqlFile('a.SQL')).toBe(true)
     expect(isSqlFile('a.csv')).toBe(false)
     expect(isSqlFile('sql')).toBe(false)
+  })
+
+  it('opens .py and .ipynb as Python tabs, named after the file', () => {
+    expect(pythonFileKind('Homework 3.ipynb')).toBe('ipynb')
+    expect(pythonFileKind('clean.PY')).toBe('py')
+    expect(pythonFileKind('data.csv')).toBe(null)
+    expect(opensAsTab('a.sql') && opensAsTab('b.py') && opensAsTab('c.ipynb')).toBe(true)
+    expect(opensAsTab('d.parquet')).toBe(false)
+    expect(tabTitleFromFile('Homework 3.ipynb')).toBe('Homework 3')
+    expect(tabFileName('Python 1', 'py')).toBe('Python 1.py')
+    expect(tabFileName('Homework 3.py', 'ipynb')).toBe('Homework 3.ipynb')
+    expect(tabFileName('', 'ipynb')).toBe('notebook.ipynb')
   })
 })
 

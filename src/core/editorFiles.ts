@@ -1,23 +1,36 @@
-// Rules for the editor's Open / Save (.sql files) and for pasting a table copied from Excel.
+// Rules for the editor's Open / Save (.sql files; .py and .ipynb for Python tabs) and for
+// pasting a table copied from Excel.
 
 /** A tab's title from a file name: "Monthly report.sql" → "Monthly report". */
 export function tabTitleFromFile(fileName: string): string {
-  return fileName.replace(/\.(sql|txt)$/i, '').trim() || 'Query'
+  return fileName.replace(/\.(sql|txt|py|ipynb)$/i, '').trim() || 'Query'
 }
 
-/** A file name for a tab: characters Windows and macOS refuse become "_"; always ends in .sql. */
-export function sqlFileName(title: string): string {
+/** A file name for a tab: characters Windows and macOS refuse become "_"; always ends in `.ext`. */
+export function tabFileName(title: string, ext: 'sql' | 'py' | 'ipynb'): string {
   const base = title
-    .replace(/\.sql$/i, '')
+    .replace(/\.(sql|py|ipynb)$/i, '')
     .replace(/[\\/:*?"<>|\u0000-\u001f]+/g, '_')
     .replace(/^[\s.]+|[\s.]+$/g, '')
-  return `${base || 'query'}.sql`
+  return `${base || (ext === 'sql' ? 'query' : 'notebook')}.${ext}`
 }
+
+/** A file name for an SQL tab, ending in .sql. */
+export const sqlFileName = (title: string) => tabFileName(title, 'sql')
 
 /** Files that open as a query tab when picked or dropped, instead of being imported as data. */
 export function isSqlFile(fileName: string): boolean {
   return /\.sql$/i.test(fileName)
 }
+
+/** Files that open as a Python tab: a script (cells as `# %%`) or a Jupyter notebook. */
+export function pythonFileKind(fileName: string): 'py' | 'ipynb' | null {
+  const m = /\.(py|ipynb)$/i.exec(fileName)
+  return m ? (m[1].toLowerCase() as 'py' | 'ipynb') : null
+}
+
+/** Files that open as a tab rather than being imported as data. */
+export const opensAsTab = (fileName: string) => isSqlFile(fileName) || pythonFileKind(fileName) !== null
 
 /**
  * Whether pasted text is a table (cells copied from Excel, Google Sheets or a web page come

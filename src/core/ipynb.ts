@@ -75,7 +75,9 @@ class Lab:
             self.con.execute(f'CREATE VIEW "{f.stem}" AS SELECT * FROM read_parquet(\\'{path}\\')')
 
     def table(self, name):
-        return self.con.table(name).df()
+        # "orders", "quaera.fact_sellout", or with its own quotes: 'northwind."Order Details"'
+        ref = name if '"' in name else ".".join(f'"{part.strip()}"' for part in name.split("."))
+        return self.con.sql(f"SELECT * FROM {ref}").df()
 
     def sql(self, query):
         return self.con.sql(query).df()

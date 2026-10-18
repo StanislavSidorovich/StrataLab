@@ -51,7 +51,7 @@ async function start(msg: Extract<ToWorker, { type: 'init' }>) {
   imports = lab.imports
   // A table named at run time can be fetched mid-cell only where WebAssembly can wait (JSPI).
   const jspi = typeof (WebAssembly as { Suspending?: unknown }).Suspending === 'function'
-  post({ type: 'ready', version: py.version, jspi })
+  post({ type: 'ready', version: py.runPython('import sys\nsys.version.split()[0]') as string, jspi })
 }
 
 /** Pyodide's packages (and what they need) not loaded yet, with a line for the page while they download. */
