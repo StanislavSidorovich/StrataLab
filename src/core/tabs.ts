@@ -22,3 +22,15 @@ export const CLOSED_TABS_KEPT = 20
 export function rememberClosed<T extends { sql: string }>(stack: T[], closed: T[]): T[] {
   return [...stack, ...closed.filter((t) => t.sql.trim())].slice(-CLOSED_TABS_KEPT)
 }
+
+/**
+ * What choosing `to` on a tab that speaks `from` does to the tab. SQL and Python don't mix: the SQL
+ * left in a tab that becomes Python (or Python in one that becomes SQL) would only fail, so a tab with
+ * text opens a new tab of the other kind and stays as it is; an empty tab, or a switch between SQL
+ * dialects, changes in place.
+ */
+export function dialectSwitch(from: string, to: string, text: string): 'in-place' | 'new-tab' {
+  if (from === to) return 'in-place'
+  const crossesKinds = (from === 'python') !== (to === 'python')
+  return crossesKinds && text.trim() ? 'new-tab' : 'in-place'
+}

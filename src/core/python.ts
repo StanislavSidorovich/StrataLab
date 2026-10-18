@@ -84,3 +84,31 @@ export function servedImports(lock: Lock): Record<string, string> {
 
 /** The extra wheels a piece of code imports (seaborn): `imports` as Pyodide's find_imports gives them. */
 export const extraWheelsFor = (imports: readonly string[]) => EXTRA_WHEELS.filter((w) => imports.includes(w.module))
+
+/** A package's size on disk (bytes, 0 when the site doesn't serve it) and what it needs, for the download bar. */
+export interface PackageSize {
+  size: number
+  depends: string[]
+}
+
+/**
+ * Bytes still to download to load `names`: their files and their dependencies', less what is
+ * `loaded` already. Null when a size is unknown (a copy that takes packages from jsDelivr).
+ */
+export function bytesToLoad(sizes: Record<string, PackageSize>, names: readonly string[], loaded: ReadonlySet<string>): number | null {
+  const seen = new Set<string>()
+  let total = 0
+  let unknown = false
+  const visit = (name: string) => {
+    const key = name.toLowerCase()
+    if (seen.has(key) || loaded.has(key)) return
+    seen.add(key)
+    const p = sizes[key]
+    if (!p) return void (unknown = true)
+    if (!p.size) unknown = true
+    total += p.size
+    p.depends.forEach(visit)
+  }
+  names.forEach(visit)
+  return unknown ? null : total
+}

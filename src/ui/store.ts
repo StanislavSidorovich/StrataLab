@@ -4,7 +4,7 @@ import { cancelQuery, checkpoint, getEngine, insertArrow, isCancelled, query, qu
 import { ROW_LIMIT } from '../core/rowLimit'
 import { loadCatalog, type TableInfo } from '../db/catalog'
 import { closeSource, createTable, openSource, type ImportSource } from '../db/importer'
-import { dialectHints, type DialectHint } from '../core/dialect'
+import { dialectHints, sqlNameHint, type DialectHint } from '../core/dialect'
 import { qualifiedName, quoteIdent, sqlName, uniqueName } from '../core/sql'
 import { looksLikeTable } from '../core/editorFiles'
 import { DEMO_SQL, DEMO_TABLES, WELCOME_SQL } from '../data/demo'
@@ -21,7 +21,8 @@ import { planGeneration, type GenPlan, type GenTable } from '../core/generate'
 import { runGeneration, type GenOutcome } from '../db/generate'
 import { duckdbScript, translateTsql, type TranslatedStatement, type TranslatorProgress } from '../dialects/tsql'
 import { copyToPostgres, explainPostgres, getPostgres, postgresCatalog, runPostgres } from '../dialects/postgres'
-import { copyTitle, rememberClosed } from '../core/tabs'
+import { copyTitle, dialectSwitch, rememberClosed } from '../core/tabs'
+import { pythonStarter } from '../core/pyStarter'
 import { backupFileName } from '../core/backup'
 import { backupDatabase, restoreDatabase } from '../db/backup'
 import { download, resultRows } from '../db/export'
@@ -491,10 +492,13 @@ export async function runSql(tabId: string, sql: string, limit?: number) {
       if (WRITES.test(toRun)) await refreshCatalog()
       return
     }
-    const error = String(e instanceof Error ? e.message : e)
+    const raw = String(e instanceof Error ? e.message : e)
+    const nameHint = sqlNameHint(raw, get().tables)
+    const error = nameHint ? `${raw}
+${nameHint}` : raw
     // In a T-SQL tab the hints are what the translation is for; they'd only repeat it.
     set((s) => ({ results: { ...s.results, [tabId]: { status: 'error', error, hints: dialect === 'tsql' ? [] : dialectHints(sql), ms: performance.now() - t0 } } }))
-    logRun(tabId, { sql, ok: false, text: error.split('\n')[0] })
+    logRun(tabId, { sql, ok: false, text: raw.split('\n')[0] })
   }
 }
 
@@ -592,6 +596,26 @@ export function setTabDialect(id: string, dialect: Dialect) {
   if (dialect === 'python') void startPython()
 }
 
+/**
+ * The tab's dialect switch (the buttons above the editor). A tab with text doesn't turn from SQL into
+ * Python or back: that text would only fail. A new tab of the chosen kind opens beside it (Python with
+ * an example over the tables that are loaded) and the first one stays as it was.
+ */
+export function switchTabDialect(id: string, dialect: Dialect) {
+  const tab = get().tabs.find((t) => t.id === id)
+  if (!tab || dialectSwitch(tabDialect(tab), dialect, tab.sql) === 'in-place') return setTabDialect(id, dialect)
+  if (dialect === 'python') newPythonTab()
+  else addTab('', undefined, dialect)
+}
+
+/** A new Python tab with an example that reads a table which is really loaded. */
+export function newPythonTab() {
+  return addTab(currentPythonStarter(), `Python ${get().tabs.filter((t) => t.dialect === 'python').length + 1}`, 'python')
+}
+
+/** The example for a Python tab, over what is loaded now. */
+export const currentPythonStarter = () => pythonStarter(get().tables, hasDemoTables(get().tables))
+
 // ------------------------------------------------------------------ Python tabs (stage 7)
 
 onKernelState((python) => set({ python }))
@@ -610,6 +634,12 @@ export function restartPython() {
       if (r.status === 'running') results[id] = { ...r, status: 'error', error: STOPPED_PY, cells: r.cells?.filter((c) => !c.running) }
     return { results }
   })
+}
+
+/** Retry after a failed start (a download manager took a file, the network dropped): a new session. */
+export function retryPython() {
+  stopKernel()
+  startPython()
 }
 
 /** The tables and views Python's lab.tables() lists: `name` in My tables, `schema.name` elsewhere. */

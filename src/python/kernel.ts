@@ -5,7 +5,7 @@
 import type { Table } from 'apache-arrow'
 import { query } from '../db/engine'
 import { callKey, labCalls, tableSql, type LabCall } from '../core/pyCells'
-import { EXTRA_WHEELS, PYODIDE_DIR, STARTUP_PACKAGES, pyodideCdn } from '../core/python'
+import { EXTRA_WHEELS, PYODIDE_DIR, STARTUP_PACKAGES, pyodideCdn, type PackageSize } from '../core/python'
 import { arrowFromFrame, frameFromArrow, transferables, type PyFrame } from './columns'
 import type { CellResult, FromWorker, ToWorker } from './pythonWorker'
 
@@ -16,8 +16,11 @@ declare const __PYODIDE_VERSION__: string
 declare const __PYTHON_IMPORTS__: Record<string, string>
 /** The package files under pyodide/ (none when the site doesn't serve them). */
 declare const __PYTHON_FILES__: string[]
+/** Each package's size on disk and what it needs, and Pyodide's core files' size: the download bar's totals. */
+declare const __PYTHON_SIZES__: Record<string, PackageSize>
+declare const __PYTHON_CORE_BYTES__: number
 
-export type KernelState = { status: 'off' } | { status: 'loading'; text: string } | { status: 'ready'; version: string; jspi: boolean } | { status: 'error'; error: string }
+export type KernelState = { status: 'off' } | { status: 'loading'; text: string; bytes?: { loaded: number; total: number | null } } | { status: 'ready'; version: string; jspi: boolean } | { status: 'error'; error: string }
 
 let worker: Worker | null = null
 let started: Promise<void> | null = null
@@ -48,7 +51,7 @@ export function startKernel(): Promise<void> {
     w.onmessage = (e: MessageEvent<FromWorker>) => {
       const msg = e.data
       // An empty progress line: the downloads a cell needed are done.
-      if (msg.type === 'progress') say(msg.text || !readyState ? { status: 'loading', text: msg.text || 'Starting Python' } : readyState)
+      if (msg.type === 'progress') say(msg.text || !readyState ? { status: 'loading', text: msg.text || 'Starting Python', bytes: msg.bytes } : readyState)
       else if (msg.type === 'ready') {
         readyState = { status: 'ready', version: msg.version, jspi: msg.jspi }
         say(readyState)
@@ -82,6 +85,8 @@ export function startKernel(): Promise<void> {
     packageBaseUrl: own ? indexURL : pyodideCdn(__PYODIDE_VERSION__),
     startup: [...STARTUP_PACKAGES],
     imports: __PYTHON_IMPORTS__,
+    sizes: __PYTHON_SIZES__,
+    coreBytes: __PYTHON_CORE_BYTES__,
     extra: EXTRA_WHEELS.map((x) => ({ module: x.module, url: own ? new URL(x.file, indexURL).href : x.url, needs: x.needs })),
   }
   say({ status: 'loading', text: 'Downloading Python' })

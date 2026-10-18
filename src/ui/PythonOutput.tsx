@@ -5,8 +5,17 @@ import { AlertTriangle, Loader2, Table2 } from 'lucide-react'
 import type { ReactNode } from 'react'
 import type { Output } from '../core/ipynb'
 import { useLab, type PyCellRun, type TabResult } from './store'
+import { pythonLoading, useSlowLoading } from './DialectBar'
+import { pythonNameHint } from '../core/dialect'
 
 const pre = 'mono whitespace-pre-wrap break-words'
+
+/** A NameError on a dataset or table name: says how to read it. */
+function NameHint({ evalue }: { evalue: string }) {
+  const tables = useLab((s) => s.tables)
+  const hint = pythonNameHint(evalue, tables)
+  return hint ? <div className="mt-1.5 font-semibold">{hint}</div> : null
+}
 
 function OutputView({ o, inGrid, rows }: { o: Output; inGrid: boolean; rows: string }) {
   if (o.output_type === 'stream')
@@ -28,6 +37,7 @@ function OutputView({ o, inGrid, rows }: { o: Output; inGrid: boolean; rows: str
               {o.traceback.slice(0, -1).join('\n')}
             </pre>
           )}
+          <NameHint evalue={o.evalue} />
         </div>
       </div>
     )
@@ -49,13 +59,14 @@ function OutputView({ o, inGrid, rows }: { o: Output; inGrid: boolean; rows: str
 
 function CellView({ run, rows }: { run: PyCellRun; rows: string }) {
   const kernel = useLab((s) => s.python)
+  const slow = useSlowLoading(kernel.status === 'loading')
   const label = run.index >= 0 ? `cell ${run.index + 1}` : 'selection'
   let body: ReactNode
   if (run.running)
     body = (
       <div className="flex items-center gap-1.5" style={{ color: 'var(--muted)' }}>
         <Loader2 size={13} className="animate-spin" />
-        {kernel.status === 'loading' ? `${kernel.text}… (once, then kept in this browser)` : 'Running… Stop restarts Python.'}
+        {kernel.status === 'loading' ? `${pythonLoading(kernel, slow)} (once, then kept in this browser)` : 'Running… Stop restarts Python.'}
       </div>
     )
   else if (!run.outputs.length) body = <div style={{ color: 'var(--muted)', fontSize: 12.5 }}>Done, no output.</div>

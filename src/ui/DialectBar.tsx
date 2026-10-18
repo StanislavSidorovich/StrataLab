@@ -1,10 +1,11 @@
 // Above the editor (stage 4): what this tab speaks. DuckDB runs as written; T-SQL is translated
 // to DuckDB first (sqlglot) and the translation can be seen side by side; PostgreSQL runs on a
 // real PostgreSQL (PGlite), a separate database that tables are copied into.
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { ArrowLeftRight, Copy, ListTree, Loader2, Play, Redo2, RotateCcw, Search, Square, SquareSlash, Undo2, WandSparkles } from 'lucide-react'
-import { copySchemaToPostgres, explainSql, ownTables, restartPython, setTabDialect, showTranslation, startPython, stopQuery, tabDialect, useLab, type Dialect } from './store'
-import { activeSql, editorCommand, formatActiveTab, runActive } from './SqlEditor'
+import { copySchemaToPostgres, explainSql, ownTables, currentPythonStarter, restartPython, retryPython, showTranslation, switchTabDialect, startPython, stopQuery, tabDialect, useLab, type Dialect } from './store'
+import { activeSql, editorCommand, formatActiveTab, runActive, setActiveText } from './SqlEditor'
+import { pythonProgressLabel, pythonProgressShare } from '../core/progress'
 
 const DIALECTS: { id: Dialect; label: string; short: string; title: string }[] = [
   { id: 'duckdb', label: 'DuckDB', short: 'DuckDB', title: 'Run as written on DuckDB (close to PostgreSQL)' },
@@ -22,6 +23,7 @@ export function DialectBar() {
   const translation = useLab((s) => (tab ? s.translations[tab.id] : undefined))
   const python = useLab((s) => s.python)
   const dialect = tabDialect(tab)
+  const shown = useSlowLoading(python.status === 'loading')
   // A Python tab starts Python (a download the first time) as soon as it is shown.
   const pythonOff = python.status === 'off'
   useEffect(() => {
@@ -31,7 +33,8 @@ export function DialectBar() {
   if (!tab) return null
 
   return (
-    <div className="h-9 shrink-0 flex items-center gap-1 sm:gap-2 px-2 overflow-x-auto" style={{ background: 'var(--panel)', borderBottom: '1px solid var(--line)', fontSize: 12 }}>
+    <div className="relative shrink-0">
+    <div className="h-9 flex items-center gap-1 sm:gap-2 px-2 overflow-x-auto" style={{ background: 'var(--panel)', borderBottom: '1px solid var(--line)', fontSize: 12 }}>
       <RunButton />
       {dialect !== 'python' && <ExplainButton />}
       <div role="radiogroup" aria-label="Dialect of this tab" className="flex shrink-0 rounded-md p-0.5" style={{ background: 'var(--panel-2)' }}>
@@ -43,7 +46,12 @@ export function DialectBar() {
             className="px-1.5 sm:px-2.5 py-1 rounded whitespace-nowrap"
             style={dialect === d.id ? { background: 'var(--panel)', fontWeight: 600, boxShadow: '0 1px 2px rgba(0,0,0,0.12)', color: 'var(--accent)' } : { color: 'var(--muted)' }}
             title={d.title}
-            onClick={() => setTabDialect(tab.id, d.id)}
+            onClick={() => {
+              // An empty tab that becomes Python gets the example; a tab with text opens a new one (store.ts).
+              const empty = !tab.sql.trim()
+              switchTabDialect(tab.id, d.id)
+              if (empty && d.id === 'python' && dialect !== 'python') setActiveText(currentPythonStarter())
+            }}
           >
             <span className="hidden sm:inline">{d.label}</span>
             <span className="sm:hidden">{d.short}</span>
@@ -92,12 +100,18 @@ export function DialectBar() {
             {python.status === 'off' && 'Python starts on the first run'}
             {python.status === 'loading' && (
               <span className="flex items-center gap-1.5">
-                <Loader2 size={13} className="animate-spin" /> {python.text}…<span className="hidden lg:inline"> (once, then kept in this browser)</span>
+                <Loader2 size={13} className="animate-spin" /> {pythonLoading(python, shown)}
+                <span className="hidden lg:inline">{shown && python.bytes ? ' (once, then kept in this browser)' : ''}</span>
               </span>
             )}
             {python.status === 'error' && `Python failed to start: ${python.error}`}
           </span>
-          {(python.status === 'ready' || python.status === 'error') && (
+          {python.status === 'error' && (
+            <button className="btn btn-ghost shrink-0" onClick={retryPython} title="Try starting Python again">
+              <RotateCcw size={13} /> Retry
+            </button>
+          )}
+          {python.status === 'ready' && (
             <button className="btn btn-ghost shrink-0" onClick={restartPython} title="Restart Python: forget every variable, as a new notebook session">
               <RotateCcw size={13} /> <span className="hidden sm:inline">Restart</span>
             </button>
@@ -106,6 +120,34 @@ export function DialectBar() {
       )}
 
       <EditorTools python={dialect === 'python'} />
+    </div>
+    {dialect === 'python' && python.status === 'loading' && shown && <PythonBar bytes={python.bytes} />}
+    </div>
+  )
+}
+
+/** True once a Python download has gone on for half a second: from the cache it ends sooner and shows no bar. */
+export function useSlowLoading(loading: boolean, ms = 500) {
+  const [slow, setSlow] = useState(false)
+  useEffect(() => {
+    if (!loading) return setSlow(false)
+    const t = setTimeout(() => setSlow(true), ms)
+    return () => clearTimeout(t)
+  }, [loading, ms])
+  return slow
+}
+
+/** The line for a Python download: with bytes and percent once it is slow enough to see. */
+export function pythonLoading(k: { text: string; bytes?: { loaded: number; total: number | null } }, slow: boolean) {
+  return slow && k.bytes ? pythonProgressLabel(k.text, k.bytes) : `${k.text}…`
+}
+
+/** A thin bar along the foot of the bar above the editor; pulses when the total is not known. */
+function PythonBar({ bytes }: { bytes?: { loaded: number; total: number | null } }) {
+  const share = bytes ? pythonProgressShare(bytes) : null
+  return (
+    <div className="absolute left-0 right-0 bottom-0 h-[3px]" style={{ background: 'var(--line)' }} role="progressbar" aria-label="Python download" aria-valuemin={0} aria-valuemax={100} aria-valuenow={share === null ? undefined : Math.round(share * 100)}>
+      <div className={`h-full transition-[width] duration-150 ${share === null ? 'animate-pulse' : ''}`} style={{ width: `${share === null ? 100 : Math.max(2, share * 100)}%`, background: 'var(--accent)', opacity: share === null ? 0.5 : 1 }} />
     </div>
   )
 }

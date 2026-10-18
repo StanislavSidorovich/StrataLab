@@ -46,3 +46,39 @@ export function splitError(message: string): { kind: string; text: string } {
   const m = /^([A-Z][A-Za-z ]+ Error):\s*([\s\S]*)$/.exec(message.trim())
   return m ? { kind: m[1], text: m[2] } : { kind: 'Error', text: message }
 }
+
+export interface NamedTable {
+  schema: string
+  name: string
+}
+
+const ref = (t: NamedTable) => (t.schema === 'main' ? t.name : `${t.schema}.${t.name}`)
+
+/**
+ * A Python NameError on a word that is really a dataset or a table (`aw = adventureworks`,
+ * `Product.head()`): says to read it with lab.table, schema-qualified. Null when the name is neither.
+ */
+export function pythonNameHint(evalue: string, tables: readonly NamedTable[]): string | null {
+  const word = /^name '([^']+)' is not defined/.exec(evalue)?.[1]?.toLowerCase()
+  if (!word) return null
+  const call = (t: NamedTable) => `lab.table("${ref(t)}")`
+  const ofSchema = tables.filter((t) => t.schema !== 'main' && t.schema.toLowerCase() === word)
+  if (ofSchema.length) {
+    const [first, ...rest] = ofSchema
+    return `Did you mean ${call(first)}? “${first.schema}” is a dataset, not a Python variable; its tables: ${[first, ...rest].slice(0, 3).map(call).join(', ')}.`
+  }
+  const named = tables.find((t) => t.name.toLowerCase() === word)
+  return named ? `Did you mean ${call(named)}? Tables are read with lab.table(…), they are not Python variables.` : null
+}
+
+/**
+ * DuckDB's "Table with name X does not exist" where X is a table of a loaded dataset: names the
+ * schema-qualified table, unless DuckDB's own "Did you mean" already does.
+ */
+export function sqlNameHint(error: string, tables: readonly NamedTable[]): string | null {
+  const word = /Table with name "?([^"\s]+)"? does not exist/.exec(error)?.[1]?.toLowerCase()
+  if (!word) return null
+  const t = tables.find((x) => x.schema !== 'main' && x.name.toLowerCase() === word)
+  if (!t || error.toLowerCase().includes(`${t.schema}.${t.name}`.toLowerCase())) return null
+  return `Did you mean ${t.schema}.${t.name}? That table is in the ${t.schema} dataset: write its schema before the name.`
+}

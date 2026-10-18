@@ -1,7 +1,7 @@
 // CodeMirror 6 with SQL highlighting and completion of the tables and
 // columns that are in the database. Each query tab keeps its own editor
 // state, so undo history survives switching tabs.
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { EditorView, basicSetup } from 'codemirror'
 import { keymap } from '@codemirror/view'
 import { Compartment, EditorState, Prec } from '@codemirror/state'
@@ -10,7 +10,8 @@ import { python } from '@codemirror/lang-python'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { isolateHistory, redo, toggleComment, undo } from '@codemirror/commands'
 import { openSearchPanel } from '@codemirror/search'
-import { runPython, runSql, setTabSql, stopQuery, tabDialect, useLab, type Dialect } from './store'
+import { explainSql, openAsModel, ownTables, runPython, runSql, setTabSql, stopQuery, tabDialect, useLab, type Dialect } from './store'
+import { Menu, useLongPress, type MenuItem } from './Menu'
 import { cellAt, splitCells } from '../core/pyCells'
 import type { TableInfo } from '../db/catalog'
 
@@ -43,6 +44,14 @@ function runPythonFrom(v: EditorView, id: string, cell = false) {
   // the line after the next cell's `# %%`, or the end of the tab
   const to = next ? Math.min(text.length, v.state.doc.lineAt(next.from).to + 1) : text.length
   v.dispatch({ selection: { anchor: to }, scrollIntoView: true })
+}
+
+/** Every code cell of a Python tab in order, or the whole SQL tab: Run all, whatever is selected. */
+function runAll(v: EditorView, id: string) {
+  if (!isPython(id)) return void runSql(id, v.state.doc.toString())
+  const cells = splitCells(v.state.doc.toString())
+  const all = cells.map((c, index) => ({ c, index })).filter(({ c }) => c.kind === 'code')
+  void runPython(id, all.map(({ c, index }) => ({ code: c.source, line: c.line, index, source: c.source })))
 }
 
 let activeView: EditorView | null = null
@@ -78,6 +87,14 @@ export function appendToActive(statement: string) {
   const last = lines[lines.length - 1].trim()
   const text = (last && !last.endsWith(';') && !last.startsWith('--') ? ';\n' : '\n') + statement
   v.dispatch({ changes: { from: end, insert: text }, selection: { anchor: end + text.length }, scrollIntoView: true, userEvent: 'input' })
+  v.focus()
+}
+
+/** Replaces the whole text of the active tab (a Python tab that was empty gets its example). */
+export function setActiveText(text: string) {
+  const v = activeView
+  if (!v) return
+  v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: text }, selection: { anchor: 0 }, userEvent: 'input' })
   v.focus()
 }
 
@@ -153,6 +170,65 @@ const darkBackground = EditorView.theme(
   },
   { dark: true },
 )
+
+const isMac = /Mac|iPhone|iPad/.test(navigator.platform)
+const mod = isMac ? '⌘' : 'Ctrl+'
+
+/**
+ * The editor's own menu (right-click, long press on a phone): only what Lab already does, with the
+ * keys on the right. Shift + right-click opens the browser's menu instead (see SqlEditor).
+ */
+function EditorMenu({ view, at, close }: { view: EditorView; at: { x: number; y: number }; close: () => void }) {
+  const id = useLab((s) => s.activeTab)
+  const ready = useLab((s) => s.engine.status === 'ready')
+  const running = useLab((s) => s.results[s.activeTab]?.status === 'running' || s.plans[s.activeTab]?.status === 'running')
+  const hasTables = useLab((s) => ownTables(s.tables).some((t) => t.kind === 'table'))
+  const python = isPython(id)
+  const sel = view.state.selection.main
+  const selected = view.state.sliceDoc(sel.from, sel.to)
+  const cantRun = !ready || running
+  const paste = async () => {
+    view.focus()
+    try {
+      const text = await navigator.clipboard.readText()
+      view.dispatch({ ...view.state.replaceSelection(text), scrollIntoView: true, userEvent: 'input.paste' })
+    } catch {
+      // Firefox and Safari ask first or refuse: the keys always work.
+      useLab.setState({ notice: `Press ${mod}V to paste.` })
+    }
+  }
+  const copy = () => {
+    void navigator.clipboard?.writeText(selected).catch(() => useLab.setState({ notice: `Press ${mod}C to copy.` }))
+    view.focus()
+  }
+  const items: MenuItem[] = [
+    ...(python
+      ? ([
+          selected ? ['Run selection', () => runPythonFrom(view, id), { disabled: cantRun, keys: `${mod}Enter` }] : ['Run cell', () => runPythonFrom(view, id, true), { disabled: cantRun, keys: 'Shift+Enter' }],
+          ['Run all', () => runAll(view, id), { disabled: cantRun, keys: selected ? undefined : `${mod}Enter` }],
+        ] as MenuItem[])
+      : ([
+          ['Run selection', () => void runSql(id, selected), { disabled: cantRun || !selected, keys: selected ? `${mod}Enter` : undefined }],
+          ['Run all', () => runAll(view, id), { disabled: cantRun, keys: selected ? undefined : `${mod}Enter` }],
+          ['Explain', () => void explainSql(id, currentSql(view)), { disabled: cantRun }],
+          ['Format SQL', formatActiveTab, { keys: isMac ? '⇧⌥F' : 'Shift+Alt+F' }],
+        ] as MenuItem[])),
+    ['Toggle comment', () => (toggleComment(view), view.focus()), { keys: `${mod}/` }],
+    'separator',
+    [
+      'Cut',
+      () => {
+        copy()
+        view.dispatch({ ...view.state.replaceSelection(''), userEvent: 'delete.cut' })
+      },
+      { disabled: !selected, keys: `${mod}X` },
+    ],
+    ['Copy', copy, { disabled: !selected, keys: `${mod}C` }],
+    ['Paste', () => void paste(), { keys: `${mod}V` }],
+    ...(python ? [] : ([ 'separator', ['Open schema in Model ↗', () => openAsModel('main'), { disabled: !ready || !hasTables }] ] as MenuItem[])),
+  ]
+  return <Menu items={items} close={close} at={at} label="Editor" />
+}
 
 export function SqlEditor() {
   const host = useRef<HTMLDivElement>(null)
@@ -245,5 +321,28 @@ export function SqlEditor() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dark])
 
-  return <div ref={host} className="h-full overflow-hidden" />
+  // Right-click opens our menu; Shift + right-click, as in a browser, leaves the browser's.
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
+  const closeMenu = useCallback(() => setMenu(null), [])
+  const longPress = useLongPress(setMenu)
+  return (
+    <>
+      <div
+        ref={host}
+        className="h-full overflow-hidden"
+        data-editor
+        onContextMenu={(e) => {
+          if (e.shiftKey) return
+          e.preventDefault()
+          const v = view.current
+          // A click outside the selection puts the cursor there first, as an editor does.
+          const pos = v?.posAtCoords({ x: e.clientX, y: e.clientY })
+          if (v && pos != null && v.state.selection.main.empty) v.dispatch({ selection: { anchor: pos } })
+          setMenu({ x: e.clientX, y: e.clientY })
+        }}
+        {...longPress}
+      />
+      {menu && view.current && <EditorMenu view={view.current} at={menu} close={closeMenu} />}
+    </>
+  )
 }

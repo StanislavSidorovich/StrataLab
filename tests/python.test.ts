@@ -171,3 +171,66 @@ describe('Python tabs: tables to pandas and back', () => {
     expect(uniqueNames(['x', 'X', 'x', '', ''])).toEqual(['x', 'X_1', 'x_2', 'column', 'column_1'])
   })
 })
+
+describe('Python tabs: example, download bar, switching', () => {
+  it('uses the demo shop starter only when the demo is loaded', async () => {
+    const { pythonStarter } = await import('../src/core/pyStarter')
+    expect(pythonStarter([], true)).toContain('lab.table("orders")')
+    const none = pythonStarter([], false)
+    expect(none).toContain('lab.sql("SELECT 42 AS answer")')
+    expect(none).toContain('Sample datasets')
+    expect(none).not.toContain('"orders"')
+  })
+
+  it('reads the first table that is loaded: mine before a dataset, tables before views', async () => {
+    const { pythonStarter } = await import('../src/core/pyStarter')
+    const t = (schema: string, name: string, kind = 'table') => ({ schema, name, kind })
+    expect(pythonStarter([t('chinook', 'Album'), t('main', 'v', 'view'), t('main', 'sales')], false)).toContain('lab.table("sales")')
+    expect(pythonStarter([t('chinook', 'Album'), t('northwind', 'Order Details')], false)).toContain('lab.table("chinook.Album")')
+  })
+
+  it('works out the bytes of a download from the package sizes, and is unsure without them', async () => {
+    const { bytesToLoad } = await import('../src/core/python')
+    const sizes = { pandas: { size: 5, depends: ['numpy'] }, numpy: { size: 7, depends: [] }, seaborn: { size: 0, depends: [] } }
+    expect(bytesToLoad(sizes, ['pandas'], new Set())).toBe(12)
+    expect(bytesToLoad(sizes, ['pandas'], new Set(['numpy']))).toBe(5)
+    expect(bytesToLoad(sizes, ['seaborn'], new Set())).toBeNull()
+    expect(bytesToLoad(sizes, ['scipy'], new Set())).toBeNull()
+  })
+
+  it('words the download: megabytes and percent, never 100 %', async () => {
+    const { pythonProgressLabel, pythonProgressShare } = await import('../src/core/progress')
+    expect(pythonProgressLabel('Downloading Python', { loaded: 7_400_000, total: 17_700_000 })).toBe('Python 7.4 / 17.7 MB · 41 %')
+    expect(pythonProgressLabel('Downloading Python', { loaded: 20_000_000, total: 17_700_000 })).toBe('Python 17.7 / 17.7 MB · 99 %')
+    expect(pythonProgressLabel('Downloading seaborn', { loaded: 1_000_000, total: null })).toBe('seaborn 1.0 MB')
+    expect(pythonProgressShare({ loaded: 5, total: 10 })).toBe(0.5)
+    expect(pythonProgressShare({ loaded: 5, total: null })).toBeNull()
+  })
+
+  it('opens a new tab when text would cross between SQL and Python, else switches in place', async () => {
+    const { dialectSwitch } = await import('../src/core/tabs')
+    expect(dialectSwitch('duckdb', 'python', 'SELECT 1')).toBe('new-tab')
+    expect(dialectSwitch('python', 'tsql', 'df = 1')).toBe('new-tab')
+    expect(dialectSwitch('duckdb', 'python', '  \n')).toBe('in-place')
+    expect(dialectSwitch('duckdb', 'tsql', 'SELECT 1')).toBe('in-place')
+    expect(dialectSwitch('python', 'python', 'x')).toBe('in-place')
+  })
+})
+
+describe('name hints', () => {
+  const tables = [{ schema: 'adventureworks', name: 'Product' }, { schema: 'adventureworks', name: 'Address' }, { schema: 'quaera', name: 'fact_sellout' }, { schema: 'main', name: 'orders' }]
+  it('Python: a dataset name or a table name that is not a variable', async () => {
+    const { pythonNameHint } = await import('../src/core/dialect')
+    expect(pythonNameHint("name 'adventureworks' is not defined", tables)).toContain('lab.table("adventureworks.Product"), lab.table("adventureworks.Address")')
+    expect(pythonNameHint("name 'Product' is not defined", tables)).toContain('Did you mean lab.table("adventureworks.Product")?')
+    expect(pythonNameHint("name 'fact_sellout' is not defined", tables)).toContain('lab.table("quaera.fact_sellout")')
+    expect(pythonNameHint("name 'orders' is not defined", tables)).toContain('lab.table("orders")')
+    expect(pythonNameHint("name 'x' is not defined", tables)).toBeNull()
+  })
+  it('SQL: names the schema-qualified table unless DuckDB already did', async () => {
+    const { sqlNameHint } = await import('../src/core/dialect')
+    expect(sqlNameHint('Catalog Error: Table with name Product does not exist!\nDid you mean "Products"?', tables)).toContain('adventureworks.Product')
+    expect(sqlNameHint('Catalog Error: Table with name Product does not exist!\nDid you mean "adventureworks.Product"?', tables)).toBeNull()
+    expect(sqlNameHint('Catalog Error: Table with name nothing does not exist!', tables)).toBeNull()
+  })
+})

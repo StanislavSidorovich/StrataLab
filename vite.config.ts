@@ -8,7 +8,7 @@ import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { swFiles } from './src/core/pwa.ts'
 import { EXTENSIONS_DIR } from './src/core/extensions.ts'
-import { hasOwnPackages, PYODIDE_DIR as PY_DIR, pythonPackageFiles, servedImports } from './src/core/python.ts'
+import { EXTRA_WHEELS, hasOwnPackages, packageClosure, PYODIDE_DIR as PY_DIR, PYTHON_PACKAGES, pythonPackageFiles, servedImports, type PackageSize } from './src/core/python.ts'
 import { isLicenseFile, licenseOf, licensesText, packageOf, sourceUrl, type Notice } from './src/core/licenses.ts'
 
 // The .wasm is served gzip-compressed, so the browser can't tell how big it is
@@ -41,6 +41,15 @@ const PYODIDE_VERSION = JSON.parse(readFileSync(join(PYODIDE_DIR, 'package.json'
 const pyDir = join('public', PY_DIR)
 const pyodideLock = JSON.parse(readFileSync(join(PYODIDE_DIR, 'pyodide-lock.json'), 'utf8'))
 const ownPython = hasOwnPackages(existsSync(pyDir) ? readdirSync(pyDir) : [], pyodideLock)
+
+// Sizes for the Python download bar (src/core/python.ts bytesToLoad): Pyodide's core files that the
+// page fetches, and each package's file (0 when the site doesn't serve it: the bar then has no total).
+const fileSize = (path: string) => (existsSync(path) ? statSync(path).size : 0)
+const pythonCoreBytes = ['pyodide.asm.wasm', 'python_stdlib.zip', 'pyodide-lock.json'].reduce((n, f) => n + fileSize(join(PYODIDE_DIR, f)), 0)
+const pythonSizes: Record<string, PackageSize> = Object.fromEntries([
+  ...packageClosure(pyodideLock, PYTHON_PACKAGES).map((p) => [p.name.toLowerCase(), { size: ownPython ? fileSize(join(pyDir, p.file_name)) : 0, depends: p.depends }] as const),
+  ...EXTRA_WHEELS.map((w) => [w.module, { size: ownPython ? fileSize(join(pyDir, w.file)) : 0, depends: [] as string[] }] as const),
+])
 
 function pyodideFiles(): Plugin {
   return {
@@ -189,6 +198,8 @@ export default defineConfig({
     __OWN_PYTHON_PACKAGES__: JSON.stringify(ownPython),
     __PYODIDE_VERSION__: JSON.stringify(PYODIDE_VERSION),
     __PYTHON_IMPORTS__: JSON.stringify(servedImports(pyodideLock)),
+    __PYTHON_SIZES__: JSON.stringify(pythonSizes),
+    __PYTHON_CORE_BYTES__: JSON.stringify(pythonCoreBytes),
     __PYTHON_FILES__: JSON.stringify(ownPython ? pythonPackageFiles(pyodideLock).map((f) => f.file) : []),
     __APP_VERSION__: JSON.stringify(JSON.parse(readFileSync('package.json', 'utf8')).version),
   },
