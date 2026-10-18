@@ -39,8 +39,9 @@ function OutputView({ o, inGrid, rows }: { o: Output; inGrid: boolean; rows: str
         <Table2 size={14} /> DataFrame in the grid below: {rows}
       </div>
     )
+  // A value (a DataFrame's columns) keeps its lines: it scrolls sideways rather than wrapping.
   return (
-    <pre className={pre} style={{ fontSize: 12.5 }}>
+    <pre className="mono whitespace-pre overflow-x-auto" style={{ fontSize: 12.5 }}>
       {o.data['text/plain'] ?? ''}
     </pre>
   )

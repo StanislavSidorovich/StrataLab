@@ -65,10 +65,12 @@ export function startKernel(): Promise<void> {
     }
     w.onerror = (e) => {
       const error = e.message || 'Python stopped unexpectedly'
-      say({ status: 'error', error })
-      reject(new Error(error))
       for (const p of pending.values()) p.reject(new Error(error))
       pending.clear()
+      reject(new Error(error))
+      // The next run starts a new worker rather than waiting on this one.
+      stopKernel(false)
+      say({ status: 'error', error })
     }
   })
   const base = siteBase()
