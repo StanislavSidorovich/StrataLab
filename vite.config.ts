@@ -8,7 +8,7 @@ import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { swFiles } from './src/core/pwa.ts'
 import { EXTENSIONS_DIR } from './src/core/extensions.ts'
-import { hasOwnPackages, PYODIDE_DIR as PY_DIR, servedImports } from './src/core/python.ts'
+import { hasOwnPackages, PYODIDE_DIR as PY_DIR, pythonPackageFiles, servedImports } from './src/core/python.ts'
 import { isLicenseFile, licenseOf, licensesText, packageOf, sourceUrl, type Notice } from './src/core/licenses.ts'
 
 // The .wasm is served gzip-compressed, so the browser can't tell how big it is
@@ -189,6 +189,7 @@ export default defineConfig({
     __OWN_PYTHON_PACKAGES__: JSON.stringify(ownPython),
     __PYODIDE_VERSION__: JSON.stringify(PYODIDE_VERSION),
     __PYTHON_IMPORTS__: JSON.stringify(servedImports(pyodideLock)),
+    __PYTHON_FILES__: JSON.stringify(ownPython ? pythonPackageFiles(pyodideLock).map((f) => f.file) : []),
     __APP_VERSION__: JSON.stringify(JSON.parse(readFileSync('package.json', 'utf8')).version),
   },
   build: { chunkSizeWarningLimit: 2000 },

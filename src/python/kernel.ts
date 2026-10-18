@@ -14,6 +14,8 @@ declare const __OWN_PYTHON_PACKAGES__: boolean
 declare const __PYODIDE_VERSION__: string
 /** Module name → Pyodide package, for the packages the site serves (src/core/python.ts servedImports). */
 declare const __PYTHON_IMPORTS__: Record<string, string>
+/** The package files under pyodide/ (none when the site doesn't serve them). */
+declare const __PYTHON_FILES__: string[]
 
 export type KernelState = { status: 'off' } | { status: 'loading'; text: string } | { status: 'ready'; version: string; jspi: boolean } | { status: 'error'; error: string }
 
@@ -51,6 +53,7 @@ export function startKernel(): Promise<void> {
         readyState = { status: 'ready', version: msg.version, jspi: msg.jspi }
         say(readyState)
         resolve()
+        warmCache()
       } else if (msg.type === 'failed') {
         say({ status: 'error', error: msg.error })
         reject(new Error(msg.error))
@@ -82,6 +85,28 @@ export function startKernel(): Promise<void> {
   say({ status: 'loading', text: 'Downloading Python' })
   w.postMessage(init)
   return started
+}
+
+/**
+ * Once Python is up, the packages not downloaded yet (matplotlib, seaborn…) are fetched in the
+ * background, one at a time, so the service worker keeps them: Python tabs then work offline in full
+ * after their first use, not only with what that first session imported. Production only (the
+ * service worker), once per page.
+ */
+let warmed = false
+function warmCache() {
+  if (warmed || !__PYTHON_FILES__.length || !navigator.serviceWorker?.controller) return
+  warmed = true
+  const dir = new URL(`${PYODIDE_DIR}/`, siteBase())
+  setTimeout(async () => {
+    for (const f of __PYTHON_FILES__)
+      try {
+        // Through the service worker, which stores what it hasn't got; the body is read to the end.
+        await (await fetch(new URL(f, dir), { priority: 'low' } as RequestInit)).arrayBuffer()
+      } catch {
+        return // offline or gone: the next visit tries again
+      }
+  }, 5000)
 }
 
 /** Ends the Python session (Stop, Restart): its variables are gone; the next run starts a new one. */
