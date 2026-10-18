@@ -143,6 +143,25 @@ export function query(sql: string): Promise<Table> {
   return serial(async () => (await getEngine()).conn.query(sql))
 }
 
+/**
+ * Statements around a query, run on the same connection with nothing in between (a SQLite tab's
+ * search path and integer division, src/core/sqliteDialect.ts): `after` runs even when it fails.
+ */
+export interface Session {
+  before: string[]
+  after: string[]
+}
+
+async function around<T>(conn: duckdb.AsyncDuckDBConnection, session: Session | undefined, job: () => Promise<T>): Promise<T> {
+  if (!session) return job()
+  try {
+    for (const s of session.before) await conn.query(s)
+    return await job()
+  } finally {
+    for (const s of session.after) await conn.query(s).catch(() => {})
+  }
+}
+
 /** The tab whose cancellable query is running, if any. */
 let sending: string | null = null
 
@@ -152,16 +171,18 @@ let sending: string | null = null
  * in one go when it starts; only the last one can be stopped. Returns the last statement's result.
  * `stopped`: asked when its turn comes, so a query stopped while it waited never starts.
  */
-export function queryCancellable(sql: string, tag: string, stopped: () => boolean): Promise<Table> {
+export function queryCancellable(sql: string, tag: string, stopped: () => boolean, session?: Session): Promise<Table> {
   return serial(async () => {
     if (stopped()) throw new Error('query was canceled')
     const { conn } = await getEngine()
-    sending = tag
-    try {
-      return await tableFromIPC(await conn.send(sql))
-    } finally {
-      sending = null
-    }
+    return around(conn, session, async () => {
+      sending = tag
+      try {
+        return await tableFromIPC(await conn.send(sql))
+      } finally {
+        sending = null
+      }
+    })
   })
 }
 
@@ -170,19 +191,21 @@ export function queryCancellable(sql: string, tag: string, stopped: () => boolea
  * (src/core/rowLimit.ts): DuckDB streams it and stops making rows once the limit is passed,
  * so a `SELECT *` on millions of rows costs no more than the rows shown. `more`: it had more.
  */
-export function queryLimited(sql: string, tag: string, stopped: () => boolean, limit: number): Promise<{ table: Table; more: boolean }> {
+export function queryLimited(sql: string, tag: string, stopped: () => boolean, limit: number, session?: Session): Promise<{ table: Table; more: boolean }> {
   return serial(async () => {
     if (stopped()) throw new Error('query was canceled')
     const { conn } = await getEngine()
-    sending = tag
-    try {
-      const reader = await conn.send(sql, true)
-      const { batches, more } = await takeRows(reader, limit)
-      // The rows past the limit are never fetched; the next query on the connection drops them.
-      return { table: new Table(reader.schema, batches), more }
-    } finally {
-      sending = null
-    }
+    return around(conn, session, async () => {
+      sending = tag
+      try {
+        const reader = await conn.send(sql, true)
+        const { batches, more } = await takeRows(reader, limit)
+        // The rows past the limit are never fetched; the next query on the connection drops them.
+        return { table: new Table(reader.schema, batches), more }
+      } finally {
+        sending = null
+      }
+    })
   })
 }
 

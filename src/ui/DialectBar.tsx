@@ -1,15 +1,18 @@
-// Above the editor (stage 4): what this tab speaks. DuckDB runs as written; T-SQL is translated
-// to DuckDB first (sqlglot) and the translation can be seen side by side; PostgreSQL runs on a
-// real PostgreSQL (PGlite), a separate database that tables are copied into.
+// Above the editor (stage 4): what this tab speaks. DuckDB runs as written; T-SQL and SQLite
+// (as the Quaera trainer runs it) are translated to DuckDB first (sqlglot) and the translation can
+// be seen side by side; PostgreSQL runs on a real PostgreSQL (PGlite), a separate database that
+// tables are copied into.
 import { useEffect } from 'react'
 import { ArrowLeftRight, Copy, ListTree, Loader2, Play, Redo2, RotateCcw, Search, Square, SquareSlash, Undo2, WandSparkles } from 'lucide-react'
-import { copySchemaToPostgres, explainSql, ownTables, restartPython, setTabDialect, showTranslation, startPython, stopQuery, tabDialect, useLab, type Dialect } from './store'
+import { copySchemaToPostgres, explainSql, isTranslated, ownTables, restartPython, setTabDialect, showTranslation, startPython, stopQuery, tabDialect, useLab, type Dialect } from './store'
 import { activeSql, editorCommand, formatActiveTab, runActive } from './SqlEditor'
 
-const DIALECTS: { id: Dialect; label: string; short: string; title: string }[] = [
-  { id: 'duckdb', label: 'DuckDB', short: 'DuckDB', title: 'Run as written on DuckDB (close to PostgreSQL)' },
-  { id: 'tsql', label: 'SQL Server (T-SQL)', short: 'T-SQL', title: 'Write SQL Server’s T-SQL: it is translated to DuckDB (by sqlglot) before it runs, and you can see the translation side by side' },
-  { id: 'postgres', label: 'PostgreSQL', short: 'Postgres', title: 'Run on a real PostgreSQL in this browser (PGlite): a separate database, copy tables into it from the tree' },
+/** `title`: when to use it, then what happens (the switch's tooltips; the guide says the same). */
+export const DIALECTS: { id: Dialect; label: string; short: string; title: string }[] = [
+  { id: 'duckdb', label: 'DuckDB', short: 'DuckDB', title: 'For your own data and analysis: runs as written on DuckDB (close to PostgreSQL)' },
+  { id: 'sqlite', label: 'SQLite (Quaera)', short: 'SQLite', title: 'To re-run a Quaera trainer task with the same result: SQLite as quaera.app runs it, on its Kaiyo Trading tables (bare names), translated to DuckDB' },
+  { id: 'tsql', label: 'SQL Server (T-SQL)', short: 'T-SQL', title: 'To practise an employer’s SQL Server: write T-SQL, it is translated to DuckDB (by sqlglot) before it runs, and you can see the translation side by side' },
+  { id: 'postgres', label: 'PostgreSQL', short: 'Postgres', title: 'To practise an employer’s PostgreSQL: runs on a real PostgreSQL in this browser (PGlite), a separate database, copy tables into it from the tree' },
   { id: 'python', label: 'Python', short: 'Python', title: 'Python with pandas, matplotlib and seaborn over the same tables: lab.table("orders"), lab.sql("SELECT …"). # %% lines split the tab into cells' },
 ]
 
@@ -51,12 +54,12 @@ export function DialectBar() {
         ))}
       </div>
 
-      {dialect === 'tsql' && (
+      {isTranslated(dialect) && (
         <>
           <span className="hidden lg:inline truncate" style={{ color: 'var(--muted)' }}>
-            Translated to DuckDB before it runs
+            {dialect === 'sqlite' ? 'As in the Quaera trainer: its tables, translated to DuckDB' : 'Translated to DuckDB before it runs'}
           </span>
-          <button className="btn btn-ghost shrink-0" onClick={() => void showTranslation(tab.id, activeSql())} title="Translate without running and show T-SQL and DuckDB side by side">
+          <button className="btn btn-ghost shrink-0" onClick={() => void showTranslation(tab.id, activeSql())} title={`Translate without running and show ${dialect === 'sqlite' ? 'SQLite' : 'T-SQL'} and DuckDB side by side`}>
             {translation?.status === 'loading' ? <Loader2 size={13} className="animate-spin" /> : <ArrowLeftRight size={13} />} Show translation
           </button>
         </>

@@ -3,7 +3,7 @@
 
 export interface HistoryEntry {
   sql: string
-  /** the tab's dialect: duckdb, tsql or postgres */
+  /** the tab's dialect: duckdb, tsql, postgres, sqlite or python */
   dialect: string
   /** when it finished (ms since 1970) */
   at: number

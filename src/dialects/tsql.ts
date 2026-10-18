@@ -1,8 +1,8 @@
-// T-SQL → DuckDB (stage 4): asks the sqlglot worker to translate a script, statement by statement.
+// T-SQL and SQLite → DuckDB (stage 4): asks the sqlglot worker to translate a script, statement by statement.
 import type { TranslateRequest } from './sqlglotWorker'
 
 export interface TranslatedStatement {
-  /** the T-SQL as written */
+  /** the T-SQL or SQLite as written */
   source: string
   /** where it starts in the script */
   at: number
@@ -40,13 +40,26 @@ let loaded = false
 /** True once Python and sqlglot are up (a translation then takes milliseconds). */
 export const translatorReady = () => loaded
 
-export function translateTsql(script: string, progress?: (p: TranslatorProgress) => void): Promise<TranslatedStatement[]> {
+/** The dialects sqlglot translates from. */
+export type SourceDialect = 'tsql' | 'sqlite'
+
+/**
+ * `schema`: for SQLite, the column types of the tables bare names reach (src/core/sqliteDialect.ts).
+ */
+export function translateToDuckdb(
+  script: string,
+  read: SourceDialect,
+  schema: Record<string, Record<string, string>> | null,
+  progress?: (p: TranslatorProgress) => void,
+): Promise<TranslatedStatement[]> {
   onProgress = progress ?? null
   const id = ++nextId
   const base = new URL('.', document.baseURI)
   const req: TranslateRequest = {
     id,
     script,
+    read,
+    schema,
     indexURL: new URL('pyodide/', base).href,
     wheelURL: new URL(`sqlglot/sqlglot-${SQLGLOT_VERSION}-py3-none-any.whl`, base).href,
   }

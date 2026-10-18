@@ -1,4 +1,4 @@
-// Pyodide + sqlglot in a Web Worker (stage 4): the first T-SQL query loads Python (~12 MB, once,
+// Pyodide + sqlglot in a Web Worker (stage 4): the first T-SQL or SQLite query loads Python (~12 MB, once,
 // then from the browser's cache) without freezing the page. Both are served with the site
 // (vite.config.ts copies Pyodide to pyodide/, the sqlglot wheel is in public/sqlglot/).
 import type { PyodideInterface } from 'pyodide'
@@ -7,6 +7,8 @@ import TRANSLATE_PY from './translate.py?raw'
 export interface TranslateRequest {
   id: number
   script: string
+  read: 'tsql' | 'sqlite'
+  schema: Record<string, Record<string, string>> | null
   indexURL: string
   wheelURL: string
 }
@@ -34,12 +36,14 @@ function post(msg: object) {
 }
 
 self.onmessage = async (e: MessageEvent<TranslateRequest>) => {
-  const { id, script, indexURL, wheelURL } = e.data
+  const { id, script, read, schema, indexURL, wheelURL } = e.data
   try {
     ready ??= start(indexURL, wheelURL)
     const py = await ready
     py.globals.set('_script', script)
-    const json = py.runPython('import json\njson.dumps(translate(_script))') as string
+    py.globals.set('_read', read)
+    py.globals.set('_schema', JSON.stringify(schema ?? {}))
+    const json = py.runPython('import json\njson.dumps(translate(_script, read=_read, schema=json.loads(_schema)))') as string
     post({ id, result: JSON.parse(json) })
   } catch (err) {
     ready = null

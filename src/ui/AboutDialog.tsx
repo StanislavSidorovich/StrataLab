@@ -16,8 +16,8 @@ const PARTS: [string, string, string, string][] = [
   ['DuckDB, DuckDB-WASM', 'the database that runs your queries', 'MIT', 'https://duckdb.org'],
   ['DuckDB extensions Parquet and ICU', 'datasets, time zones (served with the site)', 'MIT; ICU: Unicode License v3', 'duckdb-ext/NOTICE.txt'],
   ['PGlite', 'the PostgreSQL mode', 'Apache-2.0, PostgreSQL License', 'https://pglite.dev'],
-  ['Pyodide, CPython', 'Python in the browser: Python tabs and the T-SQL translator', 'MPL-2.0, PSF License', 'pyodide/LICENSE.txt'],
-  ['sqlglot', 'the T-SQL → DuckDB translation', 'MIT', 'sqlglot/NOTICE.md'],
+  ['Pyodide, CPython', 'Python in the browser: Python tabs and the T-SQL / SQLite translator', 'MPL-2.0, PSF License', 'pyodide/LICENSE.txt'],
+  ['sqlglot', 'the T-SQL and SQLite → DuckDB translation', 'MIT', 'sqlglot/NOTICE.md'],
   ['pandas, NumPy, matplotlib, seaborn', 'Python tabs, with what they need (Pillow, fontTools, python-dateutil, pytz…)', 'BSD-3-Clause, matplotlib (PSF-based), MIT and others', 'pyodide/python-packages-NOTICE.txt'],
   ['Apache Arrow', 'results between the database and the page', 'Apache-2.0', 'https://arrow.apache.org'],
   ['SheetJS Community Edition', 'reading and writing Excel files', 'Apache-2.0', 'https://sheetjs.com'],
@@ -93,7 +93,7 @@ function About() {
   return (
     <>
       <p>
-        A SQL workbench in the browser: add CSV and Excel files or a sample database and query them with SQL (DuckDB, SQL Server T-SQL or PostgreSQL). Nothing to install, no
+        A SQL workbench in the browser: add CSV and Excel files or a sample database and query them with SQL (DuckDB, SQLite as in the Quaera trainer, SQL Server T-SQL or PostgreSQL). Nothing to install, no
         account, and <b>your data stays on this device</b>: there is no server that receives it (see Privacy).
       </p>
       <p>
