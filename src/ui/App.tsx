@@ -15,13 +15,15 @@ import { AboutDialog } from './AboutDialog'
 import { ShareDialog } from './ShareDialog'
 import { PracticeDialog, TaskBar } from './Practice'
 import { DialectBar } from './DialectBar'
-import { applyUpdate, useUpdateReady } from '../pwa/register'
+import { applyUpdate, checkForUpdates, updateCheckMessage, useUpdateReady } from '../pwa/register'
 import { engineLoadingLabel, engineLoadingShort } from './EngineLoading'
 import { PYTHON_STARTER } from '../data/demo'
 import { addTab, closeTabs, downloadBackup, duplicateTab, enqueueFiles, openAbout, openCatalog, openShare, openWelcome, pasteTable, pasteTableFromClipboard, renameTab, reopenClosedTab, useLab } from './store'
 import { AppearanceButton } from './Appearance'
 import { Menu, useLongPress, type MenuItem } from './Menu'
 import { tabsToClose } from '../core/tabs'
+
+declare const __APP_VERSION__: string
 
 export function App() {
   const theme = useLab((s) => s.theme)
@@ -261,12 +263,18 @@ function FileMenu() {
   )
 }
 
+async function runUpdateCheck() {
+  useLab.setState({ notice: 'Checking for updates…' })
+  useLab.setState({ notice: updateCheckMessage(await checkForUpdates(), __APP_VERSION__) })
+}
+
 /** Help: the guide, About & licences, Privacy (src/ui/AboutDialog.tsx). */
 function HelpMenu() {
   const [open, setOpen] = useState(false)
   const items: MenuItem[] = [
     ['How to use Quaera Lab', openWelcome],
     'separator',
+    ['Check for updates', () => void runUpdateCheck()],
     ['About & licences', () => openAbout('about')],
     ['Privacy: your data stays here', () => openAbout('privacy')],
   ]
