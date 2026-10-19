@@ -2,7 +2,8 @@
 // schema, with where they come from and their licence. Also the card shown while one loads.
 import { useState } from 'react'
 import { AlertTriangle, BookOpen, Check, EyeOff, ExternalLink, Library, Link2, Loader2, Store, X } from 'lucide-react'
-import { addTab, catalogState, closeDatasetError, hasDemoTables, hideDemo, loadDemo, openCatalog, openDataset, openGuide, openPractice, showDemo, useLab } from './store'
+import { addTab, catalogState, closeDatasetError, hasDemoTables, hideDemo, loadDemo, openCatalog, openDataset, openGuide, openPractice, openWalkthrough, showDemo, useLab } from './store'
+import { walkthroughById } from '../data/walkthroughs'
 import { WELCOME_SQL } from '../data/demo'
 import { DATASETS, datasetBytes, datasetRows } from '../data/datasets'
 
@@ -133,6 +134,9 @@ function DemoCard() {
         )}
         <button className="btn btn-ghost" onClick={() => { openCatalog(false); openPractice() }} title="Worked examples and tasks with a check of your answer">
           Practice…
+        </button>
+        <button className="btn btn-ghost" onClick={() => void openWalkthrough(walkthroughById('demo')!)} title="A whole analysis in Python, cell by cell, every step explained: opens in a new Python tab">
+          Python walkthrough
         </button>
         {shown && (
           <button className="btn btn-ghost ml-auto" onClick={hideDemo} title="Take the demo tables out of the table list. Nothing is deleted.">

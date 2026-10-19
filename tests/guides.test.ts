@@ -3,7 +3,7 @@
 // them; Python in Pyodide with pandas through lab.py's own cell runner, its lab.table calls
 // fetched from the same DuckDB as the page does. The Python half needs public/pyodide
 // (`npm run python-packages`) and is skipped without it.
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { resolve, sep } from 'node:path'
 import { beforeAll, describe, expect, it } from 'vitest'
@@ -11,6 +11,8 @@ import type { Table } from 'apache-arrow'
 import { loadPyodide, type PyodideInterface } from 'pyodide'
 import { DATASETS } from '../src/data/datasets'
 import { GUIDES, cheatSetup, cheatSheet, guideNotebook } from '../src/data/guides'
+import { WALKTHROUGHS } from '../src/data/walkthroughs'
+import { DEMO_SQL } from '../src/data/demo'
 import { callKey, labCalls, splitCells, tableSql } from '../src/core/pyCells'
 import { frameFromArrow } from '../src/python/columns'
 
@@ -39,6 +41,7 @@ beforeAll(async () => {
       conn.query(`INSERT INTO "${d.id}"."${t.name}" BY NAME SELECT * FROM read_parquet('${file}')`)
     }
   }
+  conn.query(DEMO_SQL)
 }, 120_000)
 
 const noLongDash = (s: string) => expect(s, s.slice(0, 60)).not.toMatch(/—/)
@@ -58,6 +61,19 @@ describe('Dataset guides: content', () => {
     for (const g of GUIDES) {
       for (const s of [g.summary, ...g.facts, ...g.links, ...g.tables.flatMap((t) => [t.name, t.about])]) noLongDash(s)
       for (const e of g.examples) for (const s of [e.title, e.question, e.sql, e.python]) noLongDash(s)
+    }
+  })
+
+  it('a walkthrough for the demo shop and every dataset, explained cell by cell', () => {
+    expect(WALKTHROUGHS.map((w) => w.id).sort()).toEqual(['demo', ...DATASETS.map((d) => d.id)].sort())
+    for (const w of WALKTHROUGHS) {
+      noLongDash(w.code)
+      expect(w.code, w.id).not.toMatch(/FINDINGS_/)
+      const cells = splitCells(w.code)
+      // every code cell starts with a comment saying what it does
+      for (const c of cells.filter((c) => c.kind === 'code')) expect(c.source.trimStart().startsWith('#') || c.source.startsWith('import'), `${w.id} line ${c.line}`).toBe(true)
+      for (const step of ['shape', 'dtypes', 'isna()', 'describe()', 'value_counts', 'merge(', 'groupby(', 'pivot_table(', 'plt.show()', 'lab.save(']) expect(w.code, `${w.id}: ${step}`).toContain(step)
+      expect(cells.at(-2)?.kind, `${w.id}: what we found, in words`).toBe('markdown')
     }
   })
 
@@ -87,30 +103,33 @@ describe('Dataset guides: SQL runs on the real data', () => {
 
 describe.skipIf(!HAS_PANDAS)('Dataset guides: Python runs on the real data', () => {
   let py: PyodideInterface
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let runCell: any
   let count = 0
 
   beforeAll(async () => {
     py = await loadPyodide({ packageBaseUrl: resolve('public/pyodide') + '/' })
-    await py.loadPackage(['pandas'])
-    py.runPython(readFileSync('src/python/lab.py', 'utf8'))
+    await py.loadPackage(['pandas', 'matplotlib'])
+    // As the worker does (src/python/pythonWorker.ts): lab.py and its matplotlib backend as modules.
+    py.FS.writeFile('/home/pyodide/lab.py', readFileSync('src/python/lab.py', 'utf8'))
+    py.FS.writeFile('/home/pyodide/lab_backend.py', readFileSync('src/python/lab_backend.py', 'utf8'))
+    runCell = py.pyimport('lab').run_cell
   }, 180_000)
 
   /** Runs a cell as the worker does: its lab.table / lab.sql fetched first. Its outputs and grid rows. */
   async function run(code: string) {
     const fetched: Record<string, unknown> = {}
     for (const c of labCalls(code)) fetched[callKey(c)] = frameFromArrow(conn.query(c.kind === 'table' ? tableSql(c.arg) : c.arg))
-    const runCell = py.globals.get('run_cell')
     const f = py.toPy(fetched)
     const names = py.toPy([])
     try {
       const proxy = await runCell(code, 1, ++count, f, names, null)
-      const r = proxy.toJs({ dict_converter: Object.fromEntries, create_pyproxies: false }) as { outputs: { output_type: string; ename?: string; evalue?: string }[]; grid: { rows: number } | null }
+      const r = proxy.toJs({ dict_converter: Object.fromEntries, create_pyproxies: false }) as { outputs: { output_type: string; ename?: string; evalue?: string; text?: string; data?: Record<string, string> }[]; grid: { rows: number } | null; saves: unknown[] }
       proxy.destroy()
       return r
     } finally {
       f.destroy()
       names.destroy()
-      runCell.destroy()
     }
   }
 
@@ -132,5 +151,27 @@ describe.skipIf(!HAS_PANDAS)('Dataset guides: Python runs on the real data', () 
         expect(errorOf(r), `${g.id} / ${line.task}`).toEqual([])
       }
     }, 120_000)
+  }
+
+  // A walkthrough's cells in order in one session, as Run all does; with LAB_WALKTHROUGH_DUMP set,
+  // their outputs go to data-local/ to be read (the words in its last markdown cell must match them).
+  for (const w of WALKTHROUGHS) {
+    it(`walkthrough ${w.id}: every cell runs, in order`, async () => {
+      const cells = splitCells(w.code).filter((c) => c.kind === 'code')
+      expect(cells.length).toBeGreaterThanOrEqual(10)
+      const dump: string[] = []
+      let saves = 0
+      let figures = 0
+      for (const c of cells) {
+        const r = await run(c.source)
+        expect(errorOf(r), `${w.id} cell at line ${c.line}`).toEqual([])
+        saves += r.saves.length
+        figures += r.outputs.filter((o) => o.data?.['image/png']).length
+        dump.push(`# ---- line ${c.line}\n` + r.outputs.map((o) => o.text ?? o.data?.['text/plain'] ?? '').join('\n'))
+      }
+      expect(saves, `${w.id}: lab.save`).toBeGreaterThan(0)
+      expect(figures, `${w.id}: a chart`).toBeGreaterThan(0)
+      if (process.env.LAB_WALKTHROUGH_DUMP) writeFileSync(`data-local/walkthrough-${w.id}.txt`, dump.join('\n\n'))
+    }, 180_000)
   }
 })

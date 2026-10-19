@@ -15,6 +15,7 @@ import { clearFill } from '../db/fill'
 import { DATASETS, datasetById, datasetFromHash, hashWithoutDataset, type Dataset } from '../data/datasets'
 import { loadDataset, removeDataset, type DatasetProgress } from '../db/datasets'
 import { splitCells } from '../core/pyCells'
+import type { Walkthrough } from '../data/walkthroughs'
 import { createSchema, listSchemas, moveTables, renameSchema } from '../db/ownDatasets'
 import { catalogSchemaState, datasetName, isOwnSchema, linkedTables } from '../core/ownDatasets'
 import { schemaForModel, showAsModel } from '../db/modelExport'
@@ -1434,6 +1435,15 @@ export async function openGuideCode(d: Dataset, code: string, title: string, lan
   if (lang === 'sql') return void runSql(id, code)
   const cells = splitCells(code)
   void runPython(id, cells.map((c, index) => ({ c, index })).filter(({ c }) => c.kind === 'code').map(({ c, index }) => ({ code: c.source, line: c.line, index, source: c.source })))
+}
+
+/** A walkthrough (src/data/walkthroughs.ts) in a new Python tab, not run: it is read and run cell by cell. */
+export async function openWalkthrough(w: Walkthrough) {
+  const d = datasetById(w.id)
+  if (d) return openGuideCode(d, w.code, `${w.title} walkthrough`, 'python', false)
+  set({ guide: null, catalogOpen: false })
+  await ensureDemo()
+  addTab(w.code, `${w.title} walkthrough`, 'python')
 }
 
 // ------------------------------------------------------------------ practice (stage 5)

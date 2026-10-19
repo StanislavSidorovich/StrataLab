@@ -2,10 +2,11 @@
 // click (the same question in SQL and in pandas), and a pandas ↔ SQL cheat sheet on its tables.
 // Content: src/data/guides.ts. Opened from a dataset's card in the catalog and its folder's menu.
 import { useEffect, useState } from 'react'
-import { BookOpen, Check, Copy, NotebookText, Play, X } from 'lucide-react'
-import { catalogState, openDataset, openGuide, openGuideCode, useLab } from './store'
+import { BookOpen, Check, Copy, GraduationCap, NotebookText, Play, X } from 'lucide-react'
+import { catalogState, openDataset, openGuide, openGuideCode, openWalkthrough, useLab } from './store'
 import { datasetById, type Dataset } from '../data/datasets'
 import { LEVEL_LABEL, cheatSetup, cheatSheet, guideById, guideNotebook, type Guide } from '../data/guides'
+import { walkthroughById, type Walkthrough } from '../data/walkthroughs'
 
 type View = 'about' | 'examples' | 'cheat'
 type Lang = 'sql' | 'python'
@@ -116,6 +117,24 @@ export function GuideDialog() {
   )
 }
 
+/** The dataset's whole analysis in Python, as a card: what it answers and the steps, one button. */
+export function WalkthroughCard({ w }: { w: Walkthrough }) {
+  return (
+    <div className="rounded-lg p-3 flex flex-wrap items-center gap-3" style={{ border: '1px solid var(--accent)', background: 'var(--accent-soft)' }}>
+      <GraduationCap size={20} className="shrink-0" style={{ color: 'var(--accent)' }} />
+      <div className="flex-1 min-w-[14rem]">
+        <div className="font-semibold">A whole analysis in Python, step by step</div>
+        <div style={{ color: 'var(--muted)' }}>
+          {w.question} Get to know the data, clean it, join, group and pivot, draw a chart, write what it shows and save the result: every cell explained in plain words.
+        </div>
+      </div>
+      <button className="btn btn-primary shrink-0" onClick={() => void openWalkthrough(w)} title="Opens in a new Python tab without running it: run the cells one by one with Shift+Enter">
+        <NotebookText size={14} /> Open the walkthrough
+      </button>
+    </div>
+  )
+}
+
 function About({ d, g, loaded, onExamples }: { d: Dataset; g: Guide; loaded: boolean; onExamples: () => void }) {
   return (
     <div className="space-y-4">
@@ -156,6 +175,7 @@ function About({ d, g, loaded, onExamples }: { d: Dataset; g: Guide; loaded: boo
           </ul>
         </section>
       </div>
+      {walkthroughById(g.id) && <WalkthroughCard w={walkthroughById(g.id)!} />}
       <div className="flex flex-wrap items-center gap-2 pt-1">
         <button className="btn btn-primary" onClick={onExamples}>
           <Play size={14} /> Examples
@@ -170,8 +190,10 @@ function About({ d, g, loaded, onExamples }: { d: Dataset; g: Guide; loaded: boo
 
 function Examples({ d, g, lang }: { d: Dataset; g: Guide; lang: Lang }) {
   const all = guideNotebook(g, d.title, lang)
+  const w = walkthroughById(g.id)
   return (
     <div className="space-y-3">
+      {lang === 'python' && w && <WalkthroughCard w={w} />}
       <div className="flex flex-wrap items-center gap-2">
         <p className="flex-1 min-w-[16rem]" style={{ color: 'var(--muted)' }}>
           {lang === 'sql' ? 'Each example opens in a new SQL tab and runs.' : 'Each example opens in a new Python tab and runs; the table comes from lab.table.'} Same questions in SQL and Python: switch above to compare.
