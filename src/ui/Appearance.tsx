@@ -2,6 +2,7 @@
 // the panels, each from a few pale tints or any colour. Rules and swatches in src/core/look.ts.
 import { Moon, Sun } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { applyBorders, readBorders, type Borders } from '../core/borders'
 import { lookColor, lookVars, NO_LOOK, parseLook, setLookColor, SWATCHES, type Look, type LookPart } from '../core/look'
 import { toggleTheme, useLab } from './store'
 
@@ -18,6 +19,7 @@ function readLook(): Look {
 export function AppearanceButton({ className = '' }: { className?: string }) {
   const theme = useLab((s) => s.theme)
   const [look, setLook] = useState(readLook)
+  const [borders, setBorders] = useState<Borders>(readBorders)
   const [open, setOpen] = useState(false)
   const root = useRef<HTMLDivElement>(null)
 
@@ -33,6 +35,8 @@ export function AppearanceButton({ className = '' }: { className?: string }) {
       /* private mode: the look is not remembered */
     }
   }, [look, theme])
+
+  useEffect(() => applyBorders(borders), [borders])
 
   useEffect(() => {
     if (!open) return
@@ -112,10 +116,31 @@ export function AppearanceButton({ className = '' }: { className?: string }) {
               ))}
             </div>
           </div>
+          <div>
+            <div className="mb-1.5" style={{ color: 'var(--muted)' }}>Borders</div>
+            <div className="inline-flex rounded-md overflow-hidden" role="radiogroup" aria-label="Borders" style={{ border: '1px solid var(--line)' }}>
+              {(['soft', 'strong'] as const).map((b) => (
+                <button
+                  key={b}
+                  type="button"
+                  role="radio"
+                  aria-checked={borders === b}
+                  className="px-3 py-1"
+                  style={borders === b ? { background: 'var(--accent-soft)', color: 'var(--accent)', fontWeight: 600 } : { color: 'var(--muted)' }}
+                  onClick={() => setBorders(b)}
+                >
+                  {b === 'soft' ? 'Soft' : 'Strong'}
+                </button>
+              ))}
+            </div>
+          </div>
           {colorRow('editor', 'SQL editor')}
           {colorRow('panels', 'Panels (top bar, tree, results, dialogs)')}
           <div style={{ color: 'var(--muted)', fontSize: 12 }}>Colours are kept separately for the light and dark theme, in this browser.</div>
-          <button type="button" className="btn self-start" onClick={() => setLook(NO_LOOK)}>
+          <button type="button" className="btn self-start" onClick={() => {
+              setLook(NO_LOOK)
+              setBorders('soft')
+            }}>
             Reset to default
           </button>
         </div>
