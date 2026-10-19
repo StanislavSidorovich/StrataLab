@@ -3,7 +3,7 @@
 // real PostgreSQL (PGlite), a separate database that tables are copied into.
 import { useEffect, useState } from 'react'
 import { ArrowLeftRight, ChevronDown, Copy, ListTree, Loader2, Play, Plus, Redo2, RotateCcw, Search, Square, SquareSlash, Undo2, WandSparkles, X } from 'lucide-react'
-import { copySchemaToPostgres, explainSql, ownTables, openWelcome, restartPython, retryPython, setTabDialect, showTranslation, startPython, stopQuery, tabDialect, useLab } from './store'
+import { copySchemaToPostgres, explainSql, ownTables, openCompare, openWelcome, restartPython, retryPython, setTabDialect, showTranslation, startPython, stopQuery, tabDialect, useLab } from './store'
 import { activeSql, addCell, editorCommand, formatActiveTab, runActive } from './SqlEditor'
 import { Menu, type MenuItem } from './Menu'
 import { SQL_DIALECTS, dismissNote, needsNote, noteDismissed, sqlLabel, type SqlDialect } from '../core/dialectNote'
@@ -112,6 +112,8 @@ function SqlDialectMenu({ tabId, dialect }: { tabId: string; dialect: SqlDialect
     'separator',
     { heading: 'WRITE AS…' },
     ...others.map((o): MenuItem => [o.label, () => pick(o.id), { hint: o.hint, note: o.usedIn, checked: dialect === o.id }]),
+    'separator',
+    ['Compare dialects…', () => openCompare(), { hint: 'The same task in DuckDB, T-SQL, PostgreSQL and pandas.' }],
   ]
   return (
     <div className="relative shrink-0">
@@ -144,6 +146,10 @@ function DialectNote({ dialect }: { dialect: 'tsql' | 'postgres' }) {
         <b>{d.label}.</b> {d.hint}{' '}
         <button className="hover:underline" style={{ color: 'var(--accent)' }} onClick={openWelcome}>
           Read the guide
+        </button>
+        {' · '}
+        <button className="hover:underline" style={{ color: 'var(--accent)' }} onClick={() => openCompare()}>
+          Compare dialects
         </button>
       </span>
       <button className="p-0.5 shrink-0" aria-label="Close this note" onClick={() => (dismissNote(dialect), redraw((n) => n + 1))}>

@@ -159,6 +159,8 @@ interface State {
   generate: GenerateState | null
   /** the welcome screen (what's where, how to start) is open */
   welcomeOpen: boolean
+  /** the dialect comparison (src/ui/Compare.tsx) is open */
+  compareOpen: boolean
   /** per tab, for T-SQL tabs */
   translations: Record<string, TranslationState>
   postgres: PostgresState
@@ -288,6 +290,7 @@ export const useLab = create<State>(() => ({
   catalogOpen: false,
   generate: null,
   welcomeOpen: firstVisit(),
+  compareOpen: false,
   translations: {},
   postgres: { status: 'off' },
   pgTables: [],
@@ -1005,6 +1008,10 @@ export async function cancelImport(src: ImportSource) {
 
 export function openWelcome() {
   set({ welcomeOpen: true })
+}
+
+export function openCompare(open = true) {
+  set({ compareOpen: open })
 }
 
 export function closeWelcome() {
