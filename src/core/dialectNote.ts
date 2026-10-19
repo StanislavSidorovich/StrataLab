@@ -1,12 +1,13 @@
 // What each SQL dialect is for, in one line: the "Write as…" menu shows it, and the first time a tab
 // uses T-SQL or PostgreSQL a small note above the editor says it again (closed once per dialect).
+// `usedIn` names a few well-known places the dialect is met, so a newcomer recognises one.
 
 export type SqlDialect = 'duckdb' | 'tsql' | 'postgres'
 
-export const SQL_DIALECTS: { id: SqlDialect; label: string; hint: string }[] = [
-  { id: 'duckdb', label: 'DuckDB', hint: 'The default: runs as written. Close to PostgreSQL.' },
-  { id: 'tsql', label: 'T-SQL (SQL Server)', hint: 'Your course or job uses SQL Server: TOP, GETDATE(). Lab translates it to DuckDB to run.' },
-  { id: 'postgres', label: 'PostgreSQL', hint: 'Your course or job uses PostgreSQL. Runs on a real PostgreSQL in this browser: a separate database, copy tables into it.' },
+export const SQL_DIALECTS: { id: SqlDialect; label: string; hint: string; usedIn: string }[] = [
+  { id: 'duckdb', label: 'DuckDB', hint: 'The default: runs as written. Close to PostgreSQL.', usedIn: 'Used in: Python and Jupyter notebooks, MotherDuck, dbt, Evidence.' },
+  { id: 'tsql', label: 'T-SQL (SQL Server)', hint: 'Your course or job uses SQL Server: TOP, GETDATE(). Lab translates it to DuckDB to run.', usedIn: 'Used in: SQL Server, Azure SQL, SSMS, and the databases behind most company Power BI reports.' },
+  { id: 'postgres', label: 'PostgreSQL', hint: 'Your course or job uses PostgreSQL. Runs on a real PostgreSQL in this browser: a separate database, copy tables into it.', usedIn: 'Used in: Supabase, Amazon RDS and Redshift, Google Cloud SQL, most web apps.' },
 ]
 
 /** The name on the tab bar's button: "SQL · DuckDB", "SQL · T-SQL", "SQL · PostgreSQL". */

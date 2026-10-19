@@ -108,10 +108,10 @@ function SqlDialectMenu({ tabId, dialect }: { tabId: string; dialect: SqlDialect
   const pick = (d: SqlDialect) => setTabDialect(tabId, d)
   const [duck, ...others] = SQL_DIALECTS
   const items: MenuItem[] = [
-    [duck.label, () => pick(duck.id), { hint: duck.hint, checked: dialect === duck.id }],
+    [duck.label, () => pick(duck.id), { hint: duck.hint, note: duck.usedIn, checked: dialect === duck.id }],
     'separator',
     { heading: 'WRITE AS…' },
-    ...others.map((o): MenuItem => [o.label, () => pick(o.id), { hint: o.hint, checked: dialect === o.id }]),
+    ...others.map((o): MenuItem => [o.label, () => pick(o.id), { hint: o.hint, note: o.usedIn, checked: dialect === o.id }]),
   ]
   return (
     <div className="relative shrink-0">

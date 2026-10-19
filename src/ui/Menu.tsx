@@ -2,8 +2,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Check } from 'lucide-react'
 
-/** An action (with a line of explanation under it, or a tick), a line between groups, or a small heading. */
-export type MenuItem = [label: string, run: () => void, opts?: { disabled?: boolean; keys?: string; hint?: string; checked?: boolean }] | 'separator' | { heading: string }
+/** An action (with a line of explanation under it, a fainter note under that, or a tick), a line between groups, or a small heading. */
+export type MenuItem = [label: string, run: () => void, opts?: { disabled?: boolean; keys?: string; hint?: string; note?: string; checked?: boolean }] | 'separator' | { heading: string }
 
 /**
  * With `danger`, the last item is set apart in red. With `at`, the menu opens at that point of
@@ -69,6 +69,11 @@ export function Menu({ items, close, danger = false, at, label, align = 'right' 
               {item[2]?.hint && (
                 <span className="block" style={{ color: 'var(--muted)', fontSize: 11.5, lineHeight: 1.35 }}>
                   {item[2].hint}
+                </span>
+              )}
+              {item[2]?.note && (
+                <span className="block mt-0.5" style={{ color: 'var(--muted)', opacity: 0.8, fontSize: 11, lineHeight: 1.35 }}>
+                  {item[2].note}
                 </span>
               )}
             </span>
