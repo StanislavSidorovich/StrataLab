@@ -7,7 +7,8 @@ import { closeSource, createTable, openSource, type ImportSource } from '../db/i
 import { dialectHints, sqlNameHint, type DialectHint } from '../core/dialect'
 import { qualifiedName, quoteIdent, sqlName, uniqueName } from '../core/sql'
 import { looksLikeTable } from '../core/editorFiles'
-import { DEMO_SQL, DEMO_TABLES, WELCOME_SQL } from '../data/demo'
+import { DEMO_SCHEMA, DEMO_SQL, DEMO_TABLES, WELCOME_SQL } from '../data/demo'
+import { prepareDemoSchema } from '../db/demo'
 import { ddlDataFromHash, decodeDdl, hashWithoutDdl } from '../core/ddlLink'
 import { planDdl, starterSql, type DdlNote, type DdlPlan } from '../core/ddlPlan'
 import { applyPlan, type Existing } from '../db/ddl'
@@ -321,9 +322,11 @@ export const ownTables = (tables: TableInfo[]) => tables.filter((t) => t.schema 
 export const tablesIn = (tables: TableInfo[], schema: string) => tables.filter((t) => t.schema === schema)
 
 export const CATALOG_IDS = DATASETS.map((d) => d.id)
+/** Schema names that are never a dataset of the user's: the catalog's and the demo shop's. */
+export const RESERVED_IDS = [...CATALOG_IDS, DEMO_SCHEMA]
 
 /** The user's own datasets: schemas they made, not the catalog's. */
-export const ownDatasets = (schemas: string[]) => schemas.filter((s) => isOwnSchema(s, CATALOG_IDS))
+export const ownDatasets = (schemas: string[]) => schemas.filter((s) => isOwnSchema(s, RESERVED_IDS))
 
 /** “My tables” for main, the schema's name for a dataset. */
 export const schemaLabel = (schema: string) => (schema === 'main' ? 'My tables' : schema)
@@ -401,7 +404,9 @@ export async function initEngine() {
       set((s) => (s.engine.status === 'loading' ? { engine: { ...s.engine, progress } } : {})),
     )
     set({ engine: { status: 'ready', version: e.version, persistent: e.persistent } })
+    const moved = await prepareDemoSchema()
     await refreshCatalog()
+    if (moved) addLog({ sql: '-- demo shop', ok: true, text: moved })
     // Tabs kept from the last visit that speak PostgreSQL: start it now rather than on the first run.
     if (get().tabs.some((t) => t.dialect === 'postgres')) void startPostgres()
     const fromModel = await openDdlFromHash()
@@ -432,7 +437,8 @@ export async function initEngine() {
 
 export async function refreshCatalog() {
   const [tables, schemas] = await Promise.all([loadCatalog(), listSchemas()])
-  set({ tables, schemas })
+  // The demo shop has its own group in the tree, not a place among the datasets.
+  set({ tables, schemas: schemas.filter((x) => x !== DEMO_SCHEMA) })
 }
 
 /** The tree's Refresh: reads both databases again (changes made from another tab, say). */
@@ -894,11 +900,11 @@ export async function loadDemo() {
   await checkpoint()
   await refreshCatalog()
   set({ demoHidden: false })
-  addLog({ sql: '-- demo shop', ok: true, text: 'Demo shop loaded: customers, products, orders, order_items' })
+  addLog({ sql: '-- demo shop', ok: true, text: 'Demo shop loaded: demo.customers, demo.products, demo.orders, demo.order_items' })
 }
 
 /** All four demo tables are in the database (hidden or not). */
-export const hasDemoTables = (tables: TableInfo[]) => DEMO_TABLES.every((n) => ownTables(tables).some((t) => t.name === n))
+export const hasDemoTables = (tables: TableInfo[]) => DEMO_TABLES.every((n) => tables.some((t) => t.schema === DEMO_SCHEMA && t.name === n))
 
 /** Takes the demo shop out of the tree; its tables stay, so it comes back as it was. */
 export function hideDemo() {
@@ -1207,7 +1213,7 @@ export async function newDataset(ask: (text: string, value: string) => string | 
   for (;;) {
     const raw = ask(text, value)
     if (raw === null) return null
-    const r = datasetName(raw, get().schemas, CATALOG_IDS)
+    const r = datasetName(raw, get().schemas, RESERVED_IDS)
     if ('problem' in r) {
       text = r.problem
       value = raw
@@ -1264,7 +1270,7 @@ export async function renameDataset(from: string): Promise<string | null> {
   for (;;) {
     const raw = prompt(text, value)
     if (raw === null || raw.trim() === from) return null
-    const r = datasetName(raw, get().schemas.filter((s) => s !== from), CATALOG_IDS)
+    const r = datasetName(raw, get().schemas.filter((s) => s !== from), RESERVED_IDS)
     if ('problem' in r) {
       text = r.problem
       value = raw
@@ -1290,7 +1296,7 @@ export async function renameDataset(from: string): Promise<string | null> {
  * conceptual model in model.quaera.app. Called straight from the click: it opens the window first.
  */
 export function openAsModel(schema: string) {
-  const label = schema === 'main' ? 'My tables' : datasetById(schema)?.title ?? schema
+  const label = schema === 'main' ? 'My tables' : schema === DEMO_SCHEMA ? 'demo shop' : datasetById(schema)?.title ?? schema
   showAsModel(schema, label).then(
     (r) => addLog({ sql: `-- show ${schema} as a model`, ok: true, text: `${label}: ${r.tables} tables sent to model.quaera.app` + (r.notes.length ? `\n${r.notes.join('\n')}` : '') }),
     (e) => addLog({ sql: `-- show ${schema} as a model`, ok: false, text: String(e instanceof Error ? e.message : e) }),
@@ -1342,7 +1348,7 @@ export async function openShareFromHash(): Promise<boolean> {
     }
     if (await fetchDataset(d)) loadedNow.push(d.title)
   }
-  const demoMissing = share.demo && !DEMO_TABLES.every((n) => ownTables(get().tables).some((t) => t.name === n))
+  const demoMissing = share.demo && !hasDemoTables(get().tables)
   if (demoMissing) await loadDemo()
   let first: string | null = null
   for (const t of share.tabs) {

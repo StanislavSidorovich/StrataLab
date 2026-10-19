@@ -12,7 +12,7 @@ import { loadPyodide, type PyodideInterface } from 'pyodide'
 import { DATASETS } from '../src/data/datasets'
 import { GUIDES, cheatSetup, cheatSheet, guideNotebook } from '../src/data/guides'
 import { WALKTHROUGHS } from '../src/data/walkthroughs'
-import { DEMO_SQL } from '../src/data/demo'
+import { DEMO_SQL, SEARCH_PATH_SQL } from '../src/data/demo'
 import { callKey, labCalls, splitCells, tableSql } from '../src/core/pyCells'
 import { frameFromArrow } from '../src/python/columns'
 
@@ -42,6 +42,7 @@ beforeAll(async () => {
     }
   }
   conn.query(DEMO_SQL)
+  conn.query(SEARCH_PATH_SQL)
 }, 120_000)
 
 const noLongDash = (s: string) => expect(s, s.slice(0, 60)).not.toMatch(/—/)

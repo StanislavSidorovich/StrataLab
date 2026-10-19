@@ -121,7 +121,7 @@ def _fetch_now(kind, arg):
 
 
 def table(name):
-    """A table or view of the database as a DataFrame: lab.table("orders"), lab.table("quaera.dim_customer")."""
+    """A table or view of the database as a DataFrame: lab.table("demo.orders"), lab.table("quaera.dim_customer")."""
     if not isinstance(name, str):
         raise TypeError("lab.table takes the table's name as a string")
     return _get("table", name)

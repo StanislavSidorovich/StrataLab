@@ -175,7 +175,7 @@ describe('Python tabs: tables to pandas and back', () => {
 describe('Python tabs: example, download bar, switching', () => {
   it('uses the demo shop starter only when the demo is loaded', async () => {
     const { pythonStarter } = await import('../src/core/pyStarter')
-    expect(pythonStarter([], true)).toContain('lab.table("orders")')
+    expect(pythonStarter([], true)).toContain('lab.table("demo.orders")')
     const none = pythonStarter([], false)
     expect(none).toContain('lab.sql("SELECT 42 AS answer")')
     expect(none).toContain('Sample datasets')
@@ -225,6 +225,7 @@ describe('name hints', () => {
     expect(pythonNameHint("name 'Product' is not defined", tables)).toContain('Did you mean lab.table("adventureworks.Product")?')
     expect(pythonNameHint("name 'fact_sellout' is not defined", tables)).toContain('lab.table("quaera.fact_sellout")')
     expect(pythonNameHint("name 'orders' is not defined", tables)).toContain('lab.table("orders")')
+    expect(pythonNameHint("name 'order_items' is not defined", [...tables, { schema: 'demo', name: 'order_items' }])).toContain('lab.table("demo.order_items")')
     expect(pythonNameHint("name 'x' is not defined", tables)).toBeNull()
   })
   it('SQL: names the schema-qualified table unless DuckDB already did', async () => {

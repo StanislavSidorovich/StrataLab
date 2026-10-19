@@ -42,10 +42,10 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # lab.table("name") reads a table of this browser's database into a DataFrame (a table in pandas).
-customers = lab.table("customers")
-products = lab.table("products")
-orders = lab.table("orders")
-items = lab.table("order_items")
+customers = lab.table("demo.customers")
+products = lab.table("demo.products")
+orders = lab.table("demo.orders")
+items = lab.table("demo.order_items")
 
 # .shape is (rows, columns). print() writes text into the output.
 print("customers  ", customers.shape)

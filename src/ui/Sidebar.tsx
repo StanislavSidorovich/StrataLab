@@ -5,7 +5,7 @@
 import { insertAtCursor } from './SqlEditor'
 import { createContext, useContext, useRef, useState } from 'react'
 import { CornerDownLeft, ChevronDown, ChevronRight, ClipboardPaste, Database, DatabaseZap, Eye, Folder, FolderPlus, Library, Loader2, MoreHorizontal, Network, RefreshCw, Search, Sparkles, Store, Table2, Upload, X } from 'lucide-react'
-import { CATALOG_IDS, copySchemaToPostgres, downloadBackup, dropPgObject, dropDataset, dropObject, enqueueFiles, hasDemoTables, hideDemo, loadDemo, newDataset, openAndRun, openAsModel, openCatalog, openDataset, openGenerate, openGuide, openMove, openPractice, openTables, ownTables, pasteTableFromClipboard, refreshTree, renameDataset, renameObject, restoreBackup, useLab } from './store'
+import { RESERVED_IDS, copySchemaToPostgres, downloadBackup, dropPgObject, dropDataset, dropObject, enqueueFiles, hasDemoTables, hideDemo, loadDemo, newDataset, openAndRun, openAsModel, openCatalog, openDataset, openGenerate, openGuide, openMove, openPractice, openTables, ownTables, pasteTableFromClipboard, refreshTree, renameDataset, renameObject, restoreBackup, useLab } from './store'
 import { isOwnSchema } from '../core/ownDatasets'
 import { qualifiedName } from '../core/sql'
 import { treeMatch, type TreeMatch } from '../core/tree'
@@ -13,7 +13,7 @@ import { isDatabaseFile } from '../core/backup'
 import { Menu, type MenuItem } from './Menu'
 import { exportTable } from '../db/export'
 import type { TableInfo } from '../db/catalog'
-import { DEMO_TABLES } from '../data/demo'
+import { DEMO_SCHEMA } from '../data/demo'
 import { datasetById } from '../data/datasets'
 
 export const ACCEPT = '.csv,.tsv,.txt,.xlsx,.xlsm,.xls,.ods,.parquet,.json,.jsonl,.ndjson'
@@ -63,7 +63,8 @@ export function Sidebar() {
   const demoHidden = useLab((s) => s.demoHidden)
   const demoHere = hasDemoTables(all)
   // A hidden demo shop keeps its tables (queries on them still work); only the tree leaves them out.
-  const tables = ownTables(all).filter((t) => !(demoHidden && demoHere && DEMO_TABLES.includes(t.name)))
+  const tables = ownTables(all)
+  const demoTables = all.filter((t) => t.schema === DEMO_SCHEMA)
   const hasDemo = demoHere && !demoHidden
   const schemas = useLab((s) => s.schemas)
   const empty = tables.filter((t) => t.kind === 'table' && t.rows === 0)
@@ -71,6 +72,7 @@ export function Sidebar() {
   const [search, setSearch] = useState('')
   const searching = search.trim() !== ''
   const shown = matching(tables, search)
+  const shownDemo = matching(demoTables, search)
   // While searching, only folders with a match; otherwise every one, empty ones too (yours, waiting for tables).
   const shownSchemas = schemas.map((s) => [s, matching(all.filter((t) => t.schema === s), search)] as const).filter(([, list]) => !searching || list.length > 0)
 
@@ -128,7 +130,7 @@ export function Sidebar() {
       </div>
       <TreeSearchText.Provider value={search}>
       <div className="flex-1 overflow-auto pb-3">
-        {tables.length === 0 && engine.status === 'ready' && (
+        {tables.length === 0 && !hasDemo && engine.status === 'ready' && (
           <p className="px-3 py-2" style={{ color: 'var(--muted)' }}>
             No tables yet. Drop CSV or Excel files anywhere on the page.
             {demoHidden && demoHere && ' The demo shop is hidden: Sample datasets shows it again.'}
@@ -144,14 +146,10 @@ export function Sidebar() {
             <Sparkles size={12} className="shrink-0" /> Generate rows for {empty.length === 1 ? `empty ${empty[0].name}` : `${empty.length} empty tables`}…
           </button>
         )}
-        {hasDemo && (!searching || shown.some(([t]) => DEMO_TABLES.includes(t.name))) && (
-          <DemoGroup tables={shown.filter(([t]) => DEMO_TABLES.includes(t.name))} total={DEMO_TABLES.length} searching={searching} />
-        )}
-        {shown
-          .filter(([t]) => !(hasDemo && DEMO_TABLES.includes(t.name)))
-          .map(([t, m]) => (
-            <TableNode key={t.name} t={t} match={searching ? m : undefined} />
-          ))}
+        {hasDemo && (!searching || shownDemo.length > 0) && <DemoGroup tables={shownDemo} total={demoTables.length} searching={searching} />}
+        {shown.map(([t, m]) => (
+          <TableNode key={t.name} t={t} match={searching ? m : undefined} />
+        ))}
         {(!searching || shownSchemas.length > 0) && engine.status === 'ready' && (
           <div className="px-3 pt-4 pb-1 flex items-center gap-2 font-semibold" style={{ color: 'var(--muted)', fontSize: 11, letterSpacing: 0.4 }}>
             <Library size={13} className="shrink-0" />
@@ -208,6 +206,7 @@ function DemoGroup({ tables, total, searching }: { tables: [TableInfo, TreeMatch
   const [menu, setMenu] = useState(false)
   const items: MenuItem[] = [
     ['Practice on the demo shop…', () => openPractice()],
+    ['Show as model ↗', () => openAsModel(DEMO_SCHEMA), { hint: 'Open the four demo tables as a conceptual model in model.quaera.app' }],
     ['Hide the demo shop', hideDemo, { hint: 'Nothing is deleted: Sample datasets → Demo shop shows it again.' }],
   ]
   return (
@@ -217,8 +216,9 @@ function DemoGroup({ tables, total, searching }: { tables: [TableInfo, TreeMatch
           {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         </button>
         <Store size={14} style={{ color: 'var(--accent)' }} className="shrink-0" />
-        <button className="truncate text-left flex-1" onClick={toggle} title="The demo shop: made-up practice data, the same for everyone">
-          demo shop
+        <button className="truncate text-left flex-1" onClick={toggle} title="The demo shop: made-up practice data, the same for everyone. Its tables are in the demo schema: FROM demo.orders in SQL, lab.table(&quot;demo.orders&quot;) in Python.">
+          demo
+          <span className="block truncate" style={{ color: 'var(--muted)', fontSize: 10.5, lineHeight: 1.2 }}>demo shop: made-up practice data</span>
         </button>
         <span className="shrink-0" style={{ color: 'var(--muted)', fontSize: 11 }}>
           {searching ? `${tables.length}/${total}` : total}
@@ -246,7 +246,7 @@ function DemoGroup({ tables, total, searching }: { tables: [TableInfo, TreeMatch
  * removes it; one of the user's takes files (from the menu, or dropped on it), is renamed, removed.
  */
 function SchemaNode({ schema, tables, shown }: { schema: string; tables: TableInfo[]; shown?: [TableInfo, TreeMatch][] }) {
-  const own = isOwnSchema(schema, CATALOG_IDS)
+  const own = isOwnSchema(schema, RESERVED_IDS)
   const [userOpen, setOpen] = useState(own && tables.length === 0)
   // While searching, a folder with matches is open and shows only them.
   const open = userOpen || !!shown
@@ -344,7 +344,7 @@ function TableNode({ t, match }: { t: TableInfo; match?: TreeMatch }) {
   const insertable = useContext(InsertMode)
   const [dropHere, setDropHere] = useState(0)
   const name = qualifiedName(t.schema, t.name)
-  const fillable = isOwnSchema(t.schema, CATALOG_IDS) && t.kind === 'table'
+  const fillable = (isOwnSchema(t.schema, RESERVED_IDS) || t.schema === DEMO_SCHEMA) && t.kind === 'table'
   const Icon = t.kind === 'view' ? Eye : Table2
 
   return (
@@ -409,7 +409,7 @@ function TableNode({ t, match }: { t: TableInfo; match?: TreeMatch }) {
 
 function TableMenu({ t, name, close }: { t: TableInfo; name: string; close: () => void }) {
   const cols = t.columns.map((c) => c.name).join(', ')
-  const fillable = isOwnSchema(t.schema, CATALOG_IDS) && t.kind === 'table'
+  const fillable = (isOwnSchema(t.schema, RESERVED_IDS) || t.schema === DEMO_SCHEMA) && t.kind === 'table'
   const items: MenuItem[] = [
     ['Select first 100 rows', () => openAndRun(`SELECT * FROM ${name} LIMIT 100;`, t.name)],
     ['Count rows', () => openAndRun(`SELECT count(*) AS rows FROM ${name};`, `count ${t.name}`)],

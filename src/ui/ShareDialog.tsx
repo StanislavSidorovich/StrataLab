@@ -3,7 +3,7 @@
 // tables can't travel that way, and the dialog says which ones the queries use.
 import { useEffect, useState } from 'react'
 import { AlertTriangle, Check, Copy, Info, Link2, X } from 'lucide-react'
-import { CATALOG_IDS, openShare, ownTables, tabDialect, useLab } from './store'
+import { RESERVED_IDS, hasDemoTables, openShare, ownTables, tabDialect, useLab } from './store'
 import { isOwnSchema } from '../core/ownDatasets'
 import { encodeShare, planShare, shareUrl } from '../core/shareLink'
 import { DEMO_TABLES } from '../data/demo'
@@ -24,9 +24,9 @@ export function ShareDialog() {
   const picked = scope === 'all' ? tabs : tabs.filter((t) => t.id === activeTab)
   const chosen = picked
   const datasets = [...new Set(tables.map((t) => t.schema))].filter((s) => datasetById(s))
-  const ownDatasetTables = tables.filter((t) => t.schema !== 'main' && isOwnSchema(t.schema, CATALOG_IDS))
+  const ownDatasetTables = tables.filter((t) => t.schema !== 'main' && isOwnSchema(t.schema, RESERVED_IDS))
   const own = ownTables(tables).map((t) => t.name)
-  const hasDemo = DEMO_TABLES.every((n) => own.includes(n))
+  const hasDemo = hasDemoTables(tables)
   const { share, notShared } = planShare(
     chosen.map((t) => ({ title: t.title, sql: t.sql, dialect: tabDialect(t) })),
     { datasets, demoTables: hasDemo ? DEMO_TABLES : [], ownTables: own, ownDatasetTables },
@@ -103,7 +103,7 @@ export function ShareDialog() {
             {share.demo && (
               <li className="flex gap-2">
                 <Check size={14} className="shrink-0 mt-0.5" style={{ color: 'var(--accent)' }} />
-                <span>The demo shop (customers, products, orders, order_items), as everyone has it</span>
+                <span>The demo shop (demo.customers, demo.products, demo.orders, demo.order_items), as everyone has it</span>
               </li>
             )}
           </ul>

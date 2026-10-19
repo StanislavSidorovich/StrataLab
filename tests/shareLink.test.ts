@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { MAX_SHARED_TABS, decodeShare, encodeShare, hashWithoutShare, parseShare, planShare, shareDataFromHash, shareUrl } from '../src/core/shareLink'
 import { packText } from '../src/core/ddlLink'
 
-const loaded = { datasets: ['chinook', 'northwind'], demoTables: ['customers', 'orders', 'order_items', 'products'], ownTables: ['customers', 'orders', 'order_items', 'products', 'sales_2024', 'my table'] }
+const loaded = { datasets: ['chinook', 'northwind'], demoTables: ['customers', 'orders', 'order_items', 'products'], ownTables: ['sales_2024', 'my table'] }
 
 describe('Share: what a link needs', () => {
   it('takes the datasets the queries name', () => {
@@ -14,6 +14,14 @@ describe('Share: what a link needs', () => {
     const { share, notShared } = planShare([{ title: 'q', sql: 'SELECT * FROM orders o JOIN sales_2024 s USING (id) JOIN "my table" m USING (id)' }], loaded)
     expect(share.demo).toBe(true)
     expect(notShared).toEqual(['sales_2024', 'my table'])
+  })
+  it('needs the demo shop for demo.orders and for a bare orders, unless the sender has their own', () => {
+    expect(planShare([{ title: 'q', sql: 'SELECT * FROM demo.orders' }], loaded).share.demo).toBe(true)
+    expect(planShare([{ title: 'q', sql: 'x = lab.table("demo.orders")', dialect: 'python' }], loaded).share.demo).toBe(true)
+    const own = { ...loaded, ownTables: ['orders'] }
+    const r = planShare([{ title: 'q', sql: 'SELECT * FROM orders' }], own)
+    expect(r.share.demo).toBe(false)
+    expect(r.notShared).toEqual(['orders'])
   })
   it('ignores names in comments, strings and longer names', () => {
     const { share, notShared } = planShare([{ title: 'q', sql: "-- from orders\nSELECT 'sales_2024', 1 AS orders_total /* chinook.x */ FROM customers_2" }], loaded)

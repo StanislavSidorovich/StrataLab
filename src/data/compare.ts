@@ -24,7 +24,7 @@ export interface CompareRow {
   note?: string
 }
 
-/** The practice table the cells are written for (named sales: the demo shop already has an orders). Runs as is in DuckDB and in PostgreSQL. */
+/** The practice table the cells are written for (named sales, so it never meets the demo shop's demo.orders). Runs as is in DuckDB and in PostgreSQL. */
 export const PRACTICE_SQL = `CREATE TABLE sales (
   id INTEGER,
   "Full Name" VARCHAR,

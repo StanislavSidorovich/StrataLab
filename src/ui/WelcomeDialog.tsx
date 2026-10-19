@@ -91,7 +91,7 @@ export function WelcomeDialog() {
               <StartCard
                 icon={<Store size={18} />}
                 title="Try the demo shop"
-                text={`${hasDemo ? 'Already here' : 'Four tables'}: customers, products, orders, order_items. Made-up data, the same for everyone.`}
+                text={`${hasDemo ? 'Already here' : 'Four tables'}: demo.customers, demo.products, demo.orders, demo.order_items. Made-up data, the same for everyone.`}
                 action={hasDemo ? 'Run the first query' : 'Load it and run a query'}
                 actionIcon={<Play size={13} />}
                 onClick={start(() => void tryDemo())}
@@ -167,7 +167,7 @@ export function WelcomeDialog() {
             </p>
             <p>
               <b style={{ color: 'var(--text)' }}>Prefer Python?</b> Open a <b>New Python tab</b> (the + beside the tabs, or File): pandas, matplotlib and seaborn over the same tables, with{' '}
-              <code className="mono">lab.table("orders")</code> and <code className="mono">lab.sql("SELECT …")</code>. A cell is everything up to the next <code className="mono"># %%</code> line (not up to a semicolon): the bar over each cell has Run cell and Run below, + Cell adds a boundary; Run all (Ctrl+Enter) runs every cell, Run cell (Shift+Enter) the one at the cursor. The first run
+              <code className="mono">lab.table("demo.orders")</code> and <code className="mono">lab.sql("SELECT …")</code>. A cell is everything up to the next <code className="mono"># %%</code> line (not up to a semicolon): the bar over each cell has Run cell and Run below, + Cell adds a boundary; Run all (Ctrl+Enter) runs every cell, Run cell (Shift+Enter) the one at the cursor. The first run
               downloads Python (about 20 MB, once, with a progress bar); File → Download as notebook takes the tab to Jupyter or Colab. If Python won’t start and a download manager such as IDM popped up, add lab.quaera.app to its exceptions and press Retry.
             </p>
             <p>

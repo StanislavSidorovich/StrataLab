@@ -105,7 +105,7 @@ function DemoCard() {
       <div className="flex items-baseline gap-2">
         <Store size={14} className="self-center shrink-0" style={{ color: 'var(--accent)' }} />
         <span className="font-semibold text-[14px]">Demo shop</span>
-        <span className="mono" style={{ color: 'var(--muted)', fontSize: 11 }}>customers, orders…</span>
+        <span className="mono" style={{ color: 'var(--muted)', fontSize: 11 }}>demo.customers, demo.orders…</span>
         {here && (
           <span className="ml-auto flex items-center gap-1" style={{ color: hidden ? 'var(--muted)' : 'var(--accent)', fontSize: 12 }}>
             {hidden ? <EyeOff size={13} /> : <Check size={13} />} {hidden ? 'hidden' : 'loaded'}
@@ -115,7 +115,7 @@ function DemoCard() {
       <p>A small coffee shop: customers, products, orders and their lines. Made-up data, the same for everyone, so answers can be compared.</p>
       <p style={{ color: 'var(--muted)' }}>First JOINs and GROUP BY, revenue by category or month, order statuses, repeat customers.</p>
       <p style={{ color: 'var(--muted)', fontSize: 12 }}>
-        4 tables · 200 customers, 1,500 orders · generated in this browser, nothing to download{hidden && here ? ' · hidden from the table list, queries on it still work' : ''}
+        4 tables in the demo schema · 200 customers, 1,500 orders · generated in this browser, nothing to download{hidden && here ? ' · hidden from the table list, queries on it still work' : ''}
       </p>
       <div className="flex items-center gap-2 mt-auto pt-1">
         {shown ? (

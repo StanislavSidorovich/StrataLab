@@ -30,9 +30,9 @@ export const LEVELS: Record<PracticeTask['level'], string> = {
 }
 
 /** Revenue of an order line: what the shop earned on it. Repeated in the solutions on purpose. */
-const LINES = `FROM orders o
-JOIN order_items oi ON oi.order_id = o.order_id
-JOIN products    p  ON p.product_id = oi.product_id`
+const LINES = `FROM demo.orders o
+JOIN demo.order_items oi ON oi.order_id = o.order_id
+JOIN demo.products    p  ON p.product_id = oi.product_id`
 
 export const EXAMPLES: PracticeExample[] = [
   {
@@ -63,7 +63,7 @@ ORDER BY revenue DESC;
 SELECT
   dayname(ordered_at)  AS weekday,
   count(*)             AS orders
-FROM orders
+FROM demo.orders
 GROUP BY weekday, isodow(ordered_at)
 ORDER BY isodow(ordered_at);
 `,
@@ -82,10 +82,10 @@ SELECT
   min(o.ordered_at)::DATE                                             AS first_order,
   max(o.ordered_at)::DATE                                             AS last_order,
   coalesce(sum(oi.quantity * p.price) FILTER (WHERE o.status = 'delivered'), 0) AS spent
-FROM customers c
-LEFT JOIN orders      o  ON o.customer_id = c.customer_id
-LEFT JOIN order_items oi ON oi.order_id   = o.order_id
-LEFT JOIN products    p  ON p.product_id  = oi.product_id
+FROM demo.customers c
+LEFT JOIN demo.orders      o  ON o.customer_id = c.customer_id
+LEFT JOIN demo.order_items oi ON oi.order_id   = o.order_id
+LEFT JOIN demo.products    p  ON p.product_id  = oi.product_id
 GROUP BY c.customer_id, c.full_name
 ORDER BY spent DESC;
 `,
@@ -120,9 +120,9 @@ export const TASKS: PracticeTask[] = [
     title: 'Customers by city',
     question: 'How many customers live in each city? Show the city and the number of customers.',
     ordered: false,
-    hints: ['Everything is in the customers table.', 'One row per city: GROUP BY city.', 'SELECT city, count(*) AS customers FROM customers GROUP BY …'],
+    hints: ['Everything is in the customers table.', 'One row per city: GROUP BY city.', 'SELECT city, count(*) AS customers FROM demo.customers GROUP BY …'],
     solution: `SELECT city, count(*) AS customers
-FROM customers
+FROM demo.customers
 GROUP BY city;`,
   },
   {
@@ -133,7 +133,7 @@ GROUP BY city;`,
     ordered: true,
     hints: ['The products table has the name and the price.', 'Keep only some rows with WHERE price > 20.', 'Sort with ORDER BY price DESC (DESC = largest first).'],
     solution: `SELECT product_name, price
-FROM products
+FROM demo.products
 WHERE price > 20
 ORDER BY price DESC;`,
   },
@@ -143,9 +143,9 @@ ORDER BY price DESC;`,
     title: 'Orders by status',
     question: 'How many orders are there in each status (delivered, shipped, cancelled, returned)?',
     ordered: false,
-    hints: ['Only the orders table is needed.', 'GROUP BY status, and count the rows of each group.', 'SELECT status, count(*) AS orders FROM orders GROUP BY …'],
+    hints: ['Only the orders table is needed.', 'GROUP BY status, and count the rows of each group.', 'SELECT status, count(*) AS orders FROM demo.orders GROUP BY …'],
     solution: `SELECT status, count(*) AS orders
-FROM orders
+FROM demo.orders
 GROUP BY status;`,
   },
   {
@@ -154,9 +154,9 @@ GROUP BY status;`,
     title: 'New customers in 2024',
     question: 'How many customers signed up in 2024? One number.',
     ordered: false,
-    hints: ['customers.signup_date is a DATE.', 'Keep the dates from 2024-01-01 up to (not including) 2025-01-01, or use year(signup_date) = 2024.', 'SELECT count(*) FROM customers WHERE year(signup_date) = 2024;'],
+    hints: ['customers.signup_date is a DATE.', 'Keep the dates from 2024-01-01 up to (not including) 2025-01-01, or use year(signup_date) = 2024.', 'SELECT count(*) FROM demo.customers WHERE year(signup_date) = 2024;'],
     solution: `SELECT count(*) AS customers
-FROM customers
+FROM demo.customers
 WHERE signup_date >= DATE '2024-01-01' AND signup_date < DATE '2025-01-01';`,
   },
   {
@@ -189,10 +189,10 @@ ORDER BY month;`,
       'Sort by revenue DESC and keep 5 rows with LIMIT 5.',
     ],
     solution: `SELECT c.customer_id, c.full_name, sum(oi.quantity * p.price) AS revenue
-FROM customers c
-JOIN orders      o  ON o.customer_id = c.customer_id
-JOIN order_items oi ON oi.order_id   = o.order_id
-JOIN products    p  ON p.product_id  = oi.product_id
+FROM demo.customers c
+JOIN demo.orders      o  ON o.customer_id = c.customer_id
+JOIN demo.order_items oi ON oi.order_id   = o.order_id
+JOIN demo.products    p  ON p.product_id  = oi.product_id
 WHERE o.status = 'delivered'
 GROUP BY c.customer_id, c.full_name
 ORDER BY revenue DESC
@@ -225,9 +225,9 @@ FROM (
     ordered: true,
     hints: ['Units are order_items.quantity; the status is on orders.', "Not cancelled: WHERE o.status <> 'cancelled'.", 'GROUP BY the product name, ORDER BY units DESC, LIMIT 5.'],
     solution: `SELECT p.product_name, sum(oi.quantity) AS units
-FROM order_items oi
-JOIN orders   o ON o.order_id   = oi.order_id
-JOIN products p ON p.product_id = oi.product_id
+FROM demo.order_items oi
+JOIN demo.orders   o ON o.order_id   = oi.order_id
+JOIN demo.products p ON p.product_id = oi.product_id
 WHERE o.status <> 'cancelled'
 GROUP BY p.product_name
 ORDER BY units DESC
@@ -242,12 +242,12 @@ LIMIT 5;`,
     hints: [
       'A plain JOIN to delivered orders finds those who did. You want the others.',
       'NOT EXISTS (a subquery on orders for this customer with status delivered), or LEFT JOIN … WHERE o.order_id IS NULL.',
-      "SELECT customer_id, full_name FROM customers c WHERE NOT EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.customer_id AND o.status = 'delivered');",
+      "SELECT customer_id, full_name FROM demo.customers c WHERE NOT EXISTS (SELECT 1 FROM demo.orders o WHERE o.customer_id = c.customer_id AND o.status = 'delivered');",
     ],
     solution: `SELECT c.customer_id, c.full_name
-FROM customers c
+FROM demo.customers c
 WHERE NOT EXISTS (
-  SELECT 1 FROM orders o
+  SELECT 1 FROM demo.orders o
   WHERE o.customer_id = c.customer_id AND o.status = 'delivered'
 );`,
   },
@@ -265,10 +265,10 @@ WHERE NOT EXISTS (
     solution: `SELECT c.channel,
        count(DISTINCT c.customer_id) AS customers,
        round(sum(oi.quantity * p.price) / count(DISTINCT c.customer_id), 2) AS revenue_per_customer
-FROM customers c
-JOIN orders      o  ON o.customer_id = c.customer_id AND o.status = 'delivered'
-JOIN order_items oi ON oi.order_id   = o.order_id
-JOIN products    p  ON p.product_id  = oi.product_id
+FROM demo.customers c
+JOIN demo.orders      o  ON o.customer_id = c.customer_id AND o.status = 'delivered'
+JOIN demo.order_items oi ON oi.order_id   = o.order_id
+JOIN demo.products    p  ON p.product_id  = oi.product_id
 GROUP BY c.channel;`,
   },
   {
@@ -306,9 +306,9 @@ ORDER BY month;`,
     ],
     solution: `SELECT p.category,
        round(100.0 * count(*) FILTER (WHERE o.status = 'returned') / count(*), 1) AS returned_pct
-FROM order_items oi
-JOIN orders   o ON o.order_id   = oi.order_id
-JOIN products p ON p.product_id = oi.product_id
+FROM demo.order_items oi
+JOIN demo.orders   o ON o.order_id   = oi.order_id
+JOIN demo.products p ON p.product_id = oi.product_id
 GROUP BY p.category
 ORDER BY returned_pct DESC;`,
   },
@@ -321,12 +321,12 @@ ORDER BY returned_pct DESC;`,
     hints: [
       'First each customer’s first order: min(ordered_at) grouped by customer_id.',
       "Then group those first orders by month: strftime(first_order, '%Y-%m').",
-      "SELECT strftime(first_order, '%Y-%m') AS month, count(*) AS new_customers FROM (SELECT customer_id, min(ordered_at) AS first_order FROM orders GROUP BY customer_id) GROUP BY month ORDER BY month;",
+      "SELECT strftime(first_order, '%Y-%m') AS month, count(*) AS new_customers FROM (SELECT customer_id, min(ordered_at) AS first_order FROM demo.orders GROUP BY customer_id) GROUP BY month ORDER BY month;",
     ],
     solution: `SELECT strftime(first_order, '%Y-%m') AS month, count(*) AS new_customers
 FROM (
   SELECT customer_id, min(ordered_at) AS first_order
-  FROM orders
+  FROM demo.orders
   GROUP BY customer_id
 )
 GROUP BY month

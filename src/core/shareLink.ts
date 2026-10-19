@@ -4,6 +4,7 @@
 // stay in this browser, and the share dialog says which ones a query uses (their own datasets'
 // tables, `sales.orders`, too).
 import { TooLarge, packText, unpackText } from './ddlLink'
+import { DEMO_SCHEMA } from '../data/demo'
 
 export const SHARE_PARAM = 's'
 
@@ -47,12 +48,14 @@ export function planShare(
   const uses = (name: string) => new RegExp(`(^|[^\\w."])"?${escapeRe(name)}"?(?![\\w"])`, 'i').test(text)
   const usesSchema = (schema: string) => new RegExp(`(^|[^\\w."])"?${escapeRe(schema)}"?\\s*\\.`, 'i').test(text)
   const datasets = loaded.datasets.filter(usesSchema)
-  const demoSet = new Set(loaded.demoTables.map((n) => n.toLowerCase()))
-  const demo = loaded.demoTables.some(uses)
+  // The shop's tables are named `demo.orders`; links made before v0.13 (and bare names, which the
+  // search path still resolves) use `orders`, unless the sender has an `orders` of their own in main.
+  const ownSet = new Set(loaded.ownTables.map((n) => n.toLowerCase()))
+  const demo = loaded.demoTables.length > 0 && (usesSchema(DEMO_SCHEMA) || loaded.demoTables.filter((n) => !ownSet.has(n.toLowerCase())).some(uses))
   const usesIn = (schema: string, name: string) =>
     new RegExp(`(^|[^\\w."])"?${escapeRe(schema)}"?\\s*\\.\\s*"?${escapeRe(name)}"?(?![\\w"])`, 'i').test(text)
   const notShared = [
-    ...loaded.ownTables.filter((n) => !demoSet.has(n.toLowerCase()) && uses(n)),
+    ...loaded.ownTables.filter((n) => uses(n)),
     ...(loaded.ownDatasetTables ?? []).filter((t) => usesIn(t.schema, t.name)).map((t) => `${t.schema}.${t.name}`),
   ]
   return { share: { datasets, demo, tabs: tabs.map((t) => ({ title: t.title, sql: t.sql, ...(t.dialect && t.dialect !== 'duckdb' ? { dialect: t.dialect } : {}) })) }, notShared }
