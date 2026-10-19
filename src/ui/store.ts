@@ -14,6 +14,7 @@ import { applyPlan, type Existing } from '../db/ddl'
 import { clearFill } from '../db/fill'
 import { DATASETS, datasetById, datasetFromHash, hashWithoutDataset, type Dataset } from '../data/datasets'
 import { loadDataset, removeDataset, type DatasetProgress } from '../db/datasets'
+import { splitCells } from '../core/pyCells'
 import { createSchema, listSchemas, moveTables, renameSchema } from '../db/ownDatasets'
 import { catalogSchemaState, datasetName, isOwnSchema, linkedTables } from '../core/ownDatasets'
 import { schemaForModel, showAsModel } from '../db/modelExport'
@@ -181,6 +182,8 @@ interface State {
   demoHidden: boolean
   /** the practice dialog (examples and tasks on the demo shop) is open */
   practiceOpen: boolean
+  /** a sample dataset's guide (src/ui/Guide.tsx): its id, or null when closed */
+  guide: string | null
   practice: PracticeProgress
   /** per tab, a practice task's last Check */
   checks: Record<string, CheckState>
@@ -296,6 +299,7 @@ export const useLab = create<State>(() => ({
   notice: null,
   demoHidden: initialDemoHidden(),
   practiceOpen: false,
+  guide: null,
   practice: loadPractice(),
   checks: {},
   python: { status: 'off' },
@@ -1405,6 +1409,30 @@ export async function restoreBackup(file: File) {
     set({ backup: null })
     await refreshCatalog()
   }
+}
+
+// ------------------------------------------------------------------ dataset guides
+
+export function openGuide(id: string | null) {
+  set({ guide: id, ...(id ? { catalogOpen: false } : {}) })
+}
+
+/**
+ * A guide's example in a new tab of its language, run at once (Python: every cell in order). The
+ * dataset is loaded first when it isn't; `run: false` only opens the tab.
+ */
+export async function openGuideCode(d: Dataset, code: string, title: string, lang: 'sql' | 'python', run = true) {
+  set({ guide: null })
+  const { state, extra } = catalogState(d)
+  if (state !== 'loaded') {
+    if (state === 'foreign' && !confirm(`There is already a schema called ${d.id} with your table${extra.length === 1 ? '' : 's'} ${extra.join(', ')}. Loading ${d.title} replaces it and ${extra.length === 1 ? 'that table is' : 'those tables are'} lost. Load anyway?`)) return
+    if (!(await fetchDataset(d))) return
+  }
+  const id = addTab(code, title, lang === 'python' ? 'python' : undefined)
+  if (!run) return
+  if (lang === 'sql') return void runSql(id, code)
+  const cells = splitCells(code)
+  void runPython(id, cells.map((c, index) => ({ c, index })).filter(({ c }) => c.kind === 'code').map(({ c, index }) => ({ code: c.source, line: c.line, index, source: c.source })))
 }
 
 // ------------------------------------------------------------------ practice (stage 5)

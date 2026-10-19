@@ -1,8 +1,8 @@
 // The dataset catalog (stage 3): sample databases that load in one click into their own
 // schema, with where they come from and their licence. Also the card shown while one loads.
 import { useState } from 'react'
-import { AlertTriangle, Check, EyeOff, ExternalLink, Library, Link2, Loader2, Store, X } from 'lucide-react'
-import { addTab, catalogState, closeDatasetError, hasDemoTables, hideDemo, loadDemo, openCatalog, openDataset, openPractice, showDemo, useLab } from './store'
+import { AlertTriangle, BookOpen, Check, EyeOff, ExternalLink, Library, Link2, Loader2, Store, X } from 'lucide-react'
+import { addTab, catalogState, closeDatasetError, hasDemoTables, hideDemo, loadDemo, openCatalog, openDataset, openGuide, openPractice, showDemo, useLab } from './store'
 import { WELCOME_SQL } from '../data/demo'
 import { DATASETS, datasetBytes, datasetRows } from '../data/datasets'
 
@@ -68,6 +68,9 @@ export function CatalogDialog() {
                 <div className="flex items-center gap-2 mt-auto pt-1">
                   <button className="btn btn-primary" onClick={() => void openDataset(d)}>
                     {isLoaded ? 'New query' : 'Load'}
+                  </button>
+                  <button className="btn" onClick={() => openGuide(d.id)} title="What the data is about, examples in SQL and Python that run in one click, pandas ↔ SQL">
+                    <BookOpen size={14} /> Guide
                   </button>
                   {isLoaded && (
                     <button className="btn" onClick={() => confirm(`Load ${d.title} again? Changes made to its tables are lost.`) && void openDataset(d, true)}>

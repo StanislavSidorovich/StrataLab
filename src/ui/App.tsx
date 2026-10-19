@@ -14,6 +14,7 @@ import { WelcomeDialog } from './WelcomeDialog'
 import { AboutDialog } from './AboutDialog'
 import { ShareDialog } from './ShareDialog'
 import { PracticeDialog, TaskBar } from './Practice'
+import { GuideDialog } from './Guide'
 import { DialectBar } from './DialectBar'
 import { applyUpdate, checkForUpdates, updateCheckMessage, useUpdateReady } from '../pwa/register'
 import { engineLoadingLabel, engineLoadingShort } from './EngineLoading'
@@ -145,6 +146,7 @@ export function App() {
       <AboutDialog />
       <ShareDialog />
       <PracticeDialog />
+      <GuideDialog />
     </div>
   )
 }
