@@ -208,9 +208,11 @@ function TopBar() {
       <div className="flex-1" />
       <EngineBadge />
       {/* The sidebar (with its catalog button) is hidden on a phone. */}
-      <button className="btn btn-ghost md:hidden" onClick={() => openCatalog()} disabled={engine.status !== 'ready'} aria-label="Sample datasets" title="Sample datasets">
-        <Library size={16} />
-      </button>
+      <span className="contents md:hidden">
+        <button className="btn btn-ghost" onClick={() => openCatalog()} disabled={engine.status !== 'ready'} aria-label="Sample datasets" title="Sample datasets">
+          <Library size={16} />
+        </button>
+      </span>
       {/* Only while a new version waits (src/pwa/register.ts). */}
       {updateReady && (
         <button className="btn btn-primary" onClick={applyUpdate} title="A new version of Quaera Lab is ready: reload to use it (your tables and query tabs are kept)" aria-label="Update" data-testid="update">
