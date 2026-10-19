@@ -31,6 +31,8 @@ export interface Dataset {
   /** left out on the way, said plainly */
   notes?: string
   starter: string
+  /** the table a "New Python notebook" on the dataset reads first (its facts: tracks, orders, films…) */
+  main: string
   ddl: string[]
   tables: DatasetTable[]
 }
@@ -41,6 +43,7 @@ const data = built as Built
 const META: Omit<Dataset, 'ddl' | 'tables'>[] = [
   {
     id: 'chinook',
+    main: 'Track',
     title: 'Chinook',
     about: 'A digital music store: artists, albums, tracks, customers, invoices.',
     practise: 'JOINs across five tables, GROUP BY, an employee hierarchy (ReportsTo).',
@@ -61,6 +64,7 @@ LIMIT 10;
   },
   {
     id: 'northwind',
+    main: 'Orders',
     title: 'Northwind',
     about: "Microsoft's classic trading company: customers, orders, products, suppliers, employees.",
     practise: 'The SQL Server textbook dataset: most T-SQL tutorials use it, so their queries carry over.',
@@ -81,6 +85,7 @@ ORDER BY sales DESC;
   },
   {
     id: 'adventureworks',
+    main: 'SalesOrderDetail',
     title: 'AdventureWorks LT',
     about: "Microsoft's bicycle maker, the light edition (SalesLT): customers, addresses, products, categories, orders.",
     practise: 'The other SQL Server textbook dataset: a category tree, a customer with several addresses, order headers and lines.',
@@ -104,6 +109,7 @@ ORDER BY revenue DESC;
   },
   {
     id: 'sakila',
+    main: 'film',
     title: 'Sakila',
     about: 'A DVD rental chain: films, actors, inventory, rentals, payments.',
     practise: 'Many-to-many tables (film_actor), dates and durations, payments per customer.',
@@ -124,6 +130,7 @@ ORDER BY rentals DESC;
   },
   {
     id: 'quaera',
+    main: 'fact_sellout',
     title: 'Kaiyo Trading (Quaera)',
     about: "Quaera's own dataset: an FMCG and OTC-pharma distributor, a star schema over 2.5 years.",
     practise: 'Real analyst questions: sell-in vs sell-out, stock, seasonality, a brand that lost distribution.',

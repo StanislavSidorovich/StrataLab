@@ -2,7 +2,8 @@
 // schema, with where they come from and their licence. Also the card shown while one loads.
 import { useState } from 'react'
 import { AlertTriangle, BookOpen, Check, EyeOff, ExternalLink, Library, Link2, Loader2, Store, X } from 'lucide-react'
-import { addTab, catalogState, closeDatasetError, hasDemoTables, hideDemo, loadDemo, openCatalog, openDataset, openGuide, openPractice, openWalkthrough, showDemo, useLab } from './store'
+import { addTab, catalogState, closeDatasetError, hasDemoTables, hideDemo, loadDemo, newPythonNotebookOn, openCatalog, openDataset, openGuide, openPractice, openWalkthrough, showDemo, useLab } from './store'
+import { NewQueryButtons } from './NewQueryButtons'
 import { walkthroughById } from '../data/walkthroughs'
 import { WELCOME_SQL } from '../data/demo'
 import { DATASETS, datasetBytes, datasetRows } from '../data/datasets'
@@ -66,10 +67,8 @@ export function CatalogDialog() {
                   </a>
                 </p>
                 {d.notes && <p style={{ color: 'var(--muted)', fontSize: 12 }}>{d.notes}</p>}
-                <div className="flex items-center gap-2 mt-auto pt-1">
-                  <button className="btn btn-primary" onClick={() => void openDataset(d)}>
-                    {isLoaded ? 'New query' : 'Load'}
-                  </button>
+                <div className="flex flex-wrap items-center gap-2 mt-auto pt-1">
+                  <NewQueryButtons onSql={() => void openDataset(d)} onPython={() => void openDataset(d, false, 'python')} load={!isLoaded} what={d.title} />
                   <button className="btn" onClick={() => openGuide(d.id)} title="What the data is about, examples in SQL and Python that run in one click, pandas ↔ SQL">
                     <BookOpen size={14} /> Guide
                   </button>
@@ -100,6 +99,10 @@ function DemoCard() {
     openCatalog(false)
     addTab(WELCOME_SQL, 'Demo shop')
   }
+  const newNotebook = () => {
+    openCatalog(false)
+    newPythonNotebookOn('demo.orders', 'Demo shop')
+  }
   return (
     <li className="rounded-lg p-3 flex flex-col gap-2" style={{ border: '1px solid var(--line)', background: 'var(--panel-2)' }}>
       <div className="flex items-baseline gap-2">
@@ -117,11 +120,9 @@ function DemoCard() {
       <p style={{ color: 'var(--muted)', fontSize: 12 }}>
         4 tables in the demo schema · 200 customers, 1,500 orders · generated in this browser, nothing to download{hidden && here ? ' · hidden from the table list, queries on it still work' : ''}
       </p>
-      <div className="flex items-center gap-2 mt-auto pt-1">
+      <div className="flex flex-wrap items-center gap-2 mt-auto pt-1">
         {shown ? (
-          <button className="btn btn-primary" onClick={newQuery}>
-            New query
-          </button>
+          <NewQueryButtons onSql={newQuery} onPython={newNotebook} what="the demo shop" />
         ) : (
           <button className="btn btn-primary" onClick={() => void showDemo()}>
             {here ? 'Show' : 'Load'}

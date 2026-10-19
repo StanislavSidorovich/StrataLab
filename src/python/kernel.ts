@@ -146,13 +146,18 @@ async function answerFetch(w: Worker, fid: number, c: LabCall) {
   w.postMessage({ type: 'fetched', fid, frame } satisfies ToWorker, 'error' in frame ? [] : transferables(frame))
 }
 
+/** A DataFrame a cell showed: its first rows (the grid's limit) and how many it had. */
+export interface ShownFrame {
+  at: number
+  table: Table
+  total: number
+}
+
 export interface RanCell {
   count: number
   result: CellResult
-  /** the DataFrame for the grid, as an Arrow table */
-  grid: Table | null
-  /** rows the DataFrame had, when the grid has fewer */
-  gridTotal: number
+  /** every DataFrame the cell showed, as an Arrow table (at most ROW_LIMIT rows), by its place in the outputs */
+  frames: ShownFrame[]
   saves: { name: string; table: Table }[]
 }
 
@@ -172,8 +177,7 @@ export async function runCell(code: string, line: number, names: string[]): Prom
   return {
     count: n,
     result,
-    grid: result.grid ? arrowFromFrame(result.grid) : null,
-    gridTotal: result.grid?.total ?? 0,
+    frames: result.frames.map((f) => ({ at: f.at, table: arrowFromFrame(f.frame), total: f.frame.total ?? f.frame.rows })),
     saves: result.saves.map((s) => ({ name: s.name, table: arrowFromFrame(s.frame) })),
   }
 }

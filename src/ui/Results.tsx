@@ -48,7 +48,7 @@ export function Results() {
   const translation = useLab((s) => s.translations[s.activeTab])
   const stored = useLab((s) => s.resultView)
   const view = (stored === 'translation' && dialect !== 'tsql') || (stored === 'plan' && dialect === 'python') || (stored === 'table' && dialect !== 'python') ? 'result' : stored
-  // The view that shows the grid, with its row count and Copy / Export / Save: Table in Python tabs, Result elsewhere.
+  // The view that shows the grid, with its row count and Copy / Export / Save: DataFrame in Python tabs, Result elsewhere.
   const gridView = dialect === 'python' ? 'table' : 'result'
   const changes = translation?.status === 'done' ? translation.statements.reduce((n, st) => n + (st.target == null ? 1 : sideBySide(st.source, st.target).changes), 0) : null
   const views =
@@ -73,8 +73,8 @@ export function Results() {
           >
             {v === 'result' && (dialect === 'python' ? <span title="Every cell's output in one column: printed text, values, figures, errors">Output</span> : 'Result')}
             {v === 'table' && (
-              <span className="flex items-center gap-1.5" title="The last DataFrame a cell showed, on the whole pane" aria-label="Table">
-                <TableProperties size={13} /> <span className="hidden sm:inline">Table</span>
+              <span className="flex items-center gap-1.5" title="A DataFrame on the whole pane: the last one a cell showed, or the one you opened from Output" aria-label="DataFrame">
+                <TableProperties size={13} /> <span className="hidden sm:inline">DataFrame</span>
               </span>
             )}
             {v === 'chart' && (
@@ -191,12 +191,12 @@ function CellMenu({ table, row, col, at, close }: { table: Table; row: number; c
   return <Menu items={items} close={close} at={at} label="Copy" />
 }
 
-/** A Python tab's Table view: the last DataFrame a cell showed, on the whole pane. */
+/** A Python tab's DataFrame view: the last DataFrame a cell showed (or one opened from Output), on the whole pane. */
 function PythonTable() {
   const res = useLab((s) => s.results[s.activeTab])
   const t = res?.table
   if (!t || t.numCols === 0)
-    return <Empty text={res?.status === 'running' ? 'Running…' : 'No DataFrame yet. When a cell ends with a DataFrame (df.head(), df.groupby(…).sum()…) or calls display(df), it shows here on the whole pane.'} />
+    return <Empty text={res?.status === 'running' ? 'Running…' : 'No DataFrame yet. When a cell ends with a DataFrame (df.head(), df.groupby(…).sum()…) or calls display(df), it shows in Output, and the last one here on the whole pane.'} />
   return <GridWithMenu table={t} />
 }
 

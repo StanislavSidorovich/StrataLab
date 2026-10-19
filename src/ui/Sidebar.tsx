@@ -5,7 +5,7 @@
 import { insertAtCursor } from './SqlEditor'
 import { createContext, useContext, useRef, useState } from 'react'
 import { CornerDownLeft, ChevronDown, ChevronRight, ClipboardPaste, Database, DatabaseZap, Eye, Folder, FolderPlus, Library, Loader2, MoreHorizontal, Network, RefreshCw, Search, Sparkles, Store, Table2, Upload, X } from 'lucide-react'
-import { RESERVED_IDS, copySchemaToPostgres, downloadBackup, dropPgObject, dropDataset, dropObject, enqueueFiles, hasDemoTables, hideDemo, loadDemo, newDataset, openAndRun, openAsModel, openCatalog, openDataset, openGenerate, openGuide, openMove, openPractice, openTables, ownTables, pasteTableFromClipboard, refreshTree, renameDataset, renameObject, restoreBackup, useLab } from './store'
+import { RESERVED_IDS, addTab, copySchemaToPostgres, newPythonNotebookOn, downloadBackup, dropPgObject, dropDataset, dropObject, enqueueFiles, hasDemoTables, hideDemo, loadDemo, newDataset, openAndRun, openAsModel, openCatalog, openDataset, openGenerate, openGuide, openMove, openPractice, openTables, ownTables, pasteTableFromClipboard, refreshTree, renameDataset, renameObject, restoreBackup, useLab } from './store'
 import { isOwnSchema } from '../core/ownDatasets'
 import { qualifiedName } from '../core/sql'
 import { treeMatch, type TreeMatch } from '../core/tree'
@@ -13,7 +13,8 @@ import { isDatabaseFile } from '../core/backup'
 import { Menu, type MenuItem } from './Menu'
 import { exportTable } from '../db/export'
 import type { TableInfo } from '../db/catalog'
-import { DEMO_SCHEMA } from '../data/demo'
+import { DEMO_SCHEMA, WELCOME_SQL } from '../data/demo'
+import { labName } from '../core/pyStarter'
 import { datasetById } from '../data/datasets'
 
 export const ACCEPT = '.csv,.tsv,.txt,.xlsx,.xlsm,.xls,.ods,.parquet,.json,.jsonl,.ndjson'
@@ -205,6 +206,9 @@ function DemoGroup({ tables, total, searching }: { tables: [TableInfo, TreeMatch
   const open = userOpen || searching
   const [menu, setMenu] = useState(false)
   const items: MenuItem[] = [
+    ['New SQL query', () => addTab(WELCOME_SQL, 'Demo shop')],
+    ['New Python notebook', () => newPythonNotebookOn('demo.orders', 'Demo shop'), { hint: 'lab.table("demo.orders")' }],
+    'separator',
     ['Practice on the demo shop…', () => openPractice()],
     ['Show as model ↗', () => openAsModel(DEMO_SCHEMA), { hint: 'Open the four demo tables as a conceptual model in model.quaera.app' }],
     ['Hide the demo shop', hideDemo, { hint: 'Nothing is deleted: Sample datasets → Demo shop shows it again.' }],
@@ -258,10 +262,11 @@ function SchemaNode({ schema, tables, shown }: { schema: string; tables: TableIn
   const items: MenuItem[] = [
     ...(d
       ? ([
-          ['New query on this dataset', () => void openDataset(d)],
+          ['New SQL query', () => void openDataset(d)],
+          ['New Python notebook', () => void openDataset(d, false, 'python'), { hint: `lab.table("${d.id}.${d.main}")` }],
           ['Guide: about, examples, pandas ↔ SQL', () => openGuide(d.id)],
           ['Reload (undo my changes)…', () => confirm(`Load ${d.title} again? Changes made to its tables are lost.`) && void openDataset(d, true)],
-        ] as [string, () => void][])
+        ] as MenuItem[])
       : ([
           ['Add CSV / Excel…', () => pickFilesFor(undefined, schema)],
           ...(empty.length ? [['Generate sample rows…', () => void openGenerate(undefined, schema)]] : []),
@@ -411,6 +416,9 @@ function TableMenu({ t, name, close }: { t: TableInfo; name: string; close: () =
   const cols = t.columns.map((c) => c.name).join(', ')
   const fillable = (isOwnSchema(t.schema, RESERVED_IDS) || t.schema === DEMO_SCHEMA) && t.kind === 'table'
   const items: MenuItem[] = [
+    ['New SQL query', () => addTab(`SELECT *\nFROM ${name}\nLIMIT 100;\n`, t.name)],
+    ['New Python notebook', () => newPythonNotebookOn(labName(t), t.name), { hint: `lab.table(${JSON.stringify(labName(t))})` }],
+    'separator',
     ['Select first 100 rows', () => openAndRun(`SELECT * FROM ${name} LIMIT 100;`, t.name)],
     ['Count rows', () => openAndRun(`SELECT count(*) AS rows FROM ${name};`, `count ${t.name}`)],
     ['Profile columns (SUMMARIZE)', () => openAndRun(`SUMMARIZE ${name};`, `profile ${t.name}`)],

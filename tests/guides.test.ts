@@ -117,7 +117,7 @@ describe.skipIf(!HAS_PANDAS)('Dataset guides: Python runs on the real data', () 
     runCell = py.pyimport('lab').run_cell
   }, 180_000)
 
-  /** Runs a cell as the worker does: its lab.table / lab.sql fetched first. Its outputs and grid rows. */
+  /** Runs a cell as the worker does: its lab.table / lab.sql fetched first. Its outputs and the DataFrames it showed. */
   async function run(code: string) {
     const fetched: Record<string, unknown> = {}
     for (const c of labCalls(code)) fetched[callKey(c)] = frameFromArrow(conn.query(c.kind === 'table' ? tableSql(c.arg) : c.arg))
@@ -125,7 +125,7 @@ describe.skipIf(!HAS_PANDAS)('Dataset guides: Python runs on the real data', () 
     const names = py.toPy([])
     try {
       const proxy = await runCell(code, 1, ++count, f, names, null)
-      const r = proxy.toJs({ dict_converter: Object.fromEntries, create_pyproxies: false }) as { outputs: { output_type: string; ename?: string; evalue?: string; text?: string; data?: Record<string, string> }[]; grid: { rows: number } | null; saves: unknown[] }
+      const r = proxy.toJs({ dict_converter: Object.fromEntries, create_pyproxies: false }) as { outputs: { output_type: string; ename?: string; evalue?: string; text?: string; data?: Record<string, string> }[]; frames: { at: number; frame: { rows: number } }[]; saves: unknown[] }
       proxy.destroy()
       return r
     } finally {
@@ -136,13 +136,21 @@ describe.skipIf(!HAS_PANDAS)('Dataset guides: Python runs on the real data', () 
 
   const errorOf = (r: Awaited<ReturnType<typeof run>>) => r.outputs.filter((o) => o.output_type === 'error').map((o) => `${o.ename}: ${o.evalue}`)
 
+  it('sends every DataFrame a cell shows, each at its place in the outputs', async () => {
+    const r = await run('import pandas as pd\ndf = pd.DataFrame({"a": [1, 2, 3]})\nprint("first")\ndisplay(df)\ndisplay(df.a.value_counts())\ndf.head(2)')
+    expect(errorOf(r)).toEqual([])
+    expect(r.outputs.map((o) => o.output_type)).toEqual(['stream', 'display_data', 'display_data', 'execute_result'])
+    expect(r.frames.map((f) => [f.at, f.frame.rows])).toEqual([[1, 3], [2, 3], [3, 2]])
+  })
+
   for (const g of GUIDES) {
     it(`${g.id}: examples, with as many rows as their SQL`, async () => {
       for (const e of g.examples) {
         const r = await run(e.python)
         expect(errorOf(r), `${g.id} / ${e.title}`).toEqual([])
-        expect(r.grid, `${g.id} / ${e.title}: a DataFrame for the grid`).not.toBeNull()
-        if (e.level !== 'look') expect(r.grid!.rows, `${g.id} / ${e.title}: rows`).toBe(conn.query(e.sql).numRows)
+        const last = r.frames[r.frames.length - 1]?.frame
+        expect(last, `${g.id} / ${e.title}: a DataFrame for the grid`).toBeDefined()
+        if (e.level !== 'look') expect(last!.rows, `${g.id} / ${e.title}: rows`).toBe(conn.query(e.sql).numRows)
       }
     }, 120_000)
 

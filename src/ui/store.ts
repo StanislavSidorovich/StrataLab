@@ -25,7 +25,7 @@ import { runGeneration, type GenOutcome } from '../db/generate'
 import { duckdbScript, translateTsql, type TranslatedStatement, type TranslatorProgress } from '../dialects/tsql'
 import { copyToPostgres, explainPostgres, getPostgres, postgresCatalog, runPostgres } from '../dialects/postgres'
 import { copyTitle, dialectSwitch, rememberClosed } from '../core/tabs'
-import { pythonStarter } from '../core/pyStarter'
+import { pythonStarter, pythonTableStarter } from '../core/pyStarter'
 import { backupFileName } from '../core/backup'
 import { backupDatabase, restoreDatabase } from '../db/backup'
 import { download, resultRows } from '../db/export'
@@ -34,7 +34,7 @@ import { hashWithoutTask, taskById, taskFromHash, taskStarter, type PracticeExam
 import { decodeShare, hashWithoutShare, shareDataFromHash } from '../core/shareLink'
 import { historyTabTitle, parseHistory, remember, type HistoryEntry } from '../core/history'
 import { explainStatement, lastStatement, parseDuckPlan, parsePgPlan, readsOnly, type Plan } from '../core/plan'
-import { onKernelState, runCell, startKernel, stopKernel, STOPPED_PY, type KernelState } from '../python/kernel'
+import { onKernelState, runCell, startKernel, stopKernel, STOPPED_PY, type KernelState, type ShownFrame } from '../python/kernel'
 import type { CellRun, Output } from '../core/ipynb'
 
 /** What a tab speaks: DuckDB itself, T-SQL translated to DuckDB, PostgreSQL (PGlite) (stage 4), or Python (stage 7). */
@@ -79,6 +79,8 @@ export interface TabResult {
   more?: boolean
   /** a Python tab's run: the cells it ran, with their outputs (the grid shows the last DataFrame) */
   cells?: PyCellRun[]
+  /** which DataFrame of `cells` is in `table` (the DataFrame view): the last, or one opened from Output */
+  tableFrom?: { run: number; at: number }
 }
 
 /** One cell of a Python run: where it is in the tab, its number in the session ([3]) and its outputs. */
@@ -88,8 +90,8 @@ export interface PyCellRun {
   line: number
   count: number
   outputs: Output[]
-  /** the output shown in the grid (the run's last DataFrame), if it is this cell's */
-  gridAt?: number
+  /** the DataFrames among `outputs`, by their index there (Output shows each inline) */
+  frames?: Record<number, ShownFrame>
   running?: boolean
 }
 
@@ -185,6 +187,8 @@ interface State {
   aboutOpen: AboutTab | false
   /** a passing message that is not an error (what a shared link opened) */
   notice: string | null
+  /** Save on a Python tab with no file yet: the .py / .ipynb choice is open (src/ui/sqlFiles.ts) */
+  saveKind: { saveAs: boolean } | null
   /** the demo shop's tables are kept but left out of the tree (Sample datasets shows them again) */
   demoHidden: boolean
   /** the practice dialog (examples and tasks on the demo shop) is open */
@@ -306,6 +310,7 @@ export const useLab = create<State>(() => ({
   tablesOpen: false,
   aboutOpen: false,
   notice: null,
+  saveKind: null,
   demoHidden: initialDemoHidden(),
   practiceOpen: false,
   guide: null,
@@ -631,6 +636,11 @@ export function newPythonTab() {
   return addTab(currentPythonStarter(), `Python ${get().tabs.filter((t) => t.dialect === 'python').length + 1}`, 'python')
 }
 
+/** "New Python notebook" on a table: a Python tab that reads it (`name` as lab.table takes it). */
+export function newPythonNotebookOn(name: string, title = name) {
+  return addTab(pythonTableStarter(name, title), `${title} · Python`, 'python')
+}
+
 /** The example for a Python tab, over what is loaded now. */
 export const currentPythonStarter = () => pythonStarter(get().tables, hasDemoTables(get().tables))
 
@@ -675,8 +685,9 @@ export async function runPython(tabId: string, cells: { code: string; line: numb
   const runs: PyCellRun[] = []
   let table: Table | undefined
   let more = false
+  let tableFrom: TabResult['tableFrom']
   const put = (status: TabResult['status'], extra: Partial<TabResult> = {}) =>
-    set((s) => ({ results: { ...s.results, [tabId]: { status, cells: [...runs], table, more, limit: ROW_LIMIT, ms: performance.now() - t0, ...extra } } }))
+    set((s) => ({ results: { ...s.results, [tabId]: { status, cells: [...runs], table, more, tableFrom, limit: ROW_LIMIT, ms: performance.now() - t0, ...extra } } }))
   set({ resultView: 'result' })
   put('running')
   const what = todo.length === 1 ? (todo[0].index >= 0 ? `cell ${todo[0].index + 1}` : 'selection') : `${todo.length} cells`
@@ -686,11 +697,12 @@ export async function runPython(tabId: string, cells: { code: string; line: numb
       runs.push({ index: c.index, line: c.line, count: 0, outputs: [], running: true })
       put('running')
       const r = await runCell(c.code, c.line, pythonNames())
-      runs[runs.length - 1] = { index: c.index, line: c.line, count: r.count, outputs: r.result.outputs }
-      if (r.grid) {
-        table = r.grid
-        more = r.gridTotal > r.grid.numRows
-        for (let k = 0; k < runs.length; k++) runs[k] = { ...runs[k], gridAt: k === runs.length - 1 ? (r.result.grid_at ?? undefined) : undefined }
+      runs[runs.length - 1] = { index: c.index, line: c.line, count: r.count, outputs: r.result.outputs, frames: Object.fromEntries(r.frames.map((f) => [f.at, f])) }
+      const last = r.frames[r.frames.length - 1]
+      if (last) {
+        table = last.table
+        more = last.total > last.table.numRows
+        tableFrom = { run: runs.length - 1, at: last.at }
       }
       if (c.source != null)
         set((s) => ({ cellRuns: { ...s.cellRuns, [tabId]: { ...s.cellRuns[tabId], [c.source!]: { count: r.count, outputs: r.result.outputs } } } }))
@@ -719,6 +731,14 @@ export async function runPython(tabId: string, cells: { code: string; line: numb
     put('error', { error: error === STOPPED_PY ? error : `Python Error: ${error}`, cells: runs.filter((c) => !c.running) })
     logRun(tabId, { sql, ok: false, text: error.split('\n')[0] })
   }
+}
+
+/** "Open in DataFrame view" on a DataFrame in Output: that one goes to the DataFrame view, which opens. */
+export function openFrame(tabId: string, run: number, at: number) {
+  const r = get().results[tabId]
+  const f = r?.cells?.[run]?.frames?.[at]
+  if (!r || !f) return
+  set((s) => ({ results: { ...s.results, [tabId]: { ...r, table: f.table, more: f.total > f.table.numRows, tableFrom: { run, at } } }, resultView: 'table' }))
 }
 
 /** A DataFrame from lab.save into My tables, replacing a table of that name; the error, if any. */
@@ -1150,18 +1170,24 @@ export function openCatalog(open = true) {
   set({ catalogOpen: open })
 }
 
-/** Loads a catalog dataset into its own schema (again, if it is there) and opens its starter query. */
-export async function openDataset(d: Dataset, reload = false) {
+/**
+ * Loads a catalog dataset into its own schema (again, if it is there) and opens its starter query,
+ * or with `lang` 'python' a Python tab over its main table (not run: Python downloads on the first run).
+ */
+export async function openDataset(d: Dataset, reload = false, lang: 'sql' | 'python' = 'sql') {
   if (get().dataset?.phase === 'loading') return
-  set({ catalogOpen: false })
+  set({ catalogOpen: false, guide: null })
   const { state, extra } = catalogState(d)
   if (!reload && state === 'loaded') {
-    addTab(d.starter, d.title)
+    if (lang === 'python') newPythonNotebookOn(`${d.id}.${d.main}`, d.title)
+    else addTab(d.starter, d.title)
     return
   }
   // A schema of the user's with the dataset's name: loading would drop their tables.
   if (state === 'foreign' && !confirm(`There is already a schema called ${d.id} with your table${extra.length === 1 ? '' : 's'} ${extra.join(', ')}. Loading ${d.title} replaces it and ${extra.length === 1 ? 'that table is' : 'those tables are'} lost. Load anyway?`)) return
-  if (await fetchDataset(d)) openAndRun(d.starter, d.title)
+  if (!(await fetchDataset(d))) return
+  if (lang === 'python') newPythonNotebookOn(`${d.id}.${d.main}`, d.title)
+  else openAndRun(d.starter, d.title)
 }
 
 /** Whether a catalog dataset is in its schema (src/core/ownDatasets.ts). */

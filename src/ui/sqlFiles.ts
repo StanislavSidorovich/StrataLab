@@ -36,6 +36,8 @@ const OPEN_TYPES = [{ description: 'SQL, Python or a notebook', accept: { 'text/
 
 /** The file each tab was opened from or saved to (this visit only: handles aren't kept). */
 const handles = new Map<string, SqlFileHandle>()
+/** The kind a Python tab was last saved as (where Save downloads, so there is no file to write back to). */
+const kinds = new Map<string, 'py' | 'ipynb'>()
 
 const aborted = (e: unknown) => e instanceof DOMException && e.name === 'AbortError'
 
@@ -103,17 +105,29 @@ const fileText = (tab: QueryTab, fileName: string) => (pythonFileKind(fileName) 
 
 /**
  * Saves the active tab. To the file it came from when there is one (and not `saveAs`), else to a
- * file the user picks (the tab takes its name), else as a download. False if cancelled.
+ * file the user picks (the tab takes its name), else as a download. A Python tab without a file
+ * first asks which kind (`kind`): a .py script (the default) or a Jupyter notebook; the native
+ * dialog alone can't be relied on to offer both (and a download has no dialog). False if cancelled
+ * or still waiting for that choice.
  */
-export async function saveSqlFile(saveAs = false): Promise<boolean> {
+export async function saveSqlFile(saveAs = false, kind?: 'py' | 'ipynb'): Promise<boolean> {
   const s = useLab.getState()
   const tab = s.tabs.find((t) => t.id === s.activeTab)
   if (!tab) return false
+  useLab.setState({ saveKind: null })
   try {
     const python = tabDialect(tab) === 'python'
     let handle = saveAs ? undefined : handles.get(tab.id)
+    if (python && !kind && !saveAs) kind = kinds.get(tab.id)
+    if (!handle && python && !kind) {
+      useLab.setState({ saveKind: { saveAs } })
+      return false
+    }
+    if (python && kind) kinds.set(tab.id, kind)
+    const ext = python ? (kind ?? 'py') : 'sql'
     if (!handle && window.showSaveFilePicker) {
-      handle = await window.showSaveFilePicker({ types: python ? [PY_TYPE, NOTEBOOK_TYPE] : [SQL_TYPE], suggestedName: tabFileName(tab.title, python ? 'py' : 'sql') })
+      const types = !python ? [SQL_TYPE] : ext === 'ipynb' ? [NOTEBOOK_TYPE, PY_TYPE] : [PY_TYPE, NOTEBOOK_TYPE]
+      handle = await window.showSaveFilePicker({ types, suggestedName: tabFileName(tab.title, ext) })
       handles.set(tab.id, handle)
       renameTab(tab.id, tabTitleFromFile(handle.name))
     }
@@ -123,7 +137,8 @@ export async function saveSqlFile(saveAs = false): Promise<boolean> {
       await w.close()
       return true
     }
-    download(tabFileName(tab.title, python ? 'py' : 'sql'), tab.sql, python ? 'text/x-python' : 'application/sql')
+    if (ext === 'ipynb') download(tabFileName(tab.title, 'ipynb'), notebookText(tab), 'application/x-ipynb+json')
+    else download(tabFileName(tab.title, ext), tab.sql, python ? 'text/x-python' : 'application/sql')
     return true
   } catch (e) {
     if (!aborted(e)) useLab.setState({ importError: `Could not save the file: ${String(e instanceof Error ? e.message : e)}` })
@@ -143,4 +158,5 @@ function download(name: string, text: string, type: string) {
 /** Forgets a closed tab's file. */
 export function forgetFile(tabId: string) {
   handles.delete(tabId)
+  kinds.delete(tabId)
 }

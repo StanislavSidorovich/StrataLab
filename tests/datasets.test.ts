@@ -34,6 +34,8 @@ describe('dataset catalog', () => {
       }
       // the starter query only uses the dataset's schema
       expect(d.starter).toContain(`${d.id}.`)
+      // "New Python notebook" reads its main table, which is one of its tables
+      expect(d.tables.map((t) => t.name), d.id).toContain(d.main)
     }
     expect(datasetById('chinook')?.tables.find((t) => t.name === 'Employee')?.selfRef?.columns).toEqual(['ReportsTo'])
     expect(datasetById('adventureworks')?.tables.find((t) => t.name === 'ProductCategory')?.selfRef?.columns).toEqual(['ParentProductCategoryID'])

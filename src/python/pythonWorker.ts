@@ -17,9 +17,8 @@ export type ToWorker =
 
 export interface CellResult {
   outputs: Output[]
-  grid: PyFrame | null
-  /** which of `outputs` is the DataFrame in the grid */
-  grid_at: number | null
+  /** every DataFrame or Series the cell showed, `at` its place in `outputs` */
+  frames: { at: number; frame: PyFrame }[]
   saves: { name: string; frame: PyFrame }[]
 }
 

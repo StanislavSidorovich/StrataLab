@@ -189,6 +189,35 @@ describe('Python tabs: example, download bar, switching', () => {
     expect(pythonStarter([t('chinook', 'Album'), t('northwind', 'Order Details')], false)).toContain('lab.table("chinook.Album")')
   })
 
+  it('opens a table or a dataset in Python: lab.table with its name, the first rows, a summary', async () => {
+    const { pythonTableStarter } = await import('../src/core/pyStarter')
+    const { splitCells } = await import('../src/core/pyCells')
+    const code = pythonTableStarter('chinook.Track', 'Chinook')
+    const cells = splitCells(code)
+    expect(cells[0].kind).toBe('markdown')
+    expect(cells[1]).toMatchObject({ kind: 'code', source: 'df = lab.table("chinook.Track")\ndf.head()' })
+    expect(cells.filter((c) => c.kind === 'code').length).toBe(3)
+    expect(code).toContain('Chinook in Python')
+    // a name with a space or a quote stays one Python string
+    expect(pythonTableStarter('northwind.Order Details')).toContain('lab.table("northwind.Order Details")')
+    expect(pythonTableStarter('a"b')).toContain('lab.table("a\\"b")')
+  })
+
+  it('shows a DataFrame inline as pandas would: first rows, short floats, the shape', async () => {
+    const { inlineRows, inlineNumber, frameShape } = await import('../src/core/pyOutput')
+    expect(inlineRows(5)).toBe(5)
+    expect(inlineRows(20)).toBe(20)
+    expect(inlineRows(21)).toBe(10)
+    expect(inlineRows(10_000)).toBe(10)
+    expect(inlineNumber(0.1 + 0.2)).toBe('0.3')
+    expect(inlineNumber(2)).toBe('2')
+    expect(inlineNumber(1234.56789012)).toBe('1234.56789')
+    expect(inlineNumber(NaN)).toBe('NaN')
+    expect(inlineNumber(-Infinity)).toBe('-inf')
+    expect(inlineNumber(1e-9)).toBe('1e-9')
+    expect(frameShape(118449, 7)).toBe('118,449 × 7')
+  })
+
   it('works out the bytes of a download from the package sizes, and is unsure without them', async () => {
     const { bytesToLoad } = await import('../src/core/python')
     const sizes = { pandas: { size: 5, depends: ['numpy'] }, numpy: { size: 7, depends: [] }, seaborn: { size: 0, depends: [] } }

@@ -6,6 +6,7 @@ import { downloadNotebook, forgetFile, openSqlFile, openSqlFiles, saveSqlFile } 
 import { looksLikeTable, opensAsTab } from '../core/editorFiles'
 import { Results } from './Results'
 import { MoveDialog } from './MoveDialog'
+import { SaveKindDialog } from './SaveKindDialog'
 import { ImportDialog } from './ImportDialog'
 import { DdlDialog } from './DdlDialog'
 import { GenerateDialog } from './GenerateDialog'
@@ -143,6 +144,7 @@ export function App() {
       )}
       <ImportDialog />
       <MoveDialog />
+      <SaveKindDialog />
       <DdlDialog />
       <GenerateDialog />
       <CatalogDialog />
@@ -281,8 +283,8 @@ function FileMenu() {
     if (await saveSqlFile(saveAs)) (setSaved(true), setTimeout(() => setSaved(false), 1500))
   }
   const items: MenuItem[] = [
-    ['New query tab', () => addTab()],
-    ['New Python tab', () => newPythonTab()],
+    ['New SQL query', () => addTab()],
+    ['New Python notebook', () => newPythonTab()],
     ['Open a file (.sql, .py, .ipynb)…', () => void openSqlFile(), { keys: `${mod}O` }],
     ['Save', () => void save(false), { keys: `${mod}S` }],
     ['Save as…', () => void save(true), { keys: isMac ? '⇧⌘S' : 'Ctrl+Shift+S' }],
@@ -436,15 +438,15 @@ function Tabs() {
         }}
         aria-haspopup="menu"
         aria-label="New tab"
-        title="New SQL tab or New Python tab"
+        title="New SQL query or New Python notebook"
       >
         <Plus size={15} />
       </button>
       {plus && (
         <Menu
           items={[
-            ['New SQL tab', () => addTab()],
-            ['New Python tab', () => newPythonTab()],
+            ['New SQL query', () => addTab(), { hint: 'DuckDB, T-SQL or PostgreSQL' }],
+            ['New Python notebook', () => newPythonTab(), { hint: 'pandas, matplotlib and seaborn over the same tables' }],
           ]}
           close={() => setPlus(null)}
           at={plus}

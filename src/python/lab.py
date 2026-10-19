@@ -28,8 +28,9 @@ _fetch_js = None
 # Filled while a cell runs: lab.save calls, done by the page after the cell; the cell's outputs.
 _saves = []
 _outputs = []
-_grid = None
-_grid_at = None
+# Every DataFrame or Series the cell showed, with its place in `_outputs`: each shows inline in
+# Output and can be opened in the DataFrame view.
+_frames = []
 
 
 class LabError(Exception):
@@ -233,11 +234,10 @@ def _is_plot(value):
 
 
 def _bundle(value):
-    """Jupyter's MIME bundle for a value; a DataFrame or Series also goes to the grid."""
-    global _grid, _grid_at
+    """Jupyter's MIME bundle for a value; a DataFrame or Series is also sent as columns."""
     data = {"text/plain": repr(value)}
     if isinstance(value, (pd.DataFrame, pd.Series)):
-        _grid, _grid_at = value, len(_outputs)
+        _frames.append((len(_outputs), value))
         if isinstance(value, pd.DataFrame):
             try:
                 data["text/html"] = value._repr_html_()
@@ -289,14 +289,14 @@ namespace = {"__name__": "__main__", "__builtins__": __builtins__, "display": di
 
 
 async def run_cell(code, line, count, fetched, names, fetch_js):
-    """Runs one cell in the session's namespace; its outputs, the DataFrame for the grid, lab.save calls."""
-    global _fetched, _names, _fetch_js, _saves, _outputs, _grid, _grid_at
+    """Runs one cell in the session's namespace; its outputs, the DataFrames it showed, lab.save calls."""
+    global _fetched, _names, _fetch_js, _saves, _outputs, _frames
     from pyodide.code import eval_code_async
 
     _fetched = dict(fetched)
     _names = list(names)
     _fetch_js = fetch_js
-    _saves, _outputs, _grid, _grid_at = [], [], None, None
+    _saves, _outputs, _frames = [], [], []
     filename = f"<cell [{count}]>"
     # Blank lines first, so line numbers in errors are the tab's.
     source = "\n" * (line - 1) + code
@@ -315,10 +315,8 @@ async def run_cell(code, line, count, fetched, names, fetch_js):
         _outputs.append(_error(e))
     finally:
         sys.stdout, sys.stderr = out, err
-    grid = None
-    if _grid is not None:
-        grid = _encode(_shown(_grid), ROW_LIMIT)
-    return {"outputs": _outputs, "grid": grid, "grid_at": _grid_at, "saves": _saves}
+    frames = [{"at": at, "frame": _encode(_shown(v), ROW_LIMIT)} for at, v in _frames]
+    return {"outputs": _outputs, "frames": frames, "saves": _saves}
 
 
 def imports(code):

@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'react'
 import { BookOpen, Check, Copy, GraduationCap, NotebookText, Play, X } from 'lucide-react'
 import { catalogState, openDataset, openGuide, openGuideCode, openWalkthrough, useLab } from './store'
+import { NewQueryButtons } from './NewQueryButtons'
 import { datasetById, type Dataset } from '../data/datasets'
 import { LEVEL_LABEL, cheatSetup, cheatSheet, guideById, guideNotebook, type Guide } from '../data/guides'
 import { walkthroughById, type Walkthrough } from '../data/walkthroughs'
@@ -180,9 +181,7 @@ function About({ d, g, loaded, onExamples }: { d: Dataset; g: Guide; loaded: boo
         <button className="btn btn-primary" onClick={onExamples}>
           <Play size={14} /> Examples
         </button>
-        <button className="btn" onClick={() => void openDataset(d)}>
-          {loaded ? 'New query' : 'Load the dataset'}
-        </button>
+        <NewQueryButtons onSql={() => void openDataset(d)} onPython={() => void openDataset(d, false, 'python')} load={!loaded} what={d.title} primary={false} />
       </div>
     </div>
   )

@@ -49,3 +49,25 @@ df.describe(include="all").T
 df.dtypes
 `
 }
+
+/**
+ * "New Python notebook" on a table (or a dataset: its main table): a tab that reads it with
+ * lab.table and shows its first rows, then a summary of each column.
+ */
+export function pythonTableStarter(name: string, title = name): string {
+  const q = JSON.stringify(name)
+  return `# %% [markdown]
+# ${title} in Python: lab.table(${q}) gives the table as a pandas DataFrame.
+# Run every cell: Ctrl+Enter · this cell, then on to the next: Shift+Enter.
+
+# %%
+df = lab.table(${q})
+df.head()
+
+# %%
+df.describe(include="all").T
+
+# %%
+df.dtypes
+`
+}
