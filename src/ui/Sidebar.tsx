@@ -217,7 +217,7 @@ function DemoGroup({ tables, total, searching }: { tables: [TableInfo, TreeMatch
           {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         </button>
         <Store size={14} style={{ color: 'var(--accent)' }} className="shrink-0" />
-        <button className="truncate text-left flex-1" onClick={toggle} title={`The demo shop: made-up practice data, the same for everyone. Its tables have no prefix: lab.table("orders"). A dataset's tables do (lab.table("northwind.orders")).`}>
+        <button className="truncate text-left flex-1" onClick={toggle} title="The demo shop: made-up practice data, the same for everyone">
           demo shop
         </button>
         <span className="shrink-0" style={{ color: 'var(--muted)', fontSize: 11 }}>
