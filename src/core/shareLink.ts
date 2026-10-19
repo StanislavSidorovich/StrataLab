@@ -12,7 +12,8 @@ export const MAX_SHARE_BYTES = 1_000_000
 /** More tabs than this in one link are refused (a link is for a few queries, not a workspace). */
 export const MAX_SHARED_TABS = 30
 
-export type SharedDialect = 'duckdb' | 'tsql' | 'postgres'
+/** `python`: the tab's text is Python (cells split by `# %%`), opened as a Python tab. */
+export type SharedDialect = 'duckdb' | 'tsql' | 'postgres' | 'python'
 
 export interface SharedTab {
   title: string
@@ -29,7 +30,7 @@ export interface Share {
   tabs: SharedTab[]
 }
 
-const DIALECTS = new Set<string>(['duckdb', 'tsql', 'postgres'])
+const DIALECTS = new Set<string>(['duckdb', 'tsql', 'postgres', 'python'])
 
 /** What a set of tabs needs, and the user's own tables they use that a link can't carry. */
 export function planShare(
@@ -42,7 +43,7 @@ export function planShare(
     ownDatasetTables?: { schema: string; name: string }[]
   },
 ): { share: Share; notShared: string[] } {
-  const text = tabs.map((t) => stripComments(t.sql)).join('\n')
+  const text = tabs.map((t) => (t.dialect === 'python' ? stripPyComments(t.sql) : stripComments(t.sql))).join('\n')
   const uses = (name: string) => new RegExp(`(^|[^\\w."])"?${escapeRe(name)}"?(?![\\w"])`, 'i').test(text)
   const usesSchema = (schema: string) => new RegExp(`(^|[^\\w."])"?${escapeRe(schema)}"?\\s*\\.`, 'i').test(text)
   const datasets = loaded.datasets.filter(usesSchema)
@@ -62,6 +63,11 @@ const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 /** SQL without its comments (both kinds) and string literals, so a name in them is not a use. */
 function stripComments(sql: string): string {
   return sql.replace(/--[^\n]*|\/\*[\s\S]*?\*\/|'(?:[^']|'')*'/g, ' ')
+}
+
+/** Python without its `#` comments; strings stay, because `lab.table("quaera.orders")` names a table in one. */
+function stripPyComments(code: string): string {
+  return code.replace(/#.*/g, ' ')
 }
 
 /** The link's data: a short JSON (one-letter keys) packed for the fragment. */

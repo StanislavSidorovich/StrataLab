@@ -178,6 +178,8 @@ interface State {
   backup: 'saving' | 'restoring' | null
   /** the Share dialog is open */
   shareOpen: boolean
+  /** the table tree as a sheet (a phone has no sidebar) */
+  tablesOpen: boolean
   /** About & licences: closed, or the tab it shows (src/ui/AboutDialog.tsx) */
   aboutOpen: AboutTab | false
   /** a passing message that is not an error (what a shared link opened) */
@@ -300,6 +302,7 @@ export const useLab = create<State>(() => ({
   closedTabs: [],
   backup: null,
   shareOpen: false,
+  tablesOpen: false,
   aboutOpen: false,
   notice: null,
   demoHidden: initialDemoHidden(),
@@ -1360,6 +1363,10 @@ export type AboutTab = 'about' | 'licences' | 'privacy'
 
 export function openAbout(tab: AboutTab | false = 'about') {
   set({ aboutOpen: tab })
+}
+
+export function openTables(open = true) {
+  set({ tablesOpen: open })
 }
 
 export function openShare(open = true) {

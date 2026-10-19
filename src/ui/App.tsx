@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, Check, ChevronDown, Database, FileText, GraduationCap, SquareTerminal, HardDrive, HelpCircle, Library, Loader2, Plus, RefreshCw, Share2, Upload, X, Zap } from 'lucide-react'
-import { Sidebar, pickBackup, pickFilesFor } from './Sidebar'
+import { AlertTriangle, Check, ChevronDown, Database, FileText, GraduationCap, SquareTerminal, HardDrive, HelpCircle, Loader2, Plus, RefreshCw, Share2, Table2, Upload, X, Zap } from 'lucide-react'
+import { InsertMode, Sidebar, pickBackup, pickFilesFor } from './Sidebar'
 import { SqlEditor, runActive, setActiveText } from './SqlEditor'
 import { downloadNotebook, forgetFile, openSqlFile, openSqlFiles, saveSqlFile } from './sqlFiles'
 import { looksLikeTable, opensAsTab } from '../core/editorFiles'
@@ -19,7 +19,7 @@ import { CompareDialog } from './Compare'
 import { DialectBar } from './DialectBar'
 import { applyUpdate, checkForUpdates, updateCheckMessage, useUpdateReady } from '../pwa/register'
 import { engineLoadingLabel, engineLoadingShort } from './EngineLoading'
-import { addTab, closeTabs, currentPythonStarter, newPythonTab, openPractice, switchTabDialect, tabDialect, downloadBackup, duplicateTab, enqueueFiles, openAbout, openCatalog, openShare, openWelcome, pasteTable, pasteTableFromClipboard, renameTab, reopenClosedTab, useLab } from './store'
+import { addTab, closeTabs, currentPythonStarter, newPythonTab, openPractice, switchTabDialect, tabDialect, downloadBackup, duplicateTab, enqueueFiles, openAbout, openCatalog, openShare, openTables, openWelcome, pasteTable, pasteTableFromClipboard, renameTab, reopenClosedTab, useLab } from './store'
 import { AppearanceButton } from './Appearance'
 import { Menu, useLongPress, type MenuItem } from './Menu'
 import { tabsToClose } from '../core/tabs'
@@ -143,6 +143,7 @@ export function App() {
       <GenerateDialog />
       <CatalogDialog />
       <DatasetProgressCard />
+      <TablesSheet />
       <WelcomeDialog />
       <AboutDialog />
       <ShareDialog />
@@ -200,6 +201,34 @@ function useDropZone() {
   return dragging
 }
 
+/** The table tree as a bottom sheet, for a phone (the sidebar is hidden there). */
+function TablesSheet() {
+  const open = useLab((s) => s.tablesOpen)
+  useEffect(() => {
+    if (!open) return
+    const mq = window.matchMedia('(min-width: 768px)')
+    const close = () => mq.matches && openTables(false)
+    mq.addEventListener('change', close)
+    return () => mq.removeEventListener('change', close)
+  }, [open])
+  if (!open) return null
+  return (
+    <div className="fixed inset-0 z-40 flex items-end md:hidden" style={{ background: 'rgba(10,14,20,0.55)' }} onMouseDown={(e) => e.target === e.currentTarget && openTables(false)}>
+      <div role="dialog" aria-label="Tables" className="w-full flex flex-col rounded-t-xl shadow-2xl overflow-hidden" style={{ height: '85%', background: 'var(--panel)', border: '1px solid var(--line)' }}>
+        <div className="flex items-center gap-2 px-3 py-2 shrink-0" style={{ borderBottom: '1px solid var(--line)' }}>
+          <span className="font-semibold flex-1">Tables <span style={{ color: 'var(--muted)', fontWeight: 400, fontSize: 12 }}>Insert puts a name in the editor</span></span>
+          <button className="btn btn-ghost" onClick={() => openTables(false)} aria-label="Close"><X size={16} /></button>
+        </div>
+        <div className="flex-1 min-h-0">
+          <InsertMode.Provider value={true}>
+            <Sidebar />
+          </InsertMode.Provider>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function TopBar() {
   const engine = useLab((s) => s.engine)
   const updateReady = useUpdateReady()
@@ -217,8 +246,8 @@ function TopBar() {
       <EngineBadge />
       {/* The sidebar (with its catalog button) is hidden on a phone. */}
       <span className="contents md:hidden">
-        <button className="btn btn-ghost" onClick={() => openCatalog()} disabled={engine.status !== 'ready'} aria-label="Sample datasets" title="Sample datasets">
-          <Library size={16} />
+        <button className="btn btn-ghost" onClick={() => openTables()} aria-label="Tables" title="Your tables and sample datasets">
+          <Table2 size={16} /> Tables
         </button>
       </span>
       {/* Only while a new version waits (src/pwa/register.ts). */}

@@ -26,6 +26,22 @@ describe('Share: what a link needs', () => {
   })
 })
 
+describe('Share: Python tabs', () => {
+  const loaded = { datasets: ['quaera', 'chinook'], demoTables: ['orders', 'customers'], ownTables: [] }
+  it('keeps l: python and finds datasets named in strings, not in comments', () => {
+    const code = '# chinook.Album\norders = lab.table("quaera.orders")\n# %%\nlab.sql("SELECT 1")'
+    const { share } = planShare([{ title: 'p', sql: code, dialect: 'python' }], loaded)
+    expect(share.datasets).toEqual(['quaera'])
+    expect(share.tabs).toEqual([{ title: 'p', sql: code, dialect: 'python' }])
+  })
+  it('round-trips and reads old links as before', async () => {
+    const share = { datasets: ['quaera'], demo: false, tabs: [{ title: 'p', sql: 'x = lab.table("quaera.orders")', dialect: 'python' as const }, { title: 'q', sql: 'SELECT 1' }] }
+    expect(await decodeShare(await encodeShare(share))).toEqual(share)
+    expect(parseShare('{"v":1,"t":[{"q":"SELECT 1","l":"postgres"}]}').tabs[0].dialect).toBe('postgres')
+    expect(parseShare('{"v":1,"t":[{"q":"print(1)","l":"python"}]}').tabs[0]).toEqual({ title: 'Shared query', sql: 'print(1)', dialect: 'python' })
+  })
+})
+
 describe('Share: the link', () => {
   it('round-trips', async () => {
     const share = { datasets: ['chinook'], demo: true, tabs: [{ title: 'Выручка', sql: "SELECT 'ё' AS x;", dialect: 'postgres' as const }] }

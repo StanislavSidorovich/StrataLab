@@ -2,9 +2,10 @@
 // folder (its own schema): the user's own, made with New dataset and filled a table at a time,
 // and the loaded catalog datasets; and what you can do with each one (the SSMS right-click
 // menu, as a small menu button).
+import { insertAtCursor } from './SqlEditor'
 import { createContext, useContext, useRef, useState } from 'react'
-import { ChevronDown, ChevronRight, ClipboardPaste, Database, DatabaseZap, Eye, Folder, FolderPlus, Library, Loader2, MoreHorizontal, Network, RefreshCw, Search, Sparkles, Store, Table2, Upload, X } from 'lucide-react'
-import { CATALOG_IDS, copySchemaToPostgres, downloadBackup, dropPgObject, dropDataset, dropObject, enqueueFiles, hasDemoTables, hideDemo, loadDemo, newDataset, openAndRun, openAsModel, openCatalog, openDataset, openGenerate, openGuide, openMove, openPractice, ownTables, pasteTableFromClipboard, refreshTree, renameDataset, renameObject, restoreBackup, useLab } from './store'
+import { CornerDownLeft, ChevronDown, ChevronRight, ClipboardPaste, Database, DatabaseZap, Eye, Folder, FolderPlus, Library, Loader2, MoreHorizontal, Network, RefreshCw, Search, Sparkles, Store, Table2, Upload, X } from 'lucide-react'
+import { CATALOG_IDS, copySchemaToPostgres, downloadBackup, dropPgObject, dropDataset, dropObject, enqueueFiles, hasDemoTables, hideDemo, loadDemo, newDataset, openAndRun, openAsModel, openCatalog, openDataset, openGenerate, openGuide, openMove, openPractice, openTables, ownTables, pasteTableFromClipboard, refreshTree, renameDataset, renameObject, restoreBackup, useLab } from './store'
 import { isOwnSchema } from '../core/ownDatasets'
 import { qualifiedName } from '../core/sql'
 import { treeMatch, type TreeMatch } from '../core/tree'
@@ -51,6 +52,9 @@ export function pickFilesFor(table?: string, schema = 'main') {
   input.onchange = () => void enqueueFiles([...(input.files ?? [])], table, schema)
   input.click()
 }
+
+/** True inside the phone's Tables sheet: each table gets an Insert button. */
+export const InsertMode = createContext(false)
 
 export function Sidebar() {
   const all = useLab((s) => s.tables)
@@ -337,6 +341,7 @@ function TableNode({ t, match }: { t: TableInfo; match?: TreeMatch }) {
   const byColumn = !!match?.columns.length
   const open = userOpen || byColumn
   const [menu, setMenu] = useState(false)
+  const insertable = useContext(InsertMode)
   const [dropHere, setDropHere] = useState(0)
   const name = qualifiedName(t.schema, t.name)
   const fillable = isOwnSchema(t.schema, CATALOG_IDS) && t.kind === 'table'
@@ -362,6 +367,18 @@ function TableNode({ t, match }: { t: TableInfo; match?: TreeMatch }) {
         <button className="truncate text-left flex-1" onClick={() => setOpen(!open)} title={`${name} — double-click to see the first 100 rows${fillable ? '; drop a file here to add rows' : ''}`}>
           <Highlight text={t.name} match={match?.byName ? match : undefined} />
         </button>
+        {insertable && (
+          <button
+            className="btn shrink-0"
+            style={{ padding: '2px 8px' }}
+            onClick={() => {
+              if (insertAtCursor(name)) openTables(false)
+            }}
+            aria-label={`Insert ${name} into the editor`}
+          >
+            <CornerDownLeft size={13} /> Insert
+          </button>
+        )}
         {t.rows != null && (
           <span className="shrink-0" style={{ color: 'var(--muted)', fontSize: 11 }}>
             {t.rows.toLocaleString()}

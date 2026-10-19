@@ -92,6 +92,21 @@ export function appendToActive(statement: string) {
   v.focus()
 }
 
+/**
+ * Puts a table's name at the cursor (the phone's Tables sheet): SQL gets it as it is, a Python
+ * tab gets `lab.table("name")`. False when there is no editor to put it in.
+ */
+export function insertAtCursor(name: string): boolean {
+  const v = activeView
+  if (!v) return false
+  const id = useLab.getState().activeTab
+  const text = isPython(id) ? `lab.table("${name.replace(/"/g, '')}")` : name
+  const { from, to } = v.state.selection.main
+  v.dispatch({ changes: { from, to, insert: text }, selection: { anchor: from + text.length }, scrollIntoView: true, userEvent: 'input' })
+  v.focus()
+  return true
+}
+
 /** "+ Cell": a `# %%` line after the cell at the cursor, and the cursor under it. */
 export function addCell() {
   const v = activeView

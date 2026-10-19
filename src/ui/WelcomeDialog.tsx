@@ -36,6 +36,14 @@ function pickFiles() {
   input.click()
 }
 
+/** The four parts of the page in a line each; the long version is under "More about each part". */
+const SHORT: [string, string][] = [
+  ['Left', 'Your tables and sample datasets; click one for its columns, double-click for its rows.'],
+  ['Top', 'Query tabs: SQL or Python. The SQL button beside Run picks the dialect.'],
+  ['Bottom', 'Results, Chart, Messages and History; Export and Save as table.'],
+  ['Header', 'File: open and save, add CSV / Excel, Share link, backup.'],
+]
+
 const PLACES: [string, string, string][] = [
   ['Left', 'Object tree', 'Your tables, the demo shop and loaded datasets; the box above them finds a table or a column. Paste a table copied in Excel (Ctrl+V outside the editor). Click a table to see its columns, double-click for its first 100 rows; its ⋯ menu profiles, exports, renames, adds rows from a file or generates sample rows. The ⋯ next to TABLES downloads the whole database as one file and restores it: keep a copy before clearing the browser.'],
   ['Top', 'Query tabs', 'A tab is SQL or Python (+ opens New SQL tab / New Python tab; the icon and the top stripe of a tab tell which). The SQL button above the editor, next to Run, says how the SQL is written: DuckDB, or T-SQL or PostgreSQL (its Compare dialects… shows the same task in each, and in pandas) (while a query runs, Run becomes Stop; Esc in the editor stops it too). Write SQL here, with completion of table and column names. Ctrl+Enter or F5 runs the selection, or the whole tab when nothing is selected. Explain, next to Run, shows how the database runs the query: its steps, the rows at each step and where the time goes, with a plain-words note on each step (a query that would change data is only planned, not run). Tabs are kept between visits; double-click a tab to rename it, right-click it to duplicate, close others or reopen a closed one. Right-click the editor for Run, Explain, Format, Cut / Copy / Paste and more (Shift + right-click gives the browser’s own menu). The buttons at the editor’s right undo, redo, comment lines, format the SQL and find.'],
@@ -78,21 +86,22 @@ export function WelcomeDialog() {
 
         <div className="overflow-auto min-h-0 px-5 py-4 space-y-5">
           <section>
-            <h2 className="font-semibold mb-2">Start in one of three ways</h2>
+            <h2 className="font-semibold mb-2">Start here</h2>
             <div className="grid gap-3 sm:grid-cols-3">
               <StartCard
                 icon={<Store size={18} />}
                 title="Try the demo shop"
-                text={`${hasDemo ? 'Already here' : 'Four tables'}: customers, products, orders, order_items. Made-up data (200 customers, 1,500 orders), the same for everyone, so answers can be compared.`}
+                text={`${hasDemo ? 'Already here' : 'Four tables'}: customers, products, orders, order_items. Made-up data, the same for everyone.`}
                 action={hasDemo ? 'Run the first query' : 'Load it and run a query'}
                 actionIcon={<Play size={13} />}
                 onClick={start(() => void tryDemo())}
                 disabled={!ready}
+                primary
               />
               <StartCard
                 icon={<Library size={18} />}
                 title="Load a sample database"
-                text="Chinook, Northwind, AdventureWorks, Sakila and Kaiyo Trading: the databases SQL tutorials use, with their keys, in one click."
+                text="Chinook, Northwind, AdventureWorks, Sakila, Kaiyo Trading: in one click."
                 action="Open the catalog"
                 onClick={start(() => openCatalog())}
                 disabled={!ready}
@@ -100,7 +109,7 @@ export function WelcomeDialog() {
               <StartCard
                 icon={<FileUp size={18} />}
                 title="Bring your own file"
-                text="CSV, Excel, Parquet or JSON. Drop it anywhere on the page: you see a preview with types, then it becomes a table."
+                text="CSV, Excel, Parquet or JSON. Drop it anywhere on the page."
                 action="Choose a file…"
                 onClick={start(pickFiles)}
                 disabled={!ready}
@@ -110,10 +119,22 @@ export function WelcomeDialog() {
 
           <section>
             <h2 className="font-semibold mb-2">Where things are</h2>
-            <dl className="grid gap-2">
+            <dl className="grid gap-1.5">
+              {SHORT.map(([where, what]) => (
+                <div key={where} className="flex gap-3">
+                  <dt className="shrink-0 w-16 font-semibold">{where}</dt>
+                  <dd style={{ color: 'var(--muted)' }}>{what}</dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+
+          <details>
+            <summary className="cursor-pointer font-semibold">More about each part and the keyboard shortcuts</summary>
+            <dl className="grid gap-2 mt-2">
               {PLACES.map(([where, what, how]) => (
-                <div key={what} className="flex gap-3 rounded-lg p-2.5" style={{ background: 'var(--panel-2)' }}>
-                  <dt className="shrink-0 w-28">
+                <div key={what} className="rounded-lg p-2.5 sm:flex gap-3" style={{ background: 'var(--panel-2)' }}>
+                  <dt className="shrink-0 sm:w-28">
                     <div className="font-semibold">{what}</div>
                     <div style={{ color: 'var(--muted)', fontSize: 12 }}>{where}</div>
                   </dt>
@@ -121,10 +142,7 @@ export function WelcomeDialog() {
                 </div>
               ))}
             </dl>
-          </section>
-
-          <section>
-            <h2 className="font-semibold mb-2">Keyboard shortcuts</h2>
+            <h2 className="font-semibold mt-4 mb-2">Keyboard shortcuts</h2>
             <dl className="grid gap-x-4 gap-y-1 sm:grid-cols-2" style={{ fontSize: 12.5 }}>
               {KEYS.map(([keys, what]) => (
                 <div key={keys} className="flex gap-3">
@@ -137,9 +155,11 @@ export function WelcomeDialog() {
                 </div>
               ))}
             </dl>
-          </section>
+          </details>
 
-          <section style={{ color: 'var(--muted)' }} className="space-y-1">
+          <details style={{ color: 'var(--muted)' }}>
+          <summary className="cursor-pointer font-semibold" style={{ color: 'var(--text)' }}>SQL Server, PostgreSQL, Python and Model</summary>
+          <section className="space-y-1 mt-2">
             <p>
               <b style={{ color: 'var(--text)' }}>Coming from SQL Server or PostgreSQL?</b> Above the editor, press the <b>SQL · DuckDB</b> button and under <b>Write as…</b> pick <b>T-SQL (SQL Server)</b>: your T-SQL is
               translated to DuckDB before it runs, and you see both side by side. <b>PostgreSQL</b> (same menu) runs on a real PostgreSQL in this browser; copy tables into it from a
@@ -155,13 +175,14 @@ export function WelcomeDialog() {
               <a className="underline" href="https://model.quaera.app" target="_blank" rel="noreferrer">model.quaera.app</a>.
             </p>
           </section>
+          </details>
         </div>
 
-        <div className="flex items-center gap-2 px-5 py-3" style={{ borderTop: '1px solid var(--line)' }}>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 px-5 py-3" style={{ borderTop: '1px solid var(--line)' }}>
           <span className="flex items-center gap-1" style={{ color: 'var(--muted)', fontSize: 12 }}>
-            <HelpCircle size={13} /> This guide, About & licences and Privacy are under the ? button at the top right.
+            <HelpCircle size={13} className="shrink-0" /> This guide is under the ? button at the top right.
           </span>
-          <div className="flex-1" />
+          <div className="flex-1 hidden sm:block" />
           {installNote && (
             <span style={{ color: 'var(--muted)', fontSize: 12 }} className="max-w-xs text-right">
               {installNote}
@@ -170,7 +191,7 @@ export function WelcomeDialog() {
           <button className="btn btn-ghost" onClick={() => void installApp().then(setInstallNote)} title="Open Quaera Lab in its own window, from the home screen or the app list">
             <Download size={14} /> Install as app
           </button>
-          <button className="btn btn-primary" onClick={closeWelcome}>
+          <button className="btn" onClick={closeWelcome}>
             Got it
           </button>
         </div>
@@ -179,15 +200,15 @@ export function WelcomeDialog() {
   )
 }
 
-function StartCard(props: { icon: React.ReactNode; title: string; text: string; action: string; actionIcon?: React.ReactNode; onClick: () => void; disabled: boolean }) {
-  const { icon, title, text, action, actionIcon, onClick, disabled } = props
+function StartCard(props: { icon: React.ReactNode; title: string; text: string; action: string; actionIcon?: React.ReactNode; onClick: () => void; disabled: boolean; primary?: boolean }) {
+  const { icon, title, text, action, actionIcon, onClick, disabled, primary } = props
   return (
     <div className="rounded-lg p-3 flex flex-col gap-2" style={{ border: '1px solid var(--line)', background: 'var(--panel-2)' }}>
       <div className="flex items-center gap-2 font-semibold" style={{ color: 'var(--accent)' }}>
         {icon} <span style={{ color: 'var(--text)' }}>{title}</span>
       </div>
       <p className="flex-1">{text}</p>
-      <button className="btn justify-center" onClick={onClick} disabled={disabled}>
+      <button className={`btn justify-center${primary ? ' btn-primary' : ''}`} onClick={onClick} disabled={disabled}>
         {actionIcon} {action}
       </button>
     </div>
