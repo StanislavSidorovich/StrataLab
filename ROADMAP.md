@@ -14,7 +14,9 @@ Stages follow SPEC §6. A stage is done only when its acceptance criteria pass.
 
 **Overall progress: stages 1–5 of 7 done** (stage 7, Python: design, MVP, notebooks and offline done on a branch, waiting for the owner's review) (stage 6 started: PWA, history, charts, EXPLAIN, your own datasets, row limit, About & licences, Privacy, colours). Next in stage 6: snippets, RU / PT interface. The full application = all six stages.
 
-## Where we are (2026-10-19, v0.9.0: visible Python cells; v0.8.0: Output / Table views, walkthroughs; v0.7.0 dataset guides)
+## Where we are (2026-10-19, v0.10.0: tab kinds, one SQL button, demo group; v0.9.0: visible Python cells; v0.8.0: Output / Table views, walkthroughs; v0.7.0 dataset guides)
+
+**v0.10.0: made for newcomers (2026-10-19).** (1) One **SQL · DuckDB ▾** button per SQL tab; its menu has DuckDB (default) and **Write as…** T-SQL / PostgreSQL, one line each on who needs it; the first time a tab uses one of them a note above the editor says it again with a link to the guide, closed once per dialect (`stratalab.dialect-note.<id>`; `src/core/dialectNote.ts`). (2) Python is no longer a dialect: a tab shows its kind by icon and a thin top stripe (Python `--py` #3776ab, lighter in dark; green stays Lab's accent); **+** opens New SQL tab / New Python tab; a tab's menu has Switch to Python / SQL (text → new tab, as before); the Python bar reads "Python 3.14 · pandas" with + Cell and Restart. (3) The demo shop is a folder in the tree, "demo shop (4)", open or closed as left (`stratalab.demo-open`); its ⋯ menu hides it altogether, Sample datasets brings it back. (4) **Practice** moved from the data buttons to the header beside File (not on a phone; Help has it too). `Menu` got headings, a hint line and a tick. Audit item 7 (ui-audit/REPORT.md) done.
 
 **v0.9.1: Borders Soft / Strong (2026-10-19).** Aa menu setting; Strong sets `data-borders="strong"` on `<html>`, which the family kit's tokens.css turns into a darker `--q-line` (kept in `stratalab.borders`; `index.html` sets the attribute before first paint). Soft is the default.
 

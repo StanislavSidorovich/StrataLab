@@ -3,7 +3,7 @@
 // and the loaded catalog datasets; and what you can do with each one (the SSMS right-click
 // menu, as a small menu button).
 import { createContext, useContext, useRef, useState } from 'react'
-import { ChevronDown, ChevronRight, ClipboardPaste, Database, DatabaseZap, Eye, Folder, FolderPlus, GraduationCap, Library, Loader2, MoreHorizontal, Network, RefreshCw, Search, Sparkles, Store, Table2, Upload, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, ClipboardPaste, Database, DatabaseZap, Eye, Folder, FolderPlus, Library, Loader2, MoreHorizontal, Network, RefreshCw, Search, Sparkles, Store, Table2, Upload, X } from 'lucide-react'
 import { CATALOG_IDS, copySchemaToPostgres, downloadBackup, dropPgObject, dropDataset, dropObject, enqueueFiles, hasDemoTables, hideDemo, loadDemo, newDataset, openAndRun, openAsModel, openCatalog, openDataset, openGenerate, openGuide, openMove, openPractice, ownTables, pasteTableFromClipboard, refreshTree, renameDataset, renameObject, restoreBackup, useLab } from './store'
 import { isOwnSchema } from '../core/ownDatasets'
 import { qualifiedName } from '../core/sql'
@@ -99,9 +99,6 @@ export function Sidebar() {
         <button className="btn w-full justify-center" disabled={engine.status !== 'ready'} onClick={() => openCatalog()}>
           <Library size={14} /> Sample datasets…
         </button>
-        <button className="btn w-full justify-center" disabled={engine.status !== 'ready'} onClick={() => openPractice()} title="Business questions on the demo shop: worked examples, and tasks with a check of your answer and hints">
-          <GraduationCap size={14} /> Practice…
-        </button>
         {!demoHere && !demoHidden && (
           <button className="btn w-full justify-center" disabled={engine.status !== 'ready'} onClick={() => void loadDemo()}>
             <Store size={14} /> Load demo shop
@@ -143,20 +140,14 @@ export function Sidebar() {
             <Sparkles size={12} className="shrink-0" /> Generate rows for {empty.length === 1 ? `empty ${empty[0].name}` : `${empty.length} empty tables`}…
           </button>
         )}
-        {!searching && hasDemo && (
-          <p className="mx-3 mb-1 flex items-start gap-1.5" style={{ color: 'var(--muted)', fontSize: 12 }}>
-            <Store size={12} className="shrink-0 mt-0.5" />
-            <span>
-              <b>demo</b> = the demo shop: made-up practice data, the same for everyone.{' '}
-              <button className="hover:underline" style={{ color: 'var(--accent)' }} onClick={hideDemo} title="Take the demo tables out of this list. Nothing is deleted: Sample datasets → Demo shop shows them again.">
-                Hide
-              </button>
-            </span>
-          </p>
+        {hasDemo && (!searching || shown.some(([t]) => DEMO_TABLES.includes(t.name))) && (
+          <DemoGroup tables={shown.filter(([t]) => DEMO_TABLES.includes(t.name))} total={DEMO_TABLES.length} searching={searching} />
         )}
-        {shown.map(([t, m]) => (
-          <TableNode key={t.name} t={t} demo={hasDemo && DEMO_TABLES.includes(t.name)} match={searching ? m : undefined} />
-        ))}
+        {shown
+          .filter(([t]) => !(hasDemo && DEMO_TABLES.includes(t.name)))
+          .map(([t, m]) => (
+            <TableNode key={t.name} t={t} match={searching ? m : undefined} />
+          ))}
         {(!searching || shownSchemas.length > 0) && engine.status === 'ready' && (
           <div className="px-3 pt-4 pb-1 flex items-center gap-2 font-semibold" style={{ color: 'var(--muted)', fontSize: 11, letterSpacing: 0.4 }}>
             <Library size={13} className="shrink-0" />
@@ -183,6 +174,66 @@ export function Sidebar() {
       </div>
       </TreeSearchText.Provider>
     </aside>
+  )
+}
+
+const DEMO_OPEN_KEY = 'stratalab.demo-open'
+
+/**
+ * The demo shop, a folder like the datasets: "demo shop (4)" with an arrow, open or closed as the user
+ * left it (kept in this browser). Hiding it altogether is in its menu; Sample datasets brings it back.
+ */
+function DemoGroup({ tables, total, searching }: { tables: [TableInfo, TreeMatch][]; total: number; searching: boolean }) {
+  const [userOpen, setOpen] = useState(() => {
+    try {
+      return localStorage.getItem(DEMO_OPEN_KEY) !== '0'
+    } catch {
+      return true
+    }
+  })
+  const toggle = () => {
+    setOpen(!userOpen)
+    try {
+      localStorage.setItem(DEMO_OPEN_KEY, userOpen ? '0' : '1')
+    } catch {
+      /* ignore */
+    }
+  }
+  // While searching, the group is open and shows only the matches.
+  const open = userOpen || searching
+  const [menu, setMenu] = useState(false)
+  const items: MenuItem[] = [
+    ['Practice on the demo shop…', () => openPractice()],
+    ['Hide the demo shop', hideDemo, { hint: 'Nothing is deleted: Sample datasets → Demo shop shows it again.' }],
+  ]
+  return (
+    <div>
+      <div className="group flex items-center gap-1 pl-2 pr-1 py-1 hover:bg-[var(--panel-2)]">
+        <button className="p-0.5" onClick={toggle} aria-label={open ? 'Collapse the demo shop' : 'Expand the demo shop'} aria-expanded={open}>
+          {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        </button>
+        <Store size={14} style={{ color: 'var(--accent)' }} className="shrink-0" />
+        <button className="truncate text-left flex-1" onClick={toggle} title="The demo shop: made-up practice data, the same for everyone">
+          demo shop
+        </button>
+        <span className="shrink-0" style={{ color: 'var(--muted)', fontSize: 11 }}>
+          {searching ? `${tables.length}/${total}` : total}
+        </span>
+        <div className="relative">
+          <button className="p-1 rounded opacity-0 group-hover:opacity-100 focus:opacity-100" style={menu ? { opacity: 1 } : undefined} onClick={() => setMenu(!menu)} aria-label="Actions for the demo shop">
+            <MoreHorizontal size={14} />
+          </button>
+          {menu && <Menu items={items} close={() => setMenu(false)} />}
+        </div>
+      </div>
+      {open && (
+        <div className="pl-4">
+          {tables.map(([t, m]) => (
+            <TableNode key={t.name} t={t} match={searching ? m : undefined} />
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -281,7 +332,7 @@ function SchemaNode({ schema, tables, shown }: { schema: string; tables: TableIn
 }
 
 /** `match`: while searching, how the table matched; one found by its columns opens on them. */
-function TableNode({ t, demo = false, match }: { t: TableInfo; demo?: boolean; match?: TreeMatch }) {
+function TableNode({ t, match }: { t: TableInfo; match?: TreeMatch }) {
   const [userOpen, setOpen] = useState(false)
   const byColumn = !!match?.columns.length
   const open = userOpen || byColumn
@@ -311,11 +362,6 @@ function TableNode({ t, demo = false, match }: { t: TableInfo; demo?: boolean; m
         <button className="truncate text-left flex-1" onClick={() => setOpen(!open)} title={`${name} — double-click to see the first 100 rows${fillable ? '; drop a file here to add rows' : ''}`}>
           <Highlight text={t.name} match={match?.byName ? match : undefined} />
         </button>
-        {demo && (
-          <span className="shrink-0 px-1 rounded" style={{ background: 'var(--panel-2)', color: 'var(--muted)', fontSize: 10 }} title="Demo shop: made-up practice data">
-            demo
-          </span>
-        )}
         {t.rows != null && (
           <span className="shrink-0" style={{ color: 'var(--muted)', fontSize: 11 }}>
             {t.rows.toLocaleString()}

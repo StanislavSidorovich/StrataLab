@@ -2,17 +2,12 @@
 // to DuckDB first (sqlglot) and the translation can be seen side by side; PostgreSQL runs on a
 // real PostgreSQL (PGlite), a separate database that tables are copied into.
 import { useEffect, useState } from 'react'
-import { ArrowLeftRight, Copy, ListTree, Loader2, Play, Plus, Redo2, RotateCcw, Search, Square, SquareSlash, Undo2, WandSparkles } from 'lucide-react'
-import { copySchemaToPostgres, explainSql, ownTables, currentPythonStarter, restartPython, retryPython, showTranslation, switchTabDialect, startPython, stopQuery, tabDialect, useLab, type Dialect } from './store'
-import { activeSql, addCell, editorCommand, formatActiveTab, runActive, setActiveText } from './SqlEditor'
+import { ArrowLeftRight, ChevronDown, Copy, ListTree, Loader2, Play, Plus, Redo2, RotateCcw, Search, Square, SquareSlash, Undo2, WandSparkles, X } from 'lucide-react'
+import { copySchemaToPostgres, explainSql, ownTables, openWelcome, restartPython, retryPython, setTabDialect, showTranslation, startPython, stopQuery, tabDialect, useLab } from './store'
+import { activeSql, addCell, editorCommand, formatActiveTab, runActive } from './SqlEditor'
+import { Menu, type MenuItem } from './Menu'
+import { SQL_DIALECTS, dismissNote, needsNote, noteDismissed, sqlLabel, type SqlDialect } from '../core/dialectNote'
 import { pythonProgressLabel, pythonProgressShare } from '../core/progress'
-
-const DIALECTS: { id: Dialect; label: string; short: string; title: string }[] = [
-  { id: 'duckdb', label: 'DuckDB', short: 'DuckDB', title: 'Run as written on DuckDB (close to PostgreSQL)' },
-  { id: 'tsql', label: 'SQL Server (T-SQL)', short: 'T-SQL', title: 'Write SQL Server’s T-SQL: it is translated to DuckDB (by sqlglot) before it runs, and you can see the translation side by side' },
-  { id: 'postgres', label: 'PostgreSQL', short: 'Postgres', title: 'Run on a real PostgreSQL in this browser (PGlite): a separate database, copy tables into it from the tree' },
-  { id: 'python', label: 'Python', short: 'Python', title: 'Python with pandas, matplotlib and seaborn over the same tables: lab.table("orders"), lab.sql("SELECT …"). A cell ends at the next # %% line, not at a semicolon: Run cell and Run below sit on the bar over each cell' },
-]
 
 export function DialectBar() {
   const tab = useLab((s) => s.tabs.find((t) => t.id === s.activeTab))
@@ -37,27 +32,7 @@ export function DialectBar() {
     <div className="h-9 flex items-center gap-1 sm:gap-2 px-2 overflow-x-auto" style={{ background: 'var(--panel)', borderBottom: '1px solid var(--line)', fontSize: 12 }}>
       <RunButton />
       {dialect !== 'python' && <ExplainButton />}
-      <div role="radiogroup" aria-label="Dialect of this tab" className="flex shrink-0 rounded-md p-0.5" style={{ background: 'var(--panel-2)' }}>
-        {DIALECTS.map((d) => (
-          <button
-            key={d.id}
-            role="radio"
-            aria-checked={dialect === d.id}
-            className="px-1.5 sm:px-2.5 py-1 rounded whitespace-nowrap"
-            style={dialect === d.id ? { background: 'var(--panel)', fontWeight: 600, boxShadow: '0 1px 2px rgba(0,0,0,0.12)', color: 'var(--accent)' } : { color: 'var(--muted)' }}
-            title={d.title}
-            onClick={() => {
-              // An empty tab that becomes Python gets the example; a tab with text opens a new one (store.ts).
-              const empty = !tab.sql.trim()
-              switchTabDialect(tab.id, d.id)
-              if (empty && d.id === 'python' && dialect !== 'python') setActiveText(currentPythonStarter())
-            }}
-          >
-            <span className="hidden sm:inline">{d.label}</span>
-            <span className="sm:hidden">{d.short}</span>
-          </button>
-        ))}
-      </div>
+      {dialect !== 'python' && <SqlDialectMenu tabId={tab.id} dialect={dialect} />}
 
       {dialect === 'tsql' && (
         <>
@@ -91,10 +66,10 @@ export function DialectBar() {
 
       {dialect === 'python' && (
         <>
-          <span className="truncate" style={{ color: python.status === 'error' ? 'var(--danger)' : 'var(--muted)' }} title={python.status === 'error' ? python.error : 'A cell ends at the next # %% line (not at a semicolon). Run every cell: Ctrl+Enter · the cell at the cursor: Shift+Enter'}>
+          <span className="truncate" style={{ color: python.status === 'error' ? 'var(--danger)' : 'var(--py)', fontWeight: 600 }} title={python.status === 'error' ? python.error : 'A cell ends at the next # %% line (not at a semicolon). Run every cell: Ctrl+Enter · the cell at the cursor: Shift+Enter'}>
             {python.status === 'ready' && (
               <>
-                Python {python.version.replace(/^(\d+)\.(\d+).*/, '$1.$2')} with pandas<span className="hidden lg:inline"> · Shift+Enter runs a cell</span>
+                Python {python.version.replace(/^(\d+)\.(\d+).*/, '$1.$2')} · pandas
               </>
             )}
             {python.status === 'off' && 'Python starts on the first run'}
@@ -122,6 +97,58 @@ export function DialectBar() {
       <EditorTools python={dialect === 'python'} />
     </div>
     {dialect === 'python' && python.status === 'loading' && shown && <PythonBar bytes={python.bytes} />}
+    {needsNote(dialect) && <DialectNote dialect={dialect} />}
+    </div>
+  )
+}
+
+/** One button for the SQL tab: "SQL · DuckDB ▾". DuckDB is the default; T-SQL and PostgreSQL are ways to write it. */
+function SqlDialectMenu({ tabId, dialect }: { tabId: string; dialect: SqlDialect }) {
+  const [at, setAt] = useState<{ x: number; y: number } | null>(null)
+  const pick = (d: SqlDialect) => setTabDialect(tabId, d)
+  const [duck, ...others] = SQL_DIALECTS
+  const items: MenuItem[] = [
+    [duck.label, () => pick(duck.id), { hint: duck.hint, checked: dialect === duck.id }],
+    'separator',
+    { heading: 'WRITE AS…' },
+    ...others.map((o): MenuItem => [o.label, () => pick(o.id), { hint: o.hint, checked: dialect === o.id }]),
+  ]
+  return (
+    <div className="relative shrink-0">
+      <button
+        className="btn btn-ghost whitespace-nowrap"
+        style={{ fontWeight: 600 }}
+        onClick={(e) => {
+          const r = e.currentTarget.getBoundingClientRect()
+          setAt(at ? null : { x: r.left, y: r.bottom + 2 })
+        }}
+        aria-haspopup="menu"
+        aria-expanded={!!at}
+        title="The SQL this tab is written in. DuckDB runs it as written; T-SQL and PostgreSQL are for people who learned SQL there"
+      >
+        {sqlLabel(dialect)} <ChevronDown size={13} />
+      </button>
+      {at && <Menu items={items} close={() => setAt(null)} at={at} label="SQL dialect" />}
+    </div>
+  )
+}
+
+/** Once per dialect: what T-SQL or PostgreSQL means here, with a link to the guide. */
+function DialectNote({ dialect }: { dialect: 'tsql' | 'postgres' }) {
+  const [, redraw] = useState(0)
+  if (noteDismissed(dialect)) return null
+  const d = SQL_DIALECTS.find((x) => x.id === dialect)!
+  return (
+    <div className="flex items-start gap-2 px-3 py-1.5" role="note" style={{ background: 'var(--accent-soft)', borderBottom: '1px solid var(--line)', fontSize: 12 }}>
+      <span className="flex-1">
+        <b>{d.label}.</b> {d.hint}{' '}
+        <button className="hover:underline" style={{ color: 'var(--accent)' }} onClick={openWelcome}>
+          Read the guide
+        </button>
+      </span>
+      <button className="p-0.5 shrink-0" aria-label="Close this note" onClick={() => (dismissNote(dialect), redraw((n) => n + 1))}>
+        <X size={13} />
+      </button>
     </div>
   )
 }
@@ -147,7 +174,7 @@ function PythonBar({ bytes }: { bytes?: { loaded: number; total: number | null }
   const share = bytes ? pythonProgressShare(bytes) : null
   return (
     <div className="absolute left-0 right-0 bottom-0 h-[3px]" style={{ background: 'var(--line)' }} role="progressbar" aria-label="Python download" aria-valuemin={0} aria-valuemax={100} aria-valuenow={share === null ? undefined : Math.round(share * 100)}>
-      <div className={`h-full transition-[width] duration-150 ${share === null ? 'animate-pulse' : ''}`} style={{ width: `${share === null ? 100 : Math.max(2, share * 100)}%`, background: 'var(--accent)', opacity: share === null ? 0.5 : 1 }} />
+      <div className={`h-full transition-[width] duration-150 ${share === null ? 'animate-pulse' : ''}`} style={{ width: `${share === null ? 100 : Math.max(2, share * 100)}%`, background: 'var(--py)', opacity: share === null ? 0.5 : 1 }} />
     </div>
   )
 }

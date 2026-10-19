@@ -29,6 +29,9 @@
   --series-2: #eb6834;
   --series-3: #1baf7a;
   --series-4: #eda100;
+  /* Python's own colour: the tab kind shows on the tab (stripe, icon) and the Python bar; the green accent stays Lab's */
+  --py: #3776ab;
+  --py-soft: color-mix(in srgb, var(--py) 12%, var(--q-surface));
   color-scheme: light;
 }
 
@@ -45,6 +48,7 @@
   --series-2: #d95926;
   --series-3: #199e70;
   --series-4: #c98500;
+  --py: #6aa6d9;
   color-scheme: dark;
 }
 

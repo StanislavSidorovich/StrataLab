@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, Check, ChevronDown, FileText, HardDrive, HelpCircle, Library, Loader2, Plus, RefreshCw, Share2, Upload, X, Zap } from 'lucide-react'
+import { AlertTriangle, Check, ChevronDown, Database, FileText, GraduationCap, SquareTerminal, HardDrive, HelpCircle, Library, Loader2, Plus, RefreshCw, Share2, Upload, X, Zap } from 'lucide-react'
 import { Sidebar, pickBackup, pickFilesFor } from './Sidebar'
-import { SqlEditor, runActive } from './SqlEditor'
+import { SqlEditor, runActive, setActiveText } from './SqlEditor'
 import { downloadNotebook, forgetFile, openSqlFile, openSqlFiles, saveSqlFile } from './sqlFiles'
 import { looksLikeTable, opensAsTab } from '../core/editorFiles'
 import { Results } from './Results'
@@ -18,7 +18,7 @@ import { GuideDialog } from './Guide'
 import { DialectBar } from './DialectBar'
 import { applyUpdate, checkForUpdates, updateCheckMessage, useUpdateReady } from '../pwa/register'
 import { engineLoadingLabel, engineLoadingShort } from './EngineLoading'
-import { addTab, closeTabs, newPythonTab, downloadBackup, duplicateTab, enqueueFiles, openAbout, openCatalog, openShare, openWelcome, pasteTable, pasteTableFromClipboard, renameTab, reopenClosedTab, useLab } from './store'
+import { addTab, closeTabs, currentPythonStarter, newPythonTab, openPractice, switchTabDialect, tabDialect, downloadBackup, duplicateTab, enqueueFiles, openAbout, openCatalog, openShare, openWelcome, pasteTable, pasteTableFromClipboard, renameTab, reopenClosedTab, useLab } from './store'
 import { AppearanceButton } from './Appearance'
 import { Menu, useLongPress, type MenuItem } from './Menu'
 import { tabsToClose } from '../core/tabs'
@@ -205,6 +205,12 @@ function TopBar() {
     <header className="h-12 shrink-0 flex items-center gap-1 sm:gap-3 px-2 sm:px-3" style={{ background: 'var(--panel)', borderBottom: '1px solid var(--line)' }}>
       <quaera-switcher app="lab" />
       <FileMenu />
+      {/* Not on a phone (its header is full): Help has Practice too. */}
+      <span className="hidden sm:contents">
+      <button className="btn btn-ghost" onClick={() => openPractice()} disabled={engine.status !== 'ready'} title="Practice: business questions on the demo shop, worked examples and tasks with a check of your answer and hints">
+        <GraduationCap size={15} /> Practice
+      </button>
+      </span>
       <div className="flex-1" />
       <EngineBadge />
       {/* The sidebar (with its catalog button) is hidden on a phone. */}
@@ -276,6 +282,7 @@ function HelpMenu() {
   const [open, setOpen] = useState(false)
   const items: MenuItem[] = [
     ['How to use Quaera Lab', openWelcome],
+    ['Practice on the demo shop…', () => openPractice()],
     'separator',
     ['Check for updates', () => void runUpdateCheck()],
     ['About & licences', () => openAbout('about')],
@@ -330,6 +337,7 @@ function Tabs() {
   const active = useLab((s) => s.activeTab)
   const [editing, setEditing] = useState<string | null>(null)
   const [menu, setMenu] = useState<{ id: string; at: { x: number; y: number } } | null>(null)
+  const [plus, setPlus] = useState<{ x: number; y: number } | null>(null)
   const longPress = useLongPress((at) => {
     const id = document.elementFromPoint(at.x, at.y)?.closest('[data-tab]')?.getAttribute('data-tab')
     if (id) setMenu({ id, at })
@@ -340,8 +348,12 @@ function Tabs() {
         <div
           key={t.id}
           data-tab={t.id}
-          className="group flex items-center gap-1 pl-3 pr-1 h-8 rounded-t-md shrink-0 max-w-52"
-          style={t.id === active ? { background: 'var(--panel)', border: '1px solid var(--line)', borderBottom: 'none', fontWeight: 600 } : { color: 'var(--muted)' }}
+          className="group flex items-center gap-1 pl-2 pr-1 h-8 rounded-t-md shrink-0 max-w-52"
+          style={{
+            // The kind shows on the tab itself: an icon and a thin stripe on top, Python in its own blue.
+            borderTop: `2px solid ${tabDialect(t) === 'python' ? 'var(--py)' : 'var(--line)'}`,
+            ...(t.id === active ? { background: 'var(--panel)', borderLeft: '1px solid var(--line)', borderRight: '1px solid var(--line)', borderBottom: 'none', fontWeight: 600 } : { color: 'var(--muted)' }),
+          }}
           onClick={() => useLab.setState({ activeTab: t.id })}
           onDoubleClick={() => setEditing(t.id)}
           onContextMenu={(e) => {
@@ -349,6 +361,11 @@ function Tabs() {
             setMenu({ id: t.id, at: { x: e.clientX, y: e.clientY } })
           }}
         >
+          {tabDialect(t) === 'python' ? (
+            <SquareTerminal size={13} className="shrink-0" style={{ color: 'var(--py)' }} aria-label="Python tab" />
+          ) : (
+            <Database size={13} className="shrink-0" style={{ color: 'var(--muted)' }} aria-label="SQL tab" />
+          )}
           {editing === t.id ? (
             <input
               autoFocus
@@ -375,9 +392,30 @@ function Tabs() {
           </button>
         </div>
       ))}
-      <button className="h-8 px-2 shrink-0" style={{ color: 'var(--muted)' }} onClick={() => addTab()} aria-label="New query tab" title="New query tab">
+      <button
+        className="h-8 px-2 shrink-0"
+        style={{ color: 'var(--muted)' }}
+        onClick={(e) => {
+          const r = e.currentTarget.getBoundingClientRect()
+          setPlus({ x: r.left, y: r.bottom + 2 })
+        }}
+        aria-haspopup="menu"
+        aria-label="New tab"
+        title="New SQL tab or New Python tab"
+      >
         <Plus size={15} />
       </button>
+      {plus && (
+        <Menu
+          items={[
+            ['New SQL tab', () => addTab()],
+            ['New Python tab', () => newPythonTab()],
+          ]}
+          close={() => setPlus(null)}
+          at={plus}
+          label="New tab"
+        />
+      )}
       {menu && <TabMenu id={menu.id} at={menu.at} rename={() => setEditing(menu.id)} close={() => setMenu(null)} />}
     </div>
   )
@@ -389,9 +427,22 @@ function TabMenu({ id, at, rename, close: closeMenu }: { id: string; at: { x: nu
   const closed = useLab((s) => s.closedTabs.length)
   const others = tabsToClose(ids, id, 'others')
   const right = tabsToClose(ids, id, 'right')
+  const tab = useLab((s) => s.tabs.find((t) => t.id === id))
+  const python = tabDialect(tab) === 'python'
   const items: MenuItem[] = [
     ['Rename', rename, { keys: 'double-click' }],
     ['Duplicate', () => duplicateTab(id)],
+    // An empty tab turns into the other kind; one with text stays as it is and a new tab opens beside it.
+    [
+      python ? 'Switch to SQL' : 'Switch to Python',
+      () => {
+        const empty = !tab?.sql.trim()
+        useLab.setState({ activeTab: id })
+        switchTabDialect(id, python ? 'duckdb' : 'python')
+        if (empty && !python) setTimeout(() => setActiveText(currentPythonStarter()), 0)
+      },
+      { hint: tab?.sql.trim() ? 'Opens a new tab; this one stays as it is' : undefined },
+    ],
     ['Share a link…', () => (useLab.setState({ activeTab: id }), openShare())],
     'separator',
     ['Close', () => close([id])],
