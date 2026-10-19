@@ -50,6 +50,20 @@ export function cellAt(cells: Cell[], pos: number): number {
   return before.length ? cells.indexOf(before[before.length - 1]) : 0
 }
 
+/**
+ * "+ Cell": a new `# %%` line after the cell at `pos`. Returns the text to insert, where, and
+ * where the cursor goes (the empty line under the new marker).
+ */
+export function insertCellAfter(text: string, pos: number): { at: number; insert: string; cursor: number } {
+  const cells = splitCells(text)
+  const i = cellAt(cells, pos)
+  const at = i < 0 ? text.length : cells[i].to
+  const lineStart = text.lastIndexOf('\n', at - 1) + 1
+  const blankLast = !text.slice(lineStart, at).trim()
+  const insert = (!at ? '' : blankLast ? '\n' : '\n\n') + '# %%\n'
+  return { at, insert, cursor: at + insert.length }
+}
+
 /** Cells back into a tab's text: `# %%` before each, markdown lines as `# ` comments. */
 export function joinCells(cells: { kind: Cell['kind']; source: string }[]): string {
   return (

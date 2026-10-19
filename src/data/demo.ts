@@ -99,7 +99,7 @@ ORDER BY revenue DESC;
 export const PYTHON_STARTER = `# %% [markdown]
 # Python in Quaera Lab: pandas, matplotlib and seaborn over the same tables as SQL.
 # lab.table("orders") gives a table as a DataFrame; lab.sql("SELECT …") runs SQL first;
-# lab.save(df, "name") writes a DataFrame back as a table. Cells start at # %% lines.
+# lab.save(df, "name") writes a DataFrame back as a table. A cell ends at the next # %% line (not at a semicolon).
 # Run every cell: Ctrl+Enter · this cell, then on to the next: Shift+Enter.
 
 # %%

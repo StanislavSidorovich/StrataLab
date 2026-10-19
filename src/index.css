@@ -77,6 +77,43 @@ body {
   font-family: var(--q-font-mono);
 }
 
+/* Python cells (src/ui/pyCellBars.ts): every other cell tinted, a thin bar with Run buttons over each */
+.cm-cell-alt {
+  background: color-mix(in srgb, currentColor 7%, transparent);
+}
+.cm-cell-marker {
+  color: var(--muted) !important;
+}
+.cm-cellbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  font-family: var(--q-font-sans);
+  font-size: 11.5px;
+  color: var(--muted);
+  border-top: 1px solid var(--line);
+  background: color-mix(in srgb, var(--q-accent) 6%, var(--code-bg));
+}
+.cm-cellbar-label {
+  margin-right: 6px;
+  font-weight: 600;
+}
+.cm-cellbar-btn {
+  padding: 1px 8px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+}
+.cm-cellbar-btn:hover {
+  border-color: var(--line);
+  background: var(--panel);
+}
+
 button {
   cursor: pointer;
 }

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { Bool, Float64, Int32, Int64, Table, TimestampMicrosecond, Utf8, vectorFromArray, makeData, makeVector, DateDay, Decimal } from 'apache-arrow'
-import { cellAt, callKey, joinCells, labCalls, splitCells, tableSql } from '../src/core/pyCells'
+import { cellAt, callKey, insertCellAfter, joinCells, labCalls, splitCells, tableSql } from '../src/core/pyCells'
 import { EXTRA_WHEELS, extraWheelsFor, hasOwnPackages, packageClosure, pyodideCdn, pythonPackageFiles, servedImports, type Lock } from '../src/core/python'
 import { isOnDemand } from '../src/core/pwa'
 import { arrowFromFrame, frameFromArrow, uniqueNames } from '../src/python/columns'
@@ -232,5 +232,27 @@ describe('name hints', () => {
     expect(sqlNameHint('Catalog Error: Table with name Product does not exist!\nDid you mean "Products"?', tables)).toContain('adventureworks.Product')
     expect(sqlNameHint('Catalog Error: Table with name Product does not exist!\nDid you mean "adventureworks.Product"?', tables)).toBeNull()
     expect(sqlNameHint('Catalog Error: Table with name nothing does not exist!', tables)).toBeNull()
+  })
+})
+
+describe('insertCellAfter (+ Cell)', () => {
+  const apply = (text: string, pos: number) => {
+    const { at, insert, cursor } = insertCellAfter(text, pos)
+    return { out: text.slice(0, at) + insert + text.slice(at), cursor }
+  }
+  it('adds a marker after the cell at the cursor and puts the cursor under it', () => {
+    const text = '# %%\na = 1\n\n# %%\nb = 2\n'
+    const r = apply(text, 2)
+    expect(r.out).toBe('# %%\na = 1\n\n# %%\n\n# %%\nb = 2\n')
+    expect(r.out.slice(r.cursor, r.cursor + 1)).toBe('\n')
+    expect(splitCells(r.out).length).toBe(3)
+  })
+  it('after the last cell, at the end, with a blank line between', () => {
+    const r = apply('# %%\na = 1', 3)
+    expect(r.out).toBe('# %%\na = 1\n\n# %%\n')
+    expect(r.cursor).toBe(r.out.length)
+  })
+  it('in an empty tab, starts the first cell', () => {
+    expect(apply('', 0).out).toBe('# %%\n')
   })
 })

@@ -12,11 +12,13 @@ import { isolateHistory, redo, toggleComment, undo } from '@codemirror/commands'
 import { openSearchPanel } from '@codemirror/search'
 import { explainSql, openAsModel, ownTables, runPython, runSql, setTabSql, stopQuery, tabDialect, useLab, type Dialect } from './store'
 import { Menu, useLongPress, type MenuItem } from './Menu'
-import { cellAt, splitCells } from '../core/pyCells'
+import { cellAt, insertCellAfter, splitCells } from '../core/pyCells'
+import { pyCellBars } from './pyCellBars'
 import type { TableInfo } from '../db/catalog'
 
 const language = new Compartment()
 const theme = new Compartment()
+const cellBars = new Compartment()
 const states = new Map<string, EditorState>()
 
 /** The selection if there is one, else the whole editor. */
@@ -87,6 +89,15 @@ export function appendToActive(statement: string) {
   const last = lines[lines.length - 1].trim()
   const text = (last && !last.endsWith(';') && !last.startsWith('--') ? ';\n' : '\n') + statement
   v.dispatch({ changes: { from: end, insert: text }, selection: { anchor: end + text.length }, scrollIntoView: true, userEvent: 'input' })
+  v.focus()
+}
+
+/** "+ Cell": a `# %%` line after the cell at the cursor, and the cursor under it. */
+export function addCell() {
+  const v = activeView
+  if (!v) return
+  const { at, insert, cursor } = insertCellAfter(v.state.doc.toString(), v.state.selection.main.head)
+  v.dispatch({ changes: { from: at, insert }, selection: { anchor: cursor }, scrollIntoView: true, userEvent: 'input' })
   v.focus()
 }
 
@@ -246,6 +257,7 @@ export function SqlEditor() {
       : dialect === 'postgres'
       ? sql({ dialect: PostgreSQL, schema: completionSchema(pgTables, 'public'), upperCaseKeywords: false })
       : sql({ dialect: dialect === 'tsql' ? MSSQL : PostgreSQL, schema: completionSchema(tables, 'main'), upperCaseKeywords: false })
+  const barsExt = (id: string) => (dialect === 'python' ? pyCellBars(id) : [])
   const themeExt = () => (dark ? [Prec.high(darkBackground), oneDark] : lightTheme)
 
   const makeState = (id: string, doc: string) =>
@@ -272,6 +284,7 @@ export function SqlEditor() {
         ),
         basicSetup,
         language.of(langExt()),
+        cellBars.of(barsExt(id)),
         theme.of(themeExt()),
         EditorView.updateListener.of((u) => {
           if (u.docChanged) setTabSql(id, u.state.doc.toString())
@@ -305,14 +318,14 @@ export function SqlEditor() {
     let st = states.get(activeTab) ?? makeState(activeTab, tab.sql)
     if (st.doc.toString() !== tab.sql) st = makeState(activeTab, tab.sql)
     v.setState(st)
-    v.dispatch({ effects: [language.reconfigure(langExt()), theme.reconfigure(themeExt())] })
+    v.dispatch({ effects: [language.reconfigure(langExt()), theme.reconfigure(themeExt()), cellBars.reconfigure(barsExt(activeTab))] })
     shownTab.current = activeTab
     v.focus()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab])
 
   useEffect(() => {
-    view.current?.dispatch({ effects: language.reconfigure(langExt()) })
+    view.current?.dispatch({ effects: [language.reconfigure(langExt()), cellBars.reconfigure(barsExt(activeTab))] })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tables, pgTables, dialect])
 

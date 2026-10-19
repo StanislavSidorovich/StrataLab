@@ -2,16 +2,16 @@
 // to DuckDB first (sqlglot) and the translation can be seen side by side; PostgreSQL runs on a
 // real PostgreSQL (PGlite), a separate database that tables are copied into.
 import { useEffect, useState } from 'react'
-import { ArrowLeftRight, Copy, ListTree, Loader2, Play, Redo2, RotateCcw, Search, Square, SquareSlash, Undo2, WandSparkles } from 'lucide-react'
+import { ArrowLeftRight, Copy, ListTree, Loader2, Play, Plus, Redo2, RotateCcw, Search, Square, SquareSlash, Undo2, WandSparkles } from 'lucide-react'
 import { copySchemaToPostgres, explainSql, ownTables, currentPythonStarter, restartPython, retryPython, showTranslation, switchTabDialect, startPython, stopQuery, tabDialect, useLab, type Dialect } from './store'
-import { activeSql, editorCommand, formatActiveTab, runActive, setActiveText } from './SqlEditor'
+import { activeSql, addCell, editorCommand, formatActiveTab, runActive, setActiveText } from './SqlEditor'
 import { pythonProgressLabel, pythonProgressShare } from '../core/progress'
 
 const DIALECTS: { id: Dialect; label: string; short: string; title: string }[] = [
   { id: 'duckdb', label: 'DuckDB', short: 'DuckDB', title: 'Run as written on DuckDB (close to PostgreSQL)' },
   { id: 'tsql', label: 'SQL Server (T-SQL)', short: 'T-SQL', title: 'Write SQL Server’s T-SQL: it is translated to DuckDB (by sqlglot) before it runs, and you can see the translation side by side' },
   { id: 'postgres', label: 'PostgreSQL', short: 'Postgres', title: 'Run on a real PostgreSQL in this browser (PGlite): a separate database, copy tables into it from the tree' },
-  { id: 'python', label: 'Python', short: 'Python', title: 'Python with pandas, matplotlib and seaborn over the same tables: lab.table("orders"), lab.sql("SELECT …"). # %% lines split the tab into cells' },
+  { id: 'python', label: 'Python', short: 'Python', title: 'Python with pandas, matplotlib and seaborn over the same tables: lab.table("orders"), lab.sql("SELECT …"). A cell ends at the next # %% line, not at a semicolon: Run cell and Run below sit on the bar over each cell' },
 ]
 
 export function DialectBar() {
@@ -91,7 +91,7 @@ export function DialectBar() {
 
       {dialect === 'python' && (
         <>
-          <span className="truncate" style={{ color: python.status === 'error' ? 'var(--danger)' : 'var(--muted)' }} title={python.status === 'error' ? python.error : 'Run every cell: Ctrl+Enter · the cell at the cursor: Shift+Enter'}>
+          <span className="truncate" style={{ color: python.status === 'error' ? 'var(--danger)' : 'var(--muted)' }} title={python.status === 'error' ? python.error : 'A cell ends at the next # %% line (not at a semicolon). Run every cell: Ctrl+Enter · the cell at the cursor: Shift+Enter'}>
             {python.status === 'ready' && (
               <>
                 Python {python.version.replace(/^(\d+)\.(\d+).*/, '$1.$2')} with pandas<span className="hidden lg:inline"> · Shift+Enter runs a cell</span>
@@ -205,6 +205,11 @@ function EditorTools({ python }: { python: boolean }) {
   ]
   return (
     <div className="ml-auto flex shrink-0 items-center" role="toolbar" aria-label="Editor">
+      {python && (
+        <button className="btn btn-ghost shrink-0 mr-1" onClick={addCell} title="New cell: a # %% line after the current cell. A cell ends at the next # %% line (not at a semicolon)">
+          <Plus size={13} /> <span className="hidden sm:inline">Cell</span>
+        </button>
+      )}
       {tools.map(([label, keys, icon, run]) => (
         <button key={label} className="p-[3px] sm:p-1.5 rounded hover:bg-[var(--panel-2)]" style={{ color: 'var(--muted)' }} onClick={run} aria-label={label} title={`${label} (${keys})`}>
           {icon}
