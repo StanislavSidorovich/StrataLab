@@ -13,6 +13,7 @@ export type MenuItem = [label: string, run: () => void, opts?: { disabled?: bool
 export function Menu({ items, close, danger = false, at, label, align = 'right' }: { items: MenuItem[]; close: () => void; danger?: boolean; at?: { x: number; y: number }; label?: string; align?: 'left' | 'right' }) {
   const ref = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState(at)
+  const [shift, setShift] = useState({ dx: 0, dy: 0 })
   useEffect(() => {
     const onDown = (e: Event) => {
       if (!ref.current?.contains(e.target as Node)) close()
@@ -30,10 +31,20 @@ export function Menu({ items, close, danger = false, at, label, align = 'right' 
     }
   }, [close])
   useLayoutEffect(() => {
-    if (!at || !ref.current) return
+    if (!ref.current) return
+    if (!at) {
+      // Under a button: slide it back inside the window if the parent's edge puts it partly outside.
+      const el = ref.current
+      el.style.transform = ''
+      const r = el.getBoundingClientRect()
+      const dx = r.left < 4 ? 4 - r.left : r.right > innerWidth - 4 ? Math.max(4 - r.left, innerWidth - 4 - r.right) : 0
+      const dy = r.bottom > innerHeight - 4 ? Math.min(0, Math.max(4 - r.top, innerHeight - 4 - r.bottom)) : 0
+      setShift({ dx, dy })
+      return
+    }
     const { width, height } = ref.current.getBoundingClientRect()
     setPos({ x: Math.max(4, Math.min(at.x, innerWidth - width - 4)), y: Math.max(4, Math.min(at.y, innerHeight - height - 4)) })
-  }, [at])
+  }, [at, items])
   const last = items.length - 1
   const wide = items.some((i) => typeof i !== 'string' && !('heading' in i) && i[2]?.hint)
   return (
@@ -42,7 +53,7 @@ export function Menu({ items, close, danger = false, at, label, align = 'right' 
       role="menu"
       aria-label={label}
       className={`${at ? 'fixed' : align === 'left' ? 'absolute left-0 top-9' : 'absolute right-0 top-7'} z-50 rounded-lg py-1 shadow-lg ${wide ? 'w-80 max-w-[calc(100vw-1.5rem)]' : 'min-w-56'}`}
-      style={{ background: 'var(--panel)', border: '1px solid var(--line)', fontSize: 13, fontWeight: 400, letterSpacing: 0, color: 'var(--text)', ...(pos ? { left: pos.x, top: pos.y } : {}) }}
+      style={{ background: 'var(--panel)', border: '1px solid var(--line)', fontSize: 13, fontWeight: 400, letterSpacing: 0, color: 'var(--text)', ...(pos ? { left: pos.x, top: pos.y } : shift.dx || shift.dy ? { transform: `translate(${shift.dx}px, ${shift.dy}px)` } : {}) }}
       onContextMenu={(e) => e.preventDefault()}
     >
       {items.map((item, i) =>

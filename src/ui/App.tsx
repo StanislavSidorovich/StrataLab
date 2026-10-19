@@ -78,12 +78,16 @@ export function App() {
 
   const [split, setSplit] = useState(0.45)
   const main = useRef<HTMLDivElement>(null)
+  const editorBox = useRef<HTMLDivElement>(null)
   const dragging = useDropZone()
 
   const startResize = (e: React.PointerEvent) => {
     e.preventDefault()
-    const box = main.current!.getBoundingClientRect()
-    const move = (ev: PointerEvent) => setSplit(Math.min(0.8, Math.max(0.15, (ev.clientY - box.top) / box.height)))
+    // The editor and the results share what is left under the tab strip and the bars, minus the handle itself.
+    const handle = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    const top = editorBox.current!.getBoundingClientRect().top
+    const area = main.current!.getBoundingClientRect().bottom - top - handle.height
+    const move = (ev: PointerEvent) => setSplit(Math.min(0.8, Math.max(0.15, (ev.clientY - handle.height / 2 - top) / area)))
     const up = () => {
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', up)
@@ -103,11 +107,11 @@ export function App() {
           <Tabs />
           <DialectBar />
           <TaskBar />
-          <div style={{ height: `${split * 100}%` }} className="min-h-0">
+          <div ref={editorBox} style={{ flex: `${split} 1 0` }} className="min-h-0">
             <SqlEditor />
           </div>
           <div onPointerDown={startResize} className="h-1.5 shrink-0 cursor-row-resize hover:bg-[var(--accent)]" style={{ background: 'var(--line)' }} title="Drag to resize" />
-          <div className="flex-1 min-h-0">
+          <div style={{ flex: `${1 - split} 1 0` }} className="min-h-0">
             <Results />
           </div>
         </div>

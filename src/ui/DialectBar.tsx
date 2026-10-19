@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react'
 import { ArrowLeftRight, ChevronDown, Copy, ListTree, Loader2, Play, Plus, Redo2, RotateCcw, Search, Square, SquareSlash, Undo2, WandSparkles, X } from 'lucide-react'
 import { copySchemaToPostgres, explainSql, ownTables, openCompare, openWelcome, restartPython, retryPython, setTabDialect, showTranslation, startPython, stopQuery, tabDialect, useLab } from './store'
-import { activeSql, addCell, editorCommand, formatActiveTab, runActive } from './SqlEditor'
+import { activeSql, addCell, editorCommand, formatActiveTab, runActive, runActiveCell } from './SqlEditor'
 import { Menu, type MenuItem } from './Menu'
 import { SQL_DIALECTS, dismissNote, needsNote, noteDismissed, sqlLabel, type SqlDialect } from '../core/dialectNote'
 import { pythonProgressLabel, pythonProgressShare } from '../core/progress'
@@ -199,9 +199,22 @@ function RunButton() {
         <Square size={12} fill="currentColor" /> Stop
       </button>
     )
+  const disabled = engine.status !== 'ready' || running
+  const spin = running ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />
+  if (python)
+    return (
+      <>
+        <button className="btn btn-primary btn-run shrink-0" onClick={runActive} disabled={disabled} title="Run all: every cell in order, or just the selection (Ctrl+Enter, F5)">
+          {spin} Run all
+        </button>
+        <button className="btn shrink-0" onClick={runActiveCell} disabled={disabled} title="Run cell: only the cell at the cursor, then move to the next one (Shift+Enter)">
+          <Play size={13} /> <span className="hidden sm:inline">Run cell</span>
+        </button>
+      </>
+    )
   return (
-    <button className="btn btn-primary btn-run shrink-0" onClick={runActive} disabled={engine.status !== 'ready' || running} title={python ? 'Run the selection, or every cell in order (Ctrl+Enter, F5); the cell at the cursor: Shift+Enter' : 'Run the selection, or the whole tab (Ctrl+Enter, F5)'}>
-      {running ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />} Run
+    <button className="btn btn-primary btn-run shrink-0" onClick={runActive} disabled={disabled} title="Run the selection, or the whole tab (Ctrl+Enter, F5)">
+      {spin} Run
     </button>
   )
 }

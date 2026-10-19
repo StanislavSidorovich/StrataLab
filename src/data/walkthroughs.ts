@@ -30,7 +30,10 @@ export const WALKTHROUGHS: Walkthrough[] = [
 ${HOW}
 
 # %% [markdown]
-# ## 1. Get to know the data
+# ## 1. Exploration (EDA)
+# What it is: look at the data before you change it: its size, columns, types, gaps and the most common values.
+# What it gives you: you know what you have, and which problems (wrong types, gaps, odd values) to fix next.
+# Typical commands here: .shape, .head(), .dtypes, .isna().sum(), .describe(), .value_counts().
 
 # %%
 # pandas is the library for tables in Python; "pd" is the short name everyone uses.
@@ -76,7 +79,11 @@ display(orders["status"].value_counts())
 display(customers["channel"].value_counts())
 
 # %% [markdown]
-# ## 2. Clean
+# ## 2. Preprocessing: cleaning
+# What it is: fix what the first look found: duplicates, gaps, wrong types, stray spaces and spellings.
+# What it gives you: a table you can trust, so that later totals and joins do not quietly go wrong.
+# Typical commands here: .duplicated(), .str.strip(), .dt.to_period().
+#
 # This shop's data is tidy, but we still check, because real data rarely is.
 
 # %%
@@ -93,7 +100,10 @@ customers["city"] = customers["city"].str.strip()
 orders.head()
 
 # %% [markdown]
-# ## 3. Prepare: put the tables together
+# ## 3. Preparation: joins and new columns
+# What it is: put the tables together and add the columns the questions need (a total, a month, a flag).
+# What it gives you: one wide table where every row has everything the analysis asks for.
+# Typical commands here: .merge(), a new column: df["new"] = a * b, .isin().
 
 # %%
 # merge() joins two tables on a column they share, like JOIN in SQL.
@@ -116,7 +126,10 @@ sold = lines[lines["status"].isin(["delivered", "shipped"])]
 print("lines in total:", len(lines), " lines that brought money:", len(sold))
 
 # %% [markdown]
-# ## 4. Analyse
+# ## 4. Analysis
+# What it is: answer the business questions: group, add up, compare, rank.
+# What it gives you: the numbers behind the conclusions, in small tables you can read at a glance.
+# Typical commands here: .groupby(), .agg(), .sum(), .nunique(), .sort_values(), .pivot_table().
 
 # %%
 # Revenue by category: groupby() splits the rows by category, sum() adds up each group.
@@ -144,7 +157,10 @@ monthly = sold.pivot_table(index="month", columns="category", values="revenue", 
 monthly.round(0)
 
 # %% [markdown]
-# ## 5. A chart
+# ## 5. Visualization
+# What it is: draw the main result as a chart.
+# What it gives you: a pattern you can see at once, which a table of numbers hides.
+# Typical commands here: .plot(), plt.show(), .set_xlabel(), .set_ylabel().
 
 # %%
 # A DataFrame draws itself: .plot() puts the index (months) on the x axis and a line per column.
@@ -155,7 +171,11 @@ ax.set_ylabel("revenue")
 plt.show()
 
 # %% [markdown]
-# ## 6. What we found, and keep the result
+# ## 6. Conclusions and saving
+# What it is: say in words what the numbers mean, and save the result you want to keep.
+# What it gives you: an answer someone else can read, and a table you can come back to from a SQL tab.
+# Typical commands here: lab.save(), .reset_index(), print().
+#
 # - Equipment (moka pots, grinders, presses) brings almost 60 % of the money, coffee about 15 %:
 #   a few expensive items carry the shop, so a stock-out there hurts most.
 # - Email brings the most customers and the most revenue, but customers who came from a friend
@@ -184,7 +204,10 @@ print("Saved as the table demo_monthly_revenue (see My tables when the cell has 
 ${HOW}
 
 # %% [markdown]
-# ## 1. Get to know the data
+# ## 1. Exploration (EDA)
+# What it is: look at the data before you change it: its size, columns, types, gaps and the most common values.
+# What it gives you: you know what you have, and which problems (wrong types, gaps, odd values) to fix next.
+# Typical commands here: .shape, .head(), .dtypes, .isna().sum(), .value_counts().
 
 # %%
 import pandas as pd
@@ -216,7 +239,10 @@ raw.sample(8, random_state=1)
 raw["source_file"].value_counts().head(10)
 
 # %% [markdown]
-# ## 2. Clean
+# ## 2. Preprocessing: cleaning
+# What it is: fix what the first look found: duplicates, gaps, wrong types, stray spaces and spellings.
+# What it gives you: a table you can trust, so that later totals and joins do not quietly go wrong.
+# Typical commands here: .duplicated(), .drop_duplicates(), .str.strip(), .str.replace(), pd.to_datetime(), .dropna().
 
 # %%
 # Start from a copy, so raw stays as it was and we can compare.
@@ -283,7 +309,10 @@ print("returns (units below 0):", (df["units"] < 0).sum())
 print("clean rows:", len(df))
 
 # %% [markdown]
-# ## 3. Prepare: join the product and the customer
+# ## 3. Preparation: joins and new columns
+# What it is: put the tables together and add the columns the questions need (a total, a month, a flag).
+# What it gives you: one wide table where every row has everything the analysis asks for.
+# Typical commands here: .merge(), a new column: df["new"] = a * b, .dt.to_period().
 
 # %%
 # how="left" keeps every sale even when no product matches; the product columns are then empty.
@@ -300,7 +329,10 @@ df["unit_price"] = (df["revenue"] / df["units"]).round(2)
 df.head()
 
 # %% [markdown]
-# ## 4. Analyse
+# ## 4. Analysis
+# What it is: answer the business questions: group, add up, compare, rank.
+# What it gives you: the numbers behind the conclusions, in small tables you can read at a glance.
+# Typical commands here: .groupby(), .agg(), .sum(), .sort_values(), .pivot_table(), .round().
 
 # %%
 # Revenue and units by brand, the biggest first, with each brand's share of the total.
@@ -321,7 +353,10 @@ monthly = df.groupby("month")["revenue"].sum()
 pd.DataFrame({"revenue": monthly.round(0), "change_pct": (100 * monthly.pct_change()).round(1)})
 
 # %% [markdown]
-# ## 5. A chart
+# ## 5. Visualization
+# What it is: draw the main result as a chart.
+# What it gives you: a pattern you can see at once, which a table of numbers hides.
+# Typical commands here: .plot(), plt.show(), .set_xlabel(), plt.tight_layout().
 
 # %%
 # Bars read best with short text labels: turn the months into text like "2024-05" first.
@@ -336,7 +371,11 @@ plt.tight_layout()
 plt.show()
 
 # %% [markdown]
-# ## 6. What we found, and keep the result
+# ## 6. Conclusions and saving
+# What it is: say in words what the numbers mean, and save the result you want to keep.
+# What it gives you: an answer someone else can read, and a table you can come back to from a SQL tab.
+# Typical commands here: lab.save(), print().
+#
 # - The export needed real cleaning. Of 3,110 rows, 110 were the same sale sent twice and 253 had
 #   no units or no revenue; 2,747 clean rows are left. The 102 rows with negative units are returns
 #   and stay in, so the totals are net of returns.
@@ -369,7 +408,10 @@ print("Saved as kaiyo_sellout_clean:", len(df), "rows (see My tables when the ce
 ${HOW}
 
 # %% [markdown]
-# ## 1. Get to know the data
+# ## 1. Exploration (EDA)
+# What it is: look at the data before you change it: its size, columns, types, gaps and the most common values.
+# What it gives you: you know what you have, and which problems (wrong types, gaps, odd values) to fix next.
+# Typical commands here: .shape, .head(), .dtypes, .isna().sum(), .describe(), .value_counts().
 
 # %%
 import pandas as pd
@@ -402,7 +444,10 @@ lines[["UnitPrice", "Quantity", "Discount"]].describe().round(2)
 orders["ShipCountry"].value_counts().head(10)
 
 # %% [markdown]
-# ## 2. Clean
+# ## 2. Preprocessing: cleaning
+# What it is: fix what the first look found: duplicates, gaps, wrong types, stray spaces and spellings.
+# What it gives you: a table you can trust, so that later totals and joins do not quietly go wrong.
+# Typical commands here: .duplicated(), .fillna(), .notna(), .dt.days / .dt.total_seconds().
 
 # %%
 # Duplicates: an order line is unique by order and product.
@@ -422,7 +467,10 @@ orders["late"] = orders["ShippedDate"] > orders["RequiredDate"]
 orders[["OrderID", "OrderDate", "RequiredDate", "ShippedDate", "days_to_ship", "late"]].head()
 
 # %% [markdown]
-# ## 3. Prepare: one table of order lines with everything we need
+# ## 3. Preparation: joins and new columns
+# What it is: put the tables together and add the columns the questions need (a total, a month, a flag).
+# What it gives you: one wide table where every row has everything the analysis asks for.
+# Typical commands here: .merge(), a new column: df["new"] = a * b, .dt.to_period(), .dt.year / .dt.month.
 
 # %%
 # Each line gets its product's category, then its order's dates and country.
@@ -438,7 +486,10 @@ df["quarter"] = df["OrderDate"].dt.to_period("Q").astype(str)
 df.head()
 
 # %% [markdown]
-# ## 4. Analyse
+# ## 4. Analysis
+# What it is: answer the business questions: group, add up, compare, rank.
+# What it gives you: the numbers behind the conclusions, in small tables you can read at a glance.
+# Typical commands here: .groupby(), .agg(), .sum(), .nunique(), .sort_values(), .pivot_table().
 
 # %%
 # Sales by category with each one's share of the total.
@@ -465,7 +516,10 @@ late
 df.pivot_table(index="CategoryName", columns="quarter", values="sale", aggfunc="sum").round(0)
 
 # %% [markdown]
-# ## 5. A chart
+# ## 5. Visualization
+# What it is: draw the main result as a chart.
+# What it gives you: a pattern you can see at once, which a table of numbers hides.
+# Typical commands here: .plot(), plt.show(), .set_xlabel(), .set_ylabel(), plt.tight_layout().
 
 # %%
 # Sales per quarter as bars: the sum of the pivot's columns.
@@ -477,7 +531,11 @@ plt.tight_layout()
 plt.show()
 
 # %% [markdown]
-# ## 6. What we found, and keep the result
+# ## 6. Conclusions and saving
+# What it is: say in words what the numbers mean, and save the result you want to keep.
+# What it gives you: an answer someone else can read, and a table you can come back to from a SQL tab.
+# Typical commands here: lab.save(), .reset_index(), print().
+#
 # - Beverages sell the most (about 21 % of sales), then dairy (18 %); grains and produce are the smallest.
 # - The USA and Germany placed the same number of orders (122 each) and lead in sales; Austria and
 #   Ireland order less often but spend the most per order (about 3,200 and 2,600).
@@ -503,7 +561,10 @@ print("Saved as northwind_sales_by_country (see My tables when the cell has fini
 ${HOW}
 
 # %% [markdown]
-# ## 1. Get to know the data
+# ## 1. Exploration (EDA)
+# What it is: look at the data before you change it: its size, columns, types, gaps and the most common values.
+# What it gives you: you know what you have, and which problems (wrong types, gaps, odd values) to fix next.
+# Typical commands here: .shape, .head(), .dtypes, .isna().sum(), .describe(), .value_counts().
 
 # %%
 import pandas as pd
@@ -542,7 +603,10 @@ tracks["Milliseconds"].describe().round(0)
 customers["Country"].value_counts().head(10)
 
 # %% [markdown]
-# ## 2. Clean
+# ## 2. Preprocessing: cleaning
+# What it is: fix what the first look found: duplicates, gaps, wrong types, stray spaces and spellings.
+# What it gives you: a table you can trust, so that later totals and joins do not quietly go wrong.
+# Typical commands here: .duplicated(), .fillna(), .isna().
 
 # %%
 # A missing Company means a private buyer: say so in words, then count both kinds.
@@ -563,7 +627,10 @@ tracks["minutes"] = (tracks["Milliseconds"] / 60000).round(1)
 print("duplicate invoice lines:", lines["InvoiceLineId"].duplicated().sum())
 
 # %% [markdown]
-# ## 3. Prepare
+# ## 3. Preparation: joins and new columns
+# What it is: put the tables together and add the columns the questions need (a total, a month, a flag).
+# What it gives you: one wide table where every row has everything the analysis asks for.
+# Typical commands here: .merge(), a new column: df["new"] = a * b, .rename(), .dt.year / .dt.month.
 
 # %%
 # Each invoice line gets its track's genre, and its invoice's date, country and customer.
@@ -577,7 +644,10 @@ df["year"] = df["InvoiceDate"].dt.year
 df.head()
 
 # %% [markdown]
-# ## 4. Analyse
+# ## 4. Analysis
+# What it is: answer the business questions: group, add up, compare, rank.
+# What it gives you: the numbers behind the conclusions, in small tables you can read at a glance.
+# Typical commands here: .groupby(), .agg(), .sum(), .sort_values(), .pivot_table(), .round().
 
 # %%
 # Revenue by genre with its share of the total, the ten biggest.
@@ -602,7 +672,10 @@ spent = spent.merge(customers[["CustomerId", "kind", "Country"]], on="CustomerId
 spent.groupby("kind").agg(customers=("CustomerId", "count"), avg_spent=("spent", "mean")).round(2)
 
 # %% [markdown]
-# ## 5. A chart
+# ## 5. Visualization
+# What it is: draw the main result as a chart.
+# What it gives you: a pattern you can see at once, which a table of numbers hides.
+# Typical commands here: .plot(), plt.show(), .set_xlabel(), .set_ylabel(), plt.tight_layout(), .sort_values().
 
 # %%
 # The ten biggest genres as horizontal bars (kind="barh"), the biggest at the top.
@@ -613,7 +686,11 @@ plt.tight_layout()
 plt.show()
 
 # %% [markdown]
-# ## 6. What we found, and keep the result
+# ## 6. Conclusions and saving
+# What it is: say in words what the numbers mean, and save the result you want to keep.
+# What it gives you: an answer someone else can read, and a table you can come back to from a SQL tab.
+# Typical commands here: lab.save(), .reset_index(), print().
+#
 # - Rock alone brings more than a third of the revenue (35.5 %), Latin 16 %, Metal 11 %:
 #   four genres make almost three quarters of it.
 # - Every customer came back: 58 of 59 bought exactly 7 times, one 6 times. Real stores never look
@@ -641,7 +718,10 @@ print("Saved as chinook_revenue_by_genre (see My tables when the cell has finish
 ${HOW}
 
 # %% [markdown]
-# ## 1. Get to know the data
+# ## 1. Exploration (EDA)
+# What it is: look at the data before you change it: its size, columns, types, gaps and the most common values.
+# What it gives you: you know what you have, and which problems (wrong types, gaps, odd values) to fix next.
+# Typical commands here: .shape, .head(), .dtypes, .isna().sum(), .describe(), .value_counts().
 
 # %%
 import pandas as pd
@@ -672,7 +752,10 @@ products[["StandardCost", "ListPrice", "Weight"]].describe().round(2)
 products["Size"].value_counts(dropna=False)
 
 # %% [markdown]
-# ## 2. Clean
+# ## 2. Preprocessing: cleaning
+# What it is: fix what the first look found: duplicates, gaps, wrong types, stray spaces and spellings.
+# What it gives you: a table you can trust, so that later totals and joins do not quietly go wrong.
+# Typical commands here: .fillna(), .isna().
 
 # %%
 # Size mixes frame sizes in centimetres (38 to 70) and clothing sizes (S, M, L, XL).
@@ -690,7 +773,10 @@ products["on_sale"] = products["SellEndDate"].isna()
 print("products still on sale:", products["on_sale"].sum(), "of", len(products))
 
 # %% [markdown]
-# ## 3. Prepare: the category tree and the order lines
+# ## 3. Preparation: joins and new columns
+# What it is: put the tables together and add the columns the questions need (a total, a month, a flag).
+# What it gives you: one wide table where every row has everything the analysis asks for.
+# Typical commands here: .merge(), a new column: df["new"] = a * b, .rename().
 
 # %%
 # A product points to a subcategory (Mountain Bikes), which points to its parent (Bikes).
@@ -708,7 +794,10 @@ df["margin"] = df["LineTotal"] - df["OrderQty"] * df["StandardCost"]
 df[["Name", "OrderQty", "UnitPrice", "UnitPriceDiscount", "LineTotal", "margin"]].head()
 
 # %% [markdown]
-# ## 4. Analyse
+# ## 4. Analysis
+# What it is: answer the business questions: group, add up, compare, rank.
+# What it gives you: the numbers behind the conclusions, in small tables you can read at a glance.
+# Typical commands here: .groupby(), .agg(), .sum(), .pivot_table(), .round().
 
 # %%
 # The catalogue: how many products, the average list price and margin per top category.
@@ -731,7 +820,10 @@ by_product.nlargest(10, "margin").round(0)
 df.pivot_table(index="parent", columns="Color", values="OrderQty", aggfunc="sum", fill_value=0)
 
 # %% [markdown]
-# ## 5. A chart
+# ## 5. Visualization
+# What it is: draw the main result as a chart.
+# What it gives you: a pattern you can see at once, which a table of numbers hides.
+# Typical commands here: .plot(), plt.show(), .set_xlabel(), plt.tight_layout().
 
 # %%
 # Revenue and margin side by side for each top category: a DataFrame with two columns draws two bars each.
@@ -742,7 +834,11 @@ plt.tight_layout()
 plt.show()
 
 # %% [markdown]
-# ## 6. What we found, and keep the result
+# ## 6. Conclusions and saving
+# What it is: say in words what the numbers mean, and save the result you want to keep.
+# What it gives you: an answer someone else can read, and a table you can come back to from a SQL tab.
+# Typical commands here: lab.save(), print().
+#
 # - Size mixes two systems: 177 products have a frame size in centimetres, 34 a clothing size,
 #   84 none. A text column that looks numeric is worth checking before converting it.
 # - Bikes are 81 % of June's revenue but, at standard cost, they made a small loss overall (−4 %);
@@ -771,7 +867,10 @@ print("Saved as aw_products_margin (see My tables when the cell has finished).")
 ${HOW}
 
 # %% [markdown]
-# ## 1. Get to know the data
+# ## 1. Exploration (EDA)
+# What it is: look at the data before you change it: its size, columns, types, gaps and the most common values.
+# What it gives you: you know what you have, and which problems (wrong types, gaps, odd values) to fix next.
+# Typical commands here: .shape, .head(), .dtypes, .isna().sum(), .describe(), .value_counts().
 
 # %%
 import pandas as pd
@@ -805,7 +904,10 @@ films[["length", "rental_duration", "rental_rate", "replacement_cost"]].describe
 films["rating"].value_counts()
 
 # %% [markdown]
-# ## 2. Clean
+# ## 2. Preprocessing: cleaning
+# What it is: fix what the first look found: duplicates, gaps, wrong types, stray spaces and spellings.
+# What it gives you: a table you can trust, so that later totals and joins do not quietly go wrong.
+# Typical commands here: .duplicated(), .notna(), .dt.days / .dt.total_seconds().
 
 # %%
 # active is text: compare it with "1" to get True / False, then count.
@@ -824,7 +926,10 @@ print("duplicate rentals:", rentals["rental_id"].duplicated().sum())
 rentals[["rental_id", "rental_date", "return_date", "days_out"]].head()
 
 # %% [markdown]
-# ## 3. Prepare
+# ## 3. Preparation: joins and new columns
+# What it is: put the tables together and add the columns the questions need (a total, a month, a flag).
+# What it gives you: one wide table where every row has everything the analysis asks for.
+# Typical commands here: .merge(), a new column: df["new"] = a * b, .dt.to_period(), .rename().
 
 # %%
 # Each rental gets its film (through the copy in inventory), the film's category and rental_duration.
@@ -840,7 +945,10 @@ df["month"] = df["rental_date"].dt.to_period("M").dt.to_timestamp()
 df[["title", "category", "rental_duration", "days_out", "late"]].head()
 
 # %% [markdown]
-# ## 4. Analyse
+# ## 4. Analysis
+# What it is: answer the business questions: group, add up, compare, rank.
+# What it gives you: the numbers behind the conclusions, in small tables you can read at a glance.
+# Typical commands here: .groupby(), .sum(), .sort_values(), .pivot_table(), .round().
 
 # %%
 # The share of late returns, by category: the mean of a True / False column is the share of True.
@@ -859,7 +967,10 @@ by_month = df.pivot_table(index="month", columns="store_id", values="rental_id",
 by_month
 
 # %% [markdown]
-# ## 5. A chart
+# ## 5. Visualization
+# What it is: draw the main result as a chart.
+# What it gives you: a pattern you can see at once, which a table of numbers hides.
+# Typical commands here: .plot(), plt.show(), .set_xlabel(), plt.tight_layout().
 
 # %%
 # The late share by category as bars, highest first.
@@ -869,7 +980,11 @@ plt.tight_layout()
 plt.show()
 
 # %% [markdown]
-# ## 6. What we found, and keep the result
+# ## 6. Conclusions and saving
+# What it is: say in words what the numbers mean, and save the result you want to keep.
+# What it gives you: an answer someone else can read, and a table you can come back to from a SQL tab.
+# Typical commands here: lab.save(), print().
+#
 # - About half of the returned rentals came back after their rental period: late returns are the rule
 #   here, not the exception (54 % for Sports, 42 % for Travel, the lowest).
 # - Revenue is spread evenly: no category brings more than 8 %; Sports leads.

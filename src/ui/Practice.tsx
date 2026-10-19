@@ -1,11 +1,12 @@
 // Practice on the demo shop (stage 5): the dialog with worked examples and tasks, and the bar
 // above the editor of a task's tab (the question, Check, hints one at a time, the solution).
-import { Check, CheckCircle2, ChevronRight, Eye, GraduationCap, Lightbulb, Link2, Loader2, Play, X, XCircle } from 'lucide-react'
+import { Check, CheckCircle2, ChevronRight, Eye, GraduationCap, Lightbulb, Link2, Loader2, NotebookText, Play, X, XCircle } from 'lucide-react'
 import { useState } from 'react'
-import { checkTask, nextHint, openExample, openPractice, openTask, useLab } from './store'
+import { checkTask, nextHint, openExample, openPractice, openTask, openWalkthrough, useLab } from './store'
 import { activeSql, appendToActive } from './SqlEditor'
 import { EXAMPLES, LEVELS, TASKS, taskById, type PracticeTask } from '../data/practice'
 import { describeVerdict } from '../core/check'
+import { WALKTHROUGHS } from '../data/walkthroughs'
 
 export function PracticeDialog() {
   const open = useLab((s) => s.practiceOpen)
@@ -50,6 +51,35 @@ export function PracticeDialog() {
                       <span className="font-semibold">{e.title}</span>
                       <span className="block" style={{ color: 'var(--muted)' }}>
                         {e.question}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+          <section>
+            <h2 className="font-semibold mb-1 px-1">Python: a whole analysis, step by step</h2>
+            <p className="mb-2 px-1" style={{ color: 'var(--muted)' }}>
+              From the first look at the data to the conclusions, in pandas: Exploration (EDA), Preprocessing, Preparation, Analysis, Visualization, Conclusions. Each opens in a new Python tab, every cell explained; run it one cell at a time with Shift+Enter.
+            </p>
+            <ul className="grid gap-2 sm:grid-cols-2">
+              {WALKTHROUGHS.map((w) => (
+                <li key={w.id}>
+                  <button
+                    className="w-full text-left rounded-lg p-3 flex items-start gap-2 hover:bg-[var(--panel)]"
+                    style={{ border: '1px solid var(--line)', background: 'var(--panel-2)' }}
+                    onClick={() => {
+                      openPractice(false)
+                      void openWalkthrough(w)
+                    }}
+                    title="Opens in a new Python tab without running it"
+                  >
+                    <NotebookText size={14} className="shrink-0 mt-0.5" style={{ color: 'var(--py)' }} />
+                    <span>
+                      <span className="font-semibold">{w.title}</span>
+                      <span className="block" style={{ color: 'var(--muted)' }}>
+                        {w.question}
                       </span>
                     </span>
                   </button>

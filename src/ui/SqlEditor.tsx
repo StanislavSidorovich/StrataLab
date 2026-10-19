@@ -64,6 +64,12 @@ export function runActive() {
   else void runSql(id, currentSql(activeView))
 }
 
+/** A Python tab's cell at the cursor (Shift+Enter). */
+export function runActiveCell() {
+  const id = useLab.getState().activeTab
+  if (activeView) runPythonFrom(activeView, id, true)
+}
+
 /** What the active tab would run: the selection, or the whole tab. */
 export function activeSql(): string {
   return activeView ? currentSql(activeView) : ''
