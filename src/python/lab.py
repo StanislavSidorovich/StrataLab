@@ -39,6 +39,22 @@ class LabError(Exception):
 # ------------------------------------------------------------------ tables in
 
 
+try:
+    from pyodide.ffi import jsnull as _jsnull
+except ImportError:  # outside Pyodide (no JS values to meet)
+    _jsnull = object()
+
+
+def _missing(x):
+    """None, NaN, pd.NA, NaT, and JS null (which Pyodide turns into jsnull, not None)."""
+    if x is None or x is _jsnull:
+        return True
+    try:
+        return bool(pd.isna(x))
+    except (TypeError, ValueError):
+        return False
+
+
 def _bytes(x):
     """A column's bytes: a JS Uint8Array (JsProxy) or Python bytes."""
     return x.to_bytes() if hasattr(x, "to_bytes") else bytes(x)
@@ -54,7 +70,9 @@ def _frame(f):
         mask = np.frombuffer(_bytes(nulls), dtype=np.uint8).astype(bool) if nulls is not None else None
         has_nulls = mask is not None and mask.any()
         if dtype == "str":
-            s = pd.Series(c["values"], dtype="str")
+            # JS null arrives as jsnull, which pandas would keep as the text "jsnull": None where the mask says NULL.
+            values = list(c["values"])
+            s = pd.Series([None if _missing(v) or (has_nulls and mask[i]) else v for i, v in enumerate(values)], dtype="str")
         elif dtype == "datetime64[us]":
             a = np.frombuffer(_bytes(c["data"]), dtype=np.int64).view("datetime64[us]").copy()
             if has_nulls:
@@ -172,7 +190,7 @@ def _encode_column(name, s):
         if tz is not None:
             out["tz"] = str(tz)
     else:
-        out.update(dtype="str", values=[None if m else str(x) for x, m in zip(s.tolist(), mask)])
+        out.update(dtype="str", values=[None if m or _missing(x) else str(x) for x, m in zip(s.tolist(), mask)])
     return out
 
 
