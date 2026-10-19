@@ -119,7 +119,7 @@ export function AppearanceButton({ className = '' }: { className?: string }) {
           <div>
             <div className="mb-1.5" style={{ color: 'var(--muted)' }}>Borders</div>
             <div className="inline-flex rounded-md overflow-hidden" role="radiogroup" aria-label="Borders" style={{ border: '1px solid var(--line)' }}>
-              {(['soft', 'strong'] as const).map((b) => (
+              {(['strong', 'soft'] as const).map((b) => (
                 <button
                   key={b}
                   type="button"
@@ -129,7 +129,7 @@ export function AppearanceButton({ className = '' }: { className?: string }) {
                   style={borders === b ? { background: 'var(--accent-soft)', color: 'var(--accent)', fontWeight: 600 } : { color: 'var(--muted)' }}
                   onClick={() => setBorders(b)}
                 >
-                  {b === 'soft' ? 'Soft' : 'Strong'}
+                  {b === 'strong' ? 'Strong' : 'Soft'}
                 </button>
               ))}
             </div>
@@ -139,7 +139,7 @@ export function AppearanceButton({ className = '' }: { className?: string }) {
           <div style={{ color: 'var(--muted)', fontSize: 12 }}>Colours are kept separately for the light and dark theme, in this browser.</div>
           <button type="button" className="btn self-start" onClick={() => {
               setLook(NO_LOOK)
-              setBorders('soft')
+              setBorders('strong')
             }}>
             Reset to default
           </button>
