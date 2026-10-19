@@ -1,7 +1,7 @@
 // Tables between DuckDB and pandas (stage 7), without pyarrow: each column travels as its bytes
 // (little-endian numbers, int64 microseconds for dates and times, one byte per boolean) or as a
 // list of strings, with a null mask. src/python/lab.py reads and writes the same shape with numpy.
-import { Bool, DataType, Float32, Float64, Int8, Int16, Int32, Int64, Table, TimestampMicrosecond, Uint8, Uint16, Uint32, Uint64, Utf8, makeData, makeVector, vectorFromArray, type Field, type Vector } from 'apache-arrow'
+import { Bool, DataType, Field as ArrowField, Float32, Float64, Int8, Int16, Int32, Int64, RecordBatch, Schema, Struct, Table, TimestampMicrosecond, Uint8, Uint16, Uint32, Uint64, Utf8, makeData, makeVector, vectorFromArray, type Field, type Vector } from 'apache-arrow'
 import { formatterFor } from '../db/format'
 
 export type NumberDtype = 'int8' | 'int16' | 'int32' | 'int64' | 'uint8' | 'uint16' | 'uint32' | 'uint64' | 'float32' | 'float64'
@@ -151,7 +151,12 @@ export function uniqueNames(names: string[]): string[] {
 /** A pandas DataFrame (as lab.py sends it) as an Arrow table, for the grid and for DuckDB. */
 export function arrowFromFrame(frame: PyFrame): Table {
   const names = uniqueNames(frame.columns.map((c) => c.name))
-  return new Table(Object.fromEntries(frame.columns.map((c, i) => [names[i], fromColumn(c, frame.rows)])))
+  // Built from a schema, not an object of columns: an object puts names like "2021" (a pivot's
+  // years) before the others, whatever their place in the DataFrame.
+  const vectors = frame.columns.map((c) => fromColumn(c, frame.rows))
+  const fields = vectors.map((v, i) => new ArrowField(names[i], v.type, true))
+  const struct = makeData({ type: new Struct(fields), length: frame.rows, nullCount: 0, children: vectors.map((v) => v.data[0]) })
+  return new Table([new RecordBatch(new Schema(fields), struct)])
 }
 
 /** The buffers a frame can hand over to a worker instead of copying them. */

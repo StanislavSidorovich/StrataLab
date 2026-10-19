@@ -95,7 +95,8 @@ export function PythonOutput({ res, grid }: { res: TabResult; grid: ReactNode | 
   const cells = res.cells ?? []
   return (
     <div className="h-full flex flex-col">
-      <div className="overflow-auto" data-python-output style={{ flex: grid ? '1 1 55%' : '1 1 auto', minHeight: 0 }}>
+      {/* With a grid, the outputs take their own height (up to 55%, then they scroll) and the grid starts right under them. */}
+      <div className="overflow-auto" data-python-output style={grid ? { flex: '0 1 auto', maxHeight: '55%', minHeight: 0 } : { flex: '1 1 auto', minHeight: 0 }}>
         {cells.map((c, i) => (
           <CellView key={i} run={c} rows={rows} />
         ))}
@@ -107,7 +108,7 @@ export function PythonOutput({ res, grid }: { res: TabResult; grid: ReactNode | 
         )}
       </div>
       {grid && (
-        <div style={{ flex: '1 1 45%', minHeight: 120, borderTop: '1px solid var(--line)' }}>
+        <div style={{ flex: '1 1 0', minHeight: 120, borderTop: '1px solid var(--line)' }}>
           {grid}
         </div>
       )}

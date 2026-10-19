@@ -54,4 +54,11 @@ describe.skipIf(!HAS_PANDAS)('Python tabs: NULLs between DuckDB and pandas', () 
     expect([0, 2, 3].map((i) => back.getChild('t')!.isValid(i))).toEqual([false, false, false])
     expect([1, 2].map((i) => back.getChild('n')!.isValid(i))).toEqual([false, false])
   })
+
+  it("keeps the columns in the DataFrame's order, also when names look like numbers (a pivot's years)", () => {
+    const t = new Table({ k: vectorFromArray([1, 2], new Int32()) })
+    const back = roundTrip(frameFromArrow(t), `pd.DataFrame({"country": ["A", "B"], 2021: [1.0, 2.0], 2022: [3.0, None]})`)
+    expect(back.schema.fields.map((f) => f.name)).toEqual(['country', '2021', '2022'])
+    expect(back.getChild('2022')!.isValid(1)).toBe(false)
+  })
 })
