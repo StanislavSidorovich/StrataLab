@@ -163,7 +163,8 @@ interface State {
   postgres: PostgresState
   pgTables: TableInfo[]
   /** what the result pane shows */
-  resultView: 'result' | 'chart' | 'plan' | 'translation' | 'messages' | 'history'
+  /** `table` only in Python tabs: the last DataFrame on the whole pane ('result' is the cells' output there) */
+  resultView: 'result' | 'table' | 'chart' | 'plan' | 'translation' | 'messages' | 'history'
   /** per tab, its last Explain */
   plans: Record<string, PlanState>
   /** a copy to PostgreSQL in progress: the table being copied */
@@ -594,7 +595,7 @@ export function setResultView(view: State['resultView']) {
 }
 
 export function setTabDialect(id: string, dialect: Dialect) {
-  const view = (v: State['resultView']) => (v === 'translation' && dialect !== 'tsql') || (v === 'plan' && dialect === 'python') ? 'result' : v
+  const view = (v: State['resultView']) => (v === 'translation' && dialect !== 'tsql') || (v === 'plan' && dialect === 'python') || (v === 'table' && dialect !== 'python') ? 'result' : v
   set((s) => ({ tabs: s.tabs.map((t) => (t.id === id ? { ...t, dialect } : t)), resultView: view(s.resultView) }))
   if (dialect === 'postgres') void startPostgres()
   if (dialect === 'python') void startPython()

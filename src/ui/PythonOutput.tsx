@@ -1,10 +1,11 @@
-// A Python tab's result (stage 7): each cell's output as Jupyter shows it (printed text, the last
-// line's value, figures, errors), and the last DataFrame in the grid below, where Chart, Copy,
-// Export and Save as table work on it. Only text and images are shown: never HTML from the code.
-import { AlertTriangle, Loader2, Table2 } from 'lucide-react'
+// A Python tab's Output view (stage 7): each cell's output as Jupyter shows it (printed text, the
+// last line's value, figures, errors), in one column as in Colab. The last DataFrame goes to the
+// Table view, where Copy, Export and Save as table work on it; its place in the output has a button
+// to open it. Only text and images are shown: never HTML from the code.
+import { AlertTriangle, Loader2, TableProperties } from 'lucide-react'
 import type { ReactNode } from 'react'
 import type { Output } from '../core/ipynb'
-import { useLab, type PyCellRun, type TabResult } from './store'
+import { setResultView, useLab, type PyCellRun, type TabResult } from './store'
 import { pythonLoading, useSlowLoading } from './DialectBar'
 import { pythonNameHint } from '../core/dialect'
 
@@ -45,8 +46,11 @@ function OutputView({ o, inGrid, rows }: { o: Output; inGrid: boolean; rows: str
   if (png) return <img src={`data:image/png;base64,${png}`} alt={o.data['text/plain'] ?? 'Figure'} className="max-w-full rounded" style={{ background: '#fff', maxHeight: 440, objectFit: 'contain', objectPosition: 'left' }} />
   if (inGrid)
     return (
-      <div className="flex items-center gap-1.5" style={{ color: 'var(--muted)', fontSize: 12.5 }}>
-        <Table2 size={14} /> DataFrame in the grid below: {rows}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1" style={{ fontSize: 12.5 }}>
+        <button className="btn" onClick={() => setResultView('table')} title="Show this DataFrame on the whole pane, with Copy, Export and Save as table">
+          <TableProperties size={14} /> Open in Table
+        </button>
+        <span style={{ color: 'var(--muted)' }}>{rows}</span>
       </div>
     )
   // A value (a DataFrame's columns) keeps its lines: it scrolls sideways rather than wrapping.
@@ -88,28 +92,20 @@ function CellView({ run, rows }: { run: PyCellRun; rows: string }) {
   )
 }
 
-/** The cells' outputs; the grid (given by the result pane) under them when a DataFrame was shown. */
-export function PythonOutput({ res, grid }: { res: TabResult; grid: ReactNode | null }) {
+/** The cells' outputs, one under the other; the pane scrolls. */
+export function PythonOutput({ res }: { res: TabResult }) {
   const t = res.table
   const rows = t ? `${t.numRows.toLocaleString()}${res.more ? '+' : ''} rows × ${t.numCols} columns` : ''
   const cells = res.cells ?? []
   return (
-    <div className="h-full flex flex-col">
-      {/* With a grid, the outputs take their own height (up to 55%, then they scroll) and the grid starts right under them. */}
-      <div className="overflow-auto" data-python-output style={grid ? { flex: '0 1 auto', maxHeight: '55%', minHeight: 0 } : { flex: '1 1 auto', minHeight: 0 }}>
-        {cells.map((c, i) => (
-          <CellView key={i} run={c} rows={rows} />
-        ))}
-        {res.status === 'error' && res.error && (
-          <div className="m-3 rounded-lg p-2.5 flex gap-2" style={{ background: 'var(--danger-soft)', color: 'var(--danger)' }}>
-            <AlertTriangle size={16} className="shrink-0 mt-0.5" />
-            <span>{res.error}</span>
-          </div>
-        )}
-      </div>
-      {grid && (
-        <div style={{ flex: '1 1 0', minHeight: 120, borderTop: '1px solid var(--line)' }}>
-          {grid}
+    <div className="h-full overflow-auto" data-python-output>
+      {cells.map((c, i) => (
+        <CellView key={i} run={c} rows={rows} />
+      ))}
+      {res.status === 'error' && res.error && (
+        <div className="m-3 rounded-lg p-2.5 flex gap-2" style={{ background: 'var(--danger-soft)', color: 'var(--danger)' }}>
+          <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+          <span>{res.error}</span>
         </div>
       )}
     </div>

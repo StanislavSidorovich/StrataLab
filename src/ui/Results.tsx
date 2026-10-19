@@ -47,13 +47,15 @@ export function Results() {
   const dialect = useLab((s) => tabDialect(s.tabs.find((t) => t.id === s.activeTab)))
   const translation = useLab((s) => s.translations[s.activeTab])
   const stored = useLab((s) => s.resultView)
-  const view = (stored === 'translation' && dialect !== 'tsql') || (stored === 'plan' && dialect === 'python') ? 'result' : stored
+  const view = (stored === 'translation' && dialect !== 'tsql') || (stored === 'plan' && dialect === 'python') || (stored === 'table' && dialect !== 'python') ? 'result' : stored
+  // The view that shows the grid, with its row count and Copy / Export / Save: Table in Python tabs, Result elsewhere.
+  const gridView = dialect === 'python' ? 'table' : 'result'
   const changes = translation?.status === 'done' ? translation.statements.reduce((n, st) => n + (st.target == null ? 1 : sideBySide(st.source, st.target).changes), 0) : null
   const views =
     dialect === 'tsql'
       ? (['result', 'chart', 'plan', 'translation', 'messages', 'history'] as const)
       : dialect === 'python'
-        ? (['result', 'chart', 'messages', 'history'] as const)
+        ? (['result', 'table', 'chart', 'messages', 'history'] as const)
         : (['result', 'chart', 'plan', 'messages', 'history'] as const)
   const fileName = title.replace(/[^\w-]+/g, '_').toLowerCase()
 
@@ -69,7 +71,12 @@ export function Results() {
             style={view === v ? { background: 'var(--panel-2)', fontWeight: 600 } : { color: 'var(--muted)' }}
             onClick={() => setResultView(v)}
           >
-            {v === 'result' && 'Result'}
+            {v === 'result' && (dialect === 'python' ? <span title="Every cell's output in one column: printed text, values, figures, errors">Output</span> : 'Result')}
+            {v === 'table' && (
+              <span className="flex items-center gap-1.5" title="The last DataFrame a cell showed, on the whole pane" aria-label="Table">
+                <TableProperties size={13} /> <span className="hidden sm:inline">Table</span>
+              </span>
+            )}
             {v === 'chart' && (
               <span className="flex items-center gap-1.5" title="The result as bars, a line or a scatter" aria-label="Chart">
                 <ChartColumn size={13} /> <span className="hidden sm:inline">Chart</span>
@@ -101,7 +108,7 @@ export function Results() {
         ))}
         </div>
         <div className="flex-1" />
-        {view === 'result' && res?.status === 'done' && res.table && res.table.numCols > 0 && (
+        {view === gridView && res?.status === 'done' && res.table && res.table.numCols > 0 && (
           <>
             <span style={{ color: 'var(--muted)' }} className="ml-1 mr-1 whitespace-nowrap" title={`${res.table.numRows.toLocaleString()}${res.more ? '+' : ''} rows · ${res.ms?.toFixed(0)} ms`}>
               {res.table.numRows.toLocaleString()}
@@ -113,7 +120,7 @@ export function Results() {
         )}
       </div>
       <div className="flex-1 min-h-0">
-        {view === 'history' ? <HistoryView /> : view === 'plan' ? <PlanView /> : view === 'messages' ? <Messages /> : view === 'translation' ? <TranslationView /> : view === 'chart' && res?.status === 'done' && res.table && res.table.numRows > 0 ? <ChartView table={res.table} tabId={activeTab} fileName={fileName} /> : <ResultBody />}
+        {view === 'history' ? <HistoryView /> : view === 'plan' ? <PlanView /> : view === 'messages' ? <Messages /> : view === 'translation' ? <TranslationView /> : view === 'table' ? <PythonTable /> : view === 'chart' && res?.status === 'done' && res.table && res.table.numRows > 0 ? <ChartView table={res.table} tabId={activeTab} fileName={fileName} /> : <ResultBody />}
       </div>
     </div>
   )
@@ -184,6 +191,15 @@ function CellMenu({ table, row, col, at, close }: { table: Table; row: number; c
   return <Menu items={items} close={close} at={at} label="Copy" />
 }
 
+/** A Python tab's Table view: the last DataFrame a cell showed, on the whole pane. */
+function PythonTable() {
+  const res = useLab((s) => s.results[s.activeTab])
+  const t = res?.table
+  if (!t || t.numCols === 0)
+    return <Empty text={res?.status === 'running' ? 'Running…' : 'No DataFrame yet. When a cell ends with a DataFrame (df.head(), df.groupby(…).sum()…) or calls display(df), it shows here on the whole pane.'} />
+  return <GridWithMenu table={t} />
+}
+
 function ResultBody() {
   const res = useLab((s) => s.results[s.activeTab])
   const loading = useLab((s) => s.engine.status === 'loading')
@@ -193,7 +209,7 @@ function ResultBody() {
   if (loading) return <EngineLoading />
   if (dialect === 'python') {
     if (!res) return <Empty text={'Run the cells to see their output here: Ctrl+Enter runs every cell, Shift+Enter the cell at the cursor. Tables come in with lab.table("name").'} />
-    return <PythonOutput res={res} grid={res.table && res.table.numCols > 0 ? <GridWithMenu table={res.table} /> : null} />
+    return <PythonOutput res={res} />
   }
   if (!res) return <Empty text={`Run a query to see its result here — Ctrl+Enter or F5.${dialect === 'tsql' ? ' It is translated to DuckDB first.' : dialect === 'postgres' ? ' It runs on PostgreSQL.' : ''}`} />
   if (res.status === 'running')
