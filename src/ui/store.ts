@@ -470,8 +470,15 @@ const nextRowLimit = new Map<string, number>()
 export const setNextRowLimit = (tabId: string, limit: number) => nextRowLimit.set(tabId, limit)
 
 /** Runs a tab's SQL (or its selection). At most `limit` rows of the result come into the page. */
+/** The share link's "Nothing has run yet" note is out of date once something runs. */
+const NOT_RUN_YET = 'Nothing has run yet: read the query, then press Run.'
+function dropNotRunYet() {
+  if (get().notice?.includes(NOT_RUN_YET)) set({ notice: null })
+}
+
 export async function runSql(tabId: string, sql: string, limit?: number) {
   if (!sql.trim()) return
+  dropNotRunYet()
   limit ??= nextRowLimit.get(tabId) ?? ROW_LIMIT
   nextRowLimit.delete(tabId)
   const dialect = tabDialect(get().tabs.find((t) => t.id === tabId))
@@ -687,6 +694,7 @@ const pythonNames = () => get().tables.map((t) => (t.schema === 'main' ? t.name 
 export async function runPython(tabId: string, cells: { code: string; line: number; index: number; source?: string }[]) {
   const todo = cells.filter((c) => c.code.trim())
   if (!todo.length || get().results[tabId]?.status === 'running') return
+  dropNotRunYet()
   const t0 = performance.now()
   const runs: PyCellRun[] = []
   let table: Table | undefined
@@ -1405,7 +1413,7 @@ export async function openShareFromHash(): Promise<boolean> {
   const parts = [n === 1 ? 'The shared query opened in a new tab' : `${n} shared queries opened in new tabs`]
   if (loadedNow.length) parts.push(`${loadedNow.join(', ')} loaded`)
   if (demoMissing) parts.push('the demo shop loaded')
-  set({ notice: `${parts.join('; ')}. Nothing has run yet: read the query, then press Run.${unknown.length ? ` This version has no dataset called ${unknown.join(', ')}.` : ''}${blocked.length ? ` Not loaded: ${blocked.join(', ')}, because your own schema has that name (Sample datasets can replace it).` : ''}` })
+  set({ notice: `${parts.join('; ')}. ${NOT_RUN_YET}${unknown.length ? ` This version has no dataset called ${unknown.join(', ')}.` : ''}${blocked.length ? ` Not loaded: ${blocked.join(', ')}, because your own schema has that name (Sample datasets can replace it).` : ''}` })
   addLog({ sql: '-- shared link', ok: true, text: parts.join('; ') })
   return true
 }
