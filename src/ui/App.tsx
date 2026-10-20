@@ -18,9 +18,11 @@ import { PracticeDialog, TaskBar } from './Practice'
 import { GuideDialog } from './Guide'
 import { CompareDialog } from './Compare'
 import { DialectBar } from './DialectBar'
-import { applyUpdate, checkForUpdates, updateCheckMessage, useUpdateReady } from '../pwa/register'
+import { checkForUpdates, updateCheckMessage, useUpdateReady } from '../pwa/register'
+import { memoryNote } from '../core/dbLock'
+import { takeDatabaseHere } from '../db/engine'
 import { engineLoadingLabel, engineLoadingShort } from './EngineLoading'
-import { addTab, closeTabs, currentPythonStarter, newPythonTab, openPractice, switchTabDialect, tabDialect, downloadBackup, duplicateTab, enqueueFiles, openAbout, openCatalog, openShare, openTables, openWelcome, pasteTable, pasteTableFromClipboard, renameTab, reopenClosedTab, useLab } from './store'
+import { addTab, closeTabs, currentPythonStarter, newPythonTab, openPractice, switchTabDialect, tabDialect, downloadBackup, duplicateTab, enqueueFiles, openAbout, openCatalog, openShare, openTables, openWelcome, pasteTable, pasteTableFromClipboard, renameTab, reopenClosedTab, updateNow, useLab } from './store'
 import { AppearanceButton } from './Appearance'
 import { Menu, useLongPress, type MenuItem } from './Menu'
 import { tabsToClose } from '../core/tabs'
@@ -100,6 +102,7 @@ export function App() {
   return (
     <div className="h-full flex flex-col">
       <TopBar />
+      <MemoryBanner />
       <div className="flex-1 min-h-0 flex">
         <div className="w-64 shrink-0 hidden md:block">
           <Sidebar />
@@ -117,6 +120,7 @@ export function App() {
           </div>
         </div>
       </div>
+      <MovedScreen />
       {importError && (
         <div className="fixed bottom-4 right-4 z-40 max-w-md rounded-lg p-3 flex gap-2 shadow-lg" style={{ background: 'var(--danger-soft)', color: 'var(--danger)' }}>
           <AlertTriangle size={16} className="shrink-0 mt-0.5" />
@@ -258,7 +262,7 @@ function TopBar() {
       </span>
       {/* Only while a new version waits (src/pwa/register.ts). */}
       {updateReady && (
-        <button className="btn btn-primary" onClick={applyUpdate} title="A new version of Quaera Lab is ready: reload to use it (your tables and query tabs are kept)" aria-label="Update" data-testid="update">
+        <button className="btn btn-primary" onClick={updateNow} title="A new version of Quaera Lab is ready: reload to use it (your saved tables and query tabs are kept)" aria-label="Update" data-testid="update">
           <RefreshCw size={14} /> <span className="hidden sm:inline">Update</span>
         </button>
       )}
@@ -355,11 +359,63 @@ function EngineBadge() {
     <span
       className="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded-md"
       style={{ background: engine.persistent ? 'var(--accent-soft)' : 'var(--warn-soft)', color: engine.persistent ? 'var(--accent)' : 'var(--warn-text)', fontSize: 12 }}
-      title={engine.persistent ? 'Tables are kept in this browser between visits. Nothing is uploaded.' : 'Tables last until this tab is closed: Quaera Lab is already open in another tab (it holds the saved database), or this browser has no private file store.'}
+      title={engine.persistent ? 'Tables are kept in this browser between visits. Nothing is uploaded.' : memoryNote(engine.memoryReason ?? 'failed')}
     >
       {engine.persistent ? <HardDrive size={13} /> : <Zap size={13} />}
-      DuckDB {engine.version} · {engine.persistent ? 'saved in this browser' : 'in memory'}
+      DuckDB {engine.version} · {engine.persistent ? 'saved in this browser' : 'in memory, not saved'}
     </span>
+  )
+}
+
+/**
+ * A tab in memory says so under the header, in words (the badge alone was easy to miss, and a phone
+ * has no badge). When another Lab tab has the saved database, "Use this tab" brings it here.
+ */
+function MemoryBanner() {
+  const engine = useLab((s) => s.engine)
+  const [hidden, setHidden] = useState(false)
+  if (engine.status !== 'ready' || engine.persistent || hidden) return null
+  const reason = engine.memoryReason ?? 'failed'
+  const useHere = () => {
+    const { tables, schemas } = useLab.getState()
+    const own = tables.some((t) => t.schema === 'main') || schemas.length > 0
+    if (own && !confirm('This tab reloads to open the saved database: the tables loaded here in memory will be gone. The other tab stops using it. Go on?')) return
+    takeDatabaseHere()
+  }
+  return (
+    <div className="shrink-0 flex items-start sm:items-center gap-2 px-3 py-2 text-sm" style={{ background: 'var(--warn-soft)', color: 'var(--warn-text)', borderBottom: '1px solid var(--line)' }} role="status" data-testid="memory-banner">
+      <Zap size={15} className="shrink-0 mt-0.5 sm:mt-0" />
+      <span className="flex-1">{memoryNote(reason)}</span>
+      {reason === 'locked' && (
+        <button className="btn btn-primary shrink-0" onClick={useHere} title="Close the saved database in the other tab and open it here">
+          Use this tab
+        </button>
+      )}
+      <button className="shrink-0" onClick={() => setHidden(true)} aria-label="Close" title="Hide (the badge at the top still says in memory)">
+        <X size={14} />
+      </button>
+    </div>
+  )
+}
+
+/** This tab gave the saved database to another one: nothing here works until it takes it back. */
+function MovedScreen() {
+  const moved = useLab((s) => s.dbMoved)
+  if (!moved) return null
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'color-mix(in srgb, var(--bg) 85%, transparent)' }} data-testid="db-moved">
+      <div className="max-w-md rounded-xl p-5 shadow-xl flex flex-col gap-3" style={{ background: 'var(--panel)', border: '1px solid var(--line)' }}>
+        <div className="flex items-center gap-2 font-semibold">
+          <HardDrive size={16} style={{ color: 'var(--accent)' }} /> Quaera Lab moved to another tab
+        </div>
+        <p style={{ color: 'var(--muted)' }}>Your saved tables are open in the other tab now. This one is paused, so that only one page writes to the database.</p>
+        <div className="flex justify-end">
+          <button className="btn btn-primary" onClick={() => takeDatabaseHere()}>
+            Use this tab again
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }
 

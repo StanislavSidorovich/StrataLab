@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import type { Table } from 'apache-arrow'
-import { cancelQuery, checkpoint, getEngine, insertArrow, isCancelled, query, queryCancellable, queryLimited, type EngineProgress } from '../db/engine'
+import { cancelQuery, checkpoint, getEngine, insertArrow, isCancelled, onDatabaseMoved, query, queryCancellable, queryLimited, type EngineProgress } from '../db/engine'
+import { updateLosesTables, type MemoryReason } from '../core/dbLock'
+import { applyUpdate } from '../pwa/register'
 import { ROW_LIMIT } from '../core/rowLimit'
 import { loadCatalog, type TableInfo } from '../db/catalog'
 import { closeSource, createTable, openSource, type ImportSource } from '../db/importer'
@@ -137,7 +139,7 @@ export type DatasetState =
 
 type EngineState =
   | { status: 'loading'; progress: EngineProgress; withModel: boolean; withDataset: string | null }
-  | { status: 'ready'; version: string; persistent: boolean }
+  | { status: 'ready'; version: string; persistent: boolean; memoryReason?: MemoryReason }
   | { status: 'error'; error: string }
 
 interface State {
@@ -187,6 +189,8 @@ interface State {
   aboutOpen: AboutTab | false
   /** a passing message that is not an error (what a shared link opened) */
   notice: string | null
+  /** this tab gave the saved database to another Lab tab ("Use this tab" there): nothing runs here now */
+  dbMoved: boolean
   /** Save on a Python tab with no file yet: the .py / .ipynb choice is open (src/ui/sqlFiles.ts) */
   saveKind: { saveAs: boolean } | null
   /** the demo shop's tables are kept but left out of the tree (Sample datasets shows them again) */
@@ -310,6 +314,7 @@ export const useLab = create<State>(() => ({
   tablesOpen: false,
   aboutOpen: false,
   notice: null,
+  dbMoved: false,
   saveKind: null,
   demoHidden: initialDemoHidden(),
   practiceOpen: false,
@@ -408,7 +413,8 @@ export async function initEngine() {
     const e = await getEngine((progress) =>
       set((s) => (s.engine.status === 'loading' ? { engine: { ...s.engine, progress } } : {})),
     )
-    set({ engine: { status: 'ready', version: e.version, persistent: e.persistent } })
+    set({ engine: { status: 'ready', version: e.version, persistent: e.persistent, memoryReason: e.memoryReason } })
+    onDatabaseMoved(() => set({ dbMoved: true }))
     const moved = await prepareDemoSchema()
     await refreshCatalog()
     if (moved) addLog({ sql: '-- demo shop', ok: true, text: moved })
@@ -912,6 +918,19 @@ export function renameTab(id: string, title: string) {
 export function openAndRun(sql: string, title: string, dialect?: Dialect) {
   const id = addTab(sql, title, dialect)
   void runSql(id, sql)
+}
+
+/**
+ * The Update button. A tab in memory with tables of its own loses them on the reload, so it asks
+ * first (src/core/dbLock.ts); the demo shop comes back by itself and is not counted.
+ */
+export function updateNow() {
+  const { engine, tables, schemas } = get()
+  if (engine.status === 'ready' && !engine.persistent) {
+    const names = [...ownTables(tables).map((t) => t.name), ...schemas]
+    if (names.length && !confirm(updateLosesTables(names))) return
+  }
+  applyUpdate()
 }
 
 /** Loads the demo shop again (fresh rows) and shows it in the tree. */

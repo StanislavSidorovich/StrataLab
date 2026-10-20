@@ -1,6 +1,7 @@
 // About & licences (Help menu): what Quaera Lab is and its version, whose work it is built on with
 // the full licence texts (third-party-licenses.txt, made at build time: vite.config.ts → licensesPlugin),
 // and what happens to the user's data. `#about`, `#licences` and `#privacy` open it on that tab.
+import { memoryNote } from '../core/dbLock'
 import { useEffect } from 'react'
 import { ExternalLink, Info, X } from 'lucide-react'
 import { openAbout, useLab, type AboutTab } from './store'
@@ -105,7 +106,7 @@ function About() {
         <dd>{__APP_VERSION__}</dd>
         <dt style={{ color: 'var(--muted)' }}>Database</dt>
         <dd>
-          {engine.status === 'ready' ? `DuckDB ${engine.version}${engine.persistent ? ', saved in this browser' : ', in memory: this tab only (private window, or another tab has the database)'}` : engine.status === 'loading' ? 'starting…' : 'did not start'}
+          {engine.status === 'ready' ? `DuckDB ${engine.version}${engine.persistent ? ', saved in this browser' : `, in memory, not saved. ${memoryNote(engine.memoryReason ?? 'failed')}`}` : engine.status === 'loading' ? 'starting…' : 'did not start'}
         </dd>
         <dt style={{ color: 'var(--muted)' }}>Source code</dt>
         <dd>

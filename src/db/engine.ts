@@ -10,6 +10,7 @@ import ehWorker from '@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url'
 import { downloadPercent } from '../core/progress'
 import { EXTENSIONS_DIR, hasOwnExtensions } from '../core/extensions'
 import { takeRows } from '../core/rowLimit'
+import { DB_CHANNEL, DB_LOCK, HELD_KEY, LEFT_KEY, lockPlan, memoryReason, type DbMessage, type MemoryReason } from '../core/dbLock'
 
 /** Decompressed sizes of the two .wasm files, filled in by vite.config.ts. */
 declare const __DUCKDB_WASM_BYTES__: { eh: number; mvp: number }
@@ -23,6 +24,8 @@ export interface Engine {
   conn: duckdb.AsyncDuckDBConnection
   version: string
   persistent: boolean
+  /** why it is in memory (when not persistent) */
+  memoryReason?: MemoryReason
 }
 
 /** What the first start is doing: fetching the engine (percent, null if unknown), then starting it. */
@@ -53,12 +56,19 @@ async function start(onProgress: (p: EngineProgress) => void): Promise<Engine> {
   }
 
   let persistent = false
+  let reason: MemoryReason | undefined
   try {
+    if (!(await takeDbLock())) throw new Error('The database is locked by another tab')
     await openPersistent(db)
     persistent = true
+    holdDatabase(db)
   } catch (e) {
-    // No OPFS (old browser, private window) or the file is locked by another tab.
+    // No OPFS (old browser, private window) or the file is held by another tab.
     console.warn('Using an in-memory database:', e)
+    reason = memoryReason(e)
+    storageSet(() => sessionStorage, HELD_KEY, null)
+    releaseLock?.()
+    releaseLock = null
     await db.open({})
   }
 
@@ -67,7 +77,7 @@ async function start(onProgress: (p: EngineProgress) => void): Promise<Engine> {
   // Parquet and ICU from this site, not extensions.duckdb.org (src/core/extensions.ts).
   if (hasOwnExtensions(__OWN_DUCKDB_EXTENSIONS__, version, bundle.mainModule === ehWasm ? 'wasm_eh' : 'wasm_mvp'))
     await conn.query(`SET custom_extension_repository = '${new URL(EXTENSIONS_DIR, new URL(import.meta.env.BASE_URL, location.href)).href}'`)
-  return { db, conn, version, persistent }
+  return { db, conn, version, persistent, memoryReason: reason }
 }
 
 /**
@@ -106,7 +116,16 @@ async function downloadWasm(url: string, knownSize: number, onProgress: (p: Engi
 async function openPersistent(db: duckdb.AsyncDuckDB) {
   if (!('getDirectory' in (navigator.storage ?? {}))) throw new Error('OPFS is not supported')
   const dir = await navigator.storage.getDirectory()
-  await emptyWal(dir)
+  // Right after a reload the old page's worker may hold the file a moment longer.
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await emptyWal(dir)
+      break
+    } catch (e) {
+      if (attempt >= 4 || !releaseLock || (e as Error).name !== 'NoModificationAllowedError') throw e
+      await new Promise((done) => setTimeout(done, 300))
+    }
+  }
   for (const name of [DB_FILE, `${DB_FILE}.wal`]) {
     const handle = await dir.getFileHandle(name, { create: true })
     await db.registerFileHandle(name, handle, duckdb.DuckDBDataProtocol.BROWSER_FSACCESS, true)
@@ -127,6 +146,97 @@ async function emptyWal(dir: FileSystemDirectoryHandle) {
   if (!('createWritable' in wal) || (await wal.getFile()).size === 0) return
   const w = await wal.createWritable({ keepExistingData: false })
   await w.close()
+}
+
+let releaseLock: (() => void) | null = null
+
+const storageGet = (store: () => Storage, key: string) => {
+  try {
+    return store().getItem(key)
+  } catch {
+    return null
+  }
+}
+const storageSet = (store: () => Storage, key: string, value: string | null) => {
+  try {
+    if (value === null) store().removeItem(key)
+    else store().setItem(key, value)
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Takes the Web Lock that says "this tab has the saved database" and keeps it until the page goes
+ * (src/core/dbLock.ts). False when another Lab page holds it. Without Web Locks: true, and the file
+ * itself decides (opening it fails while another tab has it).
+ */
+async function takeDbLock(): Promise<boolean> {
+  if (!navigator.locks) return true
+  const leftAt = Number(storageGet(() => localStorage, LEFT_KEY)) || null
+  const { waitMs, delayMs } = lockPlan(storageGet(() => sessionStorage, HELD_KEY) === '1', leftAt, Date.now())
+  if (delayMs) await new Promise((done) => setTimeout(done, delayMs))
+  return new Promise<boolean>((resolve) => {
+    const abort = new AbortController()
+    const timer = waitMs ? setTimeout(() => abort.abort(), waitMs) : undefined
+    const options: LockOptions = waitMs ? { signal: abort.signal } : { ifAvailable: true }
+    navigator.locks
+      .request(DB_LOCK, options, (lock) => {
+        clearTimeout(timer)
+        if (!lock) {
+          resolve(false)
+          return
+        }
+        resolve(true)
+        return new Promise<void>((release) => (releaseLock = release))
+      })
+      .catch(() => resolve(false))
+  })
+}
+
+const movedListeners = new Set<() => void>()
+/** Called when this tab gave the saved database to another tab ("Use this tab" there). */
+export function onDatabaseMoved(listener: () => void) {
+  movedListeners.add(listener)
+}
+
+/** The holder's side: remembers it holds the file (for its own reload) and answers "Use this tab". */
+function holdDatabase(db: duckdb.AsyncDuckDB) {
+  storageSet(() => sessionStorage, HELD_KEY, '1')
+  // Leaving the page (reload, Update, close): other tabs coming back from the same reload let this one go first.
+  window.addEventListener('pagehide', () => storageSet(() => localStorage, LEFT_KEY, String(Date.now())))
+  if (typeof BroadcastChannel === 'undefined') return
+  const channel = new BroadcastChannel(DB_CHANNEL)
+  channel.onmessage = async (e: MessageEvent<DbMessage>) => {
+    if (e.data?.type !== 'release' || !releaseLock) return
+    storageSet(() => sessionStorage, HELD_KEY, null)
+    // Ending the worker closes the file; then the lock goes.
+    await db.terminate().catch(() => {})
+    releaseLock()
+    releaseLock = null
+    channel.postMessage({ type: 'released' } satisfies DbMessage)
+    channel.close()
+    movedListeners.forEach((l) => l())
+  }
+}
+
+/**
+ * "Use this tab": asks the tab that has the saved database to let it go, then reloads this one,
+ * which waits for its turn and opens it. Reloads after a few seconds even without an answer
+ * (an older Lab page that does not listen): the reload then takes the file if it is free.
+ */
+export function takeDatabaseHere() {
+  storageSet(() => sessionStorage, HELD_KEY, '1')
+  const reload = () => location.reload()
+  if (typeof BroadcastChannel === 'undefined') return reload()
+  const channel = new BroadcastChannel(DB_CHANNEL)
+  const timer = setTimeout(reload, 4000)
+  channel.onmessage = (e: MessageEvent<DbMessage>) => {
+    if (e.data?.type !== 'released') return
+    clearTimeout(timer)
+    reload()
+  }
+  channel.postMessage({ type: 'release' } satisfies DbMessage)
 }
 
 // One connection, one query at a time, in the order asked. The worker used to do this by
