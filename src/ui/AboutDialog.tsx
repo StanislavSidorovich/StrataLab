@@ -6,6 +6,7 @@ import { useEffect } from 'react'
 import { ExternalLink, Info, X } from 'lucide-react'
 import { openAbout, useLab, type AboutTab } from './store'
 import { DATASETS } from '../data/datasets'
+import { AuthorLinks } from './AuthorLinks'
 
 /** package.json's version (vite.config.ts). */
 declare const __APP_VERSION__: string
@@ -101,6 +102,7 @@ function About() {
         Part of <A href="https://quaera.app">Quaera</A>, with <A href="https://model.quaera.app">Quaera Model</A> (design tables and keys) and{' '}
         <A href="https://flow.quaera.app">Quaera Flow</A>.
       </p>
+      <AuthorLinks />
       <dl className="grid gap-x-4 gap-y-1" style={{ gridTemplateColumns: 'auto 1fr' }}>
         <dt style={{ color: 'var(--muted)' }}>Version</dt>
         <dd>{__APP_VERSION__}</dd>

@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { Database, Download, FileUp, HelpCircle, Library, Play, Store, X } from 'lucide-react'
 import { closeWelcome, enqueueFiles, hasDemoTables, openAndRun, openCatalog, showDemo, useLab } from './store'
 import { ACCEPT } from './Sidebar'
+import { AuthorLinks } from './AuthorLinks'
 import { WELCOME_SQL } from '../data/demo'
 import { installApp } from '../pwa/register'
 
@@ -176,6 +177,7 @@ export function WelcomeDialog() {
             </p>
           </section>
           </details>
+          <AuthorLinks className="mt-3" />
         </div>
 
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 px-5 py-3" style={{ borderTop: '1px solid var(--line)' }}>
