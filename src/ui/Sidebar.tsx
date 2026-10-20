@@ -15,6 +15,7 @@ import { exportTable } from '../db/export'
 import type { TableInfo } from '../db/catalog'
 import { DEMO_SCHEMA, WELCOME_SQL } from '../data/demo'
 import { labName } from '../core/pyStarter'
+import { AuthorLinks } from './AuthorLinks'
 import { datasetById } from '../data/datasets'
 
 export const ACCEPT = '.csv,.tsv,.txt,.xlsx,.xlsm,.xls,.ods,.parquet,.json,.jsonl,.ndjson'
@@ -176,6 +177,7 @@ export function Sidebar() {
         <PostgresSection search={search} />
       </div>
       </TreeSearchText.Provider>
+      <div style={{ borderTop: "1px solid var(--line)" }}><AuthorLinks className="px-3 py-2" /></div>
     </aside>
   )
 }
