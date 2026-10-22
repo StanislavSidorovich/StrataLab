@@ -1,4 +1,5 @@
 // T-SQL → DuckDB (stage 4): asks the sqlglot worker to translate a script, statement by statement.
+import { foldKeys, runOrder } from '../core/pdScript'
 import type { TranslateRequest } from './sqlglotWorker'
 
 export interface TranslatedStatement {
@@ -6,10 +7,12 @@ export interface TranslatedStatement {
   source: string
   /** where it starts in the script */
   at: number
-  /** DuckDB SQL, or null when sqlglot could not read the statement */
+  /** DuckDB SQL; null when sqlglot could not read the statement, empty when there is nothing to run for it */
   target: string | null
   notes: string[]
   error: string | null
+  /** Where it runs when that is not its place in the script (PowerDesigner scripts: see core/pdScript.ts) */
+  rank?: number
 }
 
 export type TranslatorProgress = 'download' | 'start'
@@ -55,11 +58,11 @@ export function translateTsql(script: string, progress?: (p: TranslatorProgress)
     getWorker().postMessage(req)
   }).then((r) => {
     loaded = true
-    return r
+    return foldKeys(r)
   })
 }
 
-/** The DuckDB script to run: every translated statement, in order. */
+/** The DuckDB script to run: every translated statement, in the order they run. */
 export function duckdbScript(statements: TranslatedStatement[]): string {
-  return statements.map((s) => s.target).filter(Boolean).join(';\n\n') + ';'
+  return runOrder(statements).join(';\n\n') + ';'
 }

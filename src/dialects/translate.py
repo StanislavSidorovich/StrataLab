@@ -53,6 +53,57 @@ def _has_code(s):
     return bool(s.strip())
 
 
+# What PowerDesigner writes for SQL Server (the "Microsoft SQL Server 2008" DBMS): guarded drops, column
+# descriptions through sp_addextendedproperty, and CLUSTERED / NONCLUSTERED keys. DuckDB has none of
+# them, so each is turned into what the script means (or left out, with a note saying why).
+_FLAGS = re.IGNORECASE | re.DOTALL
+_GUARDED_OBJECT = re.compile(
+    r"^if\s+exists\s*\(\s*select\s+1\s+from\s+sysobjects\s+where\s+id\s*=\s*object_id\('[^']+'\)\s+and\s+type\s*=\s*'[UV]'\s*\)\s*drop\s+(table|view)\s+(\S+)$",
+    _FLAGS,
+)
+_GUARDED_INDEX = re.compile(
+    r"^if\s+exists\s*\(\s*select\s+1\s+from\s+sysindexes\s+where\s+id\s*=\s*object_id\('[^']+'\)\s+and\s+name\s*=\s*'([^']+)'\s+and\s+indid\s*>\s*0\s+and\s+indid\s*<\s*255\s*\)\s*drop\s+index\s+\S+$",
+    _FLAGS,
+)
+_GUARDED_FK = re.compile(
+    r"^if\s+exists\s*\(\s*select\s+1\s+from\s+sys\.sysreferences\s+r\s+join\s+sys\.sysobjects\b.*?\)\s*alter\s+table\s+(\S+)\s+drop\s+constraint\s+(\S+)$",
+    _FLAGS,
+)
+_DESCRIPTION = re.compile(
+    r"^declare\s+@CurrentUser\s+sysname\s+select\s+@CurrentUser\s*=\s*user_name\(\)\s+exec(?:ute)?\s+sp_addextendedproperty\s+N?'MS_Description',\s*N?'((?:[^']|'')*)',\s*N?'user',\s*@CurrentUser,\s*N?'table',\s*N?'([^']+)'(?:,\s*N?'column',\s*N?'([^']+)')?$",
+    _FLAGS,
+)
+_CLUSTERED = re.compile(r"\b(?:non)?clustered\b[ \t]*", re.IGNORECASE)
+_COMMENTS = re.compile(r"--[^\n]*|/\*.*?\*/", re.DOTALL)
+
+
+def _powerdesigner(text):
+    """(DuckDB SQL or "", notes) for the statements PowerDesigner wraps around its DDL; None for any other."""
+    code = _COMMENTS.sub("", text).strip()
+    m = _GUARDED_OBJECT.match(code)
+    if m:
+        return f"DROP {m.group(1).upper()} IF EXISTS {m.group(2)}", []
+    m = _GUARDED_INDEX.match(code)
+    if m:
+        return f"DROP INDEX IF EXISTS {m.group(1)}", []
+    m = _GUARDED_FK.match(code)
+    if m:
+        return "", [f"Left out: {m.group(2)} is part of CREATE TABLE here (DuckDB adds foreign keys only when it creates a table) and goes with the table."]
+    m = _DESCRIPTION.match(code)
+    if m:
+        what, table, column = m.groups()
+        target = f"COMMENT ON COLUMN {table}.{column} IS '{what}'" if column else f"COMMENT ON TABLE {table} IS '{what}'"
+        return target, ["PowerDesigner's description becomes COMMENT ON (the declare and select lines only look up the current user for sp_addextendedproperty)."]
+    return None
+
+
+def _without_clustered(text):
+    """CREATE / ALTER with CLUSTERED and NONCLUSTERED taken out (and a note when it did)."""
+    if not re.match(r"\s*(?:create|alter)\b", _COMMENTS.sub("", text), re.IGNORECASE) or not _CLUSTERED.search(text):
+        return text, []
+    return _CLUSTERED.sub("", text), ["CLUSTERED / NONCLUSTERED left out: DuckDB has no clustered indexes."]
+
+
 def _is_text(node):
     return (isinstance(node, exp.Literal) and node.is_string) or isinstance(node, exp.DPipe)
 
@@ -69,8 +120,36 @@ def _text_length(dt):
     return int(p.name) if isinstance(p, exp.Literal) and p.name.isdigit() else None
 
 
+IDENTITY = (exp.AutoIncrementColumnConstraint, exp.GeneratedAsIdentityColumnConstraint)
+
+
+def _sequences(tree, notes):
+    """IDENTITY columns: DuckDB has none, so each gets a sequence as its default. Returns the CREATE SEQUENCE statements."""
+    out = []
+    if not isinstance(tree, exp.Create) or tree.args.get("kind") != "TABLE" or not isinstance(tree.this, exp.Schema):
+        return out
+    table = tree.this.this.name
+    for col in tree.find_all(exp.ColumnDef):
+        for c in list(col.args.get("constraints") or []):
+            kind = c.args.get("kind")
+            if not isinstance(kind, IDENTITY):
+                continue
+            seq = f"{table}_{col.name}_seq"
+            generated = isinstance(kind, exp.GeneratedAsIdentityColumnConstraint)
+            start = kind.args.get("start") if generated else None
+            step = kind.args.get("increment") if generated else None
+            out.append(f"CREATE OR REPLACE SEQUENCE {seq} START {start.name if start is not None else 1} INCREMENT {step.name if step is not None else 1}")
+            c.replace(exp.ColumnConstraint(kind=exp.DefaultColumnConstraint(this=exp.func("nextval", exp.Literal.string(seq)))))
+            notes.append(f"{col.name}: IDENTITY becomes the sequence {seq}, used as the column's default (DuckDB has no identity columns).")
+    return out
+
+
 def _fix(tree, notes):
     """What sqlglot keeps as written but DuckDB reads differently."""
+    # PRIMARY KEY (a ASC): sqlglot adds NULLS FIRST to key columns, which DuckDB does not read there.
+    for key in tree.find_all(exp.PrimaryKey):
+        for o in list(key.find_all(exp.Ordered)):
+            o.replace(o.this)
     # 'a' + name: T-SQL joins text with +, DuckDB only adds numbers. Deepest first, so
     # first_name + ' ' + last_name becomes first_name || ' ' || last_name.
     adds = list(tree.find_all(exp.Add))
@@ -153,25 +232,33 @@ def translate(script, pretty_multiline=True):
     for source, at in _statements(script):
         text = source.strip()
         _handler.items = []
+        special = _powerdesigner(text)
+        if special:
+            result.append({"source": text, "at": at, "target": special[0], "notes": special[1], "error": None})
+            continue
+        readable, clustered_notes = _without_clustered(text)
         try:
-            parsed = _parse(text)
+            parsed = _parse(readable)
         except Exception as e:  # sqlglot raises ParseError, and now and then something else on odd input
             result.append({"source": text, "at": at, "target": None, "notes": [], "error": _parse_error(e)})
             continue
         for piece, trees in parsed:
-            notes = []
+            notes = list(clustered_notes)
             if len(parsed) > 1:
                 _handler.items = []
             try:
                 pretty = pretty_multiline and "\n" in piece
-                target = ";\n".join(_fix(t, notes).sql(dialect="duckdb", pretty=pretty, unsupported_level=ErrorLevel.WARN) for t in trees)
+                before = [seq for t in trees for seq in _sequences(t, notes)]
+                target = ";\n".join(before + [_fix(t, notes).sql(dialect="duckdb", pretty=pretty, unsupported_level=ErrorLevel.WARN) for t in trees])
                 error = None
             except Exception as e:
                 target, error = None, str(e)
             notes = list(dict.fromkeys([_note(n) for n in _handler.items] + notes))
             if target is not None and not target.strip():  # EXEC: nothing left to run
                 target, error = None, notes.pop(0) if notes else "This statement has no DuckDB counterpart."
-            result.append({"source": piece, "at": at + max(0, source.find(piece)), "target": target, "notes": notes, "error": error})
+            # The statement as written, not as it was made readable for sqlglot.
+            shown = text if piece == readable else piece
+            result.append({"source": shown, "at": at + max(0, source.find(shown)), "target": target, "notes": notes, "error": error})
     return result
 
 

@@ -70,6 +70,8 @@ function StatementRow({ n, st }: { n: number; st: TranslatedStatement }) {
             <div className="p-3 flex gap-2" style={{ color: 'var(--danger)' }}>
               <AlertTriangle size={14} className="shrink-0 mt-0.5" /> Could not read this statement: {st.error}
             </div>
+          ) : st.target === '' ? (
+            <Note>Nothing to run for this statement.</Note>
           ) : (
             <Code label={`${n} · DuckDB${diff ? ` · ${diff.changes ? `${diff.changes} change${diff.changes === 1 ? '' : 's'}` : 'the same'}` : ''}`} segments={diff!.right} kind="new" />
           )}

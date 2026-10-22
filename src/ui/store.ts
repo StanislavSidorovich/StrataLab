@@ -24,6 +24,7 @@ import { catalogSchemaState, datasetName, isOwnSchema, linkedTables } from '../c
 import { schemaForModel, showAsModel } from '../db/modelExport'
 import { planGeneration, type GenPlan, type GenTable } from '../core/generate'
 import { runGeneration, type GenOutcome } from '../db/generate'
+import { runOrder } from '../core/pdScript'
 import { duckdbScript, translateTsql, type TranslatedStatement, type TranslatorProgress } from '../dialects/tsql'
 import { copyToPostgres, explainPostgres, getPostgres, postgresCatalog, runPostgres } from '../dialects/postgres'
 import { copyTitle, dialectSwitch, rememberClosed } from '../core/tabs'
@@ -501,7 +502,7 @@ export async function runSql(tabId: string, sql: string, limit?: number) {
     toRun = duckdbScript(translated)
     // One at a time, so the result shown is the last one that returns rows (as in PostgreSQL
     // tabs), and Stop can end any of them.
-    statements = translated.map((st) => st.target!)
+    statements = runOrder(translated)
   }
   const t0 = performance.now()
   const isStopped = () => stopped.has(tabId)
