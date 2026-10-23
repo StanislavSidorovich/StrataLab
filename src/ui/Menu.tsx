@@ -16,7 +16,11 @@ export function Menu({ items, close, danger = false, at, label, align = 'right' 
   const [shift, setShift] = useState({ dx: 0, dy: 0 })
   useEffect(() => {
     const onDown = (e: Event) => {
-      if (!ref.current?.contains(e.target as Node)) close()
+      const target = e.target as Node
+      if (ref.current?.contains(target)) return
+      // The ⋯ button that opened it toggles it: closing here would let its click open the menu again.
+      if (!at && ref.current?.parentElement?.contains(target)) return
+      close()
     }
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close()
     document.addEventListener('mousedown', onDown)

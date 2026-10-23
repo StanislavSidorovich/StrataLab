@@ -1052,11 +1052,41 @@ export async function showDemo() {
 }
 
 export async function dropObject(t: TableInfo) {
-  const name = qualifiedName(t.schema, t.name)
-  await query(`DROP ${t.kind === 'view' ? 'VIEW' : 'TABLE'} ${name}`)
-  await checkpoint()
+  await dropObjects([t])
+}
+
+/**
+ * Drops several tables and views at once. Views go first, and a table another one points to with
+ * a foreign key waits until the one pointing at it is gone (DuckDB refuses to drop it before);
+ * what still cannot go, because something outside the list depends on it, is reported.
+ */
+export async function dropObjects(list: TableInfo[]) {
+  let rest = [...list].sort((a, b) => Number(b.kind === 'view') - Number(a.kind === 'view'))
+  const done: string[] = []
+  let why = ''
+  while (rest.length) {
+    const failed: TableInfo[] = []
+    for (const t of rest) {
+      const name = qualifiedName(t.schema, t.name)
+      try {
+        await query(`DROP ${t.kind === 'view' ? 'VIEW' : 'TABLE'} ${name}`)
+        done.push(name)
+        addLog({ sql: `DROP ${t.kind.toUpperCase()} ${name}`, ok: true, text: `${name} dropped` })
+      } catch (e) {
+        failed.push(t)
+        why = String(e instanceof Error ? e.message : e)
+      }
+    }
+    if (failed.length === rest.length) break
+    rest = failed
+  }
+  if (done.length) await checkpoint()
   await refreshCatalog()
-  addLog({ sql: `DROP ${t.kind.toUpperCase()} ${name}`, ok: true, text: `${name} dropped` })
+  if (rest.length) {
+    const names = rest.map((t) => qualifiedName(t.schema, t.name)).join(', ')
+    addLog({ sql: `DROP ${names}`, ok: false, text: why })
+    set({ importError: `Could not drop ${names}: ${why.split('\n')[0]}` })
+  }
 }
 
 export async function renameObject(t: TableInfo, to: string) {

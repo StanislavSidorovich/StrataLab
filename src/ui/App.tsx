@@ -28,6 +28,12 @@ import { AppearanceButton } from './Appearance'
 import { Menu, useLongPress, type MenuItem } from './Menu'
 import { tabsToClose } from '../core/tabs'
 
+/** The tables panel: its width in px (kept in this browser), what dragging its edge allows. */
+const SIDE_KEY = 'stratalab.sidebar-width'
+const SIDE_DEFAULT = 256
+const SIDE_MIN = 200
+const SIDE_MAX = 560
+
 declare const __APP_VERSION__: string
 
 export function App() {
@@ -85,6 +91,34 @@ export function App() {
   const editorBox = useRef<HTMLDivElement>(null)
   const dragging = useDropZone()
 
+  const [sideW, setSideW] = useState(() => {
+    try {
+      const n = Number(localStorage.getItem(SIDE_KEY))
+      return n >= SIDE_MIN && n <= SIDE_MAX ? n : SIDE_DEFAULT
+    } catch {
+      return SIDE_DEFAULT
+    }
+  })
+  useEffect(() => {
+    try {
+      localStorage.setItem(SIDE_KEY, String(sideW))
+    } catch {
+      /* ignore */
+    }
+  }, [sideW])
+  const startSideResize = (e: React.PointerEvent) => {
+    e.preventDefault()
+    const x0 = e.clientX
+    const w0 = sideW
+    const move = (ev: PointerEvent) => setSideW(Math.round(Math.min(SIDE_MAX, Math.max(SIDE_MIN, w0 + ev.clientX - x0))))
+    const up = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+  }
+
   const startResize = (e: React.PointerEvent) => {
     e.preventDefault()
     // The editor and the results share what is left under the tab strip and the bars, minus the handle itself.
@@ -105,8 +139,16 @@ export function App() {
       <TopBar />
       <MemoryBanner />
       <div className="flex-1 min-h-0 flex">
-        <div className="w-64 shrink-0 hidden md:block">
+        <div className="shrink-0 hidden md:block relative" style={{ width: sideW }}>
           <Sidebar />
+          <div
+            onPointerDown={startSideResize}
+            onDoubleClick={() => setSideW(SIDE_DEFAULT)}
+            className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-[var(--accent)] z-30"
+            title="Drag to resize; double-click to reset"
+            role="separator"
+            aria-orientation="vertical"
+          />
         </div>
         <div ref={main} className="flex-1 min-w-0 flex flex-col">
           <Tabs />

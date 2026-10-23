@@ -4,8 +4,8 @@
 // menu, as a small menu button).
 import { insertAtCursor } from './SqlEditor'
 import { createContext, useContext, useRef, useState } from 'react'
-import { CornerDownLeft, ChevronDown, ChevronRight, ClipboardPaste, Database, DatabaseZap, Eye, Folder, FolderPlus, Library, Loader2, MoreHorizontal, Network, RefreshCw, Search, Sparkles, Store, Table2, Upload, X } from 'lucide-react'
-import { RESERVED_IDS, addTab, copySchemaToPostgres, newPythonNotebookOn, downloadBackup, dropPgObject, dropDataset, dropObject, enqueueFiles, hasDemoTables, hideDemo, loadDemo, newDataset, openAndRun, openAsModel, openCatalog, openDataset, openGenerate, openGuide, openMove, openPractice, openTables, ownTables, pasteTableFromClipboard, refreshTree, renameDataset, renameObject, restoreBackup, useLab } from './store'
+import { CheckSquare, CornerDownLeft, ChevronDown, ChevronRight, ClipboardPaste, Database, DatabaseZap, Eye, Folder, FolderPlus, Library, Loader2, MoreHorizontal, Network, RefreshCw, Search, Sparkles, Store, Table2, Upload, X } from 'lucide-react'
+import { RESERVED_IDS, addTab, copySchemaToPostgres, newPythonNotebookOn, downloadBackup, dropPgObject, dropDataset, dropObjects, enqueueFiles, hasDemoTables, hideDemo, loadDemo, newDataset, openAndRun, openAsModel, openCatalog, openDataset, openGenerate, openGuide, openMove, openPractice, openTables, ownTables, pasteTableFromClipboard, refreshTree, renameDataset, renameObject, restoreBackup, useLab } from './store'
 import { isOwnSchema } from '../core/ownDatasets'
 import { qualifiedName } from '../core/sql'
 import { treeMatch, type TreeMatch } from '../core/tree'
@@ -58,6 +58,10 @@ export function pickFilesFor(table?: string, schema = 'main') {
 /** True inside the phone's Tables sheet: each table gets an Insert button. */
 export const InsertMode = createContext(false)
 
+/** Picking several tables to drop at once: `on` shows a checkbox on every table, `picked` holds their qualified names. */
+type Picking = { on: boolean; picked: Set<string>; toggle: (name: string) => void; start: (name?: string) => void }
+const PickTables = createContext<Picking>({ on: false, picked: new Set(), toggle: () => {}, start: () => {} })
+
 export function Sidebar() {
   const all = useLab((s) => s.tables)
   const engine = useLab((s) => s.engine)
@@ -72,6 +76,36 @@ export function Sidebar() {
   const empty = tables.filter((t) => t.kind === 'table' && t.rows === 0)
   const backup = useLab((s) => s.backup)
   const [search, setSearch] = useState('')
+  const [pickOn, setPickOn] = useState(false)
+  const [picked, setPicked] = useState<Set<string>>(new Set())
+  const picking: Picking = {
+    on: pickOn,
+    picked,
+    toggle: (name) =>
+      setPicked((p) => {
+        const n = new Set(p)
+        if (!n.delete(name)) n.add(name)
+        return n
+      }),
+    start: (name) => {
+      setPickOn(true)
+      setPicked(new Set(name ? [name] : []))
+    },
+  }
+  const stopPicking = () => {
+    setPickOn(false)
+    setPicked(new Set())
+  }
+  // Tables and views of every schema that exist now (one dropped elsewhere leaves the selection on its own).
+  const pickable = all.map((t) => [qualifiedName(t.schema, t.name), t] as const)
+  const chosen = pickable.filter(([n]) => picked.has(n)).map(([, t]) => t)
+  const dropChosen = async () => {
+    if (chosen.length === 0) return
+    const list = chosen.length <= 8 ? chosen.map((t) => qualifiedName(t.schema, t.name)).join(', ') : `${chosen.length} tables`
+    if (!confirm(`Drop ${list}? This cannot be undone.`)) return
+    await dropObjects(chosen)
+    stopPicking()
+  }
   const searching = search.trim() !== ''
   const shown = matching(tables, search)
   const shownDemo = matching(demoTables, search)
@@ -128,9 +162,39 @@ export function Sidebar() {
             <Network size={12} /> Show as model ↗
           </button>
         )}
-        <DatabaseMenu push={!tables.some((t) => t.kind === 'table')} />
+        {all.length > 0 && (
+          <button
+            className={`p-0.5 rounded hover:bg-[var(--panel-2)] ${tables.some((t) => t.kind === 'table') ? '' : 'ml-auto'}`}
+            style={pickOn ? { color: 'var(--accent)' } : undefined}
+            onClick={() => (pickOn ? stopPicking() : picking.start())}
+            aria-label="Select tables to drop"
+            aria-pressed={pickOn}
+            title="Tick several tables, then drop them in one go"
+          >
+            <CheckSquare size={14} />
+          </button>
+        )}
+        <DatabaseMenu push={!tables.some((t) => t.kind === 'table') && all.length === 0} />
       </div>
+      {pickOn && (
+        <div className="px-3 py-1.5 flex items-center gap-2 flex-wrap shrink-0" style={{ background: 'var(--accent-soft)', borderBottom: '1px solid var(--line)', fontSize: 12 }}>
+          <span className="font-semibold">{chosen.length} selected</span>
+          <button className="hover:underline" style={{ color: 'var(--accent)' }} onClick={() => setPicked(new Set(pickable.map(([n]) => n)))}>
+            All
+          </button>
+          <button className="hover:underline" style={{ color: 'var(--accent)' }} onClick={() => setPicked(new Set())}>
+            None
+          </button>
+          <button className="btn ml-auto" style={{ padding: '2px 8px', color: chosen.length ? 'var(--danger)' : undefined }} disabled={chosen.length === 0} onClick={() => void dropChosen()}>
+            Drop…
+          </button>
+          <button className="btn btn-ghost" style={{ padding: '2px 6px' }} onClick={stopPicking} aria-label="Cancel selecting">
+            <X size={13} />
+          </button>
+        </div>
+      )}
       <TreeSearchText.Provider value={search}>
+      <PickTables.Provider value={picking}>
       <div className="flex-1 overflow-auto pb-3">
         {tables.length === 0 && !hasDemo && engine.status === 'ready' && (
           <p className="px-3 py-2" style={{ color: 'var(--muted)' }}>
@@ -176,6 +240,7 @@ export function Sidebar() {
         ))}
         <PostgresSection search={search} />
       </div>
+      </PickTables.Provider>
       </TreeSearchText.Provider>
       <div style={{ borderTop: "1px solid var(--line)" }}><AuthorLinks className="px-3 py-2" /></div>
     </aside>
@@ -361,6 +426,7 @@ function TableNode({ t, match }: { t: TableInfo; match?: TreeMatch }) {
   const open = userOpen || byColumn
   const [menu, setMenu] = useState(false)
   const insertable = useContext(InsertMode)
+  const pick = useContext(PickTables)
   const [dropHere, setDropHere] = useState(0)
   const name = qualifiedName(t.schema, t.name)
   const fillable = (isOwnSchema(t.schema, RESERVED_IDS) || t.schema === DEMO_SCHEMA) && t.kind === 'table'
@@ -385,11 +451,12 @@ function TableNode({ t, match }: { t: TableInfo; match?: TreeMatch }) {
         onDrop={() => setDropHere(0)}
         onDoubleClick={() => openAndRun(`SELECT * FROM ${name} LIMIT 100;`, t.name)}
       >
+        {pick.on && <input type="checkbox" className="shrink-0" checked={pick.picked.has(name)} onChange={() => pick.toggle(name)} aria-label={`Select ${name}`} />}
         <button className="p-0.5" onClick={() => setOpen(!open)} aria-label={open ? 'Collapse' : 'Expand'}>
           {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         </button>
         <Icon size={14} style={{ color: 'var(--accent)' }} className="shrink-0" />
-        <button className="truncate text-left flex-1" onClick={() => setOpen(!open)} title={`${name} — double-click to see the first 100 rows${fillable ? '; drop a file here to add rows' : ''}`}>
+        <button className="truncate text-left flex-1" onClick={() => (pick.on ? pick.toggle(name) : setOpen(!open))} title={`${name} — double-click to see the first 100 rows${fillable ? '; drop a file here to add rows' : ''}`}>
           <Highlight text={t.name} match={match?.byName ? match : undefined} />
         </button>
         {insertable && (
@@ -413,7 +480,7 @@ function TableNode({ t, match }: { t: TableInfo; match?: TreeMatch }) {
           <button className="p-1 rounded opacity-0 group-hover:opacity-100 focus:opacity-100" style={menu ? { opacity: 1 } : undefined} onClick={() => setMenu(!menu)} aria-label={`Actions for ${t.name}`}>
             <MoreHorizontal size={14} />
           </button>
-          {menu && <TableMenu t={t} name={name} close={() => setMenu(false)} />}
+          {menu && <TableMenu t={t} name={name} close={() => setMenu(false)} pick={pick.start} />}
         </div>
       </div>
       {open && (
@@ -432,7 +499,7 @@ function TableNode({ t, match }: { t: TableInfo; match?: TreeMatch }) {
   )
 }
 
-function TableMenu({ t, name, close }: { t: TableInfo; name: string; close: () => void }) {
+function TableMenu({ t, name, close, pick }: { t: TableInfo; name: string; close: () => void; pick: (name: string) => void }) {
   const cols = t.columns.map((c) => c.name).join(', ')
   const fillable = (isOwnSchema(t.schema, RESERVED_IDS) || t.schema === DEMO_SCHEMA) && t.kind === 'table'
   const items: MenuItem[] = [
@@ -462,10 +529,11 @@ LIMIT 100;`, t.name)],
         if (to && to !== t.name) void renameObject(t, to)
       },
     ],
+    ['Select several to drop…', () => pick(name)],
     [
       t.kind === 'view' ? 'Drop view…' : 'Drop table…',
       () => {
-        if (confirm(`Drop ${t.kind} ${name}? This cannot be undone.`)) void dropObject(t)
+        if (confirm(`Drop ${t.kind} ${name}? This cannot be undone.`)) void dropObjects([t])
       },
     ],
   ]
