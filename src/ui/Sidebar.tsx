@@ -59,7 +59,7 @@ export function pickFilesFor(table?: string, schema = 'main') {
 export const InsertMode = createContext(false)
 
 /** Picking several tables to drop at once: `on` shows a checkbox on every table, `picked` holds their qualified names. */
-type Picking = { on: boolean; picked: Set<string>; toggle: (name: string) => void; start: (name?: string) => void }
+type Picking = { on: boolean; picked: Set<string>; toggle: (name: string, e?: { shiftKey: boolean; currentTarget: Element }) => void; start: (name?: string) => void }
 const PickTables = createContext<Picking>({ on: false, picked: new Set(), toggle: () => {}, start: () => {} })
 
 export function Sidebar() {
@@ -76,18 +76,32 @@ export function Sidebar() {
   const empty = tables.filter((t) => t.kind === 'table' && t.rows === 0)
   const backup = useLab((s) => s.backup)
   const [search, setSearch] = useState('')
+  const anchor = useRef<string | null>(null)
   const [pickOn, setPickOn] = useState(false)
   const [picked, setPicked] = useState<Set<string>>(new Set())
   const picking: Picking = {
     on: pickOn,
     picked,
-    toggle: (name) =>
+    // Shift extends from the last one ticked to this one, in the order they are on screen; Ctrl just toggles.
+    toggle: (name, e) => {
+      const from = anchor.current
+      anchor.current = name
+      if (e?.shiftKey && from && from !== name) {
+        const order = [...(e.currentTarget.closest('aside')?.querySelectorAll<HTMLElement>('[data-pick]') ?? [])].map((i) => i.dataset.pick!)
+        const [a, b] = [order.indexOf(from), order.indexOf(name)]
+        if (a >= 0 && b >= 0) {
+          setPicked((p) => new Set([...p, ...order.slice(Math.min(a, b), Math.max(a, b) + 1)]))
+          return
+        }
+      }
       setPicked((p) => {
         const n = new Set(p)
         if (!n.delete(name)) n.add(name)
         return n
-      }),
+      })
+    },
     start: (name) => {
+      anchor.current = name ?? null
       setPickOn(true)
       setPicked(new Set(name ? [name] : []))
     },
@@ -166,7 +180,7 @@ export function Sidebar() {
             onClick={() => (pickOn ? stopPicking() : picking.start())}
             aria-label="Select tables to drop"
             aria-pressed={pickOn}
-            title="Tick several tables, then drop them in one go"
+            title="Tick several tables, then drop them in one go (Ctrl+click a name does the same; Shift+click ticks a range)"
           >
             <CheckSquare size={14} />
           </button>
@@ -448,12 +462,17 @@ function TableNode({ t, match }: { t: TableInfo; match?: TreeMatch }) {
         onDrop={() => setDropHere(0)}
         onDoubleClick={() => openAndRun(`SELECT * FROM ${name} LIMIT 100;`, t.name)}
       >
-        {pick.on && <input type="checkbox" className="shrink-0" checked={pick.picked.has(name)} onChange={() => pick.toggle(name)} aria-label={`Select ${name}`} />}
+        {pick.on && <input type="checkbox" className="shrink-0" data-pick={name} checked={pick.picked.has(name)} onChange={() => {}} onClick={(e) => pick.toggle(name, e)} aria-label={`Select ${name}`} />}
         <button className="p-0.5" onClick={() => setOpen(!open)} aria-label={open ? 'Collapse' : 'Expand'}>
           {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         </button>
         <Icon size={14} style={{ color: 'var(--accent)' }} className="shrink-0" />
-        <button className="truncate text-left flex-1" onClick={() => (pick.on ? pick.toggle(name) : setOpen(!open))} title={`${name} — double-click to see the first 100 rows${fillable ? '; drop a file here to add rows' : ''}`}>
+        <button className="truncate text-left flex-1" onClick={(e) => {
+          // Ctrl / Shift + click on a name starts picking, like in a file list.
+          if (!pick.on && (e.ctrlKey || e.metaKey || e.shiftKey)) pick.start(name)
+          else if (pick.on) pick.toggle(name, e)
+          else setOpen(!open)
+        }} title={`${name} — double-click to see the first 100 rows${fillable ? '; drop a file here to add rows' : ''}`}>
           <Highlight text={t.name} match={match?.byName ? match : undefined} />
         </button>
         {insertable && (
