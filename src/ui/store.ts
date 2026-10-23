@@ -1051,6 +1051,25 @@ export async function showDemo() {
   set({ demoHidden: false })
 }
 
+/** Tables that point at `list` with a foreign key (and the ones pointing at those): DuckDB will not drop `list` while they exist. */
+export async function dependentsOf(list: TableInfo[]): Promise<TableInfo[]> {
+  const res = await query(`SELECT schema_name AS schema, table_name AS "table", referenced_table AS "refTable" FROM duckdb_constraints() WHERE database_name = current_database() AND constraint_type = 'FOREIGN KEY'`)
+  const fks = res.toArray().map((r) => ({ schema: String(r.schema), table: String(r.table), ref: String(r.refTable) }))
+  const all = get().tables
+  const found = [...list]
+  for (let grew = true; grew; ) {
+    grew = false
+    for (const fk of fks) {
+      const child = all.find((t) => t.schema === fk.schema && t.name === fk.table)
+      if (child && !found.includes(child) && found.some((t) => t.schema === fk.schema && t.name === fk.ref)) {
+        found.push(child)
+        grew = true
+      }
+    }
+  }
+  return found.slice(list.length)
+}
+
 export async function dropObject(t: TableInfo) {
   await dropObjects([t])
 }

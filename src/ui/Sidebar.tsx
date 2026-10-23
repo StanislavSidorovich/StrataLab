@@ -5,7 +5,7 @@
 import { insertAtCursor } from './SqlEditor'
 import { createContext, useContext, useRef, useState } from 'react'
 import { CheckSquare, CornerDownLeft, ChevronDown, ChevronRight, ClipboardPaste, Database, DatabaseZap, Eye, Folder, FolderPlus, Library, Loader2, MoreHorizontal, Network, RefreshCw, Search, Sparkles, Store, Table2, Upload, X } from 'lucide-react'
-import { RESERVED_IDS, addTab, copySchemaToPostgres, newPythonNotebookOn, downloadBackup, dropPgObject, dropDataset, dropObjects, enqueueFiles, hasDemoTables, hideDemo, loadDemo, newDataset, openAndRun, openAsModel, openCatalog, openDataset, openGenerate, openGuide, openMove, openPractice, openTables, ownTables, pasteTableFromClipboard, refreshTree, renameDataset, renameObject, restoreBackup, useLab } from './store'
+import { RESERVED_IDS, addTab, copySchemaToPostgres, newPythonNotebookOn, downloadBackup, dropPgObject, dependentsOf, dropDataset, dropObjects, enqueueFiles, hasDemoTables, hideDemo, loadDemo, newDataset, openAndRun, openAsModel, openCatalog, openDataset, openGenerate, openGuide, openMove, openPractice, openTables, ownTables, pasteTableFromClipboard, refreshTree, renameDataset, renameObject, restoreBackup, useLab } from './store'
 import { isOwnSchema } from '../core/ownDatasets'
 import { qualifiedName } from '../core/sql'
 import { treeMatch, type TreeMatch } from '../core/tree'
@@ -101,10 +101,7 @@ export function Sidebar() {
   const chosen = pickable.filter(([n]) => picked.has(n)).map(([, t]) => t)
   const dropChosen = async () => {
     if (chosen.length === 0) return
-    const list = chosen.length <= 8 ? chosen.map((t) => qualifiedName(t.schema, t.name)).join(', ') : `${chosen.length} tables`
-    if (!confirm(`Drop ${list}? This cannot be undone.`)) return
-    await dropObjects(chosen)
-    stopPicking()
+    if (await confirmDrop(chosen)) stopPicking()
   }
   const searching = search.trim() !== ''
   const shown = matching(tables, search)
@@ -532,12 +529,24 @@ LIMIT 100;`, t.name)],
     ['Select several to drop…', () => pick(name)],
     [
       t.kind === 'view' ? 'Drop view…' : 'Drop table…',
-      () => {
-        if (confirm(`Drop ${t.kind} ${name}? This cannot be undone.`)) void dropObjects([t])
-      },
+      () => void confirmDrop([t]),
     ],
   ]
   return <Menu items={items} close={close} danger />
+}
+
+/**
+ * Asks before dropping `list`, naming the tables that point at them with a foreign key: DuckDB
+ * refuses to drop a table while those exist, so they go too. True when it was dropped.
+ */
+async function confirmDrop(list: TableInfo[]): Promise<boolean> {
+  const names = (l: TableInfo[]) => (l.length <= 8 ? l.map((t) => qualifiedName(t.schema, t.name)).join(', ') : `${l.length} tables`)
+  const extra = await dependentsOf(list).catch(() => [])
+  const what = list.length === 1 ? `${list[0].kind} ${names(list)}` : names(list)
+  const note = extra.length ? ` ${extra.length === 1 ? 'It is' : 'They are'} referenced by ${names(extra)} (foreign keys), so ${extra.length === 1 ? 'that table goes' : 'those go'} too.` : ''
+  if (!confirm(`Drop ${what}?${note} This cannot be undone.`)) return false
+  await dropObjects([...list, ...extra])
+  return true
 }
 
 /** The PostgreSQL database (stage 4), once it has been started: its tables, by schema. */
