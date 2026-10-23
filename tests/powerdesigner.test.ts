@@ -7,6 +7,7 @@ import { resolve } from 'node:path'
 import { loadPyodide, type PyodideInterface } from 'pyodide'
 import { SQLGLOT_VERSION, type TranslatedStatement } from '../src/dialects/tsql'
 import { foldKeys, runOrder } from '../src/core/pdScript'
+import { qualifyDrops } from '../src/core/scriptDataset'
 
 const require = createRequire(import.meta.url)
 const SCRIPT = readFileSync('tests/fixtures/powerdesigner-sqlserver.sql', 'utf8').replace(/\r\n/g, '\n')
@@ -75,6 +76,18 @@ describe('PowerDesigner SQL Server script', () => {
     expect(at(/CREATE TABLE CUSTOMER/)).toBeLessThan(at(/CREATE TABLE ORDERS/))
     expect(at(/CREATE TABLE ORDERS/)).toBeLessThan(at(/CREATE TABLE ORDER_LINE/))
     expect(at(/CREATE TABLE ORDER_LINE/)).toBeLessThan(at(/CREATE INDEX PLACES_FK/))
+  })
+
+
+  it('runs into a dataset: the tables land in its schema and the search path comes back', () => {
+    duck.query('CREATE SCHEMA ds')
+    duck.query('CREATE SCHEMA demo')
+    duck.query("SET search_path = 'ds'")
+    runOrder(translate(SCRIPT)).forEach((s) => duck.query(qualifyDrops(s, 'ds')))
+    duck.query("SET search_path = 'main,demo'")
+    expect(rows("SELECT schema_name, count(*)::int AS n FROM duckdb_tables() WHERE schema_name IN ('main', 'ds') GROUP BY 1 ORDER BY 1")).toEqual([{ schema_name: 'ds', n: 4 }, { schema_name: 'main', n: 4 }])
+    // the foreign keys are inside the dataset and still block
+    expect(() => duck.query("INSERT INTO ds.ORDERS (IDCUSTOMER, ORDER_DATE, STATUS) VALUES (999, '2026-01-02', 'Open')")).toThrow(/foreign key|Constraint/i)
   })
 
   it('leaves an ordinary script alone', () => {

@@ -6,6 +6,7 @@ import { downloadNotebook, forgetFile, openSqlFile, openSqlFiles, saveSqlFile } 
 import { looksLikeTable, opensAsTab } from '../core/editorFiles'
 import { Results } from './Results'
 import { MoveDialog } from './MoveDialog'
+import { ScriptDatasetDialog } from './ScriptDatasetDialog'
 import { SaveKindDialog } from './SaveKindDialog'
 import { ImportDialog } from './ImportDialog'
 import { DdlDialog } from './DdlDialog'
@@ -148,6 +149,7 @@ export function App() {
       )}
       <ImportDialog />
       <MoveDialog />
+      <ScriptDatasetDialog />
       <SaveKindDialog />
       <DdlDialog />
       <GenerateDialog />

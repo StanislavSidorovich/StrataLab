@@ -291,10 +291,19 @@ function SchemaNode({ schema, tables, shown }: { schema: string; tables: TableIn
       <div
         className="group flex items-center gap-1 pl-2 pr-1 py-1 hover:bg-[var(--panel-2)]"
         data-fill-schema={own ? schema : undefined}
+        onDragOver={(e) => own && e.dataTransfer.types.includes(TABLE_DRAG) && e.preventDefault()}
         style={dropHere > 0 && own ? { background: 'var(--accent-soft)', outline: '2px dashed var(--accent)', outlineOffset: -2 } : undefined}
         onDragEnter={() => setDropHere((n) => n + 1)}
         onDragLeave={() => setDropHere((n) => Math.max(0, n - 1))}
-        onDrop={() => setDropHere(0)}
+        onDrop={(e) => {
+          setDropHere(0)
+          const dragged = own ? e.dataTransfer.getData(TABLE_DRAG) : ''
+          if (!dragged) return
+          e.preventDefault()
+          const from: { schema: string; name: string } = JSON.parse(dragged)
+          const t = useLab.getState().tables.find((x) => x.schema === from.schema && x.name === from.name)
+          if (t && t.schema !== schema) void openMove(t, schema)
+        }}
       >
         <button className="p-0.5" onClick={() => setOpen(!open)} aria-label={open ? 'Collapse' : 'Expand'}>
           {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
@@ -342,6 +351,9 @@ function SchemaNode({ schema, tables, shown }: { schema: string; tables: TableIn
   )
 }
 
+/** What a dragged table carries: its schema and name. */
+const TABLE_DRAG = 'application/x-lab-table'
+
 /** `match`: while searching, how the table matched; one found by its columns opens on them. */
 function TableNode({ t, match }: { t: TableInfo; match?: TreeMatch }) {
   const [userOpen, setOpen] = useState(false)
@@ -361,6 +373,12 @@ function TableNode({ t, match }: { t: TableInfo; match?: TreeMatch }) {
         className="group flex items-center gap-1 pl-2 pr-1 py-1 hover:bg-[var(--panel-2)]"
         data-fill-table={fillable ? t.name : undefined}
         data-fill-schema={fillable ? t.schema : undefined}
+        // A table can be dragged onto one of the user's datasets (Move to dataset opens with it chosen).
+        draggable={fillable && t.schema !== DEMO_SCHEMA}
+        onDragStart={(e) => {
+          e.dataTransfer.setData(TABLE_DRAG, JSON.stringify({ schema: t.schema, name: t.name }))
+          e.dataTransfer.effectAllowed = 'move'
+        }}
         style={dropHere > 0 && fillable ? { background: 'var(--accent-soft)', outline: '2px dashed var(--accent)', outlineOffset: -2 } : undefined}
         onDragEnter={() => setDropHere((n) => n + 1)}
         onDragLeave={() => setDropHere((n) => Math.max(0, n - 1))}

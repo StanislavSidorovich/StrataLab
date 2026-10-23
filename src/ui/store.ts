@@ -9,7 +9,7 @@ import { closeSource, createTable, openSource, type ImportSource } from '../db/i
 import { dialectHints, sqlNameHint, type DialectHint } from '../core/dialect'
 import { qualifiedName, quoteIdent, sqlName, uniqueName } from '../core/sql'
 import { looksLikeTable } from '../core/editorFiles'
-import { DEMO_SCHEMA, DEMO_SQL, DEMO_TABLES, WELCOME_SQL } from '../data/demo'
+import { DEMO_SCHEMA, DEMO_SQL, DEMO_TABLES, SEARCH_PATH_SQL, WELCOME_SQL } from '../data/demo'
 import { prepareDemoSchema } from '../db/demo'
 import { ddlDataFromHash, decodeDdl, hashWithoutDdl } from '../core/ddlLink'
 import { planDdl, starterSql, type DdlNote, type DdlPlan } from '../core/ddlPlan'
@@ -21,6 +21,7 @@ import { splitCells } from '../core/pyCells'
 import type { Walkthrough } from '../data/walkthroughs'
 import { createSchema, listSchemas, moveTables, renameSchema } from '../db/ownDatasets'
 import { catalogSchemaState, datasetName, isOwnSchema, linkedTables } from '../core/ownDatasets'
+import { DATASET_AT, choiceKey, qualifyDrops, suggestDatasetName, tablesCreated } from '../core/scriptDataset'
 import { schemaForModel, showAsModel } from '../db/modelExport'
 import { planGeneration, type GenPlan, type GenTable } from '../core/generate'
 import { runGeneration, type GenOutcome } from '../db/generate'
@@ -124,6 +125,13 @@ export type GenerateState =
   | { phase: 'running'; plan: GenPlan; step: number }
   | { phase: 'report'; outcomes: GenOutcome[]; problems: GenPlan['problems'] }
 
+/** A script about to make many tables: the dialog asking whether they go into a dataset. */
+export interface ScriptDatasetAsk {
+  tables: string[]
+  name: string
+  problem: string | null
+}
+
 /** “Move to dataset”: the tables that go (the one chosen and the ones linked to it by keys). */
 export interface MoveState {
   schema: string
@@ -131,6 +139,8 @@ export interface MoveState {
   tables: string[]
   busy: boolean
   error: string | null
+  /** the dataset a drag ended on: the dialog opens with it chosen */
+  to?: string
 }
 
 /** A catalog dataset being loaded (or what went wrong). */
@@ -149,6 +159,7 @@ interface State {
   /** every schema but main, empty ones too: the catalog datasets and the user's own */
   schemas: string[]
   move: MoveState | null
+  scriptDataset: ScriptDatasetAsk | null
   tabs: QueryTab[]
   activeTab: string
   results: Record<string, TabResult>
@@ -290,6 +301,7 @@ export const useLab = create<State>(() => ({
   tables: [],
   schemas: [],
   move: null,
+  scriptDataset: null,
   ...loadTabs(),
   results: {},
   log: [],
@@ -485,6 +497,7 @@ export async function runSql(tabId: string, sql: string, limit?: number) {
   const dialect = tabDialect(get().tabs.find((t) => t.id === tabId))
   if (dialect === 'python') return runPython(tabId, [{ code: sql, line: 1, index: -1 }])
   stopped.delete(tabId)
+  const before = get().results[tabId]
   set((s) => ({ results: { ...s.results, [tabId]: { ...s.results[tabId], status: 'running' } } }))
   if (dialect === 'postgres') return runOnPostgres(tabId, sql, limit)
   let toRun = sql
@@ -504,9 +517,32 @@ export async function runSql(tabId: string, sql: string, limit?: number) {
     // tabs), and Stop can end any of them.
     statements = runOrder(translated)
   }
+  // Many new tables: into a dataset of their own rather than My tables (asked once per script and tab).
+  const made = tablesCreated(toRun)
+  let into: string | null = null
+  if (made.length >= DATASET_AT) {
+    const answer = await chooseDataset(tabId, made)
+    if (answer === 'cancel') {
+      set((s) => {
+        const results = { ...s.results }
+        if (before) results[tabId] = before
+        else delete results[tabId]
+        return { results }
+      })
+      return
+    }
+    into = answer
+    if (into) statements = statements.map((st) => qualifyDrops(st, into!))
+  }
   const t0 = performance.now()
   const isStopped = () => stopped.has(tabId)
   try {
+    if (into) {
+      if (!get().schemas.includes(into)) await createSchema(into)
+      // Tables made without a schema go to the first of the path (DuckDB keeps main on it too, which is why
+      // the script's DROPs are given the dataset's name above).
+      await query(`SET search_path = '${into}'`)
+    }
     let { table, more } = await queryLimited(statements[0], tabId, isStopped, limit)
     for (const st of statements.slice(1)) {
       const next = await queryLimited(st, tabId, isStopped, limit)
@@ -514,7 +550,7 @@ export async function runSql(tabId: string, sql: string, limit?: number) {
     }
     const ms = performance.now() - t0
     set((s) => ({ results: { ...s.results, [tabId]: { status: 'done', table, ms, sql, limit, more } } }))
-    logRun(tabId, { sql, ok: true, text: `${rowsText(table.numRows, more)} · ${ms.toFixed(0)} ms${dialect === 'tsql' ? ' · T-SQL translated to DuckDB' : ''}` })
+    logRun(tabId, { sql, ok: true, text: `${rowsText(table.numRows, more)} · ${ms.toFixed(0)} ms${dialect === 'tsql' ? ' · T-SQL translated to DuckDB' : ''}${into ? ` · ${made.length} tables in the dataset ${into}` : ''}` })
     // Always: the saved database must hold every change (src/db/engine.ts empties the WAL on
     // start), and a CHECKPOINT with nothing to write costs next to nothing.
     await checkpoint()
@@ -536,7 +572,56 @@ ${nameHint}` : raw
     // In a T-SQL tab the hints are what the translation is for; they'd only repeat it.
     set((s) => ({ results: { ...s.results, [tabId]: { status: 'error', error, hints: dialect === 'tsql' ? [] : dialectHints(sql), ms: performance.now() - t0 } } }))
     logRun(tabId, { sql, ok: false, text: raw.split('\n')[0] })
+  } finally {
+    if (into) {
+      try {
+        await query(SEARCH_PATH_SQL)
+      } catch {
+        /* the next run sets it again */
+      }
+      await refreshCatalog()
+    }
   }
+}
+
+/** The answers given for a script in a tab: a dataset's name, or null for My tables. */
+const datasetChoices = new Map<string, string | null>()
+let answerDataset: ((a: string | null | 'cancel') => void) | null = null
+
+/** The dataset a script's tables go into (null: My tables), asking the first time; 'cancel' when the user backed out. */
+async function chooseDataset(tabId: string, tables: string[]): Promise<string | null | 'cancel'> {
+  const key = choiceKey(tabId, tables)
+  if (datasetChoices.has(key)) {
+    const chosen = datasetChoices.get(key)!
+    // A dataset that was removed since is asked about again.
+    if (chosen === null || get().schemas.includes(chosen)) return chosen
+  }
+  const title = get().tabs.find((t) => t.id === tabId)?.title ?? ''
+  set({ scriptDataset: { tables, name: suggestDatasetName(title, get().schemas, RESERVED_IDS), problem: null } })
+  const answer = await new Promise<string | null | 'cancel'>((resolve) => {
+    answerDataset = resolve
+  })
+  if (answer !== 'cancel') datasetChoices.set(key, answer)
+  return answer
+}
+
+/** The dialog's buttons: a dataset name (made when it is new), My tables, or cancel. */
+export function answerScriptDataset(choice: { dataset: string } | 'main' | 'cancel') {
+  if (!answerDataset) return set({ scriptDataset: null })
+  if (typeof choice === 'object') {
+    const raw = choice.dataset
+    const own = ownDatasets(get().schemas).find((n) => n.toLowerCase() === raw.trim().toLowerCase())
+    const r = own ? { name: own } : datasetName(raw, get().schemas, RESERVED_IDS)
+    if ('problem' in r) return set((s) => ({ scriptDataset: s.scriptDataset && { ...s.scriptDataset, name: raw, problem: r.problem } }))
+    resolveDataset(r.name)
+  } else resolveDataset(choice === 'main' ? null : 'cancel')
+}
+
+function resolveDataset(a: string | null | 'cancel') {
+  const done = answerDataset
+  answerDataset = null
+  set({ scriptDataset: null })
+  done?.(a)
 }
 
 export const STOPPED = 'Stopped: the query was cancelled before it finished.'
@@ -1287,10 +1372,10 @@ export async function newDataset(ask: (text: string, value: string) => string | 
 }
 
 /** Opens “Move to dataset” for a table: it goes with every table linked to it by keys. */
-export async function openMove(t: TableInfo) {
+export async function openMove(t: TableInfo, to?: string) {
   const tables = await schemaForModel(t.schema)
   const linked = t.kind === 'table' ? linkedTables(tables, t.name) : [t.name]
-  set({ move: { schema: t.schema, table: t.name, tables: linked.length ? linked : [t.name], busy: false, error: null } })
+  set({ move: { schema: t.schema, table: t.name, tables: linked.length ? linked : [t.name], busy: false, error: null, to } })
 }
 
 export function closeMove() {

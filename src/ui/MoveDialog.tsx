@@ -12,7 +12,7 @@ export function MoveDialog() {
   const targets = ['main', ...ownDatasets(schemas)].filter((s) => s !== move?.schema)
   const [to, setTo] = useState<string>('')
   if (!move) return null
-  const chosen = targets.includes(to) ? to : (targets[0] ?? NEW)
+  const chosen = targets.includes(to) ? to : move.to && targets.includes(move.to) ? move.to : (targets[0] ?? NEW)
   const others = move.tables.filter((t) => t !== move.table)
 
   const go = async () => {
