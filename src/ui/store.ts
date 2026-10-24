@@ -32,7 +32,7 @@ import { copyTitle, dialectSwitch, rememberClosed } from '../core/tabs'
 import { pythonStarter, pythonTableStarter } from '../core/pyStarter'
 import { backupFileName } from '../core/backup'
 import { backupDatabase, restoreDatabase } from '../db/backup'
-import { download, resultRows } from '../db/export'
+import { download, exportTablesCsv, pickFolder, resultRows } from '../db/export'
 import { compareResults, type Verdict } from '../core/check'
 import { hashWithoutTask, taskById, taskFromHash, taskStarter, type PracticeExample, type PracticeTask } from '../data/practice'
 import { decodeShare, hashWithoutShare, shareDataFromHash } from '../core/shareLink'
@@ -193,6 +193,8 @@ interface State {
   closedTabs: QueryTab[]
   /** a database backup or restore in progress */
   backup: 'saving' | 'restoring' | null
+  /** “Export all tables as CSV” in progress: the dataset, the table being written, how many are done */
+  csvExport: { schema: string; table: string; done: number; total: number } | null
   /** the Share dialog is open */
   shareOpen: boolean
   /** the table tree as a sheet (a phone has no sidebar) */
@@ -323,6 +325,7 @@ export const useLab = create<State>(() => ({
   pgCopy: null,
   closedTabs: [],
   backup: null,
+  csvExport: null,
   shareOpen: false,
   tablesOpen: false,
   aboutOpen: false,
@@ -1601,6 +1604,42 @@ export async function downloadBackup() {
     set({ importError: `Could not make the backup: ${String(e instanceof Error ? e.message : e)}` })
   } finally {
     set({ backup: null })
+  }
+}
+
+/**
+ * Export all tables as CSV: every table and view of a dataset, one CSV each, into a folder the
+ * user picks (`toFolder`, Chrome and Edge; called from the click, as the picker needs it) or one
+ * .zip. A folder the browser won't let us write to falls back to the .zip.
+ */
+export async function exportDatasetCsv(schema: string, toFolder: boolean) {
+  if (get().csvExport) return
+  const tables = get().tables.filter((t) => t.schema === schema)
+  if (!tables.length) return
+  const label = datasetById(schema)?.title ?? schema
+  let folder: Awaited<ReturnType<typeof pickFolder>> = null
+  if (toFolder)
+    try {
+      folder = await pickFolder()
+      if (!folder) return
+    } catch (e) {
+      addLog({ sql: `-- export ${label} as CSV`, ok: false, text: `The browser did not let Lab write to that folder (${String(e instanceof Error ? e.message : e)}); downloading a .zip instead.` })
+    }
+  set({ csvExport: { schema, table: tables[0].name, done: 0, total: tables.length } })
+  try {
+    const text = await exportTablesCsv(
+      tables.map((t) => ({ sqlName: qualifiedName(t.schema, t.name), name: t.name })),
+      schema,
+      folder,
+      (table, done) => set({ csvExport: { schema, table, done, total: tables.length } }),
+    )
+    addLog({ sql: `-- export ${label} as CSV`, ok: true, text })
+  } catch (e) {
+    const error = String(e instanceof Error ? e.message : e)
+    addLog({ sql: `-- export ${label} as CSV`, ok: false, text: error })
+    set({ importError: `Could not export ${label}: ${error}` })
+  } finally {
+    set({ csvExport: null })
   }
 }
 

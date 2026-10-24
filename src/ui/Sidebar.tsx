@@ -5,13 +5,13 @@
 import { insertAtCursor } from './SqlEditor'
 import { createContext, useContext, useRef, useState } from 'react'
 import { CheckSquare, CornerDownLeft, ChevronDown, ChevronRight, ClipboardPaste, Database, DatabaseZap, Eye, Folder, FolderPlus, Library, Loader2, MoreHorizontal, Network, RefreshCw, Search, Sparkles, Store, Table2, Upload, X } from 'lucide-react'
-import { RESERVED_IDS, addTab, copySchemaToPostgres, newPythonNotebookOn, downloadBackup, dropPgObject, dependentsOf, dropDataset, dropObjects, enqueueFiles, hasDemoTables, hideDemo, loadDemo, newDataset, openAndRun, openAsModel, openCatalog, openDataset, openGenerate, openGuide, openMove, openPractice, openTables, ownTables, pasteTableFromClipboard, refreshTree, renameDataset, renameObject, restoreBackup, useLab } from './store'
+import { RESERVED_IDS, addTab, copySchemaToPostgres, newPythonNotebookOn, downloadBackup, dropPgObject, dependentsOf, exportDatasetCsv, dropDataset, dropObjects, enqueueFiles, hasDemoTables, hideDemo, loadDemo, newDataset, openAndRun, openAsModel, openCatalog, openDataset, openGenerate, openGuide, openMove, openPractice, openTables, ownTables, pasteTableFromClipboard, refreshTree, renameDataset, renameObject, restoreBackup, useLab } from './store'
 import { isOwnSchema } from '../core/ownDatasets'
 import { qualifiedName } from '../core/sql'
 import { treeMatch, type TreeMatch } from '../core/tree'
 import { isDatabaseFile } from '../core/backup'
 import { Menu, type MenuItem } from './Menu'
-import { exportTable } from '../db/export'
+import { canPickFolder, exportTable } from '../db/export'
 import type { TableInfo } from '../db/catalog'
 import { DEMO_SCHEMA, WELCOME_SQL } from '../data/demo'
 import { labName } from '../core/pyStarter'
@@ -337,6 +337,8 @@ function SchemaNode({ schema, tables, shown }: { schema: string; tables: TableIn
   const d = own ? undefined : datasetById(schema)
   const hasTables = tables.some((t) => t.kind === 'table')
   const empty = tables.filter((t) => t.kind === 'table' && t.rows === 0)
+  const exporting = useLab((s) => s.csvExport)
+  const exportingHere = exporting?.schema === schema ? exporting : null
   const items: MenuItem[] = [
     ...(d
       ? ([
@@ -354,7 +356,11 @@ function SchemaNode({ schema, tables, shown }: { schema: string; tables: TableIn
       ? ([
           ['Show as model in model.quaera.app ↗', () => openAsModel(schema)],
           ['Copy dataset to PostgreSQL', () => void copySchemaToPostgres(schema)],
-        ] as [string, () => void][])
+          ...(canPickFolder()
+            ? ([['Export all tables as CSV to a folder…', () => void exportDatasetCsv(schema, true), { disabled: !!exporting, hint: 'one .csv per table, for Power BI or Excel' }]] as MenuItem[])
+            : []),
+          ['Export all tables as CSV (.zip)', () => void exportDatasetCsv(schema, false), { disabled: !!exporting, hint: canPickFolder() ? undefined : 'one .csv per table, for Power BI or Excel' }],
+        ] as MenuItem[])
       : []),
     [
       'Remove from this browser…',
@@ -397,9 +403,15 @@ function SchemaNode({ schema, tables, shown }: { schema: string; tables: TableIn
             my
           </span>
         )}
-        <span className="shrink-0" style={{ color: 'var(--muted)', fontSize: 11 }}>
-          {shown ? `${shown.length}/${tables.length}` : tables.length}
-        </span>
+        {exportingHere ? (
+          <span className="shrink-0 flex items-center gap-1" style={{ color: 'var(--muted)', fontSize: 11 }} title={`Exporting ${exportingHere.table} as CSV`}>
+            <Loader2 size={11} className="animate-spin" /> CSV {exportingHere.done + 1}/{exportingHere.total}
+          </span>
+        ) : (
+          <span className="shrink-0" style={{ color: 'var(--muted)', fontSize: 11 }}>
+            {shown ? `${shown.length}/${tables.length}` : tables.length}
+          </span>
+        )}
         <div className="relative">
           <button className="p-1 rounded opacity-0 group-hover:opacity-100 focus:opacity-100" style={menu ? { opacity: 1 } : undefined} onClick={() => setMenu(!menu)} aria-label={`Actions for ${schema}`}>
             <MoreHorizontal size={14} />
