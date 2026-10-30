@@ -16,15 +16,28 @@ export interface CsvOptions {
   header: boolean
 }
 
-export function decodeText(bytes: Uint8Array): { text: string; encoding: Encoding } {
+/**
+ * `partial`: the bytes are only the start of a bigger file, so a character cut off at the end
+ * is not an error and the last (probably cut) line is left out.
+ */
+export function decodeText(bytes: Uint8Array, partial = false): { text: string; encoding: Encoding } {
   let start = 0
   if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) start = 3
   const body = start ? bytes.subarray(start) : bytes
+  let text: string
+  let encoding: Encoding
   try {
-    return { text: new TextDecoder('utf-8', { fatal: true }).decode(body), encoding: 'utf-8' }
+    text = new TextDecoder('utf-8', { fatal: true }).decode(body, { stream: partial })
+    encoding = 'utf-8'
   } catch {
-    return { text: new TextDecoder('windows-1251').decode(body), encoding: 'windows-1251' }
+    text = new TextDecoder('windows-1251').decode(body)
+    encoding = 'windows-1251'
   }
+  if (partial) {
+    const cut = text.lastIndexOf('\n')
+    if (cut > 0) text = text.slice(0, cut + 1)
+  }
+  return { text, encoding }
 }
 
 const DELIMITERS = [',', ';', '\t', '|']
@@ -127,8 +140,8 @@ export function detectDateFormats(rows: string[][]): { date: string | null; time
   return { date: base, timestamp: base + (dottedTime ?? ' %H:%M:%S') }
 }
 
-export function sniffCsv(bytes: Uint8Array): { text: string; options: CsvOptions } {
-  const { text, encoding } = decodeText(bytes)
+export function sniffCsv(bytes: Uint8Array, partial = false): { text: string; options: CsvOptions } {
+  const { text, encoding } = decodeText(bytes, partial)
   const lines = sampleLines(text)
   const delimiter = detectDelimiter(lines)
   const rows = lines.slice(1).map((l) => splitLine(l, delimiter))

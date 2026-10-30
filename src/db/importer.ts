@@ -5,7 +5,7 @@ import type { WorkBook } from 'xlsx'
 import { sniffCsv, type CsvOptions } from '../core/sniff'
 import { cleanHeader, findHeaderRow, toCsv } from '../core/csvWrite'
 import { quoteIdent, quoteString, tableNameFrom } from '../core/sql'
-import { checkpoint, dropFile, query, registerBuffer } from './engine'
+import { checkpoint, dropFile, query, registerBuffer, registerFile } from './engine'
 
 export type SourceKind = 'csv' | 'excel' | 'parquet' | 'json'
 
@@ -15,6 +15,8 @@ export interface ImportSource {
   kind: SourceKind
   /** name of the file inside DuckDB's virtual file system */
   regName: string
+  /** size of the file the user dropped, in bytes */
+  size: number
   tableName: string
   /** the schema the table goes into: main (My tables) or one of the user's datasets */
   schema: string
@@ -26,6 +28,11 @@ export interface ImportSource {
   /** an existing table of `schema` to add the rows to (stage 2b), instead of creating a new one */
   target?: string | null
 }
+
+/** How much of a CSV is read to guess its encoding, separator and dates. */
+const SNIFF_BYTES = 1 << 20
+/** Bigger files are re-encoded in Blob parts of about this size, so the browser can keep them on disk. */
+const PART_BYTES = 64 << 20
 
 let counter = 0
 const workbooks = new Map<string, WorkBook>()
@@ -45,16 +52,19 @@ export async function openSource(file: File): Promise<ImportSource> {
   const kind = kindOf(file.name)
   if (!kind) throw new Error(`${file.name}: Quaera Lab reads CSV, Excel, Parquet and JSON files`)
   const id = `src${++counter}`
-  const bytes = new Uint8Array(await file.arrayBuffer())
-  const base: ImportSource = { id, fileName: file.name, kind, regName: '', tableName: tableNameFrom(file.name), schema: 'main' }
+  const base: ImportSource = { id, fileName: file.name, kind, regName: '', size: file.size, tableName: tableNameFrom(file.name), schema: 'main' }
 
   if (kind === 'csv') {
-    const { text, options } = sniffCsv(bytes)
+    // Only the start of the file is decoded to guess the options; the file itself is never turned
+    // into one string (a browser hands back an empty one above ~512 MB, and the table came out empty).
+    const head = new Uint8Array(await file.slice(0, SNIFF_BYTES).arrayBuffer())
+    const { options } = sniffCsv(head, file.size > SNIFF_BYTES)
     const regName = `${id}.csv`
-    // DuckDB reads UTF-8 only: re-encode cp1251 files (and drop the BOM).
-    await registerBuffer(regName, new TextEncoder().encode(text))
+    // DuckDB reads UTF-8 only (and skips a BOM itself): cp1251 files are re-encoded as a stream.
+    await registerFile(regName, options.encoding === 'utf-8' ? file : await recode(file, regName))
     return { ...base, regName, csv: options }
   }
+  const bytes = new Uint8Array(await file.arrayBuffer())
   if (kind === 'excel') {
     const XLSX = await import('xlsx')
     const wb = XLSX.read(bytes, { type: 'array', cellDates: true, dense: true })
@@ -71,6 +81,28 @@ export async function openSource(file: File): Promise<ImportSource> {
   const regName = `${id}.${kind}`
   await registerBuffer(regName, bytes)
   return { ...base, regName }
+}
+
+/** A UTF-8 copy of a Windows-1251 file, built chunk by chunk. */
+async function recode(file: File, name: string): Promise<File> {
+  const parts: Blob[] = []
+  let chunks: Uint8Array[] = []
+  let size = 0
+  const flush = () => {
+    if (chunks.length) parts.push(new Blob(chunks as BlobPart[]))
+    chunks = []
+    size = 0
+  }
+  const reader = file.stream().pipeThrough(new TextDecoderStream('windows-1251')).pipeThrough(new TextEncoderStream()).getReader()
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    chunks.push(value)
+    size += value.length
+    if (size >= PART_BYTES) flush()
+  }
+  flush()
+  return new File(parts, name, { type: 'text/csv' })
 }
 
 /** (Re)writes the chosen sheet as CSV for DuckDB. */
@@ -114,7 +146,11 @@ export async function previewSource(src: ImportSource, limit = 50) {
     query(`SELECT * FROM ${expr} LIMIT ${limit}`),
     query(`SELECT count(*)::INTEGER AS n FROM ${expr}`),
   ])
-  return { rows, total: Number(count.get(0)?.n ?? 0) }
+  const total = Number(count.get(0)?.n ?? 0)
+  // An empty table from a big file would look like "the file has no data". Say what happened.
+  if (total === 0 && src.size > 1 << 20)
+    throw new Error(`Read 0 rows from ${src.fileName} (${(src.size / 1048576).toFixed(0)} MB). The file is too large for this browser to read, or it is not what its extension says. Try a smaller part of it.`)
+  return { rows, total }
 }
 
 export async function createTable(src: ImportSource, replace: boolean): Promise<void> {

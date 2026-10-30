@@ -321,6 +321,12 @@ export async function registerBuffer(name: string, bytes: Uint8Array): Promise<v
   await db.registerFileBuffer(name, bytes)
 }
 
+/** Registers a File without reading it into memory: DuckDB reads the slices it needs from the disk. */
+export async function registerFile(name: string, file: File): Promise<void> {
+  const { db } = await getEngine()
+  await db.registerFileHandle(name, file, duckdb.DuckDBDataProtocol.BROWSER_FILEREADER, true)
+}
+
 export async function dropFile(name: string): Promise<void> {
   const { db } = await getEngine()
   await db.dropFile(name)

@@ -27,6 +27,16 @@ describe('CSV sniffing', () => {
     expect(r.text).toBe('имя;сумма\nОльга;3,5\n')
   })
 
+  it('reads the start of a big file: a cut character is not an error, the cut line is dropped', () => {
+    const whole = new TextEncoder().encode('имя,город\nОльга,Лиссабон\nИван,Порту\n')
+    const head = whole.subarray(0, whole.length - 2) // cuts a two-byte character in the last line
+    expect(() => decodeText(head)).not.toThrow() // falls back to cp1251 without `partial`
+    expect(decodeText(head).encoding).toBe('windows-1251')
+    const r = decodeText(head, true)
+    expect(r.encoding).toBe('utf-8')
+    expect(r.text).toBe('имя,город\nОльга,Лиссабон\n')
+  })
+
   it('splits quoted fields', () => {
     expect(splitLine('1,"Silva, Ana","say ""hi"""', ',')).toEqual(['1', 'Silva, Ana', 'say "hi"'])
   })
