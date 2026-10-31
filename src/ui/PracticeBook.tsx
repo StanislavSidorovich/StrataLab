@@ -289,6 +289,24 @@ function Grid({ table }: { table: Table }) {
   )
 }
 
+/** A cell whose last line is one number or short text: its text, or null for a table, a chart or a long value. */
+function singleValue(o: Output): string | null {
+  if (o.output_type !== 'execute_result' || o.data['image/png']) return null
+  const text = (o.data['text/plain'] ?? '').trim()
+  return text && text.length <= 60 && !text.includes('\n') ? text : null
+}
+
+function SingleValue({ text }: { text: string }) {
+  return (
+    <div className="inline-flex items-baseline gap-2 rounded-md px-3 py-1.5" style={{ background: 'var(--panel-2)' }}>
+      <span style={{ color: 'var(--muted)', fontSize: 12 }}>Result</span>
+      <span className="mono font-semibold" style={{ fontSize: 18 }}>
+        {text}
+      </span>
+    </div>
+  )
+}
+
 function RunResult({ run }: { run: Run }) {
   const book = useBook()
   const kernel = useLab((s) => s.python)
@@ -311,14 +329,17 @@ function RunResult({ run }: { run: Run }) {
   return (
     <div className="space-y-1.5">
       {result.outputs ? (
-        result.outputs.map((o, i) => <OutputView key={i} o={o} frame={result.frames?.[i] && <Grid table={result.frames[i]} />} />)
+        result.outputs.map((o, i) => {
+          const single = !result.frames?.[i] && singleValue(o)
+          return single ? <SingleValue key={i} text={single} /> : <OutputView key={i} o={o} frame={result.frames?.[i] && <Grid table={result.frames[i]} />} />
+        })
       ) : result.table && result.table.numCols > 0 ? (
         <Grid table={result.table} />
       ) : (
         <div style={{ color: 'var(--muted)' }}>Done: no rows to show.</div>
       )}
       <div style={{ color: 'var(--muted)', fontSize: 12 }}>
-        {result.table && (
+        {result.table && !(result.outputs?.some(singleValue) && Object.keys(result.frames ?? {}).length === 0) && (
           <>
             {rows.toLocaleString('en-US')}
             {result.more ? '+' : ''} row{rows === 1 ? '' : 's'} ·{' '}
@@ -336,13 +357,16 @@ function RunResult({ run }: { run: Run }) {
   )
 }
 
+/** The page is wide for code and result tables; running text keeps a line length that reads well. */
+const READABLE = 'max-w-[46rem]'
+
 function NoteBlock({ block, afterWork }: { block: PracticeNote; afterWork: boolean }) {
   return (
     <div className={afterWork ? 'space-y-2 pt-5 mt-2' : 'space-y-2'} style={afterWork ? { borderTop: '1px solid var(--line)' } : undefined}>
       <div className="font-semibold" style={{ color: 'var(--muted)', fontWeight: 500 }}>
         Reminder
       </div>
-      <p className="m-0" style={{ fontSize: 15, lineHeight: 1.55 }}>
+      <p className={`m-0 ${READABLE}`} style={{ fontSize: 15, lineHeight: 1.55 }}>
         <Prose text={block.text} />
       </p>
       {block.syntax && (
@@ -351,7 +375,7 @@ function NoteBlock({ block, afterWork }: { block: PracticeNote; afterWork: boole
         </pre>
       )}
       {block.trap && (
-        <p className="m-0 flex gap-2" style={{ color: 'var(--warn-text)' }}>
+        <p className={`m-0 flex gap-2 ${READABLE}`} style={{ color: 'var(--warn-text)' }}>
           <TriangleAlert size={15} className="shrink-0 mt-0.5" />
           <span>
             <Prose text={block.trap} />
@@ -513,7 +537,7 @@ function TaskBlock({ section, block, onNext }: { section: PracticeSection; block
         {solved ? <CheckCircle2 size={16} style={{ color: 'var(--accent)' }} aria-label="Solved" /> : <GraduationCap size={16} style={{ color: 'var(--muted)' }} />}
         Task {number} · {block.title}
       </div>
-      <p className="m-0" style={{ fontSize: 15, lineHeight: 1.5 }}>
+      <p className={`m-0 ${READABLE}`} style={{ fontSize: 15, lineHeight: 1.5 }}>
         <Prose text={block.question} />
       </p>
       <CellEditor key={editorKey} value={initial} onChange={change} onRun={go} onCheck={() => void doCheck()} minLines={4} hint={book.writeHint} label={`Task ${number}: your answer`} />
@@ -759,8 +783,8 @@ function Page() {
             ))}
           </select>
         </div>
-        <div className="max-w-3xl mx-auto px-4 py-4 space-y-8">
-          <p className="m-0" style={{ color: 'var(--muted)' }}>
+        <div className="max-w-5xl mx-auto px-4 py-4 space-y-8">
+          <p className={`m-0 ${READABLE}`} style={{ color: 'var(--muted)' }}>
             {book.intro}
           </p>
           {shown.map((s) => (

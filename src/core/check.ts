@@ -99,7 +99,7 @@ const showRow = (r: Cell[]) => r.map((v) => (v == null ? 'NULL' : String(v))).jo
 /** What to tell the user about a verdict: a headline and a nudge, in the words of the language written. */
 export function describeVerdict(v: Verdict, lang: 'sql' | 'python' = 'sql'): { title: string; detail: string } {
   const py = lang === 'python'
-  if (v.ok) return { title: 'Correct!', detail: `All ${plural(v.rows, 'row')} match the answer.` }
+  if (v.ok) return { title: 'Correct!', detail: v.rows === 1 ? 'Your result matches the answer.' : `All ${plural(v.rows, 'row')} match the answer.` }
   switch (v.problem) {
     case 'columns':
       return {
