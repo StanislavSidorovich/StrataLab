@@ -24,7 +24,7 @@ import { checkForUpdates, updateCheckMessage, useUpdateReady } from '../pwa/regi
 import { memoryNote } from '../core/dbLock'
 import { takeDatabaseHere } from '../db/engine'
 import { engineLoadingLabel, engineLoadingShort } from './EngineLoading'
-import { addTab, closeTabs, currentPythonStarter, newPythonTab, openPractice, switchTabDialect, tabDialect, downloadBackup, duplicateTab, enqueueFiles, openAbout, openCatalog, openShare, openTables, openWelcome, pasteTable, pasteTableFromClipboard, renameTab, reopenClosedTab, updateNow, useLab } from './store'
+import { addTab, closeTabs, currentPythonStarter, newPythonTab, openPractice, openSqlPractice, switchTabDialect, tabDialect, downloadBackup, duplicateTab, enqueueFiles, openAbout, openCatalog, openShare, openTables, openWelcome, pasteTable, pasteTableFromClipboard, renameTab, reopenClosedTab, updateNow, useLab } from './store'
 import { AppearanceButton } from './Appearance'
 import { Menu, useLongPress, type MenuItem } from './Menu'
 import { tabsToClose } from '../core/tabs'
@@ -371,6 +371,7 @@ function HelpMenu() {
   const items: MenuItem[] = [
     ['How to use Quaera Lab', openWelcome],
     ['Practice on the demo shop…', () => openPractice()],
+    ['SQL practice on Kaiyo Trading', () => openSqlPractice()],
     'separator',
     ['Check for updates', () => void runUpdateCheck()],
     ['About & licences', () => openAbout('about')],

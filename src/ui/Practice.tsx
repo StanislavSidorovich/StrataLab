@@ -2,7 +2,7 @@
 // above the editor of a task's tab (the question, Check, hints one at a time, the solution).
 import { Check, CheckCircle2, ChevronRight, Eye, GraduationCap, Lightbulb, Link2, Loader2, NotebookText, Play, X, XCircle } from 'lucide-react'
 import { useState } from 'react'
-import { checkTask, nextHint, openExample, openPractice, openTask, openWalkthrough, useLab } from './store'
+import { checkTask, nextHint, openExample, openPractice, openSqlPractice, openTask, openWalkthrough, useLab } from './store'
 import { activeSql, appendToActive } from './SqlEditor'
 import { EXAMPLES, LEVELS, TASKS, taskById, type PracticeTask } from '../data/practice'
 import { describeVerdict } from '../core/check'
@@ -40,6 +40,23 @@ export function PracticeDialog() {
           </button>
         </div>
         <div className="overflow-auto min-h-0 p-3 space-y-4">
+          <button
+            className="w-full text-left rounded-lg p-3 flex items-start gap-2 hover:bg-[var(--panel)]"
+            style={{ border: '1px solid var(--accent)', background: 'var(--accent-soft)' }}
+            onClick={() => {
+              openPractice(false)
+              openSqlPractice()
+            }}
+          >
+            <NotebookText size={15} className="shrink-0 mt-0.5" style={{ color: 'var(--accent)' }} />
+            <span className="flex-1 min-w-0">
+              <span className="font-semibold">SQL practice on Kaiyo Trading: one long page in T-SQL</span>
+              <span className="block" style={{ color: 'var(--muted)' }}>
+                To get SQL back fast: a short note, an example to run, a task to solve, from SELECT to window functions. Skip what you remember.
+              </span>
+            </span>
+            <ChevronRight size={16} className="shrink-0 mt-0.5" />
+          </button>
           <section>
             <h2 className="font-semibold mb-2 px-1">Worked examples</h2>
             <ul className="grid gap-2 sm:grid-cols-2">
