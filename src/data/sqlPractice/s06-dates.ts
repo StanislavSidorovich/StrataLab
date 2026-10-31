@@ -30,6 +30,9 @@ ORDER BY year, month;`,
       solution: `SELECT COUNT(*) AS shipments, SUM(net_amount) AS net_amount
 FROM quaera.fact_sellin
 WHERE YEAR(order_date) = 2026 AND MONTH(order_date) = 6;`,
+      pg: `SELECT COUNT(*) AS shipments, SUM(net_amount) AS net_amount
+FROM quaera.fact_sellin
+WHERE EXTRACT(YEAR FROM order_date) = 2026 AND EXTRACT(MONTH FROM order_date) = 6;`,
       traps: [
         {
           code: `SELECT COUNT(*) AS shipments, SUM(net_amount) AS net_amount
@@ -50,6 +53,11 @@ WHERE MONTH(order_date) = 6;`,
 FROM quaera.fact_sellout
 WHERE week_start >= '2026-01-01'
 GROUP BY DATETRUNC(month, week_start)
+ORDER BY month;`,
+      pg: `SELECT CAST(date_trunc('month', week_start) AS date) AS month, SUM(revenue) AS revenue
+FROM quaera.fact_sellout
+WHERE week_start >= '2026-01-01'
+GROUP BY CAST(date_trunc('month', week_start) AS date)
 ORDER BY month;`,
     },
     {
@@ -82,6 +90,14 @@ ORDER BY order_date, sellin_id;`,
 FROM quaera.fact_sellin
 WHERE order_date >= '2025-01-01' AND order_date < '2026-01-01'
   AND ship_date > DATEADD(day, 7, order_date)
+GROUP BY distributor_id
+ORDER BY slow_shipments DESC, distributor_id;`,
+      pg: `SELECT distributor_id,
+       COUNT(*) AS slow_shipments,
+       MAX(ship_date - order_date) AS longest_wait
+FROM quaera.fact_sellin
+WHERE order_date >= '2025-01-01' AND order_date < '2026-01-01'
+  AND ship_date > order_date + 7
 GROUP BY distributor_id
 ORDER BY slow_shipments DESC, distributor_id;`,
       traps: [

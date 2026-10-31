@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
 import { beforeAll, describe, expect, it } from 'vitest'
+import { PGlite } from '@electric-sql/pglite'
 import type { Table } from 'apache-arrow'
 import { loadPyodide, type PyodideInterface } from 'pyodide'
 import { compareResults, type ResultData } from '../src/core/check'
@@ -11,6 +12,7 @@ import { emptyProgress, fabricNotes, hashWithPractice, hashWithoutPractice, next
 import { resultRows } from '../src/db/export'
 import { datasetById } from '../src/data/datasets'
 import { SECTIONS, SECTION_TASKS, examplesOf, tasksOf } from '../src/data/sqlPractice'
+import { postgresType } from '../src/core/modelLink'
 import { SQLGLOT_VERSION, duckdbScript, type TranslatedStatement } from '../src/dialects/tsql'
 
 const require = createRequire(import.meta.url)
@@ -139,6 +141,7 @@ describe('SQL practice: content', () => {
   describe('run on the real data', () => {
     let duck: { query: (sql: string) => Table }
     let py: PyodideInterface
+    let pg: PGlite
 
     beforeAll(async () => {
       const duckdb = require('@duckdb/duckdb-wasm/dist/duckdb-node-blocking.cjs')
@@ -148,6 +151,16 @@ describe('SQL practice: content', () => {
       duck = db.connect()
       duck.query('CREATE SCHEMA quaera')
       for (const t of datasetById('quaera')!.tables) duck.query(`CREATE TABLE quaera."${t.name}" AS SELECT * FROM read_parquet('${resolve('public/datasets/quaera', t.file).replace(/\\/g, '/')}')`)
+      // The same rows in PostgreSQL (PGlite): types from DuckDB's, rows through JSON.
+      pg = new PGlite()
+      await pg.exec('CREATE SCHEMA quaera')
+      for (const t of datasetById('quaera')!.tables) {
+        const cols = resultRows(duck.query(`SELECT column_name, data_type FROM information_schema.columns WHERE table_schema = 'quaera' AND table_name = '${t.name}' ORDER BY ordinal_position`)).rows
+        await pg.exec(`CREATE TABLE quaera."${t.name}" (${cols.map(([n, ty]) => `"${n}" ${postgresType(String(ty))}`).join(', ')})`)
+        const all = resultRows(duck.query(`SELECT * FROM quaera."${t.name}"`))
+        const objects = all.rows.map((r) => Object.fromEntries(all.header.map((h, i) => [h, r[i]])))
+        await pg.query(`INSERT INTO quaera."${t.name}" SELECT * FROM jsonb_populate_recordset(null::quaera."${t.name}", $1::jsonb)`, [JSON.stringify(objects)])
+      }
       py = await loadPyodide()
       py.unpackArchive(new Uint8Array(readFileSync(`public/sqlglot/sqlglot-${SQLGLOT_VERSION}-py3-none-any.whl`)), 'wheel')
       py.runPython(readFileSync('src/dialects/translate.py', 'utf8'))
@@ -159,6 +172,13 @@ describe('SQL practice: content', () => {
       expect(t, sql).toHaveLength(1)
       expect(t[0].error, sql).toBeNull()
       return resultRows(duck.query(duckdbScript(t)))
+    }
+
+    /** A query's result in PostgreSQL. A DATE comes back as a JS Date at midnight: it is compared as its date. */
+    async function runPg(sql: string): Promise<ResultData> {
+      const r = await pg.query(sql, [], { rowMode: 'array' })
+      const cell = (v: unknown) => (v == null ? null : v instanceof Date ? v.toISOString().slice(0, 10) : typeof v === 'bigint' ? Number(v) : typeof v === 'number' ? v : String(v))
+      return { header: r.fields.map((f) => f.name), rows: r.rows.map((row) => (row as unknown[]).map(cell)) }
     }
 
     it('every example returns rows', () => {
@@ -177,6 +197,27 @@ describe('SQL practice: content', () => {
     })
     it('every trap runs and gives a result the answer does not', () => {
       for (const t of tasks) for (const trap of t.traps ?? []) expect(compareResults(run(trap.code), run(t.solution), t.ordered).ok, `${t.id}: ${trap.says}`).toBe(false)
+    })
+    it('every pg answer differs from the T-SQL, runs on PostgreSQL and gives the same result', async () => {
+      for (const t of tasks) {
+        if (t.pg === undefined) continue
+        expect(t.pg.trim(), t.id).not.toBe(t.solution.trim())
+        expect(JSON.stringify(t.pg), t.id).not.toMatch(/—/)
+        const got = await runPg(t.pg).catch((e) => Promise.reject(new Error(`${t.id}: ${e}`)))
+        const verdict = compareResults(got, run(t.solution), t.ordered)
+        expect(verdict.ok, `${t.id}: ${JSON.stringify(verdict)}`).toBe(true)
+      }
+    })
+    it('a task without pg runs on PostgreSQL as written, with the same result', async () => {
+      for (const t of tasks) {
+        if (t.pg !== undefined) continue
+        // Same query, same values; an average of doubles ends in .705 and the engines add the floats in
+        // another order, so 2-decimal rounding falls on different sides in one cell. Not a dialect difference.
+        if (t.id === 'win-moving-average-division') continue
+        const got = await runPg(t.solution).catch((e) => Promise.reject(new Error(`${t.id} needs a pg answer: ${e}`)))
+        const verdict = compareResults(got, run(t.solution), t.ordered)
+        expect(verdict.ok, `${t.id} needs a pg answer: ${JSON.stringify(verdict)}`).toBe(true)
+      }
     })
   })
 })

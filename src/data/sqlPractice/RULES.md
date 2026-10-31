@@ -23,6 +23,10 @@ Every query is valid T-SQL for Fabric Warehouse:
 
 `fabricNotes` (`src/core/sqlPractice.ts`) must find nothing in any query; the test fails otherwise.
 
+## In PostgreSQL
+
+A task gets `pg` (its full solution in PostgreSQL, shown under the task after Solution) only where the T-SQL fails or gives a different result there: `TOP` to `LIMIT`, `YEAR(d)` to `EXTRACT(YEAR FROM d)`, `DATETRUNC`, `DATEDIFF`, `DATEADD`, `ISNULL`, `TRY_CAST`, and `ROUND` of a DOUBLE column (cast to `numeric`). Keep the tables as `quaera.…`; change only the dialect. The test runs every `pg` on PostgreSQL (PGlite) over the same rows and compares it with the T-SQL answer, and runs the tasks without `pg` as written: a new task that fails there needs a `pg`.
+
 ## A task
 
 - `question` is what a manager would ask, and it names the columns and the order wanted. Check compares results, so a question that leaves them open fails right answers.

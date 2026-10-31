@@ -91,6 +91,24 @@ SELECT i.category, i.units AS shipped, s.units AS sold
 FROM shipped AS i
 JOIN sold AS s ON s.category = i.category
 ORDER BY i.category;`,
+      pg: `WITH shipped AS (
+  SELECT p.category, SUM(i.units) AS units
+  FROM quaera.fact_sellin AS i
+  JOIN quaera.dim_product AS p ON p.product_id = i.product_id
+  WHERE EXTRACT(YEAR FROM i.order_date) = 2025
+  GROUP BY p.category
+),
+sold AS (
+  SELECT p.category, SUM(s.units) AS units
+  FROM quaera.fact_sellout AS s
+  JOIN quaera.dim_product AS p ON p.product_id = s.product_id
+  WHERE EXTRACT(YEAR FROM s.week_start) = 2025
+  GROUP BY p.category
+)
+SELECT i.category, i.units AS shipped, s.units AS sold
+FROM shipped AS i
+JOIN sold AS s ON s.category = i.category
+ORDER BY i.category;`,
       traps: [
         {
           code: `SELECT p.category, SUM(i.units) AS shipped, SUM(s.units) AS sold

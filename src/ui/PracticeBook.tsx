@@ -446,6 +446,7 @@ function TaskBlock({ section, block, onNext }: { section: PracticeSection; block
   const [check, setCheck] = useState<CheckState>(null)
   const [checking, setChecking] = useState(false)
   const [offer, setOffer] = useState(false)
+  const [solutionShown, setSolutionShown] = useState(false)
   const ready = useLab((s) => s.engine.status === 'ready')
 
   const change = (v: string) => {
@@ -498,6 +499,7 @@ function TaskBlock({ section, block, onNext }: { section: PracticeSection; block
     change(next)
     setInitial(next)
     setEditorKey((k) => k + 1)
+    setSolutionShown(true)
   }
   const next = check?.verdict.ok ? nextTask(book.tasks, useProgress.getState()) : null
   const said = check ? describeVerdict(check.verdict, book.kind) : null
@@ -536,6 +538,16 @@ function TaskBlock({ section, block, onNext }: { section: PracticeSection; block
         </ol>
       )}
       <RunResult run={run} />
+      {solutionShown && block.pg && (
+        <details>
+          <summary className="cursor-pointer select-none" style={{ color: 'var(--muted)', fontSize: 12 }}>
+            In PostgreSQL
+          </summary>
+          <pre className="mono m-0 mt-1 px-3 py-2 rounded-md overflow-x-auto" style={{ background: 'var(--panel-2)', fontSize: 13 }}>
+            {block.pg}
+          </pre>
+        </details>
+      )}
       {check && said && (
         <div role="status" className="rounded-md px-2.5 py-1.5 flex gap-2" style={check.verdict.ok ? { background: 'var(--accent-soft)', color: 'var(--accent)' } : { background: 'var(--warn-soft)', color: 'var(--warn-text)' }}>
           {check.verdict.ok ? <CheckCircle2 size={15} className="shrink-0 mt-0.5" /> : <XCircle size={15} className="shrink-0 mt-0.5" />}

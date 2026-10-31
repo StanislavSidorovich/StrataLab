@@ -77,6 +77,12 @@ FROM quaera.fact_sellin AS i
 JOIN quaera.dim_customer AS c ON c.customer_id = i.distributor_id
 GROUP BY c.customer_name
 ORDER BY net_amount DESC;`,
+      pg: `SELECT c.customer_name, SUM(i.net_amount) AS net_amount
+FROM quaera.fact_sellin AS i
+JOIN quaera.dim_customer AS c ON c.customer_id = i.distributor_id
+GROUP BY c.customer_name
+ORDER BY net_amount DESC
+LIMIT 5;`,
       traps: [
         {
           code: `SELECT TOP (5) c.customer_name, SUM(i.net_amount) AS net_amount

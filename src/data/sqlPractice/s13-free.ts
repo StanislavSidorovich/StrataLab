@@ -30,6 +30,21 @@ SELECT TOP (3) i.month_start, i.units AS shipped, s.units AS sold, i.units - s.u
 FROM shipped AS i
 JOIN sold AS s ON s.month_start = i.month_start
 ORDER BY gap DESC, i.month_start;`,
+      pg: `WITH shipped AS (
+  SELECT month_start, SUM(units) AS units
+  FROM quaera.fact_sellin
+  GROUP BY month_start
+),
+sold AS (
+  SELECT CAST(date_trunc('month', week_start) AS date) AS month_start, SUM(units) AS units
+  FROM quaera.fact_sellout
+  GROUP BY CAST(date_trunc('month', week_start) AS date)
+)
+SELECT i.month_start, i.units AS shipped, s.units AS sold, i.units - s.units AS gap
+FROM shipped AS i
+JOIN sold AS s ON s.month_start = i.month_start
+ORDER BY gap DESC, i.month_start
+LIMIT 3;`,
     },
     {
       kind: 'task',
@@ -43,6 +58,13 @@ ORDER BY gap DESC, i.month_start;`,
 FROM quaera.staging_raw_sellout
 GROUP BY UPPER(TRIM(sku_code))
 ORDER BY revenue DESC;`,
+      pg: `SELECT UPPER(TRIM(sku_code)) AS sku_code,
+       SUM(CASE WHEN REPLACE(revenue, ',', '.') ~ '^-?[0-9]+([.][0-9]+)?$'
+                THEN CAST(REPLACE(revenue, ',', '.') AS numeric(12, 2)) END) AS revenue
+FROM quaera.staging_raw_sellout
+GROUP BY UPPER(TRIM(sku_code))
+ORDER BY revenue DESC
+LIMIT 5;`,
     },
     {
       kind: 'task',
@@ -75,6 +97,16 @@ FROM orders AS o
 JOIN quaera.dim_customer AS c ON c.customer_id = o.distributor_id
 GROUP BY c.customer_name
 ORDER BY longest_gap DESC, c.customer_name;`,
+      pg: `WITH orders AS (
+  SELECT distributor_id, order_date,
+         LAG(order_date) OVER (PARTITION BY distributor_id ORDER BY order_date) AS previous_date
+  FROM quaera.fact_sellin
+)
+SELECT c.customer_name, MAX(o.order_date - o.previous_date) AS longest_gap
+FROM orders AS o
+JOIN quaera.dim_customer AS c ON c.customer_id = o.distributor_id
+GROUP BY c.customer_name
+ORDER BY longest_gap DESC, c.customer_name;`,
     },
     {
       kind: 'task',
@@ -99,6 +131,25 @@ planned AS (
   GROUP BY r.team
 )
 SELECT s.team, s.revenue, p.target, ROUND(100.0 * s.revenue / p.target, 1) AS done_pct
+FROM sold AS s
+JOIN planned AS p ON p.team = s.team
+ORDER BY done_pct DESC, s.team;`,
+      pg: `WITH sold AS (
+  SELECT r.team, SUM(s.revenue) AS revenue
+  FROM quaera.fact_sellout AS s
+  JOIN quaera.dim_customer AS c ON c.customer_id = s.customer_id
+  JOIN quaera.dim_rep AS r ON r.rep_id = c.rep_id
+  WHERE EXTRACT(YEAR FROM s.week_start) = 2025
+  GROUP BY r.team
+),
+planned AS (
+  SELECT r.team, SUM(t.target_revenue) AS target
+  FROM quaera.fact_target AS t
+  JOIN quaera.dim_rep AS r ON r.rep_id = t.rep_id
+  WHERE EXTRACT(YEAR FROM t.month_start) = 2025
+  GROUP BY r.team
+)
+SELECT s.team, s.revenue, p.target, ROUND(CAST(100.0 * s.revenue / p.target AS numeric), 1) AS done_pct
 FROM sold AS s
 JOIN planned AS p ON p.team = s.team
 ORDER BY done_pct DESC, s.team;`,

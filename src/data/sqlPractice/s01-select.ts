@@ -29,6 +29,10 @@ ORDER BY opened_date, customer_id;`,
       solution: `SELECT TOP (3) region_name AS region, population AS residents
 FROM quaera.dim_region
 ORDER BY population DESC;`,
+      pg: `SELECT region_name AS region, population AS residents
+FROM quaera.dim_region
+ORDER BY population DESC
+LIMIT 3;`,
     },
     {
       kind: 'task',
@@ -40,6 +44,10 @@ ORDER BY population DESC;`,
       solution: `SELECT TOP (5) rep_name, team, hired_date
 FROM quaera.dim_rep
 ORDER BY hired_date, rep_id;`,
+      pg: `SELECT rep_name, team, hired_date
+FROM quaera.dim_rep
+ORDER BY hired_date, rep_id
+LIMIT 5;`,
     },
     {
       kind: 'note',
@@ -65,6 +73,10 @@ ORDER BY brand, list_price DESC, product_id;`,
       solution: `SELECT TOP (5) sellin_id, order_date, distributor_id, product_id, discount_amount AS discount
 FROM quaera.fact_sellin
 ORDER BY discount_amount DESC, sellin_id;`,
+      pg: `SELECT sellin_id, order_date, distributor_id, product_id, discount_amount AS discount
+FROM quaera.fact_sellin
+ORDER BY discount_amount DESC, sellin_id
+LIMIT 5;`,
       traps: [
         {
           code: `SELECT TOP (5) sellin_id, order_date, distributor_id, product_id, discount_amount AS discount

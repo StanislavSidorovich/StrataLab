@@ -51,6 +51,8 @@ export interface PracticeTaskCell {
   ordered: boolean
   hints: string[]
   solution: string
+  /** SQL page only: the solution written in PostgreSQL, only where the PostgreSQL form really differs; shown under the task after Solution */
+  pg?: string
   traps?: PracticeTrap[]
 }
 

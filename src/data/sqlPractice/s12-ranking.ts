@@ -92,6 +92,18 @@ SELECT channel, customer_name, revenue
 FROM numbered
 WHERE n <= 3
 ORDER BY channel, revenue DESC;`,
+      pg: `WITH numbered AS (
+  SELECT c.channel, c.customer_name, SUM(s.revenue) AS revenue,
+         ROW_NUMBER() OVER (PARTITION BY c.channel ORDER BY SUM(s.revenue) DESC) AS n
+  FROM quaera.fact_sellout AS s
+  JOIN quaera.dim_customer AS c ON c.customer_id = s.customer_id
+  WHERE EXTRACT(YEAR FROM s.week_start) = 2025
+  GROUP BY c.channel, c.customer_id, c.customer_name
+)
+SELECT channel, customer_name, revenue
+FROM numbered
+WHERE n <= 3
+ORDER BY channel, revenue DESC;`,
       traps: [
         {
           code: `WITH numbered AS (
@@ -125,6 +137,20 @@ ORDER BY channel, revenue DESC;`,
   SELECT customer_id, SUM(revenue) AS revenue
   FROM quaera.fact_sellout
   WHERE YEAR(week_start) = 2025
+  GROUP BY customer_id
+),
+grouped AS (
+  SELECT revenue, NTILE(4) OVER (ORDER BY revenue DESC) AS quartile
+  FROM outlets
+)
+SELECT quartile, COUNT(*) AS outlets, SUM(revenue) AS revenue
+FROM grouped
+GROUP BY quartile
+ORDER BY quartile;`,
+      pg: `WITH outlets AS (
+  SELECT customer_id, SUM(revenue) AS revenue
+  FROM quaera.fact_sellout
+  WHERE EXTRACT(YEAR FROM week_start) = 2025
   GROUP BY customer_id
 ),
 grouped AS (

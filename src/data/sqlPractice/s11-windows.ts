@@ -36,6 +36,13 @@ FROM quaera.fact_sellin AS i
 JOIN quaera.dim_product AS p ON p.product_id = i.product_id
 GROUP BY p.brand
 ORDER BY net_amount DESC;`,
+      pg: `SELECT p.brand,
+       SUM(i.net_amount) AS net_amount,
+       ROUND(CAST(100.0 * SUM(i.net_amount) / SUM(SUM(i.net_amount)) OVER () AS numeric), 1) AS share_pct
+FROM quaera.fact_sellin AS i
+JOIN quaera.dim_product AS p ON p.product_id = i.product_id
+GROUP BY p.brand
+ORDER BY net_amount DESC;`,
     },
     {
       kind: 'note',
@@ -68,6 +75,15 @@ ORDER BY month_start;`,
   FROM quaera.fact_sellout
   WHERE YEAR(week_start) = 2025
   GROUP BY DATETRUNC(month, week_start)
+)
+SELECT month_start, revenue, SUM(revenue) OVER (ORDER BY month_start) AS running_total
+FROM monthly
+ORDER BY month_start;`,
+      pg: `WITH monthly AS (
+  SELECT CAST(date_trunc('month', week_start) AS date) AS month_start, SUM(revenue) AS revenue
+  FROM quaera.fact_sellout
+  WHERE EXTRACT(YEAR FROM week_start) = 2025
+  GROUP BY CAST(date_trunc('month', week_start) AS date)
 )
 SELECT month_start, revenue, SUM(revenue) OVER (ORDER BY month_start) AS running_total
 FROM monthly
@@ -110,6 +126,19 @@ compared AS (
 SELECT month_start, net_amount, last_year
 FROM compared
 WHERE YEAR(month_start) = 2026
+ORDER BY month_start;`,
+      pg: `WITH monthly AS (
+  SELECT month_start, SUM(net_amount) AS net_amount
+  FROM quaera.fact_sellin
+  GROUP BY month_start
+),
+compared AS (
+  SELECT month_start, net_amount, LAG(net_amount, 12) OVER (ORDER BY month_start) AS last_year
+  FROM monthly
+)
+SELECT month_start, net_amount, last_year
+FROM compared
+WHERE EXTRACT(YEAR FROM month_start) = 2026
 ORDER BY month_start;`,
       traps: [
         {

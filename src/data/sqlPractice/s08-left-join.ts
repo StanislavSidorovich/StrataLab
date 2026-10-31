@@ -36,6 +36,14 @@ LEFT JOIN quaera.fact_sellout AS s
   AND s.week_start >= '2026-06-01' AND s.week_start < '2026-07-01'
 GROUP BY p.product_name
 ORDER BY units DESC, p.product_name;`,
+      pg: `SELECT p.product_name, COALESCE(SUM(s.units), 0) AS units
+FROM quaera.dim_product AS p
+LEFT JOIN quaera.fact_sellout AS s
+  ON s.product_id = p.product_id
+  AND s.promo_id IS NOT NULL
+  AND s.week_start >= '2026-06-01' AND s.week_start < '2026-07-01'
+GROUP BY p.product_name
+ORDER BY units DESC, p.product_name;`,
       traps: [
         {
           code: `SELECT p.product_name, ISNULL(SUM(s.units), 0) AS units

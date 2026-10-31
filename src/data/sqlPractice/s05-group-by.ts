@@ -100,6 +100,13 @@ WHERE month_start >= '2026-01-01' AND month_start <= '2026-06-01'
 GROUP BY distributor_id, month_start
 HAVING SUM(discount_amount) > 0.09 * SUM(gross_amount)
 ORDER BY discount_pct DESC, distributor_id, month_start;`,
+      pg: `SELECT distributor_id, month_start, COUNT(*) AS shipments,
+       ROUND(CAST(100.0 * SUM(discount_amount) / SUM(gross_amount) AS numeric), 1) AS discount_pct
+FROM quaera.fact_sellin
+WHERE month_start >= '2026-01-01' AND month_start <= '2026-06-01'
+GROUP BY distributor_id, month_start
+HAVING SUM(discount_amount) > 0.09 * SUM(gross_amount)
+ORDER BY discount_pct DESC, distributor_id, month_start;`,
       traps: [
         {
           code: `SELECT distributor_id, month_start, COUNT(*) AS shipments,
