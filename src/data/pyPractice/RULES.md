@@ -32,11 +32,11 @@ Tables come in slowly. Sections 1 to 3 use `sellout` and `products`; each later 
 - `question` is what a manager would ask, and it names the columns and the order wanted.
 - Check ignores an unnamed index (row labels) and treats a named one as a column. So `groupby("brand")["units"].sum()` and `groupby("brand", as_index=False)["units"].sum()` are the same answer. Do not make a task whose answer lives in an unnamed index, as with `describe()` or `df.loc[...]` labels: say `reset_index` or ask for one value.
 - Column names don't matter, only their number and meaning. With a named result column, say the name in the question anyway.
-- `ordered: true` only when the question states an order, and the order must be fully decided: add a second sort key when two rows can tie. Sort with `sort_values(..., kind="stable")` only if ties cannot be broken by a column.
+- `ordered: true` only when the question states an order, and the order must be fully decided: add a second sort key when two rows can tie. The test wants a sort in the solution's text, so end a pivot or crosstab with `sort_values` or `sort_index` too.
 - Months are real dates: ask for `month_start`, made with `dt.to_period("M").dt.to_timestamp()`. A Period and a Timestamp print differently, so the question says which one.
 - At most 1,000 rows in the answer. Numbers compare to at most 2 decimals, by the answer's own decimals.
 - Three hints, from where to look to almost the code. The third may be code.
-- `traps`: a wrong cell people really write, and what is wrong with it. About 10 on the whole page. The test requires its result to differ from the answer's.
+- `traps`: a wrong cell people really write, and what is wrong with it. Only where the wrong cell really gives a different result; about 25 on the whole page. The test requires its result to differ from the answer's.
 - Never the same question as a task in quaera.app's pandas track (`quaera/src/content/packs/`), nor one on the SQL practice page's wording: the same data, a different question. A task may say "the same as task N of the SQL page" only as a deliberate pair.
 - Ids stay stable once published: they hold the learner's progress.
 
@@ -46,7 +46,10 @@ Tables come in slowly. Sections 1 to 3 use `sellout` and `products`; each later 
 - `customers` has outlets and 12 distributors (`channel == "distributor"`); those 12 have no `rep_id` and no sell-out rows.
 - `promo_id` is missing on sales outside promotions (about 80% of the rows). It is `Int32` with `pd.NA`, so `==` on it gives `NA`, and `.isna()` is the test.
 - Data runs from 2024-01-01 to the week of 2026-06-29. Say which period a question means when it matters.
-- `raw` is the unclean export: dates in four forms (`2024-02-19`, `2024-5-20`, `11.03.2024`, `11/03/2024`), SKU codes in mixed case with spaces, `units` and `revenue` as text with missing values and decimal commas, exact duplicate rows (3,110 rows, 3,000 after dropping them). It does not reconcile row by row with `sellout`.
+- `raw` is the unclean export: dates in four forms (`2024-02-19`, `2024-5-20`, `11.03.2024`, `11/03/2024`), SKU codes in mixed case, spaces in customer names (919 rows, none in SKU codes), `units` and `revenue` as text with missing values and decimal commas, 110 negative units, duplicate rows that show only with `raw_id` left out (3,110 rows, 3,000 after dropping them). It does not reconcile row by row with `sellout`.
+- `format="mixed"` misparses `raw` dates, with or without `dayfirst`: it swaps month and day on `2024-5-20`. Bring every form to one first and parse with an explicit format; the result agrees with the month in `source_file` on every row.
+- `sellin.month_start` is the order month, not the ship month. Rows are already sorted in time within a series, so a trap based on unsorted rows needs a real shuffle or another sort.
+- Pharmacies sell only Pharma and other channels only FMCG, so a category by channel pivot has empty cells. Nettora's delisting (second half of 2025) leaves 12 distributor and product pairs with no 2026 shipments.
 - `prices.promo_price` is meaningless noise: never use it. Read `querium-promo-data-limits` in memory before writing promo or price tasks. There is no cannibalisation, no post-promo dip, and depth does not explain lift in this data.
 - Plan (`targets`) is by rep and division, not by brand.
 
