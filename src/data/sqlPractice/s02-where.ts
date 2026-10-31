@@ -44,7 +44,7 @@ WHERE channel = 'pharmacy' AND city = 'Osaka' OR city = 'Tokyo';`,
       kind: 'task',
       id: 'where-single-channel-promos',
       title: 'Promotions aimed at one channel',
-      question: "Which promotions with the mechanic '2+1' or 'Discount 30%' ran in a single channel, not in all of them? Show promo_name, channel, start_date and discount_pct. A promotion for every channel has channel 'all'.",
+      question: "Which promotions with the value '2+1' or 'Discount 30%' in the mechanic column ran in a single channel, not in all of them? Show promo_name, channel, start_date and discount_pct. A promotion for every channel has channel 'all'.",
       ordered: false,
       hints: ['dim_promo has the mechanic and the channel.', "IN takes the two mechanics; the channel is a separate condition, not equal to 'all'.", "WHERE mechanic IN ('2+1', 'Discount 30%') AND channel <> 'all'."],
       solution: `SELECT promo_name, channel, start_date, discount_pct
@@ -54,7 +54,7 @@ WHERE mechanic IN ('2+1', 'Discount 30%')
     },
     {
       kind: 'note',
-      text: '`BETWEEN a AND b` includes both ends. `LIKE` matches a pattern, where `%` stands for any run of characters and `_` for exactly one, and the letters must have the case the data has.',
+      text: "`BETWEEN a AND b` includes both ends, and a date is written in quotes: `'2026-01-31'`. `LIKE` matches a pattern, where `%` stands for any run of characters and `_` for exactly one, and the letters must have the case the data has.",
       syntax: "WHERE units BETWEEN 100 AND 150 AND product_name LIKE 'Fruvia%'",
       trap: "`LIKE '%kids%'` finds nothing when the data says `Kids`.",
     },
@@ -73,7 +73,7 @@ WHERE list_price BETWEEN 100 AND 145
       title: 'Mid-size shipments of early 2026',
       question: 'Which sell-in shipments ordered from 2026-01-01 to 2026-03-31, both days included, had between 100 and 150 units, both numbers included? Show sellin_id, order_date, distributor_id, product_id and units.',
       ordered: false,
-      hints: ['fact_sellin has order_date and units.', 'Two BETWEEN conditions joined by AND; both ends are included.', "WHERE order_date BETWEEN '2026-01-01' AND '2026-03-31' AND units BETWEEN 100 AND 150."],
+      hints: ['fact_sellin has order_date and units.', 'Two BETWEEN conditions joined by AND; both ends are included, and the dates go in quotes.', "WHERE order_date BETWEEN '2026-01-01' AND '2026-03-31' AND units BETWEEN 100 AND 150."],
       solution: `SELECT sellin_id, order_date, distributor_id, product_id, units
 FROM quaera.fact_sellin
 WHERE order_date BETWEEN '2026-01-01' AND '2026-03-31'

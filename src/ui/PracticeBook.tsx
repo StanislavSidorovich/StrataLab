@@ -336,9 +336,12 @@ function RunResult({ run }: { run: Run }) {
   )
 }
 
-function NoteBlock({ block }: { block: PracticeNote }) {
+function NoteBlock({ block, afterWork }: { block: PracticeNote; afterWork: boolean }) {
   return (
-    <div className="space-y-2">
+    <div className={afterWork ? 'space-y-2 pt-5 mt-2' : 'space-y-2'} style={afterWork ? { borderTop: '1px solid var(--line)' } : undefined}>
+      <div className="font-semibold" style={{ color: 'var(--muted)', fontWeight: 500 }}>
+        Reminder
+      </div>
       <p className="m-0" style={{ fontSize: 15, lineHeight: 1.55 }}>
         <Prose text={block.text} />
       </p>
@@ -552,7 +555,9 @@ function TaskBlock({ section, block, onNext }: { section: PracticeSection; block
         <div role="status" className="rounded-md px-2.5 py-1.5 flex gap-2" style={check.verdict.ok ? { background: 'var(--accent-soft)', color: 'var(--accent)' } : { background: 'var(--warn-soft)', color: 'var(--warn-text)' }}>
           {check.verdict.ok ? <CheckCircle2 size={15} className="shrink-0 mt-0.5" /> : <XCircle size={15} className="shrink-0 mt-0.5" />}
           <span className="flex-1 min-w-0">
-            <b>{said.title}</b> <Prose text={check.trap ?? said.detail} />
+            <b>{said.title}</b>
+            {check.verdict.ok ? ' ' : <br />}
+            <Prose text={check.trap ?? said.detail} />
           </span>
           {next && (
             <button className="btn shrink-0" onClick={() => onNext(next)}>
@@ -579,10 +584,10 @@ function TaskBlock({ section, block, onNext }: { section: PracticeSection; block
   )
 }
 
-function Block({ section, block, onNext }: { section: PracticeSection; block: PracticeBlock; onNext: (id: string) => void }) {
+function Block({ section, block, afterWork, onNext }: { section: PracticeSection; block: PracticeBlock; afterWork: boolean; onNext: (id: string) => void }) {
   switch (block.kind) {
     case 'note':
-      return <NoteBlock block={block} />
+      return <NoteBlock block={block} afterWork={afterWork} />
     case 'tables':
       return <TablesBlock block={block} />
     case 'example':
@@ -628,7 +633,7 @@ function SectionView({ section, onNext }: { section: PracticeSection; onNext: (i
           </button>
         )}
       </div>
-      {open && section.blocks.map((b, i) => <Block key={i} section={section} block={b} onNext={onNext} />)}
+      {open && section.blocks.map((b, i) => <Block key={i} section={section} block={b} afterWork={i > 0 && section.blocks[i - 1].kind === 'task'} onNext={onNext} />)}
     </section>
   )
 }
