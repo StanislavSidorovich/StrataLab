@@ -30,6 +30,11 @@ sellout.assign(kind=kind)["kind"].value_counts()`,
       trap: '`pd.cut` bands include their upper edge: with edges 0, 2 and 5, the number 2 is in the first band.',
     },
     {
+      kind: 'note',
+      text: '`value_counts` sorts by how often a value comes, and `sort_index` puts the values back in their own order. `rename_axis` names the values and `reset_index(name=...)` names the count, which gives a table with the columns you want.',
+      syntax: 's.value_counts().sort_index().rename_axis("band").reset_index(name="lines")',
+    },
+    {
       kind: 'task',
       id: 'py-new-columns-size-bands',
       title: 'Sell-out lines by size',
@@ -79,8 +84,8 @@ dept.value_counts().rename_axis("department").reset_index(name="products").sort_
     },
     {
       kind: 'note',
-      text: '`.str` runs text methods on a whole column: `contains`, `split`, `replace`, and `extract`, which pulls out the part of a regex in brackets. A row without a match gives NaN.',
-      syntax: 'df["name"].str.extract(r" x(\\d+)$")[0]   df["name"].str.split(" ").str[0]',
+      text: '`.str` runs text methods on a whole column: `contains`, `split`, `replace`, and `extract`, which pulls out the part of a regex in brackets. A row without a match gives NaN: `dropna` removes it, and `astype(float)` makes numbers of the text.',
+      syntax: 'df["name"].str.extract(r" x(\\d+)$")[0]   df["name"].str.split(" ").str[0]   df.dropna(subset=["x"])   df["x"].astype(float)',
       trap: '`extract` returns the first match only: anchor the pattern when a name holds several numbers.',
     },
     {

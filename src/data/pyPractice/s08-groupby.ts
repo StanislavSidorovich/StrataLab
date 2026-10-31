@@ -23,8 +23,8 @@ export const GROUPBY: PracticeSection = {
       title: 'Sell-out by year',
       question: 'What were the sell-out units and revenue in each year (the year of week_start)? Show year, units and revenue, the oldest year first.',
       ordered: true,
-      hints: ['The key is not a column yet: make the year from week_start.', 'sellout.groupby(sellout["week_start"].dt.year) groups by the year, and the index is named week_start.', 'Add .agg(units=("units", "sum"), revenue=("revenue", "sum")).rename_axis("year").reset_index().'],
-      solution: `sellout.groupby(sellout["week_start"].dt.year).agg(units=("units", "sum"), revenue=("revenue", "sum")).rename_axis("year").reset_index().sort_values("year")`,
+      hints: ['The key is not a column yet: make the year from week_start.', 'sellout.groupby(sellout["week_start"].dt.year) groups by the year, and the index is named week_start.', 'Add [["units", "revenue"]].sum().rename_axis("year").reset_index().'],
+      solution: `sellout.groupby(sellout["week_start"].dt.year)[["units", "revenue"]].sum().rename_axis("year").reset_index().sort_values("year")`,
     },
     {
       kind: 'note',

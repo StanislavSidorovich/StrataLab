@@ -18,6 +18,11 @@ export const FILTER: PracticeSection = {
       code: `sellout[sellout["units"] > 2000].head()`,
     },
     {
+      kind: 'note',
+      text: '`sort_values` orders the rows by one column or a list of them, and `ascending` gives the direction of each.',
+      syntax: 'df.sort_values(["list_price", "brand"], ascending=[False, True])',
+    },
+    {
       kind: 'task',
       id: 'py-filter-pharma',
       title: 'The Pharma range',
@@ -62,6 +67,11 @@ export const FILTER: PracticeSection = {
       id: 'py-filter-top-lines',
       title: 'The five biggest sales lines',
       code: `sellout.nlargest(5, "revenue")[["week_start", "customer_id", "product_id", "revenue"]]`,
+    },
+    {
+      kind: 'note',
+      text: '`notna` is the opposite of `isna`. `.dt` reads a part of a date column, such as its year.',
+      syntax: 'df["promo_id"].notna()   df["week_start"].dt.year == 2025',
     },
     {
       kind: 'task',

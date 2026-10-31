@@ -47,6 +47,11 @@ ORDER BY gap DESC, i.month_start
 LIMIT 3;`,
     },
     {
+      kind: 'note',
+      text: '`UPPER` and `TRIM` clean text, and `REPLACE` swaps characters. `TRY_CAST` turns text into a number, or into NULL when it cannot.',
+      syntax: "TRY_CAST(REPLACE(x, ',', '.') AS DECIMAL(12, 2))",
+    },
+    {
       kind: 'task',
       id: 'free-raw-extract-revenue',
       title: 'Revenue from the raw extract',

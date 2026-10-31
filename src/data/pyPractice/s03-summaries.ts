@@ -7,8 +7,8 @@ export const SUMMARIES: PracticeSection = {
   blocks: [
     {
       kind: 'note',
-      text: '`value_counts` is the fastest answer to "what is in this column, and how often". It sorts from the most frequent and gives a named index, so the values are a column of the answer.',
-      syntax: 'df["brand"].value_counts()   df["brand"].value_counts(normalize=True)',
+      text: '`value_counts` is the fastest answer to "what is in this column, and how often". It sorts from the most frequent and gives a named index, so the values are a column of the answer once `reset_index` makes it a table.',
+      syntax: 'df["brand"].value_counts()   df["brand"].value_counts(normalize=True)   df["brand"].value_counts().reset_index()',
     },
     {
       kind: 'example',
@@ -28,7 +28,7 @@ export const SUMMARIES: PracticeSection = {
     {
       kind: 'note',
       text: 'A filter followed by a total answers most first questions without any grouping. Totals skip missing values, so `count` on a column tells how many rows have one.',
-      syntax: 'df[df["x"] == 1]["units"].sum()   df["promo_id"].count()   df["promo_id"].isna().mean()',
+      syntax: 'df[df["x"] == 1]["units"].sum()   df["promo_id"].count()   df["promo_id"].isna().mean()   round(x, 1)   df["x"].round(1)',
     },
     {
       kind: 'example',
@@ -49,10 +49,12 @@ export const SUMMARIES: PracticeSection = {
       kind: 'task',
       id: 'py-summaries-avg-promo-units',
       title: 'Units on a promotional line',
-      question: 'On average, how many units does a sellout row on a promotion sell, and how many does a row outside promotions? Give two numbers in a Series named units_per_row, indexed by on_promo (True or False), each rounded to 1 decimal.',
+      question: 'On average, how many more units does a sellout row on a promotion sell than a row outside promotions? Give the difference rounded to 1 decimal.',
       ordered: false,
-      hints: ['Group by a condition: a True/False Series can be the key.', 'sellout["units"].groupby(sellout["promo_id"].notna()).mean()', 'Round the result, then .rename_axis("on_promo").rename("units_per_row").'],
-      solution: `sellout["units"].groupby(sellout["promo_id"].notna()).mean().round(1).rename_axis("on_promo").rename("units_per_row")`,
+      hints: ['Two averages of units: the rows with a promo_id and the rows without one.', 'sellout[sellout["promo_id"].notna()]["units"].mean() is the first.', 'Keep the two in variables, then round(promo - regular, 1).'],
+      solution: `promo = sellout[sellout["promo_id"].notna()]["units"].mean()
+regular = sellout[sellout["promo_id"].isna()]["units"].mean()
+round(promo - regular, 1)`,
     },
   ],
 }

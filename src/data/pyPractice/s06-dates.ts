@@ -23,11 +23,10 @@ export const DATES: PracticeSection = {
       title: 'Orders through the week',
       question: 'How many sell-in shipments were ordered on each weekday in 2025 (order_date in 2025)? Show weekday (the full name, Monday first) and shipments, in weekday order from Monday to Sunday.',
       ordered: true,
-      hints: ['Count the orders of 2025 by the weekday number of order_date, with Monday as 0.', 'w.dt.dayofweek.value_counts().sort_index() counts in calendar order, with the number as index.', 'Turn the number into a name with .map(dict(enumerate(days))) on the column after rename_axis("weekday").reset_index(name="shipments").'],
-      solution: `days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-w = sellin.loc[sellin["order_date"].dt.year == 2025, "order_date"]
+      hints: ['Count the orders of 2025 by the weekday number of order_date, with Monday as 0.', 'w.dt.dayofweek.value_counts().sort_index() counts in calendar order, with the number as index.', 'Turn the number into a name with .map({0: "Monday", 1: "Tuesday", ...}) on the column after rename_axis("weekday").reset_index(name="shipments").'],
+      solution: `w = sellin.loc[sellin["order_date"].dt.year == 2025, "order_date"]
 t = w.dt.dayofweek.value_counts().sort_index().rename_axis("weekday").reset_index(name="shipments")
-t["weekday"] = t["weekday"].map(dict(enumerate(days)))
+t["weekday"] = t["weekday"].map({0: "Monday", 1: "Tuesday", 2: "Wednesday", 3: "Thursday", 4: "Friday", 5: "Saturday", 6: "Sunday"})
 t`,
     },
     {
@@ -63,6 +62,11 @@ m.value_counts().sort_index().rename_axis("month_start").reset_index(name="shipm
       title: 'Days from order to shipment',
       code: `days = (sellin["ship_date"] - sellin["order_date"]).dt.days
 days.describe()`,
+    },
+    {
+      kind: 'note',
+      text: '`pd.DataFrame` with a dict of one-item lists builds a one-row answer from several numbers.',
+      syntax: 'pd.DataFrame({"shipments": [10], "avg_days": [2.5]})',
     },
     {
       kind: 'task',

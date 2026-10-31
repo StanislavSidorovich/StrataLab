@@ -33,6 +33,11 @@ GROUP BY channel, chain_name
 ORDER BY channel, chain_name;`,
     },
     {
+      kind: 'note',
+      text: '`FLOOR(x)` rounds a number down, which turns it into bands.',
+      syntax: 'FLOOR(list_price / 100) * 100',
+    },
+    {
       kind: 'task',
       id: 'group-by-price-bands',
       title: 'Price bands',

@@ -23,6 +23,11 @@ plt.ylabel("revenue")
 monthly`,
     },
     {
+      kind: 'note',
+      text: '`plot.barh` draws horizontal bars with the first row at the bottom, so `iloc[::-1]` turns the table over. `plt.xlabel` names the axis.',
+      syntax: 'df.iloc[::-1].plot.barh(x="brand", y="revenue", legend=False)   plt.xlabel("revenue")',
+    },
+    {
       kind: 'task',
       id: 'py-charts-brand-bars',
       title: 'Brands as a bar chart',
@@ -40,7 +45,7 @@ table`,
     {
       kind: 'note',
       text: 'Two lines on one chart need one table per chart: a column for each line, or `ax=` to draw the second on the axes of the first. When the lines are on different scales, a shared axis flattens the smaller one, so check before you read a gap.',
-      syntax: 'ax = a.plot(x="m", y="units", label="a")\nb.plot(x="m", y="units", label="b", ax=ax)',
+      syntax: 'ax = a.plot(x="m", y="units", label="a")\nb.plot(x="m", y="units", label="b", ax=ax)\ndf.rename(columns={"units": "shipped"})',
     },
     {
       kind: 'task',
@@ -57,6 +62,11 @@ sold = sales.assign(month_start=sales["week_start"].dt.to_period("M").dt.to_time
 table = shipped.merge(sold, on="month_start").sort_values("month_start")
 table.plot(x="month_start", y=["shipped", "sold"], title="Shipped and sold, 2025")
 table`,
+    },
+    {
+      kind: 'note',
+      text: '`plot.bar(stacked=True)` draws one bar for each row of a wide table, and `pivot` makes that table when each pair of keys has one value.',
+      syntax: 'df.pivot(index="year", columns="channel", values="share_pct").plot.bar(stacked=True)',
     },
     {
       kind: 'task',

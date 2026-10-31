@@ -7,6 +7,7 @@ The page is for someone who has learnt SQL before and needs to get it back: look
 - The rhythm is: note, example, task, note, example, task. Two to four tasks, one or two examples.
 - A note is at most two sentences, plus one line of syntax and one line of trap when they earn it. If it needs a third sentence, it is a lesson: leave it to the track.
 - The trap is a mistake people really make with this topic, not a general warning.
+- Every function or keyword a solution uses has already appeared in a note or an example above it, on this page. `tests/practiceTaught.test.ts` fails otherwise. Prefer a simpler solution to a new function that only tidies the answer.
 - The last task of a section is its hardest: "Test me" jumps there.
 - No story, no characters, no praise. English; no long dashes.
 

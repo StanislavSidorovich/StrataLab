@@ -7,8 +7,8 @@ export const CLEAN_EXPORT: PracticeSection = {
   blocks: [
     {
       kind: 'note',
-      text: '`raw` is an export nobody tidied: every column is text, and the same thing is written in several ways. Look at the real values first, then fix one column at a time and check the result.',
-      syntax: 'raw["sku_code"].value_counts()   raw["sale_date"].sample(10)   raw["units"].isna().sum()',
+      text: '`raw` is an export nobody tidied: every column is text, and the same thing is written in several ways. Look at the real values first, then fix one column at a time: `str.strip` removes stray spaces and `str.upper` makes capitals.',
+      syntax: 'raw["sku_code"].value_counts()   raw["sale_date"].sample(10)   raw["units"].isna().sum()   raw["sku_code"].str.strip().str.upper()',
     },
     {
       kind: 'task',
@@ -83,7 +83,7 @@ month[month < "2024-07-01"].value_counts().sort_index().rename_axis("month_start
     },
     {
       kind: 'note',
-      text: 'Rows can repeat in everything but their id, so `duplicated()` on the whole table finds none. Leave the id out with `subset`.',
+      text: 'Rows can repeat in everything but their id, so `duplicated()` on the whole table finds none. Leave the id out with `subset`, and work on `df.copy()` when you change several columns.',
       syntax: 'df.drop_duplicates(subset=[c for c in df.columns if c != "raw_id"])',
     },
     {

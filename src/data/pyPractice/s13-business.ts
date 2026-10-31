@@ -23,15 +23,15 @@ export const BUSINESS: PracticeSection = {
       title: 'How few outlets carry the business',
       question: 'Taking all of sellout, how many outlets, counted from the largest, does it take to reach 80% of revenue? Give the number: the first outlet at or above 80% counts.',
       ordered: false,
-      hints: ['Total revenue by customer_id, largest first.', 'The running share is cumsum() / sum().', 'Count the outlets below 0.8, then add 1 for the one that crosses it: int((share < 0.8).sum()) + 1.'],
+      hints: ['Total revenue by customer_id, largest first.', 'The running share is cumsum() / sum().', 'Count the outlets below 0.8, then add 1 for the one that crosses it: len(share[share < 0.8]) + 1.'],
       solution: `by_outlet = sellout.groupby("customer_id")["revenue"].sum().sort_values(ascending=False)
 share = by_outlet.cumsum() / by_outlet.sum()
-int((share < 0.8).sum()) + 1`,
+len(share[share < 0.8]) + 1`,
       traps: [
         {
           code: `by_outlet = sellout.groupby("customer_id")["revenue"].sum()
 share = by_outlet.cumsum() / by_outlet.sum()
-int((share < 0.8).sum()) + 1`,
+len(share[share < 0.8]) + 1`,
           says: 'Without sorting first, this counts outlets in order of their id, not from the largest.',
         },
       ],

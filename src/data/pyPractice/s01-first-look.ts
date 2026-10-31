@@ -7,8 +7,8 @@ export const FIRST_LOOK: PracticeSection = {
   blocks: [
     {
       kind: 'note',
-      text: 'Before any question, find out how big a table is, what its columns hold, and whether their types are what you expect. `shape` and `dtypes` are attributes, so they take no brackets.',
-      syntax: 'df.shape   df.dtypes   df.info()   df.describe()',
+      text: 'Before any question, find out how big a table is, what its columns hold, and whether their types are what you expect. `shape` and `dtypes` are attributes, so they take no brackets, and `len(df)` gives just the number of rows.',
+      syntax: 'df.shape   len(df)   df.dtypes   df.info()   df.describe()',
     },
     {
       kind: 'example',

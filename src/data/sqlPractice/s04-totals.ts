@@ -7,7 +7,7 @@ export const TOTALS: PracticeSection = {
   blocks: [
     {
       kind: 'note',
-      text: '`COUNT(*)` counts rows, `COUNT(col)` counts the rows where col is not NULL, and `COUNT(DISTINCT col)` counts the different values. `SUM` and `AVG` skip NULLs, and with no `GROUP BY` the whole table gives one row.',
+      text: '`COUNT(*)` counts rows, `COUNT(col)` counts the rows where col is not NULL, and `COUNT(DISTINCT col)` counts the different values. `SUM`, `AVG`, `MIN` and `MAX` skip NULLs, `ROUND(x, 1)` rounds to 1 decimal, and with no `GROUP BY` the whole table gives one row.',
       syntax: 'SELECT COUNT(*), COUNT(promo_id), COUNT(DISTINCT promo_id) FROM quaera.fact_sellout',
       trap: '`COUNT(product_id)` counts shipments, not products: add `DISTINCT` to count each product once.',
     },
