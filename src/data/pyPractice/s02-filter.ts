@@ -14,8 +14,8 @@ export const FILTER: PracticeSection = {
     {
       kind: 'example',
       id: 'py-filter-big-weeks',
-      title: 'Weeks an outlet sold over 2,000 units',
-      code: `sellout[sellout["units"] > 2000].head()`,
+      title: 'Weeks an outlet sold over 100 units',
+      code: `sellout[sellout["units"] > 100].head()`,
     },
     {
       kind: 'note',

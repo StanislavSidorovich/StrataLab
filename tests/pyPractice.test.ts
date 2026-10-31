@@ -130,12 +130,15 @@ describe('Python practice: content', () => {
       expect(outputs.some((o) => o.output_type === 'error')).toBe(true)
     })
 
-    it('every example runs', async () => {
+    it('every example runs and shows something', async () => {
+      const empty: string[] = []
       for (const e of examples) {
-        const { outputs } = await cell(e.code)
+        const { outputs, answer: t } = await cell(e.code)
         const failed = outputs.find((o) => o.output_type === 'error')
         expect(failed && failed.output_type === 'error' ? `${failed.ename}: ${failed.evalue}` : null, `${e.id}\n${e.code}`).toBeNull()
+        if (t && t.numRows === 0) empty.push(e.id)
       }
+      expect(empty).toEqual([])
     }, 120_000)
     it('every answer gives rows, passes its own Check, and is not too long', async () => {
       for (const t of tasks) {
