@@ -55,6 +55,16 @@ describe.skipIf(!HAS_PANDAS)('Python tabs: NULLs between DuckDB and pandas', () 
     expect([1, 2].map((i) => back.getChild('n')!.isValid(i))).toEqual([false, false])
   })
 
+  it('hides the old row places after a sort, and keeps labels that mean something', () => {
+    const t = new Table({ k: vectorFromArray([3, 1, 2], new Int32()) })
+    const names = (python: string) => roundTrip(frameFromArrow(t), python).schema.fields.map((f) => f.name)
+    expect(names('df.sort_values("k")')).toEqual(['k'])
+    expect(names('df[df["k"] > 1]')).toEqual(['k'])
+    expect(names('df["k"].describe()')).toEqual(['index', 'k'])
+    expect(names('df.set_index("k", drop=False).rename_axis("key")')).toEqual(['key', 'k'])
+    expect(roundTrip(frameFromArrow(t), 'df.sort_values("k")').getChild('k')!.toArray()).toEqual(Int32Array.from([1, 2, 3]))
+  })
+
   it("keeps the columns in the DataFrame's order, also when names look like numbers (a pivot's years)", () => {
     const t = new Table({ k: vectorFromArray([1, 2], new Int32()) })
     const back = roundTrip(frameFromArrow(t), `pd.DataFrame({"country": ["A", "B"], 2021: [1.0, 2.0], 2022: [3.0, None]})`)

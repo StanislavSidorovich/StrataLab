@@ -155,12 +155,12 @@ def save(df, name):
 
 
 def _shown(df):
-    """A DataFrame as the grid shows it: a meaningful index becomes columns, as pandas prints it."""
+    """A DataFrame as the grid shows it: a meaningful index becomes columns, as pandas prints it. Unnamed whole numbers are only the rows' old places."""
     if isinstance(df, pd.Series):
         df = df.to_frame(name=df.name if df.name is not None else "value")
-    if not (isinstance(df.index, pd.RangeIndex) and df.index.name is None and df.index.start == 0 and df.index.step == 1):
-        df = df.reset_index(allow_duplicates=True)
-    return df
+    if df.index.nlevels == 1 and df.index.name is None and pd.api.types.is_integer_dtype(df.index):
+        return df.reset_index(drop=True)
+    return df.reset_index(allow_duplicates=True)
 
 
 def _column_name(name):

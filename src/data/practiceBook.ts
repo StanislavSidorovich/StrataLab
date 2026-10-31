@@ -49,6 +49,8 @@ export interface PracticeTaskCell {
   question: string
   /** the answer's rows come in this order, and the question says so */
   ordered: boolean
+  /** the moves the solution makes, from the page's skills.ts; tests/practiceLadder.test.ts holds the page to them */
+  skills?: string[]
   hints: string[]
   solution: string
   /** SQL page only: the solution written in PostgreSQL, only where the PostgreSQL form really differs; shown under the task after Solution */
@@ -56,7 +58,15 @@ export interface PracticeTaskCell {
   traps?: PracticeTrap[]
 }
 
-export type PracticeBlock = PracticeNote | PracticeTables | PracticeExampleCell | PracticeTaskCell
+export interface PracticeSkill {
+  id: string
+  /** the section that teaches it */
+  section: string
+  /** finds it in a solution whose strings are emptied; left out when code cannot show it */
+  uses?: RegExp
+}
+
+export type PracticeBlock =PracticeNote | PracticeTables | PracticeExampleCell | PracticeTaskCell
 
 export interface PracticeSection {
   /** in the address (`&at=joins`): keep stable */

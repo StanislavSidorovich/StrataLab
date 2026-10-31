@@ -1,6 +1,6 @@
 # Writing the Python practice page
 
-The page is for someone who wants pandas in hand: look, remember, solve, from a first look at the data to a business answer. It does not teach from zero; quaera.app's pandas track and the pandas notebook do. Copy `s02-filter.ts` as the pattern.
+The page is for someone who wants pandas in hand: look, remember, solve, from a first look at the data to a business answer. People do learn from this page, so each skill is practised alone before tasks combine it. The fast path stays: "I know this" folds a section, "Test me" jumps to its last task. Copy `s02-filter.ts` as the pattern.
 
 ## Shape of the page
 
@@ -15,8 +15,11 @@ Tables come in slowly. Sections 1 to 3 use `sellout` and `products`; each later 
 
 ## A section
 
-- The rhythm is: note, example, task, note, example, task. Two to four tasks, one or two examples.
-- A note is at most two sentences, plus one line of syntax and one line of trap when they earn it. If it needs a third sentence, it is a lesson: leave it to the track.
+- The rhythm is: note, example, a task on that one skill. When a section has shown several skills, a task joins them. The last task is the hardest and adds nothing new.
+- A section has as many tasks as it needs, usually 6 to 12: one for each skill, plus the joins. Sections with no topic of their own (`business`, `free`, `data`) are not ladders.
+- A note is at most three sentences and first says what the thing is for, plus one line of syntax and one line of trap when they earn it.
+- `skills` on a task names the moves its solution makes, from `skills.ts`. Helpers such as `round`, `head`, `reset_index` and variables are not skills.
+- The first task of a section uses one skill. A task adds at most one skill not yet practised on the page. Skills of earlier sections count as practised. `tests/practiceLadder.test.ts` checks all of this, and that the tags are true.
 - The trap is a mistake people really make with this topic, not a general warning.
 - Every `.method` or function a solution uses has already appeared in a note or an example above it, on this page. `tests/practiceTaught.test.ts` fails otherwise. Prefer a simpler solution to a new function that only tidies the answer.
 - The last task of a section is its hardest: "Test me" jumps there.
