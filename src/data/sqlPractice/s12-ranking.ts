@@ -1,4 +1,4 @@
-import type { PracticeSection } from './types'
+import type { PracticeSection } from '../practiceBook'
 
 export const RANKING: PracticeSection = {
   id: 'ranking',
@@ -14,7 +14,7 @@ export const RANKING: PracticeSection = {
       kind: 'example',
       id: 'rank-three-ways',
       title: 'Brands by number of products, three ways',
-      sql: `SELECT brand,
+      code: `SELECT brand,
        COUNT(*) AS products,
        ROW_NUMBER() OVER (ORDER BY COUNT(*) DESC, brand) AS row_no,
        RANK() OVER (ORDER BY COUNT(*) DESC) AS rank_no,
@@ -37,7 +37,7 @@ GROUP BY r.region_name
 ORDER BY place, r.region_name;`,
       traps: [
         {
-          sql: `SELECT r.region_name, COUNT(*) AS customers, RANK() OVER (ORDER BY COUNT(*) DESC) AS place
+          code: `SELECT r.region_name, COUNT(*) AS customers, RANK() OVER (ORDER BY COUNT(*) DESC) AS place
 FROM quaera.dim_region AS r
 JOIN quaera.dim_customer AS c ON c.region_id = r.region_id
 GROUP BY r.region_name
@@ -45,7 +45,7 @@ ORDER BY place, r.region_name;`,
           says: 'RANK leaves a gap after a tie (1, 1, 3). The question asks for no gap: DENSE_RANK.',
         },
         {
-          sql: `SELECT r.region_name, COUNT(*) AS customers, ROW_NUMBER() OVER (ORDER BY COUNT(*) DESC, r.region_name) AS place
+          code: `SELECT r.region_name, COUNT(*) AS customers, ROW_NUMBER() OVER (ORDER BY COUNT(*) DESC, r.region_name) AS place
 FROM quaera.dim_region AS r
 JOIN quaera.dim_customer AS c ON c.region_id = r.region_id
 GROUP BY r.region_name
@@ -63,7 +63,7 @@ ORDER BY place, r.region_name;`,
       kind: 'example',
       id: 'rank-dearest-per-category',
       title: 'The dearest product of each category',
-      sql: `WITH numbered AS (
+      code: `WITH numbered AS (
   SELECT category, product_name, list_price,
          ROW_NUMBER() OVER (PARTITION BY category ORDER BY list_price DESC, product_name) AS n
   FROM quaera.dim_product
@@ -94,7 +94,7 @@ WHERE n <= 3
 ORDER BY channel, revenue DESC;`,
       traps: [
         {
-          sql: `WITH numbered AS (
+          code: `WITH numbered AS (
   SELECT c.channel, c.customer_name, SUM(s.revenue) AS revenue,
          ROW_NUMBER() OVER (ORDER BY SUM(s.revenue) DESC) AS n
   FROM quaera.fact_sellout AS s

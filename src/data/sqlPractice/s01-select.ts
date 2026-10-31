@@ -1,4 +1,4 @@
-import type { PracticeSection } from './types'
+import type { PracticeSection } from '../practiceBook'
 
 export const SELECT: PracticeSection = {
   id: 'select',
@@ -15,7 +15,7 @@ export const SELECT: PracticeSection = {
       kind: 'example',
       id: 'select-oldest-customers',
       title: 'Five longest-standing customers',
-      sql: `SELECT TOP (5) customer_name AS customer, city, opened_date
+      code: `SELECT TOP (5) customer_name AS customer, city, opened_date
 FROM quaera.dim_customer
 ORDER BY opened_date, customer_id;`,
     },
@@ -51,7 +51,7 @@ ORDER BY hired_date, rep_id;`,
       kind: 'example',
       id: 'select-products-by-brand',
       title: 'Products by brand, the dearest first',
-      sql: `SELECT brand, product_name, list_price
+      code: `SELECT brand, product_name, list_price
 FROM quaera.dim_product
 ORDER BY brand, list_price DESC, product_id;`,
     },
@@ -67,12 +67,12 @@ FROM quaera.fact_sellin
 ORDER BY discount_amount DESC, sellin_id;`,
       traps: [
         {
-          sql: `SELECT TOP (5) sellin_id, order_date, distributor_id, product_id, discount_amount AS discount
+          code: `SELECT TOP (5) sellin_id, order_date, distributor_id, product_id, discount_amount AS discount
 FROM quaera.fact_sellin;`,
           says: 'There is no ORDER BY, so TOP (5) took the first five rows the table gave, not the biggest discounts.',
         },
         {
-          sql: `SELECT TOP (5) sellin_id, order_date, distributor_id, product_id, discount_amount AS discount
+          code: `SELECT TOP (5) sellin_id, order_date, distributor_id, product_id, discount_amount AS discount
 FROM quaera.fact_sellin
 ORDER BY discount_amount, sellin_id;`,
           says: 'ORDER BY sorts ascending unless told otherwise, so this is the five smallest discounts. Add DESC.',

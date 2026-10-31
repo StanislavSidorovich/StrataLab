@@ -1,4 +1,4 @@
-import type { PracticeSection } from './types'
+import type { PracticeSection } from '../practiceBook'
 
 export const WINDOWS: PracticeSection = {
   id: 'windows',
@@ -14,7 +14,7 @@ export const WINDOWS: PracticeSection = {
       kind: 'example',
       id: 'win-channel-share',
       title: 'Each channel’s share of sell-out revenue',
-      sql: `SELECT c.channel,
+      code: `SELECT c.channel,
        SUM(s.revenue) AS revenue,
        ROUND(100.0 * SUM(s.revenue) / SUM(SUM(s.revenue)) OVER (), 1) AS share_pct
 FROM quaera.fact_sellout AS s
@@ -45,7 +45,7 @@ ORDER BY net_amount DESC;`,
       kind: 'example',
       id: 'win-running-by-year',
       title: 'Shipments by month, running within each year',
-      sql: `WITH monthly AS (
+      code: `WITH monthly AS (
   SELECT month_start, SUM(net_amount) AS net_amount
   FROM quaera.fact_sellin
   GROUP BY month_start
@@ -82,7 +82,7 @@ ORDER BY month_start;`,
       kind: 'example',
       id: 'win-lag-previous-month',
       title: 'Shipped units against the month before',
-      sql: `WITH monthly AS (
+      code: `WITH monthly AS (
   SELECT month_start, SUM(units) AS units
   FROM quaera.fact_sellin
   GROUP BY month_start
@@ -113,7 +113,7 @@ WHERE YEAR(month_start) = 2026
 ORDER BY month_start;`,
       traps: [
         {
-          sql: `WITH monthly AS (
+          code: `WITH monthly AS (
   SELECT month_start, SUM(net_amount) AS net_amount
   FROM quaera.fact_sellin
   WHERE YEAR(month_start) = 2026
@@ -145,7 +145,7 @@ FROM monthly
 ORDER BY division, month_start;`,
       traps: [
         {
-          sql: `WITH monthly AS (
+          code: `WITH monthly AS (
   SELECT p.division, i.month_start, SUM(i.net_amount) AS net_amount
   FROM quaera.fact_sellin AS i
   JOIN quaera.dim_product AS p ON p.product_id = i.product_id

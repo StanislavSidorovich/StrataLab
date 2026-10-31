@@ -287,13 +287,48 @@ def _error(e):
 
 namespace = {"__name__": "__main__", "__builtins__": __builtins__, "display": display, "lab": sys.modules[__name__]}
 
+# The Python practice page: its tables by short name (sellout, customers…), kept for the session.
+_book = {}
 
-async def run_cell(code, line, count, fetched, names, fetch_js):
+
+def _book_namespace():
+    """A clean start for a practice cell: no cell's variables or changes reach another (pandas 3 copies on write)."""
+    ns = {"__name__": "__main__", "__builtins__": __builtins__, "display": display, "lab": sys.modules[__name__], "pd": pd, "np": np}
+    ns.update({name: df.copy(deep=False) for name, df in _book.items()})
+    return ns
+
+
+def _answer_frame(value):
+    """What a practice cell's last line gives, as a table to compare. A named index is data, an unnamed one is only row labels."""
+    if isinstance(value, pd.Series):
+        value = value.to_frame(name=value.name if value.name is not None else "value")
+    if isinstance(value, pd.DataFrame):
+        if any(n is not None for n in value.index.names):
+            return value.reset_index(allow_duplicates=True)
+        return value.reset_index(drop=True)
+    if isinstance(value, (np.ndarray, pd.Index, pd.api.extensions.ExtensionArray, list, tuple)):
+        return pd.DataFrame({"value": pd.Series(value).reset_index(drop=True)})
+    if isinstance(value, (bool, int, float, str, np.generic, pd.Timestamp)):
+        return pd.DataFrame({"value": [value]})
+    return None
+
+
+async def run_cell(code, line, count, fetched, names, fetch_js, practice=False):
     """Runs one cell in the session's namespace; its outputs, the DataFrames it showed, lab.save calls."""
     global _fetched, _names, _fetch_js, _saves, _outputs, _frames
     from pyodide.code import eval_code_async
 
-    _fetched = dict(fetched)
+    fetched = dict(fetched)
+    if practice:
+        # The page sends the book's tables once, under names without the colon of a call's key.
+        for name in [k for k in fetched if ":" not in k]:
+            f = fetched.pop(name)
+            if "error" in f:
+                raise LabError(f["error"])
+            _book[name] = _frame(f)
+    ns = _book_namespace() if practice else namespace
+    value = None
+    _fetched = fetched
     _names = list(names)
     _fetch_js = fetch_js
     _saves, _outputs, _frames = [], [], []
@@ -306,7 +341,7 @@ async def run_cell(code, line, count, fetched, names, fetch_js):
     try:
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", message=".*non-interactive.*")
-            value = await eval_code_async(source, globals=namespace, filename=filename, return_mode="last_expr", quiet_trailing_semicolon=True)
+            value = await eval_code_async(source, globals=ns, filename=filename, return_mode="last_expr", quiet_trailing_semicolon=True)
         _flush_figures()
         if value is not None and not _is_plot(value):
             _outputs.append({"output_type": "execute_result", "execution_count": count, "data": _bundle(value), "metadata": {}})
@@ -316,7 +351,11 @@ async def run_cell(code, line, count, fetched, names, fetch_js):
     finally:
         sys.stdout, sys.stderr = out, err
     frames = [{"at": at, "frame": _encode(_shown(v), ROW_LIMIT)} for at, v in _frames]
-    return {"outputs": _outputs, "frames": frames, "saves": _saves}
+    result = {"outputs": _outputs, "frames": frames, "saves": _saves}
+    if practice:
+        answer = None if _is_plot(value) else _answer_frame(value)
+        result["answer"] = None if answer is None else _encode(answer, ROW_LIMIT)
+    return result
 
 
 def imports(code):

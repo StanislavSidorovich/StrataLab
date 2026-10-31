@@ -1,5 +1,5 @@
-// The SQL practice page (`#practice=sql`): its address, what the learner has done, and the notes on
-// T-SQL that runs here but not on Fabric. Queries are translated to DuckDB, and DuckDB forgives
+// The practice pages (`#practice=sql`, `#practice=python`): their address, what the learner has done,
+// and the notes on T-SQL that runs here but not on Fabric. Queries are translated to DuckDB, and DuckDB forgives
 // things SQL Server refuses, or answers differently; a note says so instead of letting a habit form.
 
 export interface PracticeProgress {
@@ -35,10 +35,13 @@ export function readProgress(raw: string | null): PracticeProgress {
   }
 }
 
-/** The address of the page: whether it is asked for, and which section. */
-export function practiceFromHash(hash: string): { at: string | null } | null {
-  if (!/(?:^#|&)practice=sql(?:&|$)/i.test(hash)) return null
-  return { at: /(?:^#|&)at=([a-z0-9-]+)/i.exec(hash)?.[1].toLowerCase() ?? null }
+export type BookKind = 'sql' | 'python'
+
+/** The address of the page: whether it is asked for, which one, and which section. */
+export function practiceFromHash(hash: string): { kind: BookKind; at: string | null } | null {
+  const kind = /(?:^#|&)practice=(sql|python)(?:&|$)/i.exec(hash)?.[1].toLowerCase() as BookKind | undefined
+  if (!kind) return null
+  return { kind, at: /(?:^#|&)at=([a-z0-9-]+)/i.exec(hash)?.[1].toLowerCase() ?? null }
 }
 
 export function hashWithoutPractice(hash: string): string {
@@ -46,9 +49,9 @@ export function hashWithoutPractice(hash: string): string {
   return rest.length ? '#' + rest.join('&') : ''
 }
 
-export function hashWithPractice(hash: string, at: string | null): string {
+export function hashWithPractice(hash: string, at: string | null, kind: BookKind = 'sql'): string {
   const rest = hashWithoutPractice(hash).replace(/^#/, '')
-  return `#practice=sql${at ? `&at=${at}` : ''}${rest ? `&${rest}` : ''}`
+  return `#practice=${kind}${at ? `&at=${at}` : ''}${rest ? `&${rest}` : ''}`
 }
 
 export interface SectionTasks {

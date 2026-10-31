@@ -1,4 +1,4 @@
-import type { PracticeSection } from './types'
+import type { PracticeSection } from '../practiceBook'
 
 export const DATA_MAP: PracticeSection = {
   id: 'data',
@@ -31,7 +31,7 @@ export const DATA_MAP: PracticeSection = {
       kind: 'example',
       id: 'data-first-look',
       title: 'A first look at a table',
-      sql: `-- The first Run loads the dataset and the T-SQL translator, once.
+      code: `-- The first Run loads the dataset and the T-SQL translator, once.
 SELECT TOP (5) *
 FROM quaera.fact_sellout
 ORDER BY week_start, sellout_id;`,

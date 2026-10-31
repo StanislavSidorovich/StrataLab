@@ -96,8 +96,9 @@ export function compareResults(got: ResultData, expected: ResultData, ordered: b
 const plural = (n: number, word: string) => `${n.toLocaleString('en-US')} ${word}${n === 1 ? '' : 's'}`
 const showRow = (r: Cell[]) => r.map((v) => (v == null ? 'NULL' : String(v))).join(' · ')
 
-/** What to tell the user about a verdict: a headline and a nudge. */
-export function describeVerdict(v: Verdict): { title: string; detail: string } {
+/** What to tell the user about a verdict: a headline and a nudge, in the words of the language written. */
+export function describeVerdict(v: Verdict, lang: 'sql' | 'python' = 'sql'): { title: string; detail: string } {
+  const py = lang === 'python'
   if (v.ok) return { title: 'Correct!', detail: `All ${plural(v.rows, 'row')} match the answer.` }
   switch (v.problem) {
     case 'columns':
@@ -107,8 +108,8 @@ export function describeVerdict(v: Verdict): { title: string; detail: string } {
       }
     case 'rows':
       return v.got > v.expected
-        ? { title: `${plural(v.got, 'row')}, the answer has ${v.expected}`, detail: 'Too many rows: is a filter (WHERE) missing, or are you grouping by more columns than asked, or did a JOIN repeat rows?' }
-        : { title: `${plural(v.got, 'row')}, the answer has ${v.expected}`, detail: 'Too few rows: is a filter too strict, or does an INNER JOIN drop rows that have no match, or is a LIMIT left over?' }
+        ? { title: `${plural(v.got, 'row')}, the answer has ${v.expected}`, detail: py ? 'Too many rows: is a filter missing, or are you grouping by more columns than asked, or did a merge repeat rows?' : 'Too many rows: is a filter (WHERE) missing, or are you grouping by more columns than asked, or did a JOIN repeat rows?' }
+        : { title: `${plural(v.got, 'row')}, the answer has ${v.expected}`, detail: py ? 'Too few rows: is a filter too strict, or does an inner merge drop rows that have no match, or is a head() left over?' : 'Too few rows: is a filter too strict, or does an INNER JOIN drop rows that have no match, or is a LIMIT left over?' }
     case 'values':
       return {
         title: `${v.wrong} of ${plural(v.expected, 'row')} differ`,
@@ -121,6 +122,6 @@ export function describeVerdict(v: Verdict): { title: string; detail: string } {
           .join(' '),
       }
     case 'order':
-      return { title: 'Right rows, wrong order', detail: 'The task asks for a sort order: check ORDER BY (and DESC).' }
+      return { title: 'Right rows, wrong order', detail: py ? 'The task asks for a sort order: check sort_values (and ascending=False).' : 'The task asks for a sort order: check ORDER BY (and DESC).' }
   }
 }

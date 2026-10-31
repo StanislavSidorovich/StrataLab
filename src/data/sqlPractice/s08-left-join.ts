@@ -1,4 +1,4 @@
-import type { PracticeSection } from './types'
+import type { PracticeSection } from '../practiceBook'
 
 export const LEFT_JOIN: PracticeSection = {
   id: 'left-join',
@@ -15,7 +15,7 @@ export const LEFT_JOIN: PracticeSection = {
       kind: 'example',
       id: 'left-outlets-per-rep',
       title: 'Outlets per person, managers with none included',
-      sql: `SELECT r.rep_name, r.role, COUNT(c.customer_id) AS outlets
+      code: `SELECT r.rep_name, r.role, COUNT(c.customer_id) AS outlets
 FROM quaera.dim_rep AS r
 LEFT JOIN quaera.dim_customer AS c ON c.rep_id = r.rep_id
 GROUP BY r.rep_name, r.role
@@ -38,7 +38,7 @@ GROUP BY p.product_name
 ORDER BY units DESC, p.product_name;`,
       traps: [
         {
-          sql: `SELECT p.product_name, ISNULL(SUM(s.units), 0) AS units
+          code: `SELECT p.product_name, ISNULL(SUM(s.units), 0) AS units
 FROM quaera.dim_product AS p
 LEFT JOIN quaera.fact_sellout AS s ON s.product_id = p.product_id
 WHERE s.promo_id IS NOT NULL
@@ -57,7 +57,7 @@ ORDER BY units DESC, p.product_name;`,
       kind: 'example',
       id: 'left-regions-no-rep',
       title: 'Regions with no rep based there',
-      sql: `SELECT g.region_name
+      code: `SELECT g.region_name
 FROM quaera.dim_region AS g
 LEFT JOIN quaera.dim_rep AS r ON r.region_id = g.region_id
 WHERE r.rep_id IS NULL
@@ -95,7 +95,7 @@ GROUP BY r.macro_region
 ORDER BY revenue DESC;`,
       traps: [
         {
-          sql: `SELECT r.macro_region, COUNT(s.customer_id) AS outlets, SUM(s.revenue) AS revenue
+          code: `SELECT r.macro_region, COUNT(s.customer_id) AS outlets, SUM(s.revenue) AS revenue
 FROM quaera.fact_sellout AS s
 JOIN quaera.dim_customer AS c ON c.customer_id = s.customer_id
 JOIN quaera.dim_region AS r ON r.region_id = c.region_id

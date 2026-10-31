@@ -1,4 +1,4 @@
-import type { PracticeSection } from './types'
+import type { PracticeSection } from '../practiceBook'
 
 export const TOTALS: PracticeSection = {
   id: 'totals',
@@ -15,7 +15,7 @@ export const TOTALS: PracticeSection = {
       kind: 'example',
       id: 'totals-three-counts',
       title: 'Three counts on sell-out',
-      sql: `SELECT COUNT(*) AS lines,
+      code: `SELECT COUNT(*) AS lines,
        COUNT(promo_id) AS promo_lines,
        COUNT(DISTINCT promo_id) AS promotions
 FROM quaera.fact_sellout;`,
@@ -34,7 +34,7 @@ FROM quaera.fact_sellin
 WHERE order_date >= '2025-01-01' AND order_date < '2026-01-01';`,
       traps: [
         {
-          sql: `SELECT COUNT(*) AS shipments,
+          code: `SELECT COUNT(*) AS shipments,
        COUNT(distributor_id) AS distributors,
        COUNT(product_id) AS products
 FROM quaera.fact_sellin
@@ -53,7 +53,7 @@ WHERE order_date >= '2025-01-01' AND order_date < '2026-01-01';`,
       kind: 'example',
       id: 'totals-average-shipment',
       title: 'An average shipment',
-      sql: `SELECT COUNT(*) AS shipments,
+      code: `SELECT COUNT(*) AS shipments,
        AVG(1.0 * units) AS avg_units,
        SUM(net_amount) AS net_amount
 FROM quaera.fact_sellin;`,
@@ -71,7 +71,7 @@ FROM quaera.fact_sellin
 WHERE order_date >= '2025-01-01' AND order_date < '2026-01-01';`,
       traps: [
         {
-          sql: `SELECT AVG(1.0 * units) AS avg_units,
+          code: `SELECT AVG(1.0 * units) AS avg_units,
        AVG(net_amount / units) AS net_per_unit
 FROM quaera.fact_sellin
 WHERE order_date >= '2025-01-01' AND order_date < '2026-01-01';`,
@@ -91,7 +91,7 @@ FROM quaera.fact_sellout
 WHERE week_start >= '2025-01-01' AND week_start < '2026-01-01';`,
       traps: [
         {
-          sql: `SELECT ROUND(1.0 * COUNT(DISTINCT promo_id) / COUNT(*), 3) AS promo_share
+          code: `SELECT ROUND(1.0 * COUNT(DISTINCT promo_id) / COUNT(*), 3) AS promo_share
 FROM quaera.fact_sellout
 WHERE week_start >= '2025-01-01' AND week_start < '2026-01-01';`,
           says: 'COUNT(DISTINCT promo_id) counts the different promotions, not the lines that had one. Count promo_id without DISTINCT.',

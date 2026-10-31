@@ -1,4 +1,4 @@
-import type { PracticeSection } from './types'
+import type { PracticeSection } from '../practiceBook'
 
 export const NULL: PracticeSection = {
   id: 'null',
@@ -15,7 +15,7 @@ export const NULL: PracticeSection = {
       kind: 'example',
       id: 'null-reps-without-manager',
       title: 'People with no manager',
-      sql: `SELECT rep_name, team, role
+      code: `SELECT rep_name, team, role
 FROM quaera.dim_rep
 WHERE manager_id IS NULL;`,
     },
@@ -32,7 +32,7 @@ WHERE channel = 'pharmacy'
   AND chain_name IS NULL;`,
       traps: [
         {
-          sql: `SELECT customer_name, city
+          code: `SELECT customer_name, city
 FROM quaera.dim_customer
 WHERE channel = 'pharmacy'
   AND chain_name = NULL;`,
@@ -49,7 +49,7 @@ WHERE channel = 'pharmacy'
       kind: 'example',
       id: 'null-pharmacy-chain-label',
       title: 'A label for every pharmacy',
-      sql: `SELECT customer_name, ISNULL(chain_name, 'No chain') AS chain
+      code: `SELECT customer_name, ISNULL(chain_name, 'No chain') AS chain
 FROM quaera.dim_customer
 WHERE channel = 'pharmacy';`,
     },
@@ -66,7 +66,7 @@ WHERE channel = 'pharmacy'
   AND (chain_name <> 'Farmalux' OR chain_name IS NULL);`,
       traps: [
         {
-          sql: `SELECT customer_name, COALESCE(chain_name, 'Independent') AS chain
+          code: `SELECT customer_name, COALESCE(chain_name, 'Independent') AS chain
 FROM quaera.dim_customer
 WHERE channel = 'pharmacy'
   AND chain_name <> 'Farmalux';`,

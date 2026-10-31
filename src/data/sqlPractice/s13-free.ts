@@ -1,4 +1,4 @@
-import type { PracticeSection } from './types'
+import type { PracticeSection } from '../practiceBook'
 
 export const FREE: PracticeSection = {
   id: 'free',
@@ -104,7 +104,7 @@ JOIN planned AS p ON p.team = s.team
 ORDER BY done_pct DESC, s.team;`,
       traps: [
         {
-          sql: `SELECT r.team, SUM(s.revenue) AS revenue, SUM(t.target_revenue) AS target, ROUND(100.0 * SUM(s.revenue) / SUM(t.target_revenue), 1) AS done_pct
+          code: `SELECT r.team, SUM(s.revenue) AS revenue, SUM(t.target_revenue) AS target, ROUND(100.0 * SUM(s.revenue) / SUM(t.target_revenue), 1) AS done_pct
 FROM quaera.dim_rep AS r
 JOIN quaera.fact_target AS t ON t.rep_id = r.rep_id AND YEAR(t.month_start) = 2025
 JOIN quaera.dim_customer AS c ON c.rep_id = r.rep_id

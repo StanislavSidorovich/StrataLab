@@ -122,6 +122,7 @@ export function stopKernel(tell = true) {
   worker = null
   started = null
   readyState = null
+  bookLoaded = false
   for (const p of pending.values()) p.reject(new Error(STOPPED_PY))
   pending.clear()
   if (tell) say({ status: 'off' })
@@ -159,19 +160,47 @@ export interface RanCell {
   /** every DataFrame the cell showed, as an Arrow table (at most ROW_LIMIT rows), by its place in the outputs */
   frames: ShownFrame[]
   saves: { name: string; table: Table }[]
+  /** on the practice page: the cell's last line as a table to compare */
+  answer: Table | null
 }
 
 /** Runs one cell: fetches what it names, then runs it in the session. `line`: where it starts in the tab. */
-export async function runCell(code: string, line: number, names: string[]): Promise<RanCell> {
+export function runCell(code: string, line: number, names: string[]): Promise<RanCell> {
+  return run(code, line, names)
+}
+
+let bookLoaded = false
+let bookQueue: Promise<unknown> = Promise.resolve()
+
+/**
+ * Runs a cell of the practice page on a clean start, with the book's tables (short name → table)
+ * ready as variables. One at a time: a Check runs the learner's cell, then the answer's.
+ */
+export function runBookCell(code: string, tables: Record<string, string>, names: string[]): Promise<RanCell> {
+  const go = async () => {
+    await startKernel()
+    const first = !bookLoaded
+    const given: Record<string, PyFrame | { error: string }> = {}
+    if (first) for (const [name, table] of Object.entries(tables)) given[name] = await fetchFrame({ kind: 'table', arg: table })
+    const ran = await run(code, 1, names, given, true)
+    bookLoaded = true
+    return ran
+  }
+  const next = bookQueue.then(go, go)
+  bookQueue = next.catch(() => {})
+  return next
+}
+
+async function run(code: string, line: number, names: string[], given: Record<string, PyFrame | { error: string }> = {}, practice = false): Promise<RanCell> {
   await startKernel()
   const w = worker!
-  const fetched: Record<string, PyFrame | { error: string }> = {}
+  const fetched: Record<string, PyFrame | { error: string }> = { ...given }
   for (const c of labCalls(code)) fetched[callKey(c)] = await fetchFrame(c)
   const id = ++nextId
   const n = ++count
   const result = await new Promise<CellResult>((resolve, reject) => {
     pending.set(id, { resolve, reject })
-    const msg: ToWorker = { type: 'run', id, code, line, count: n, fetched, names }
+    const msg: ToWorker = { type: 'run', id, code, line, count: n, fetched, names, practice }
     w.postMessage(msg, Object.values(fetched).flatMap((f) => ('error' in f ? [] : transferables(f))))
   })
   return {
@@ -179,5 +208,6 @@ export async function runCell(code: string, line: number, names: string[]): Prom
     result,
     frames: result.frames.map((f) => ({ at: f.at, table: arrowFromFrame(f.frame), total: f.frame.total ?? f.frame.rows })),
     saves: result.saves.map((s) => ({ name: s.name, table: arrowFromFrame(s.frame) })),
+    answer: result.answer ? arrowFromFrame(result.answer) : null,
   }
 }

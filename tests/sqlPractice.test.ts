@@ -17,14 +17,16 @@ const require = createRequire(import.meta.url)
 
 describe('SQL practice: the address', () => {
   it('reads the page and its section, and leaves other parts alone', () => {
-    expect(practiceFromHash('#practice=sql')).toEqual({ at: null })
-    expect(practiceFromHash('#practice=sql&at=left-join')).toEqual({ at: 'left-join' })
+    expect(practiceFromHash('#practice=sql')).toEqual({ kind: 'sql', at: null })
+    expect(practiceFromHash('#practice=sql&at=left-join')).toEqual({ kind: 'sql', at: 'left-join' })
+    expect(practiceFromHash('#practice=python&at=merge')).toEqual({ kind: 'python', at: 'merge' })
     expect(practiceFromHash('#ds=quaera')).toBeNull()
     expect(practiceFromHash('#practice=sqlx')).toBeNull()
     expect(hashWithoutPractice('#practice=sql&at=joins&ds=quaera')).toBe('#ds=quaera')
     expect(hashWithoutPractice('#practice=sql')).toBe('')
     expect(hashWithPractice('#ds=quaera', 'joins')).toBe('#practice=sql&at=joins&ds=quaera')
     expect(hashWithPractice('#practice=sql&at=old', null)).toBe('#practice=sql')
+    expect(hashWithPractice('#ds=quaera', 'merge', 'python')).toBe('#practice=python&at=merge&ds=quaera')
   })
 })
 
@@ -119,7 +121,7 @@ describe('SQL practice: content', () => {
     for (const b of cells) if (b.kind === 'note') expect((b.text.match(/[.!?](\s|$)/g) ?? []).length, b.text).toBeLessThanOrEqual(3)
   })
   it('has only T-SQL that Fabric takes', () => {
-    for (const e of examples) expect(fabricNotes(e.sql), e.id).toEqual([])
+    for (const e of examples) expect(fabricNotes(e.code), e.id).toEqual([])
     for (const t of tasks) expect(fabricNotes(t.solution), t.id).toEqual([])
   })
   it('names real columns on the data map', () => {
@@ -160,7 +162,7 @@ describe('SQL practice: content', () => {
     }
 
     it('every example returns rows', () => {
-      for (const e of examples) expect(run(e.sql).rows.length, e.id).toBeGreaterThan(0)
+      for (const e of examples) expect(run(e.code).rows.length, e.id).toBeGreaterThan(0)
     })
     it('every answer returns rows, passes its own Check, and is not too long', () => {
       for (const t of tasks) {
@@ -174,7 +176,7 @@ describe('SQL practice: content', () => {
       for (const t of tasks) if (t.ordered) expect(t.solution, t.id).toMatch(/\border by\b/i)
     })
     it('every trap runs and gives a result the answer does not', () => {
-      for (const t of tasks) for (const trap of t.traps ?? []) expect(compareResults(run(trap.sql), run(t.solution), t.ordered).ok, `${t.id}: ${trap.says}`).toBe(false)
+      for (const t of tasks) for (const trap of t.traps ?? []) expect(compareResults(run(trap.code), run(t.solution), t.ordered).ok, `${t.id}: ${trap.says}`).toBe(false)
     })
   })
 })

@@ -1,4 +1,4 @@
-import type { PracticeSection } from './types'
+import type { PracticeSection } from '../practiceBook'
 
 export const CASE: PracticeSection = {
   id: 'case',
@@ -15,7 +15,7 @@ export const CASE: PracticeSection = {
       kind: 'example',
       id: 'case-line-sizes',
       title: 'Sell-out lines by size',
-      sql: `SELECT CASE WHEN units < 10 THEN 'small'
+      code: `SELECT CASE WHEN units < 10 THEN 'small'
             WHEN units < 50 THEN 'medium'
             ELSE 'large' END AS line_size,
        COUNT(*) AS lines
@@ -39,7 +39,7 @@ ORDER BY lines DESC;`,
 FROM quaera.dim_product;`,
       traps: [
         {
-          sql: `SELECT product_name,
+          code: `SELECT product_name,
        CASE WHEN list_price < 300 THEN 'mid'
             WHEN list_price < 100 THEN 'low'
             ELSE 'high' END AS price_tier
@@ -58,7 +58,7 @@ FROM quaera.dim_product;`,
       kind: 'example',
       id: 'case-promo-units-by-division',
       title: 'Promoted and regular units by division',
-      sql: `SELECT p.division,
+      code: `SELECT p.division,
        SUM(CASE WHEN s.promo_id IS NOT NULL THEN s.units ELSE 0 END) AS promo_units,
        SUM(CASE WHEN s.promo_id IS NULL THEN s.units ELSE 0 END) AS regular_units
 FROM quaera.fact_sellout AS s
@@ -101,7 +101,7 @@ GROUP BY p.brand
 ORDER BY promo_share DESC, p.brand;`,
       traps: [
         {
-          sql: `SELECT p.brand,
+          code: `SELECT p.brand,
        COUNT(*) AS lines,
        COUNT(CASE WHEN s.promo_id IS NOT NULL THEN 1 ELSE 0 END) AS promo_lines,
        ROUND(1.0 * COUNT(CASE WHEN s.promo_id IS NOT NULL THEN 1 ELSE 0 END) / COUNT(*), 3) AS promo_share

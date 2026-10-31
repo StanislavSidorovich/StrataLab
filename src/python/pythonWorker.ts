@@ -12,7 +12,7 @@ import { bytesToLoad, type PackageSize } from '../core/python'
 
 export type ToWorker =
   | { type: 'init'; indexURL: string; packageBaseUrl: string; startup: string[]; imports: Record<string, string>; extra: { module: string; url: string; needs: string[] }[]; sizes: Record<string, PackageSize>; coreBytes: number }
-  | { type: 'run'; id: number; code: string; line: number; count: number; fetched: Record<string, PyFrame | { error: string }>; names: string[] }
+  | { type: 'run'; id: number; code: string; line: number; count: number; fetched: Record<string, PyFrame | { error: string }>; names: string[]; practice?: boolean }
   | { type: 'fetched'; fid: number; frame: PyFrame | { error: string } }
 
 export interface CellResult {
@@ -20,6 +20,8 @@ export interface CellResult {
   /** every DataFrame or Series the cell showed, `at` its place in `outputs` */
   frames: { at: number; frame: PyFrame }[]
   saves: { name: string; frame: PyFrame }[]
+  /** on the practice page: the cell's last line as a table to compare, null when it gives none */
+  answer?: PyFrame | null
 }
 
 export type FromWorker =
@@ -178,7 +180,7 @@ self.onmessage = async (e: MessageEvent<ToWorker>) => {
   const fetched = py!.toPy(msg.fetched)
   const names = py!.toPy(msg.names)
   try {
-    const proxy = (await (runCell as unknown as { callPromising: (...a: unknown[]) => Promise<PyProxy> }).callPromising(msg.code, msg.line, msg.count, fetched, names, fetchFromPage)) as PyProxy
+    const proxy = (await (runCell as unknown as { callPromising: (...a: unknown[]) => Promise<PyProxy> }).callPromising(msg.code, msg.line, msg.count, fetched, names, fetchFromPage, msg.practice === true)) as PyProxy
     const result = proxy.toJs({ dict_converter: Object.fromEntries, create_pyproxies: false }) as CellResult
     proxy.destroy()
     post({ type: 'result', id: msg.id, result })

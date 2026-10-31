@@ -1,4 +1,4 @@
-import type { PracticeSection } from './types'
+import type { PracticeSection } from '../practiceBook'
 
 export const CTE: PracticeSection = {
   id: 'cte',
@@ -15,7 +15,7 @@ export const CTE: PracticeSection = {
       kind: 'example',
       id: 'cte-best-sellin-month',
       title: 'The three biggest months of shipments',
-      sql: `WITH monthly AS (
+      code: `WITH monthly AS (
   SELECT month_start, SUM(net_amount) AS net_amount
   FROM quaera.fact_sellin
   GROUP BY month_start
@@ -49,7 +49,7 @@ ORDER BY month_start;`,
       kind: 'example',
       id: 'cte-two-facts-by-division',
       title: 'Shipped and sold by division',
-      sql: `WITH shipped AS (
+      code: `WITH shipped AS (
   SELECT p.division, SUM(i.units) AS units
   FROM quaera.fact_sellin AS i
   JOIN quaera.dim_product AS p ON p.product_id = i.product_id
@@ -93,7 +93,7 @@ JOIN sold AS s ON s.category = i.category
 ORDER BY i.category;`,
       traps: [
         {
-          sql: `SELECT p.category, SUM(i.units) AS shipped, SUM(s.units) AS sold
+          code: `SELECT p.category, SUM(i.units) AS shipped, SUM(s.units) AS sold
 FROM quaera.dim_product AS p
 JOIN quaera.fact_sellin AS i ON i.product_id = p.product_id AND YEAR(i.order_date) = 2025
 JOIN quaera.fact_sellout AS s ON s.product_id = p.product_id AND YEAR(s.week_start) = 2025

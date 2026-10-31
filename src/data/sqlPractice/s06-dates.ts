@@ -1,4 +1,4 @@
-import type { PracticeSection } from './types'
+import type { PracticeSection } from '../practiceBook'
 
 export const DATES: PracticeSection = {
   id: 'dates',
@@ -15,7 +15,7 @@ export const DATES: PracticeSection = {
       kind: 'example',
       id: 'dates-shipments-by-month',
       title: 'Shipments by year and month',
-      sql: `SELECT YEAR(order_date) AS year, MONTH(order_date) AS month, COUNT(*) AS shipments
+      code: `SELECT YEAR(order_date) AS year, MONTH(order_date) AS month, COUNT(*) AS shipments
 FROM quaera.fact_sellin
 GROUP BY YEAR(order_date), MONTH(order_date)
 ORDER BY year, month;`,
@@ -32,7 +32,7 @@ FROM quaera.fact_sellin
 WHERE YEAR(order_date) = 2026 AND MONTH(order_date) = 6;`,
       traps: [
         {
-          sql: `SELECT COUNT(*) AS shipments, SUM(net_amount) AS net_amount
+          code: `SELECT COUNT(*) AS shipments, SUM(net_amount) AS net_amount
 FROM quaera.fact_sellin
 WHERE MONTH(order_date) = 6;`,
           says: 'MONTH(order_date) = 6 takes every June in the data, three of them. Add the year.',
@@ -62,7 +62,7 @@ ORDER BY month;`,
       kind: 'example',
       id: 'dates-promised-arrival',
       title: 'Order, shipment and a 7-day mark',
-      sql: `SELECT TOP (5) sellin_id,
+      code: `SELECT TOP (5) sellin_id,
        FORMAT(order_date, 'yyyy-MM') AS order_month,
        DATEDIFF(day, order_date, ship_date) AS days_to_ship,
        DATEADD(day, 7, order_date) AS seventh_day
@@ -86,7 +86,7 @@ GROUP BY distributor_id
 ORDER BY slow_shipments DESC, distributor_id;`,
       traps: [
         {
-          sql: `SELECT distributor_id,
+          code: `SELECT distributor_id,
        COUNT(*) AS slow_shipments,
        MAX(DATEDIFF(day, ship_date, order_date)) AS longest_wait
 FROM quaera.fact_sellin

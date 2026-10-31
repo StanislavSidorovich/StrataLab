@@ -26,7 +26,8 @@ import { schemaForModel, showAsModel } from '../db/modelExport'
 import { planGeneration, type GenPlan, type GenTable } from '../core/generate'
 import { runGeneration, type GenOutcome } from '../db/generate'
 import { runOrder } from '../core/pdScript'
-import { hashWithPractice, hashWithoutPractice, practiceFromHash, readableError } from '../core/sqlPractice'
+import { hashWithPractice, hashWithoutPractice, practiceFromHash, readableError, type BookKind } from '../core/sqlPractice'
+import { BOOK_TABLES } from '../data/pyPractice/tables'
 import { duckdbScript, translateTsql, type TranslatedStatement, type TranslatorProgress } from '../dialects/tsql'
 import { copyToPostgres, explainPostgres, getPostgres, postgresCatalog, runPostgres } from '../dialects/postgres'
 import { copyTitle, dialectSwitch, rememberClosed } from '../core/tabs'
@@ -39,7 +40,7 @@ import { hashWithoutTask, taskById, taskFromHash, taskStarter, type PracticeExam
 import { decodeShare, hashWithoutShare, shareDataFromHash } from '../core/shareLink'
 import { historyTabTitle, parseHistory, remember, type HistoryEntry } from '../core/history'
 import { explainStatement, lastStatement, parseDuckPlan, parsePgPlan, readsOnly, type Plan } from '../core/plan'
-import { onKernelState, runCell, startKernel, stopKernel, STOPPED_PY, type KernelState, type ShownFrame } from '../python/kernel'
+import { onKernelState, runBookCell, runCell, startKernel, stopKernel, STOPPED_PY, type KernelState, type ShownFrame } from '../python/kernel'
 import type { CellRun, Output } from '../core/ipynb'
 
 /** What a tab speaks: DuckDB itself, T-SQL translated to DuckDB, PostgreSQL (PGlite) (stage 4), or Python (stage 7). */
@@ -177,8 +178,8 @@ interface State {
   generate: GenerateState | null
   /** the welcome screen (what's where, how to start) is open */
   welcomeOpen: boolean
-  /** the SQL practice page on Kaiyo (`#practice=sql`, src/ui/SqlPractice.tsx) is open */
-  sqlPracticeOpen: boolean
+  /** the practice page on Kaiyo that is open (`#practice=sql`, `#practice=python`, src/ui/PracticeBook.tsx) */
+  practiceBook: BookKind | null
   /** the dialect comparison (src/ui/Compare.tsx) is open */
   compareOpen: boolean
   /** per tab, for T-SQL tabs */
@@ -319,7 +320,7 @@ export const useLab = create<State>(() => ({
   catalogOpen: false,
   generate: null,
   welcomeOpen: !practiceFromHash(location.hash) && firstVisit(),
-  sqlPracticeOpen: practiceFromHash(location.hash) !== null,
+  practiceBook: practiceFromHash(location.hash)?.kind ?? null,
   compareOpen: false,
   translations: {},
   postgres: { status: 'off' },
@@ -445,7 +446,7 @@ export async function initEngine() {
     const fromTask = await openTaskFromHash()
     const fromShare = await openShareFromHash()
     window.addEventListener('hashchange', () => {
-      if (practiceFromHash(location.hash)) set({ sqlPracticeOpen: true })
+      if (practiceFromHash(location.hash)) set({ practiceBook: practiceFromHash(location.hash)!.kind })
       void openDdlFromHash()
       void openDatasetFromHash()
       void openTaskFromHash()
@@ -461,7 +462,7 @@ export async function initEngine() {
       /* ignore */
     }
     // Someone arriving with a model came for that model, not for the demo shop.
-    if (!fromModel && !fromLink && !fromTask && !fromShare && !get().sqlPracticeOpen && ownTables(get().tables).length === 0 && (!e.persistent || !offered)) await loadDemo()
+    if (!fromModel && !fromLink && !fromTask && !fromShare && !get().practiceBook && ownTables(get().tables).length === 0 && (!e.persistent || !offered)) await loadDemo()
   } catch (e) {
     set({ engine: { status: 'error', error: String(e instanceof Error ? e.message : e) } })
   }
@@ -1698,12 +1699,12 @@ export async function openWalkthrough(w: Walkthrough) {
   addTab(w.code, `${w.title} walkthrough`, 'python')
 }
 
-// ------------------------------------------------------------------ SQL practice on Kaiyo
+// ------------------------------------------------------------------ practice pages on Kaiyo
 
-export function openSqlPractice(open = true, at: string | null = null) {
-  const hash = open ? hashWithPractice(location.hash, at) : hashWithoutPractice(location.hash)
+export function openPracticeBook(kind: BookKind | null, at: string | null = null) {
+  const hash = kind ? hashWithPractice(location.hash, at, kind) : hashWithoutPractice(location.hash)
   history.replaceState(null, '', location.pathname + location.search + hash)
-  set({ sqlPracticeOpen: open })
+  set({ practiceBook: kind })
 }
 
 /** The dataset the page's queries read; loaded with the usual progress card the first time. */
@@ -1742,6 +1743,12 @@ export async function runPracticeQuery(sql: string, tag: string, isStopped: () =
       await refreshCatalog()
     }
   }
+}
+
+/** Runs a cell of the Python practice page: a clean start, with Kaiyo's tables as variables. */
+export async function runPracticePython(code: string) {
+  await ensureKaiyo()
+  return runBookCell(code, BOOK_TABLES, pythonNames())
 }
 
 // ------------------------------------------------------------------ practice (stage 5)

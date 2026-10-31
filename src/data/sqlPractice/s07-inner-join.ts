@@ -1,4 +1,4 @@
-import type { PracticeSection } from './types'
+import type { PracticeSection } from '../practiceBook'
 
 export const INNER_JOIN: PracticeSection = {
   id: 'inner-join',
@@ -15,7 +15,7 @@ export const INNER_JOIN: PracticeSection = {
       kind: 'example',
       id: 'join-units-by-division',
       title: 'Units sold by division',
-      sql: `SELECT p.division, SUM(s.units) AS units
+      code: `SELECT p.division, SUM(s.units) AS units
 FROM quaera.fact_sellout AS s
 JOIN quaera.dim_product AS p ON p.product_id = s.product_id
 GROUP BY p.division
@@ -42,7 +42,7 @@ ORDER BY revenue DESC;`,
       kind: 'example',
       id: 'join-revenue-by-macro-region',
       title: 'Revenue by macro-region: three tables',
-      sql: `SELECT r.macro_region, SUM(s.revenue) AS revenue
+      code: `SELECT r.macro_region, SUM(s.revenue) AS revenue
 FROM quaera.fact_sellout AS s
 JOIN quaera.dim_customer AS c ON c.customer_id = s.customer_id
 JOIN quaera.dim_region AS r ON r.region_id = c.region_id
@@ -79,7 +79,7 @@ GROUP BY c.customer_name
 ORDER BY net_amount DESC;`,
       traps: [
         {
-          sql: `SELECT TOP (5) c.customer_name, SUM(i.net_amount) AS net_amount
+          code: `SELECT TOP (5) c.customer_name, SUM(i.net_amount) AS net_amount
 FROM quaera.fact_sellin AS i
 JOIN quaera.dim_customer AS c ON c.served_by_distributor_id = i.distributor_id
 GROUP BY c.customer_name

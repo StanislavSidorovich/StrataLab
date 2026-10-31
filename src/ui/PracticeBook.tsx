@@ -1,44 +1,164 @@
-// One long page of SQL practice on Kaiyo Trading (`#practice=sql`): a note, an example to run, a task
-// to solve, and so on. It lies over the workbench and shares its engine. Only the editors on screen
-// exist; the rest show their text, so a page of 70 cells stays light.
-import { useEffect, useMemo, useRef, useState } from 'react'
+// One long page of practice on Kaiyo Trading (`#practice=sql`, `#practice=python`): a note, an example
+// to run, a task to solve, and so on. It lies over the workbench and shares its engines. Only the
+// editors on screen exist; the rest show their text, so a page of 70 cells stays light.
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { EditorView, basicSetup } from 'codemirror'
 import { keymap, placeholder } from '@codemirror/view'
-import { Prec } from '@codemirror/state'
+import { Prec, type Extension } from '@codemirror/state'
 import { MSSQL, sql as sqlLang } from '@codemirror/lang-sql'
+import { python } from '@codemirror/lang-python'
 import { oneDark } from '@codemirror/theme-one-dark'
 import type { Table } from 'apache-arrow'
 import { ArrowDown, ArrowRight, Check, CheckCircle2, ChevronDown, ChevronRight, ExternalLink, Eye, GraduationCap, Lightbulb, Loader2, Play, Square, Target, TriangleAlert, X, XCircle } from 'lucide-react'
 import { create } from 'zustand'
 import { compareResults, describeVerdict, type ResultData, type Verdict } from '../core/check'
-import { fabricNotes, hashWithPractice, nextTask, offersKnown, practiceCounts, practiceFromHash, readProgress, type FabricNote, type PracticeProgress } from '../core/sqlPractice'
+import type { Output } from '../core/ipynb'
+import { fabricNotes, hashWithPractice, nextTask, offersKnown, practiceCounts, practiceFromHash, readProgress, type BookKind, type FabricNote, type PracticeProgress, type SectionTasks } from '../core/sqlPractice'
 import { cancelQuery } from '../db/engine'
 import { resultRows } from '../db/export'
-import { SECTIONS, SECTION_TASKS, tasksOf, taskNumber } from '../data/sqlPractice'
-import type { PracticeBlock, PracticeExampleCell, PracticeNote, PracticeSection, PracticeTables, PracticeTaskCell } from '../data/sqlPractice/types'
+import { SECTIONS as SQL_SECTIONS, SECTION_TASKS as SQL_TASKS } from '../data/sqlPractice'
+import { SECTIONS as PY_SECTIONS, SECTION_TASKS as PY_TASKS } from '../data/pyPractice'
+import { aliasesIn, BOOK_TABLES } from '../data/pyPractice/tables'
+import { taskNumber, tasksOf, type PracticeBlock, type PracticeExampleCell, type PracticeNote, type PracticeSection, type PracticeTables, type PracticeTaskCell } from '../data/practiceBook'
 import { DataGrid } from './DataGrid'
 import { completionSchema, darkBackground, lightTheme } from './SqlEditor'
-import { openAndRun, openSqlPractice, runPracticeQuery, useLab } from './store'
+import { OutputView } from './PythonOutput'
+import { addTab, openAndRun, openPracticeBook, restartPython, runPracticePython, runPracticeQuery, startPython, useLab } from './store'
 
-const PROGRESS_KEY = 'stratalab.sql-practice.v1'
 const LINE = 20
 
-function loadProgress(): PracticeProgress {
-  try {
-    return readProgress(localStorage.getItem(PROGRESS_KEY))
-  } catch {
-    return readProgress(null)
+function progressStore(key: string) {
+  const load = () => {
+    try {
+      return readProgress(localStorage.getItem(key))
+    } catch {
+      return readProgress(null)
+    }
   }
+  const store = create<PracticeProgress>(load)
+  store.subscribe((p) => {
+    try {
+      localStorage.setItem(key, JSON.stringify(p))
+    } catch {
+      /* progress stays for this visit */
+    }
+  })
+  return store
 }
 
-const useProgress = create<PracticeProgress>(loadProgress)
-useProgress.subscribe((p) => {
-  try {
-    localStorage.setItem(PROGRESS_KEY, JSON.stringify(p))
-  } catch {
-    /* progress stays for this visit */
-  }
-})
+/** What a run of a cell gives: the rows to compare, and what to show. */
+interface BookRun {
+  /** the answer to compare; for SQL also the grid */
+  table: Table | null
+  more: boolean
+  notes: FabricNote[]
+  /** Python: what the cell showed, in order, with its DataFrames by place */
+  outputs?: Output[]
+  frames?: Record<number, Table>
+  failed?: boolean
+}
+
+/** A page's language: how it runs a cell and what it says. */
+interface BookEngine {
+  kind: BookKind
+  title: string
+  sections: PracticeSection[]
+  tasks: SectionTasks[]
+  useProgress: ReturnType<typeof progressStore>
+  language: (tables: ReturnType<typeof useLab.getState>['tables']) => Extension
+  comment: string
+  writeHint: string
+  empty: string
+  intro: ReactNode
+  run: (code: string, tag: string, isStopped: () => boolean, onProgress: (text: string) => void) => Promise<BookRun>
+  /** the cell's result as rows to compare */
+  rows: (code: string, tag: string) => Promise<ResultData>
+  stop: (tag: string) => void
+  openInLab: (code: string, title: string) => void
+  openTitle: string
+}
+
+const linkStyle = { color: 'var(--accent)' }
+
+const SQL_ENGINE: BookEngine = {
+  kind: 'sql',
+  title: 'SQL practice · Kaiyo Trading',
+  sections: SQL_SECTIONS,
+  tasks: SQL_TASKS,
+  useProgress: progressStore('stratalab.sql-practice.v1'),
+  language: (tables) => sqlLang({ dialect: MSSQL, schema: completionSchema(tables, 'main'), upperCaseKeywords: false }),
+  comment: '--',
+  writeHint: 'Write your query here',
+  empty: 'There is no query to run yet.',
+  intro: (
+    <>
+      Look, remember, solve. For an explanation from the start, see the{' '}
+      <a href="https://quaera.app" target="_blank" rel="noreferrer" style={linkStyle}>
+        SQL track on quaera.app
+      </a>
+      . Your queries are T-SQL, translated to DuckDB in this browser: nearly the same as Fabric Warehouse, and a yellow note marks where it is not.
+    </>
+  ),
+  run: async (code, tag, isStopped, onProgress) => {
+    const { table, more } = await runPracticeQuery(code, tag, isStopped, (p) => onProgress(p === 'download' ? 'Getting the T-SQL translator (once)…' : 'Starting the T-SQL translator…'))
+    return { table, more, notes: fabricNotes(code) }
+  },
+  rows: async (code, tag) => resultRows((await runPracticeQuery(code, tag, () => false)).table),
+  stop: (tag) => void cancelQuery(tag),
+  openInLab: (code, title) => openAndRun(code, title, 'tsql'),
+  openTitle: 'Open this query in a T-SQL tab of the workbench',
+}
+
+/** A cell as a Python tab has to write it: there the tables are not variables yet. */
+function asPythonTab(code: string) {
+  const reads = aliasesIn(code).map((a) => `${a} = lab.table("${BOOK_TABLES[a]}")`)
+  return ['import numpy as np', 'import pandas as pd', ...reads, '', code].join('\n')
+}
+
+const PY_ENGINE: BookEngine = {
+  kind: 'python',
+  title: 'Python practice · Kaiyo Trading',
+  sections: PY_SECTIONS,
+  tasks: PY_TASKS,
+  useProgress: progressStore('stratalab.python-practice.v1'),
+  language: () => python(),
+  comment: '#',
+  writeHint: 'Write your code here. The last line is your answer.',
+  empty: 'There is no code to run yet.',
+  intro: (
+    <>
+      Look, remember, solve, from a first look at the data to a business answer. For an explanation from the start, see the{' '}
+      <a href="https://quaera.app" target="_blank" rel="noreferrer" style={linkStyle}>
+        pandas track on quaera.app
+      </a>{' '}
+      or the{' '}
+      <a href="https://pandas.quaera.app" target="_blank" rel="noreferrer" style={linkStyle}>
+        pandas notebook
+      </a>
+      . Every cell starts clean, with <code className="mono">pd</code>, <code className="mono">np</code> and the tables ready as variables, so cells never depend on each other. The last line of a cell is its answer. Python runs in this browser and starts once, in about ten seconds.
+    </>
+  ),
+  run: async (code) => {
+    const r = await runPracticePython(code)
+    const error = r.result.outputs.some((o) => o.output_type === 'error')
+    return { table: r.answer, more: false, notes: [], outputs: r.result.outputs, frames: Object.fromEntries(r.frames.map((f) => [f.at, f.table])), failed: error }
+  },
+  rows: async (code) => {
+    const r = await runPracticePython(code)
+    const failed = r.result.outputs.find((o) => o.output_type === 'error')
+    if (failed && failed.output_type === 'error') throw new Error(`${failed.ename}: ${failed.evalue}`)
+    if (!r.answer) throw new Error('The cell gave no answer.')
+    return resultRows(r.answer)
+  },
+  stop: () => restartPython(),
+  openInLab: (code, title) => void addTab(asPythonTab(code), title, 'python'),
+  openTitle: 'Open this code in a Python tab of the workbench',
+}
+
+const ENGINES: Record<BookKind, BookEngine> = { sql: SQL_ENGINE, python: PY_ENGINE }
+
+const BookContext = createContext<BookEngine>(SQL_ENGINE)
+const useBook = () => useContext(BookContext)
 
 const toggled = (list: string[], id: string) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id])
 
@@ -66,6 +186,7 @@ function CellEditor({ value, onChange, onRun, onCheck, minLines, hint, label }: 
   const handlers = useRef({ onChange, onRun, onCheck })
   handlers.current = { onChange, onRun, onCheck }
   const [visible, setVisible] = useState(false)
+  const book = useBook()
   const dark = useLab((s) => s.theme === 'dark')
   const tables = useLab((s) => s.tables)
 
@@ -89,7 +210,7 @@ function CellEditor({ value, onChange, onRun, onCheck, minLines, hint, label }: 
         ),
         basicSetup,
         EditorView.lineWrapping,
-        sqlLang({ dialect: MSSQL, schema: completionSchema(tables, 'main'), upperCaseKeywords: false }),
+        book.language(tables),
         dark ? [Prec.high(darkBackground), oneDark] : lightTheme,
         hint ? placeholder(hint) : [],
         EditorView.contentAttributes.of({ 'aria-label': label }),
@@ -123,46 +244,59 @@ type Run =
   | { status: 'idle' }
   | { status: 'running'; message: string }
   | { status: 'error'; message: string }
-  | { status: 'done'; table: Table; more: boolean; ms: number; notes: FabricNote[] }
+  | { status: 'done'; ms: number; result: BookRun }
 
-/** Running one cell's query: Stop, the translator's first download, and the notes on Fabric. */
+/** Running one cell: Stop, what is being started the first time, and the notes on Fabric. */
 function useCellRun(id: string) {
+  const book = useBook()
   const [run, setRun] = useState<Run>({ status: 'idle' })
   const stopped = useRef(false)
-  const exec = async (sql: string): Promise<Table | null> => {
-    if (!sql.trim()) {
-      setRun({ status: 'error', message: 'There is no query to run yet.' })
+  const exec = async (code: string): Promise<BookRun | null> => {
+    if (!code.trim()) {
+      setRun({ status: 'error', message: book.empty })
       return null
     }
     stopped.current = false
     const t0 = performance.now()
     setRun({ status: 'running', message: 'Running…' })
     try {
-      const { table, more } = await runPracticeQuery(sql, `practice-${id}`, () => stopped.current, (p) => setRun({ status: 'running', message: p === 'download' ? 'Getting the T-SQL translator (once)…' : 'Starting the T-SQL translator…' }))
-      setRun({ status: 'done', table, more, ms: performance.now() - t0, notes: fabricNotes(sql) })
-      return table
+      const result = await book.run(code, `practice-${id}`, () => stopped.current, (message) => setRun({ status: 'running', message }))
+      setRun({ status: 'done', ms: performance.now() - t0, result })
+      return result
     } catch (e) {
       setRun({ status: 'error', message: e instanceof Error ? e.message : String(e) })
       return null
     }
   }
+  /** Adds a note under a finished run. */
+  const note = (n: FabricNote) => setRun((r) => (r.status === 'done' ? { ...r, result: { ...r.result, notes: [...r.result.notes, n] } } : r))
   const stop = () => {
     stopped.current = true
-    void cancelQuery(`practice-${id}`)
+    book.stop(`practice-${id}`)
   }
-  return { run, exec, stop }
+  return { run, exec, stop, note }
 }
 
 const SHOWN_ROWS = 10
 const ROW_H = 26
 const HEAD_H = 46
 
+function Grid({ table }: { table: Table }) {
+  return (
+    <div className="rounded-md overflow-hidden" style={{ height: Math.min(table.numRows, SHOWN_ROWS) * ROW_H + HEAD_H + 2, border: '1px solid var(--line)' }}>
+      <DataGrid table={table} compact />
+    </div>
+  )
+}
+
 function RunResult({ run }: { run: Run }) {
+  const book = useBook()
+  const kernel = useLab((s) => s.python)
   if (run.status === 'idle') return null
   if (run.status === 'running')
     return (
       <div className="flex items-center gap-2 py-1" role="status" style={{ color: 'var(--muted)' }}>
-        <Loader2 size={14} className="animate-spin" /> {run.message}
+        <Loader2 size={14} className="animate-spin" /> {book.kind === 'python' && kernel.status === 'loading' ? 'Starting Python (once, about ten seconds)…' : run.message}
       </div>
     )
   if (run.status === 'error')
@@ -172,21 +306,27 @@ function RunResult({ run }: { run: Run }) {
         <span className="min-w-0 break-words">{run.message}</span>
       </div>
     )
-  const rows = run.table.numRows
+  const { result } = run
+  const rows = result.table?.numRows ?? 0
   return (
     <div className="space-y-1.5">
-      {run.table.numCols > 0 ? (
-        <div className="rounded-md overflow-hidden" style={{ height: Math.min(rows, SHOWN_ROWS) * ROW_H + HEAD_H + 2, border: '1px solid var(--line)' }}>
-          <DataGrid table={run.table} compact />
-        </div>
+      {result.outputs ? (
+        result.outputs.map((o, i) => <OutputView key={i} o={o} frame={result.frames?.[i] && <Grid table={result.frames[i]} />} />)
+      ) : result.table && result.table.numCols > 0 ? (
+        <Grid table={result.table} />
       ) : (
         <div style={{ color: 'var(--muted)' }}>Done: no rows to show.</div>
       )}
       <div style={{ color: 'var(--muted)', fontSize: 12 }}>
-        {rows.toLocaleString('en-US')}
-        {run.more ? '+' : ''} row{rows === 1 ? '' : 's'} · {run.ms.toFixed(0)} ms
+        {result.table && (
+          <>
+            {rows.toLocaleString('en-US')}
+            {result.more ? '+' : ''} row{rows === 1 ? '' : 's'} ·{' '}
+          </>
+        )}
+        {run.ms.toFixed(0)} ms
       </div>
-      {run.notes.map((n) => (
+      {result.notes.map((n) => (
         <div key={n.id} className="rounded-md px-2.5 py-1.5 flex gap-2" style={{ background: 'var(--warn-soft)', color: 'var(--warn-text)' }}>
           <TriangleAlert size={15} className="shrink-0 mt-0.5" />
           <span>{n.text}</span>
@@ -224,8 +364,10 @@ function TablesBlock({ block }: { block: PracticeTables }) {
     <ul className="m-0 p-0 list-none rounded-lg overflow-hidden" style={{ border: '1px solid var(--line)' }}>
       {block.tables.map((t, i) => (
         <li key={t.name} className="px-3 py-2" style={i ? { borderTop: '1px solid var(--line)' } : undefined}>
-          <span className="mono font-semibold">{t.name}</span>
-          <span style={{ color: 'var(--muted)' }}> · one row: {t.row}</span>
+          <span className="mono font-semibold">{t.alias ?? t.name}</span>
+          <span style={{ color: 'var(--muted)' }}>
+            {t.alias ? ` (${t.name})` : ''} · one row: {t.row}
+          </span>
           <div className="mono" style={{ color: 'var(--muted)', fontSize: 12, overflowWrap: 'anywhere' }}>
             {t.columns.join(', ')}
           </div>
@@ -235,16 +377,17 @@ function TablesBlock({ block }: { block: PracticeTables }) {
   )
 }
 
-/** Opens the cell's query in the workbench, in a T-SQL tab. */
-function OpenInLab({ sql, title }: { sql: string; title: string }) {
+/** Opens the cell in the workbench, in a tab of its language. */
+function OpenInLab({ code, title }: { code: string; title: string }) {
+  const book = useBook()
   return (
     <button
       className="btn btn-ghost"
-      disabled={!sql.trim()}
-      title="Open this query in a T-SQL tab of the workbench"
+      disabled={!code.trim()}
+      title={book.openTitle}
       onClick={() => {
-        openSqlPractice(false)
-        openAndRun(sql, title, 'tsql')
+        openPracticeBook(null)
+        book.openInLab(code, title)
       }}
     >
       <ExternalLink size={14} /> <span className="hidden sm:inline">Open in Lab</span>
@@ -268,7 +411,7 @@ function RunButton({ run, exec, stop }: { run: Run; exec: () => void; stop: () =
 }
 
 function ExampleBlock({ block }: { block: PracticeExampleCell }) {
-  const [text, setText] = useState(block.sql)
+  const [text, setText] = useState(block.code)
   const { run, exec, stop } = useCellRun(block.id)
   const go = () => void exec(text)
   return (
@@ -279,9 +422,9 @@ function ExampleBlock({ block }: { block: PracticeExampleCell }) {
           {block.title}
         </span>
         <RunButton run={run} exec={go} stop={stop} />
-        <OpenInLab sql={text} title={block.title} />
+        <OpenInLab code={text} title={block.title} />
       </div>
-      <CellEditor value={block.sql} onChange={setText} onRun={go} minLines={1} label={`Example: ${block.title}`} />
+      <CellEditor value={block.code} onChange={setText} onRun={go} minLines={1} label={`Example: ${block.title}`} />
       <RunResult run={run} />
     </div>
   )
@@ -290,6 +433,8 @@ function ExampleBlock({ block }: { block: PracticeExampleCell }) {
 type CheckState = { verdict: Verdict; trap: string | null } | null
 
 function TaskBlock({ section, block, onNext }: { section: PracticeSection; block: PracticeTaskCell; onNext: (id: string) => void }) {
+  const book = useBook()
+  const useProgress = book.useProgress
   const number = taskNumber(section, block)
   const saved = useProgress((p) => p.drafts[block.id] ?? '')
   const hints = useProgress((p) => p.hints[block.id] ?? 0)
@@ -297,7 +442,7 @@ function TaskBlock({ section, block, onNext }: { section: PracticeSection; block
   const [initial, setInitial] = useState(saved)
   const [editorKey, setEditorKey] = useState(0)
   const text = useRef(saved)
-  const { run, exec, stop } = useCellRun(block.id)
+  const { run, exec, stop, note } = useCellRun(block.id)
   const [check, setCheck] = useState<CheckState>(null)
   const [checking, setChecking] = useState(false)
   const [offer, setOffer] = useState(false)
@@ -315,17 +460,19 @@ function TaskBlock({ section, block, onNext }: { section: PracticeSection; block
     setCheck(null)
     setChecking(true)
     try {
-      const table = await exec(text.current)
-      if (!table) return
-      if (table.numCols === 0) return
-      const got: ResultData = resultRows(table)
-      const never = () => false
-      const expected = resultRows((await runPracticeQuery(block.solution, `practice-${block.id}-answer`, never)).table)
+      const ran = await exec(text.current)
+      if (!ran || ran.failed) return
+      if (!ran.table || ran.table.numCols === 0) {
+        if (book.kind === 'python') note({ id: 'no-answer', text: 'Nothing to check: end the cell with the answer itself, not an assignment. Put the variable’s name on the last line.' })
+        return
+      }
+      const got: ResultData = resultRows(ran.table)
+      const expected = await book.rows(block.solution, `practice-${block.id}-answer`)
       const verdict = compareResults(got, expected, block.ordered)
       let trap: string | null = null
       if (!verdict.ok) {
         for (const t of block.traps ?? []) {
-          const wrong = resultRows((await runPracticeQuery(t.sql, `practice-${block.id}-trap`, never)).table)
+          const wrong = await book.rows(t.code, `practice-${block.id}-trap`)
           if (compareResults(got, wrong, block.ordered).ok) {
             trap = t.says
             break
@@ -333,7 +480,7 @@ function TaskBlock({ section, block, onNext }: { section: PracticeSection; block
         }
       } else {
         const p = useProgress.getState()
-        const section_ = SECTION_TASKS.find((s) => s.id === section.id)!
+        const section_ = book.tasks.find((s) => s.id === section.id)!
         setOffer(offersKnown(section_, block.id, p))
         if (!p.solved.includes(block.id)) useProgress.setState({ solved: [...p.solved, block.id] })
       }
@@ -346,14 +493,14 @@ function TaskBlock({ section, block, onNext }: { section: PracticeSection; block
     }
   }
   const showSolution = () => {
-    if (!confirm('Show the solution? It is added under your query.')) return
-    const next = `${text.current.trimEnd()}${text.current.trim() ? '\n\n' : ''}-- Solution:\n${block.solution}\n`
+    if (!confirm('Show the solution? It is added under what you wrote.')) return
+    const next = `${text.current.trimEnd()}${text.current.trim() ? '\n\n' : ''}${book.comment} Solution:\n${block.solution}\n`
     change(next)
     setInitial(next)
     setEditorKey((k) => k + 1)
   }
-  const next = check?.verdict.ok ? nextTask(SECTION_TASKS, useProgress.getState()) : null
-  const said = check ? describeVerdict(check.verdict) : null
+  const next = check?.verdict.ok ? nextTask(book.tasks, useProgress.getState()) : null
+  const said = check ? describeVerdict(check.verdict, book.kind) : null
 
   return (
     <div id={`task-${block.id}`} className="rounded-lg p-3 space-y-2" style={{ background: 'var(--panel)', border: `1px solid ${solved ? 'var(--accent)' : 'var(--line)'}`, scrollMarginTop: 72 }}>
@@ -364,10 +511,10 @@ function TaskBlock({ section, block, onNext }: { section: PracticeSection; block
       <p className="m-0" style={{ fontSize: 15, lineHeight: 1.5 }}>
         <Prose text={block.question} />
       </p>
-      <CellEditor key={editorKey} value={initial} onChange={change} onRun={go} onCheck={() => void doCheck()} minLines={4} hint="Write your query here" label={`Task ${number}: your query`} />
+      <CellEditor key={editorKey} value={initial} onChange={change} onRun={go} onCheck={() => void doCheck()} minLines={4} hint={book.writeHint} label={`Task ${number}: your answer`} />
       <div className="flex items-center gap-1.5 flex-wrap">
         <RunButton run={run} exec={go} stop={stop} />
-        <button className="btn btn-primary" disabled={!ready || checking} onClick={() => void doCheck()} title="Run your query and compare its result with the answer (Ctrl+Shift+Enter)">
+        <button className="btn btn-primary" disabled={!ready || checking} onClick={() => void doCheck()} title="Run your cell and compare its result with the answer (Ctrl+Shift+Enter)">
           {checking ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} Check
         </button>
         <button className="btn" disabled={hints >= block.hints.length} onClick={() => useProgress.setState((p) => ({ hints: { ...p.hints, [block.id]: hints + 1 } }))}>
@@ -376,7 +523,7 @@ function TaskBlock({ section, block, onNext }: { section: PracticeSection; block
         <button className="btn btn-ghost" onClick={showSolution}>
           <Eye size={14} /> Solution
         </button>
-        <OpenInLab sql={text.current} title={`Task ${number}`} />
+        <OpenInLab code={text.current} title={`Task ${number}`} />
       </div>
       {hints > 0 && (
         <ol className="m-0 p-0 list-none space-y-0.5">
@@ -393,7 +540,7 @@ function TaskBlock({ section, block, onNext }: { section: PracticeSection; block
         <div role="status" className="rounded-md px-2.5 py-1.5 flex gap-2" style={check.verdict.ok ? { background: 'var(--accent-soft)', color: 'var(--accent)' } : { background: 'var(--warn-soft)', color: 'var(--warn-text)' }}>
           {check.verdict.ok ? <CheckCircle2 size={15} className="shrink-0 mt-0.5" /> : <XCircle size={15} className="shrink-0 mt-0.5" />}
           <span className="flex-1 min-w-0">
-            <b>{said.title}</b> {check.trap ?? said.detail}
+            <b>{said.title}</b> <Prose text={check.trap ?? said.detail} />
           </span>
           {next && (
             <button className="btn shrink-0" onClick={() => onNext(next)}>
@@ -434,6 +581,7 @@ function Block({ section, block, onNext }: { section: PracticeSection; block: Pr
 }
 
 function SectionView({ section, onNext }: { section: PracticeSection; onNext: (id: string) => void }) {
+  const useProgress = useBook().useProgress
   const known = useProgress((p) => p.known.includes(section.id))
   const [opened, setOpened] = useState(false)
   const tasks = tasksOf(section)
@@ -473,19 +621,30 @@ function SectionView({ section, onNext }: { section: PracticeSection; onNext: (i
   )
 }
 
-export function SqlPracticePage() {
-  const open = useLab((s) => s.sqlPracticeOpen)
-  if (!open) return null
-  return <Page />
+export function PracticeBookPage() {
+  const kind = useLab((s) => s.practiceBook)
+  if (!kind) return null
+  return (
+    <BookContext.Provider value={ENGINES[kind]}>
+      <Page key={kind} />
+    </BookContext.Provider>
+  )
 }
 
 function Page() {
+  const book = useBook()
+  const { sections: SECTIONS, tasks: SECTION_TASKS, useProgress } = book
   const progress = useProgress()
   const counts = practiceCounts(SECTION_TASKS, progress)
   const next = nextTask(SECTION_TASKS, progress)
   const main = useRef<HTMLDivElement>(null)
   const [active, setActive] = useState(() => practiceFromHash(location.hash)?.at ?? SECTIONS[0].id)
   const shown = useMemo(() => SECTIONS.filter((s) => !progress.hideKnown || !progress.known.includes(s.id)), [progress.hideKnown, progress.known])
+
+  // Python takes a few seconds to start: have it ready before the first Run.
+  useEffect(() => {
+    if (book.kind === 'python') startPython()
+  }, [book.kind])
 
   const toSection = (id: string) => document.getElementById(`section-${id}`)?.scrollIntoView()
   const toTask = (id: string) => document.getElementById(`task-${id}`)?.scrollIntoView()
@@ -507,7 +666,7 @@ function Page() {
         const hit = entries.find((e) => e.isIntersecting)?.target.getAttribute('data-section')
         if (!hit || !settled.current) return
         setActive(hit)
-        history.replaceState(null, '', location.pathname + location.search + hashWithPractice(location.hash, hit))
+        history.replaceState(null, '', location.pathname + location.search + hashWithPractice(location.hash, hit, book.kind))
       },
       { root: main.current, rootMargin: '-15% 0px -80% 0px' },
     )
@@ -528,6 +687,11 @@ function Page() {
             const st = statusOf(s)
             return (
               <li key={s.id}>
+                {s.part && (
+                  <div className="px-2 pt-3 pb-1 font-semibold" style={{ color: 'var(--muted)', fontSize: 11.5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    {s.part}
+                  </div>
+                )}
                 <button
                   className="w-full text-left flex items-center gap-1.5 px-2 py-1.5 rounded-md"
                   style={s.id === active ? { background: 'var(--accent-soft)', fontWeight: 600 } : { color: st.known ? 'var(--muted)' : undefined }}
@@ -555,7 +719,7 @@ function Page() {
       <div ref={main} className="flex-1 min-w-0 overflow-y-auto">
         <header className="sticky top-0 z-20 px-4 py-2 flex items-center gap-2 flex-wrap" style={{ background: 'var(--panel)', borderBottom: '1px solid var(--line)' }}>
           <div className="flex-1 min-w-[10rem]">
-            <div className="font-semibold">SQL practice · Kaiyo Trading</div>
+            <div className="font-semibold">{book.title}</div>
             <div style={{ color: 'var(--muted)', fontSize: 12 }}>
               {counts.solved} solved · {counts.known} known · {counts.left} left
             </div>
@@ -565,7 +729,7 @@ function Page() {
               Continue <ArrowRight size={14} />
             </button>
           )}
-          <button className="btn btn-ghost" onClick={() => openSqlPractice(false)} aria-label="Close the practice" title="Back to the workbench">
+          <button className="btn btn-ghost" onClick={() => openPracticeBook(null)} aria-label="Close the practice" title="Back to the workbench">
             <X size={16} />
           </button>
         </header>
@@ -580,14 +744,13 @@ function Page() {
         </div>
         <div className="max-w-3xl mx-auto px-4 py-4 space-y-8">
           <p className="m-0" style={{ color: 'var(--muted)' }}>
-            Look, remember, solve. For an explanation from the start, see the{' '}
-            <a href="https://quaera.app" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>
-              SQL track on quaera.app
-            </a>
-            . Your queries are T-SQL, translated to DuckDB in this browser: nearly the same as Fabric Warehouse, and a yellow note marks where it is not.
+            {book.intro}
           </p>
           {shown.map((s) => (
-            <SectionView key={s.id} section={s} onNext={toTask} />
+            <div key={s.id} className="space-y-4">
+              {s.part && <div className="pt-2 text-xl font-semibold">{s.part}</div>}
+              <SectionView section={s} onNext={toTask} />
+            </div>
           ))}
           <div className="flex justify-end">
             <button

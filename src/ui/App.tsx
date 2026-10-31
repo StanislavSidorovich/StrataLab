@@ -16,7 +16,7 @@ import { WelcomeDialog } from './WelcomeDialog'
 import { AboutDialog } from './AboutDialog'
 import { ShareDialog } from './ShareDialog'
 import { PracticeDialog, TaskBar } from './Practice'
-import { SqlPracticePage } from './SqlPractice'
+import { PracticeBookPage } from './PracticeBook'
 import { GuideDialog } from './Guide'
 import { CompareDialog } from './Compare'
 import { DialectBar } from './DialectBar'
@@ -24,7 +24,7 @@ import { checkForUpdates, updateCheckMessage, useUpdateReady } from '../pwa/regi
 import { memoryNote } from '../core/dbLock'
 import { takeDatabaseHere } from '../db/engine'
 import { engineLoadingLabel, engineLoadingShort } from './EngineLoading'
-import { addTab, closeTabs, currentPythonStarter, newPythonTab, openPractice, openSqlPractice, switchTabDialect, tabDialect, downloadBackup, duplicateTab, enqueueFiles, openAbout, openCatalog, openShare, openTables, openWelcome, pasteTable, pasteTableFromClipboard, renameTab, reopenClosedTab, updateNow, useLab } from './store'
+import { addTab, closeTabs, currentPythonStarter, newPythonTab, openPractice, openPracticeBook, switchTabDialect, tabDialect, downloadBackup, duplicateTab, enqueueFiles, openAbout, openCatalog, openShare, openTables, openWelcome, pasteTable, pasteTableFromClipboard, renameTab, reopenClosedTab, updateNow, useLab } from './store'
 import { AppearanceButton } from './Appearance'
 import { Menu, useLongPress, type MenuItem } from './Menu'
 import { tabsToClose } from '../core/tabs'
@@ -51,7 +51,7 @@ export function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       // The practice page covers the workbench: its keys must not run a hidden tab.
-      if (e.defaultPrevented || useLab.getState().sqlPracticeOpen) return
+      if (e.defaultPrevented || useLab.getState().practiceBook) return
       const mod = e.ctrlKey || e.metaKey
       const key = e.key.toLowerCase()
       // Ctrl+Shift+T is the browser's own; Alt+Shift+T reopens a tab closed here.
@@ -141,7 +141,7 @@ export function App() {
       <TopBar />
       <MemoryBanner />
       <div className="flex-1 min-h-0 flex relative">
-        <SqlPracticePage />
+        <PracticeBookPage />
         <div className="shrink-0 hidden md:block relative" style={{ width: sideW }}>
           <Sidebar />
           <div
@@ -371,7 +371,8 @@ function HelpMenu() {
   const items: MenuItem[] = [
     ['How to use Quaera Lab', openWelcome],
     ['Practice on the demo shop…', () => openPractice()],
-    ['SQL practice on Kaiyo Trading', () => openSqlPractice()],
+    ['SQL practice on Kaiyo Trading', () => openPracticeBook('sql')],
+    ['Python practice on Kaiyo Trading', () => openPracticeBook('python')],
     'separator',
     ['Check for updates', () => void runUpdateCheck()],
     ['About & licences', () => openAbout('about')],

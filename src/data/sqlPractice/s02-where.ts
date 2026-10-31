@@ -1,4 +1,4 @@
-import type { PracticeSection } from './types'
+import type { PracticeSection } from '../practiceBook'
 
 export const WHERE: PracticeSection = {
   id: 'where',
@@ -15,7 +15,7 @@ export const WHERE: PracticeSection = {
       kind: 'example',
       id: 'where-chains-in-two-cities',
       title: 'Chain outlets in two cities',
-      sql: `SELECT customer_name, channel, city
+      code: `SELECT customer_name, channel, city
 FROM quaera.dim_customer
 WHERE channel IN ('modern_trade', 'ecom')
   AND (city = 'Kobe' OR city = 'Sendai');`,
@@ -33,7 +33,7 @@ WHERE channel = 'pharmacy'
   AND (city = 'Osaka' OR city = 'Tokyo');`,
       traps: [
         {
-          sql: `SELECT customer_name, city, chain_name
+          code: `SELECT customer_name, city, chain_name
 FROM quaera.dim_customer
 WHERE channel = 'pharmacy' AND city = 'Osaka' OR city = 'Tokyo';`,
           says: 'Without brackets this is (pharmacy AND Osaka) OR Tokyo, so every customer in Tokyo comes in, whatever its channel.',
@@ -62,7 +62,7 @@ WHERE mechanic IN ('2+1', 'Discount 30%')
       kind: 'example',
       id: 'where-fruvia-mid-price',
       title: 'Mid-priced Fruvia products',
-      sql: `SELECT product_name, list_price
+      code: `SELECT product_name, list_price
 FROM quaera.dim_product
 WHERE list_price BETWEEN 100 AND 145
   AND product_name LIKE 'Fruvia%';`,
@@ -80,7 +80,7 @@ WHERE order_date BETWEEN '2026-01-01' AND '2026-03-31'
   AND units BETWEEN 100 AND 150;`,
       traps: [
         {
-          sql: `SELECT sellin_id, order_date, distributor_id, product_id, units
+          code: `SELECT sellin_id, order_date, distributor_id, product_id, units
 FROM quaera.fact_sellin
 WHERE order_date BETWEEN '2026-01-01' AND '2026-03-31'
   AND units > 100 AND units < 150;`,
@@ -101,7 +101,7 @@ WHERE division = 'Pharma'
   AND (product_name LIKE '%Kids%' OR product_name LIKE '%x10');`,
       traps: [
         {
-          sql: `SELECT product_name, list_price
+          code: `SELECT product_name, list_price
 FROM quaera.dim_product
 WHERE division = 'Pharma'
   AND (product_name LIKE '%kids%' OR product_name LIKE '%x10');`,

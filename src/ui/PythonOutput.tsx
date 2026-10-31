@@ -95,7 +95,7 @@ function FrameView({ f, open, shown }: { f: ShownFrame; open: () => void; shown:
   )
 }
 
-function OutputView({ o, frame }: { o: Output; frame?: ReactNode }) {
+export function OutputView({ o, frame }: { o: Output; frame?: ReactNode }) {
   if (o.output_type === 'stream')
     return (
       <pre className={pre} style={{ fontSize: 12.5, color: o.name === 'stderr' ? 'var(--warn-text)' : 'var(--text)' }}>

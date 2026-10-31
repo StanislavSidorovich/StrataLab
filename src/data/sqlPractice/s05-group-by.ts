@@ -1,4 +1,4 @@
-import type { PracticeSection } from './types'
+import type { PracticeSection } from '../practiceBook'
 
 export const GROUP_BY: PracticeSection = {
   id: 'group-by',
@@ -14,7 +14,7 @@ export const GROUP_BY: PracticeSection = {
       kind: 'example',
       id: 'group-by-skus-per-code',
       title: 'Products per brand code',
-      sql: `SELECT LEFT(sku_code, 4) AS brand_code, COUNT(*) AS products
+      code: `SELECT LEFT(sku_code, 4) AS brand_code, COUNT(*) AS products
 FROM quaera.dim_product
 GROUP BY LEFT(sku_code, 4)
 ORDER BY brand_code;`,
@@ -54,7 +54,7 @@ ORDER BY price_band;`,
       kind: 'example',
       id: 'group-by-pharma-brands',
       title: 'Pharma brands with five or more products',
-      sql: `SELECT brand, COUNT(*) AS products
+      code: `SELECT brand, COUNT(*) AS products
 FROM quaera.dim_product
 WHERE division = 'Pharma'
 GROUP BY brand
@@ -76,7 +76,7 @@ HAVING SUM(units) > 30000
 ORDER BY units DESC, customer_id;`,
       traps: [
         {
-          sql: `SELECT customer_id, SUM(units) AS units
+          code: `SELECT customer_id, SUM(units) AS units
 FROM quaera.fact_sellout
 WHERE week_start >= '2025-01-01' AND week_start < '2026-01-01'
   AND units > 30000
@@ -102,7 +102,7 @@ HAVING SUM(discount_amount) > 0.09 * SUM(gross_amount)
 ORDER BY discount_pct DESC, distributor_id, month_start;`,
       traps: [
         {
-          sql: `SELECT distributor_id, month_start, COUNT(*) AS shipments,
+          code: `SELECT distributor_id, month_start, COUNT(*) AS shipments,
        ROUND(100.0 * SUM(discount_amount) / SUM(gross_amount), 1) AS discount_pct
 FROM quaera.fact_sellin
 WHERE month_start >= '2026-01-01' AND month_start <= '2026-06-01'
