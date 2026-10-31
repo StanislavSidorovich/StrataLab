@@ -9,7 +9,7 @@ import { MSSQL, sql as sqlLang } from '@codemirror/lang-sql'
 import { python } from '@codemirror/lang-python'
 import { oneDark } from '@codemirror/theme-one-dark'
 import type { Table } from 'apache-arrow'
-import { ArrowDown, ArrowRight, Check, CheckCircle2, ChevronDown, ChevronRight, ExternalLink, Eye, GraduationCap, Lightbulb, Loader2, Play, Square, Target, TriangleAlert, X, XCircle } from 'lucide-react'
+import { ArrowDown, ArrowRight, Check, CheckCircle2, ChevronDown, ChevronRight, ExternalLink, Eye, GraduationCap, Lightbulb, Loader2, Play, Square, Table2, Target, TriangleAlert, X, XCircle } from 'lucide-react'
 import { create } from 'zustand'
 import { compareResults, describeVerdict, type ResultData, type Verdict } from '../core/check'
 import type { Output } from '../core/ipynb'
@@ -680,6 +680,8 @@ function Page() {
   const next = nextTask(SECTION_TASKS, progress)
   const main = useRef<HTMLDivElement>(null)
   const [active, setActive] = useState(() => practiceFromHash(location.hash)?.at ?? SECTIONS[0].id)
+  const [tablesOpen, setTablesOpen] = useState(false)
+  const tablesBlock = useMemo(() => SECTIONS.flatMap((s) => s.blocks).find((b): b is PracticeTables => b.kind === 'tables'), [SECTIONS])
   const shown = useMemo(() => SECTIONS.filter((s) => !progress.hideKnown || !progress.known.includes(s.id)), [progress.hideKnown, progress.known])
 
   // Python takes a few seconds to start: have it ready before the first Run.
@@ -765,6 +767,11 @@ function Page() {
               {counts.solved} solved · {counts.known} known · {counts.left} left
             </div>
           </div>
+          {tablesBlock && (
+            <button className="btn" aria-expanded={tablesOpen} onClick={() => setTablesOpen(!tablesOpen)} title="Tables and their columns, without leaving your place">
+              <Table2 size={14} /> Tables
+            </button>
+          )}
           {next && (
             <button className="btn btn-primary" onClick={() => toTask(next)}>
               Continue <ArrowRight size={14} />
@@ -806,6 +813,19 @@ function Page() {
           </div>
         </div>
       </div>
+      {tablesOpen && tablesBlock && (
+        <aside aria-label="Tables and columns" className="absolute inset-y-0 right-0 z-30 w-full max-w-sm md:static md:w-80 md:shrink-0 flex flex-col" style={{ background: 'var(--panel)', borderLeft: '1px solid var(--line)' }}>
+          <div className="flex items-center gap-2 px-3 py-2" style={{ borderBottom: '1px solid var(--line)' }}>
+            <span className="font-semibold flex-1">Tables and columns</span>
+            <button className="btn btn-ghost" onClick={() => setTablesOpen(false)} aria-label="Close the tables">
+              <X size={16} />
+            </button>
+          </div>
+          <div className="flex-1 min-h-0 overflow-y-auto p-2">
+            <TablesBlock block={tablesBlock} />
+          </div>
+        </aside>
+      )}
     </div>
   )
 }
