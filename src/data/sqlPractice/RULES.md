@@ -17,7 +17,7 @@ Every query is valid T-SQL for Fabric Warehouse:
 - `SELECT TOP (n)`, never `LIMIT`. `CAST(x AS type)`, never `::`. `ON a.x = b.x`, never `USING`.
 - `GROUP BY` and `HAVING` repeat the expression; only `ORDER BY` may use a name given in SELECT.
 - Dividing whole numbers: `1.0 * a / b`. AVG of a whole-number column: `AVG(1.0 * units)`. Lab's DuckDB would forgive both, Fabric would not.
-- Text comparisons match the case the data has: `'Pharma'`, not `'pharma'`.
+- Text comparisons match the case the data has: `'Pharma'`, not `'pharma'`. A Fabric Warehouse is case-sensitive by default (`Latin1_General_100_BIN2_UTF8`), as Lab is; a warehouse made with another collation is not.
 - Not in the first version: `TOP … WITH TIES` and `CROSS APPLY` with an outer `TOP` (the translator cannot run them).
 - Tables always with their schema: `quaera.fact_sellout`.
 
