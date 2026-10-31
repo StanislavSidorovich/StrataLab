@@ -26,6 +26,7 @@ import { schemaForModel, showAsModel } from '../db/modelExport'
 import { planGeneration, type GenPlan, type GenTable } from '../core/generate'
 import { runGeneration, type GenOutcome } from '../db/generate'
 import { runOrder } from '../core/pdScript'
+import { hashWithPractice, hashWithoutPractice, practiceFromHash, readableError } from '../core/sqlPractice'
 import { duckdbScript, translateTsql, type TranslatedStatement, type TranslatorProgress } from '../dialects/tsql'
 import { copyToPostgres, explainPostgres, getPostgres, postgresCatalog, runPostgres } from '../dialects/postgres'
 import { copyTitle, dialectSwitch, rememberClosed } from '../core/tabs'
@@ -176,6 +177,8 @@ interface State {
   generate: GenerateState | null
   /** the welcome screen (what's where, how to start) is open */
   welcomeOpen: boolean
+  /** the SQL practice page on Kaiyo (`#practice=sql`, src/ui/SqlPractice.tsx) is open */
+  sqlPracticeOpen: boolean
   /** the dialect comparison (src/ui/Compare.tsx) is open */
   compareOpen: boolean
   /** per tab, for T-SQL tabs */
@@ -315,7 +318,8 @@ export const useLab = create<State>(() => ({
   dataset: null,
   catalogOpen: false,
   generate: null,
-  welcomeOpen: firstVisit(),
+  welcomeOpen: !practiceFromHash(location.hash) && firstVisit(),
+  sqlPracticeOpen: practiceFromHash(location.hash) !== null,
   compareOpen: false,
   translations: {},
   postgres: { status: 'off' },
@@ -441,6 +445,7 @@ export async function initEngine() {
     const fromTask = await openTaskFromHash()
     const fromShare = await openShareFromHash()
     window.addEventListener('hashchange', () => {
+      if (practiceFromHash(location.hash)) set({ sqlPracticeOpen: true })
       void openDdlFromHash()
       void openDatasetFromHash()
       void openTaskFromHash()
@@ -456,7 +461,7 @@ export async function initEngine() {
       /* ignore */
     }
     // Someone arriving with a model came for that model, not for the demo shop.
-    if (!fromModel && !fromLink && !fromTask && !fromShare && ownTables(get().tables).length === 0 && (!e.persistent || !offered)) await loadDemo()
+    if (!fromModel && !fromLink && !fromTask && !fromShare && !get().sqlPracticeOpen && ownTables(get().tables).length === 0 && (!e.persistent || !offered)) await loadDemo()
   } catch (e) {
     set({ engine: { status: 'error', error: String(e instanceof Error ? e.message : e) } })
   }
@@ -1691,6 +1696,52 @@ export async function openWalkthrough(w: Walkthrough) {
   set({ guide: null, catalogOpen: false })
   await ensureDemo()
   addTab(w.code, `${w.title} walkthrough`, 'python')
+}
+
+// ------------------------------------------------------------------ SQL practice on Kaiyo
+
+export function openSqlPractice(open = true, at: string | null = null) {
+  const hash = open ? hashWithPractice(location.hash, at) : hashWithoutPractice(location.hash)
+  history.replaceState(null, '', location.pathname + location.search + hash)
+  set({ sqlPracticeOpen: open })
+}
+
+/** The dataset the page's queries read; loaded with the usual progress card the first time. */
+async function ensureKaiyo() {
+  await refreshCatalog()
+  const d = datasetById('quaera')!
+  const { state, extra } = catalogState(d)
+  if (state === 'loaded') return
+  if (state === 'foreign' && !confirm(`There is already a schema called ${d.id} with your table${extra.length === 1 ? '' : 's'} ${extra.join(', ')}. Loading ${d.title} replaces it and ${extra.length === 1 ? 'that table is' : 'those tables are'} lost. Load anyway?`)) throw new Error(`The practice needs ${d.title}, which was not loaded.`)
+  if (!(await fetchDataset(d))) throw new Error(`${d.title} could not be loaded.`)
+}
+
+/** Translates T-SQL and runs it on the practice page; throws with the message to show. The last statement with columns is the result. */
+export async function runPracticeQuery(sql: string, tag: string, isStopped: () => boolean, onProgress?: (p: TranslatorProgress) => void) {
+  await ensureKaiyo()
+  const translated = await translateTsql(sql, (p) => onProgress?.(p))
+  const bad = translated.find((st) => st.error)
+  if (bad) throw new Error(`This could not be read as T-SQL: ${bad.error}`)
+  const statements = runOrder(translated)
+  if (!statements.length) throw new Error('There is no query to run yet.')
+  try {
+    let { table, more } = await queryLimited(statements[0], tag, isStopped, ROW_LIMIT)
+    for (const st of statements.slice(1)) {
+      const next = await queryLimited(st, tag, isStopped, ROW_LIMIT)
+      if (next.table.numCols > 0) ({ table, more } = next)
+    }
+    return { table, more }
+  } catch (e) {
+    if (isCancelled(e)) throw new Error(STOPPED)
+    const raw = readableError(String(e instanceof Error ? e.message : e))
+    const hint = sqlNameHint(raw, get().tables)
+    throw new Error(hint ? `${raw}\n${hint}` : raw)
+  } finally {
+    if (WRITES.test(duckdbScript(translated))) {
+      await checkpoint()
+      await refreshCatalog()
+    }
+  }
 }
 
 // ------------------------------------------------------------------ practice (stage 5)

@@ -16,6 +16,7 @@ import { WelcomeDialog } from './WelcomeDialog'
 import { AboutDialog } from './AboutDialog'
 import { ShareDialog } from './ShareDialog'
 import { PracticeDialog, TaskBar } from './Practice'
+import { SqlPracticePage } from './SqlPractice'
 import { GuideDialog } from './Guide'
 import { CompareDialog } from './Compare'
 import { DialectBar } from './DialectBar'
@@ -49,7 +50,8 @@ export function App() {
   // Ctrl+O / Ctrl+S open and save .sql files (instead of the browser's own open and save page).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.defaultPrevented) return
+      // The practice page covers the workbench: its keys must not run a hidden tab.
+      if (e.defaultPrevented || useLab.getState().sqlPracticeOpen) return
       const mod = e.ctrlKey || e.metaKey
       const key = e.key.toLowerCase()
       // Ctrl+Shift+T is the browser's own; Alt+Shift+T reopens a tab closed here.
@@ -138,7 +140,8 @@ export function App() {
     <div className="h-full flex flex-col">
       <TopBar />
       <MemoryBanner />
-      <div className="flex-1 min-h-0 flex">
+      <div className="flex-1 min-h-0 flex relative">
+        <SqlPracticePage />
         <div className="shrink-0 hidden md:block relative" style={{ width: sideW }}>
           <Sidebar />
           <div

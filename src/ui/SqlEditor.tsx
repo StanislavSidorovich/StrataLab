@@ -177,7 +177,7 @@ export function formatActiveTab() {
 }
 
 /** Completion: the default schema's tables as they are, others after their schema name (chinook.Track). */
-function completionSchema(tables: TableInfo[], plain: string) {
+export function completionSchema(tables: TableInfo[], plain: string) {
   const schema: Record<string, string[] | Record<string, string[]>> = {}
   for (const t of tables) {
     const cols = t.columns.map((c) => c.name)
@@ -188,14 +188,14 @@ function completionSchema(tables: TableInfo[], plain: string) {
 }
 
 // The editor's background is --code-bg (src/index.css), which the Appearance button can change.
-const lightTheme = EditorView.theme({
+export const lightTheme = EditorView.theme({
   '&': { backgroundColor: 'var(--code-bg)', color: 'var(--text)' },
   '.cm-gutters': { backgroundColor: 'var(--code-bg)', color: 'var(--muted)', border: 'none' },
   '.cm-activeLine, .cm-activeLineGutter': { backgroundColor: 'color-mix(in srgb, var(--q-accent) 7%, transparent)' },
 })
 
 // One Dark with its background taken from --code-bg (One Dark's own #282c34 unless changed).
-const darkBackground = EditorView.theme(
+export const darkBackground = EditorView.theme(
   {
     '&': { backgroundColor: 'var(--code-bg)' },
     '.cm-gutters': { backgroundColor: 'var(--code-bg)' },
