@@ -21,6 +21,7 @@ import { SECTIONS as PY_SECTIONS, SECTION_TASKS as PY_TASKS } from '../data/pyPr
 import { aliasesIn, BOOK_TABLES } from '../data/pyPractice/tables'
 import { taskNumber, tasksOf, type PracticeBlock, type PracticeExampleCell, type PracticeNote, type PracticeSection, type PracticeTables, type PracticeTaskCell } from '../data/practiceBook'
 import { DataGrid } from './DataGrid'
+import { Menu, useLongPress, type MenuItem } from './Menu'
 import { completionSchema, darkBackground, lightTheme } from './SqlEditor'
 import { OutputView } from './PythonOutput'
 import { addTab, openAndRun, openPracticeBook, restartPython, runPracticePython, runPracticeQuery, startPython, useLab } from './store'
@@ -76,7 +77,13 @@ interface BookEngine {
   stop: (tag: string) => void
   openInLab: (code: string, title: string) => void
   openTitle: string
+  /** how code names a table, a few rows of it, and one of its columns (for the right-click menu) */
+  tableRef: (t: BookTable) => string
+  peek: (t: BookTable) => string
+  columnRef: (t: BookTable, column: string) => string
 }
+
+type BookTable = PracticeTables['tables'][number]
 
 const linkStyle = { color: 'var(--accent)' }
 
@@ -107,6 +114,9 @@ const SQL_ENGINE: BookEngine = {
   stop: (tag) => void cancelQuery(tag),
   openInLab: (code, title) => openAndRun(code, title, 'tsql'),
   openTitle: 'Open this query in a T-SQL tab of the workbench',
+  tableRef: (t) => `quaera.${t.name}`,
+  peek: (t) => `SELECT TOP 100 * FROM quaera.${t.name};`,
+  columnRef: (t, c) => `quaera.${t.name}.${c}`,
 }
 
 /** A cell as a Python tab has to write it: there the tables are not variables yet. */
@@ -153,12 +163,42 @@ const PY_ENGINE: BookEngine = {
   stop: () => restartPython(),
   openInLab: (code, title) => void addTab(asPythonTab(code), title, 'python'),
   openTitle: 'Open this code in a Python tab of the workbench',
+  tableRef: (t) => t.alias ?? t.name,
+  peek: (t) => `${t.alias ?? t.name}.head(100)`,
+  columnRef: (t, c) => `${t.alias ?? t.name}["${c}"]`,
 }
 
 const ENGINES: Record<BookKind, BookEngine> = { sql: SQL_ENGINE, python: PY_ENGINE }
 
 const BookContext = createContext<BookEngine>(SQL_ENGINE)
 const useBook = () => useContext(BookContext)
+
+/** The page's one right-click menu: any block asks for it to open at a point, with its own items. */
+const MenuContext = createContext<(at: { x: number; y: number }, items: MenuItem[]) => void>(() => {})
+
+const copy = (text: string) => void navigator.clipboard?.writeText(text).catch(() => {})
+
+/** What the user has selected on the page, if anything: offered first in every menu. */
+function selectionItems(): MenuItem[] {
+  const sel = window.getSelection()?.toString() ?? ''
+  return sel.trim() ? [['Copy selection', () => copy(sel)], 'separator'] : []
+}
+
+/** Handlers for an element that opens the menu on right-click, and on a long press on a touch screen. */
+function useContextMenu(items: () => MenuItem[]) {
+  const open = useContext(MenuContext)
+  const longPress = useLongPress((at) => open(at, [...selectionItems(), ...items()]))
+  return {
+    ...longPress,
+    onContextMenu: (e: React.MouseEvent) => {
+      // A link keeps the browser's menu (open in a new tab); the innermost block wins.
+      if ((e.target as HTMLElement).closest('a')) return
+      e.preventDefault()
+      e.stopPropagation()
+      open({ x: e.clientX, y: e.clientY }, [...selectionItems(), ...items()])
+    },
+  }
+}
 
 const toggled = (list: string[], id: string) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id])
 
@@ -386,19 +426,56 @@ function NoteBlock({ block, afterWork }: { block: PracticeNote; afterWork: boole
   )
 }
 
+function TableItem({ table: t, first }: { table: BookTable; first: boolean }) {
+  const book = useBook()
+  const open = useContext(MenuContext)
+  const tableItems = (): MenuItem[] => [
+    [`Copy ${book.tableRef(t)}`, () => copy(book.tableRef(t))],
+    [book.kind === 'python' ? 'Copy a look at the rows' : 'Copy SELECT TOP 100', () => copy(book.peek(t))],
+    ['Open a look at the rows in Lab', () => (openPracticeBook(null), book.openInLab(book.peek(t), t.name))],
+  ]
+  // Over a column name the menu is about the column first, then about its table.
+  const columnItems = (c: string): MenuItem[] => [
+    [`Copy ${c}`, () => copy(c)],
+    [`Copy ${book.columnRef(t, c)}`, () => copy(book.columnRef(t, c))],
+  ]
+  const itemsAt = (target: Element | null): MenuItem[] => {
+    const column = target?.closest('[data-column]')?.getAttribute('data-column')
+    return [...selectionItems(), ...(column ? [...columnItems(column), 'separator' as const] : []), ...tableItems()]
+  }
+  const longPress = useLongPress((at) => open(at, itemsAt(document.elementFromPoint(at.x, at.y))))
+  return (
+    <li
+      className="px-3 py-2"
+      style={first ? undefined : { borderTop: '1px solid var(--line)' }}
+      {...longPress}
+      onContextMenu={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        open({ x: e.clientX, y: e.clientY }, itemsAt(e.target as Element))
+      }}
+    >
+      <span className="mono font-semibold">{t.alias ?? t.name}</span>
+      <span style={{ color: 'var(--muted)' }}>
+        {t.alias ? ` (${t.name})` : ''} · one row: {t.row}
+      </span>
+      <div className="mono" style={{ color: 'var(--muted)', fontSize: 12, overflowWrap: 'anywhere' }}>
+        {t.columns.map((c, i) => (
+          <span key={c} data-column={c}>
+            {c}
+            {i < t.columns.length - 1 ? ', ' : ''}
+          </span>
+        ))}
+      </div>
+    </li>
+  )
+}
+
 function TablesBlock({ block }: { block: PracticeTables }) {
   return (
     <ul className="m-0 p-0 list-none rounded-lg overflow-hidden" style={{ border: '1px solid var(--line)' }}>
       {block.tables.map((t, i) => (
-        <li key={t.name} className="px-3 py-2" style={i ? { borderTop: '1px solid var(--line)' } : undefined}>
-          <span className="mono font-semibold">{t.alias ?? t.name}</span>
-          <span style={{ color: 'var(--muted)' }}>
-            {t.alias ? ` (${t.name})` : ''} · one row: {t.row}
-          </span>
-          <div className="mono" style={{ color: 'var(--muted)', fontSize: 12, overflowWrap: 'anywhere' }}>
-            {t.columns.join(', ')}
-          </div>
-        </li>
+        <TableItem key={t.name} table={t} first={i === 0} />
       ))}
     </ul>
   )
@@ -441,8 +518,16 @@ function ExampleBlock({ block }: { block: PracticeExampleCell }) {
   const [text, setText] = useState(block.code)
   const { run, exec, stop } = useCellRun(block.id)
   const go = () => void exec(text)
+  const book = useBook()
+  const ready = useLab((s) => s.engine.status === 'ready')
+  const menu = useContextMenu(() => [
+    run.status === 'running' ? ['Stop', stop] : ['Run', go, { disabled: !ready, keys: 'Ctrl+Enter' }],
+    'separator',
+    ['Copy code', () => copy(text)],
+    ['Open in Lab', () => (openPracticeBook(null), book.openInLab(text, block.title)), { disabled: !text.trim() }],
+  ])
   return (
-    <div className="space-y-2">
+    <div className="space-y-2" {...menu}>
       <div className="flex items-center gap-2 flex-wrap">
         <span className="font-semibold flex-1 min-w-[12rem]">
           <span style={{ color: 'var(--muted)', fontWeight: 500 }}>Example · </span>
@@ -530,9 +615,28 @@ function TaskBlock({ section, block, onNext }: { section: PracticeSection; block
   }
   const next = check?.verdict.ok ? nextTask(book.tasks, useProgress.getState()) : null
   const said = check ? describeVerdict(check.verdict, book.kind) : null
+  const moreHint = () => useProgress.setState((p) => ({ hints: { ...p.hints, [block.id]: hints + 1 } }))
+  const clear = () => {
+    if (text.current.trim() && !confirm('Clear your answer?')) return
+    change('')
+    setInitial('')
+    setEditorKey((k) => k + 1)
+    setCheck(null)
+  }
+  const menu = useContextMenu(() => [
+    run.status === 'running' ? ['Stop', stop] : ['Run', go, { disabled: !ready, keys: 'Ctrl+Enter' }],
+    ['Check', () => void doCheck(), { disabled: !ready || checking, keys: 'Ctrl+Shift+Enter' }],
+    'separator',
+    [hints < block.hints.length ? `Hint ${hints + 1}/${block.hints.length}` : 'No more hints', moreHint, { disabled: hints >= block.hints.length }],
+    ['Show the solution', showSolution],
+    'separator',
+    ['Copy my answer', () => copy(text.current), { disabled: !text.current.trim() }],
+    ['Open in Lab', () => (openPracticeBook(null), book.openInLab(text.current, `Task ${number}`)), { disabled: !text.current.trim() }],
+    ['Clear my answer', clear],
+  ])
 
   return (
-    <div id={`task-${block.id}`} className="rounded-lg p-3 space-y-2" style={{ background: 'var(--panel)', border: `1px solid ${solved ? 'var(--accent)' : 'var(--line)'}`, scrollMarginTop: 72 }}>
+    <div id={`task-${block.id}`} className="rounded-lg p-3 space-y-2" {...menu} style={{ background: 'var(--panel)', border: `1px solid ${solved ? 'var(--accent)' : 'var(--line)'}`, scrollMarginTop: 72 }}>
       <div className="font-semibold flex items-center gap-2">
         {solved ? <CheckCircle2 size={16} style={{ color: 'var(--accent)' }} aria-label="Solved" /> : <GraduationCap size={16} style={{ color: 'var(--muted)' }} />}
         Task {number} · {block.title}
@@ -546,7 +650,7 @@ function TaskBlock({ section, block, onNext }: { section: PracticeSection; block
         <button className="btn btn-primary" disabled={!ready || checking} onClick={() => void doCheck()} title="Run your cell and compare its result with the answer (Ctrl+Shift+Enter)">
           {checking ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} Check
         </button>
-        <button className="btn" disabled={hints >= block.hints.length} onClick={() => useProgress.setState((p) => ({ hints: { ...p.hints, [block.id]: hints + 1 } }))}>
+        <button className="btn" disabled={hints >= block.hints.length} onClick={moreHint}>
           <Lightbulb size={14} /> Hint {hints < block.hints.length ? `${hints + 1}/${block.hints.length}` : ''}
         </button>
         <button className="btn btn-ghost" onClick={showSolution}>
@@ -722,7 +826,22 @@ function Page() {
     return { known: progress.known.includes(s.id), done: ids.filter((t) => progress.solved.includes(t)).length, total: ids.length }
   }
 
+  // The menu is one for the whole page; a block says where and with what it opens.
+  const [menu, setMenu] = useState<{ at: { x: number; y: number }; items: MenuItem[] } | null>(null)
+  const openMenu = (at: { x: number; y: number }, items: MenuItem[]) => setMenu({ at, items })
+  const sectionItems = (s: PracticeSection, known: boolean): MenuItem[] => [
+    ['Go to this section', () => toSection(s.id)],
+    ...(tasksOf(s).length ? ([[known ? 'Back to not known' : 'Mark as known', () => useProgress.setState((p) => ({ known: toggled(p.known, s.id) }))]] as MenuItem[]) : []),
+  ]
+  const sectionMenu = (s: PracticeSection, known: boolean) => ({
+    onContextMenu: (e: React.MouseEvent) => {
+      e.preventDefault()
+      openMenu({ x: e.clientX, y: e.clientY }, sectionItems(s, known))
+    },
+  })
+
   return (
+    <MenuContext.Provider value={openMenu}>
     <div className="absolute inset-0 z-30 flex min-w-0" style={{ background: 'var(--bg)' }} data-testid="sql-practice">
       <nav aria-label="Sections" className="hidden md:flex flex-col w-56 shrink-0 overflow-y-auto p-2" style={{ background: 'var(--panel)', borderRight: '1px solid var(--line)' }}>
         <ul className="m-0 p-0 list-none flex-1">
@@ -736,6 +855,7 @@ function Page() {
                   </div>
                 )}
                 <button
+                  {...sectionMenu(s, st.known)}
                   className="w-full text-left flex items-center gap-1.5 px-2 py-1.5 rounded-md"
                   style={s.id === active ? { background: 'var(--accent-soft)', fontWeight: 600 } : { color: st.known ? 'var(--muted)' : undefined }}
                   aria-current={s.id === active ? 'true' : undefined}
@@ -826,6 +946,8 @@ function Page() {
           </div>
         </aside>
       )}
+      {menu && <Menu items={menu.items} at={menu.at} close={() => setMenu(null)} />}
     </div>
+    </MenuContext.Provider>
   )
 }
