@@ -141,3 +141,22 @@ export async function installApp(): Promise<string | null> {
     ? 'To install on an iPhone or iPad: Safari → Share (□↑) → Add to Home Screen.'
     : 'To install: open the browser menu (⋮) → Install app (or Add to Home screen). In Chrome or Edge on a computer it is also the install icon in the address bar.'
 }
+
+/**
+ * A link clicked in another Quaera app lands in the installed window (manifest `launch_handler:
+ * navigate-existing`, Chrome 139+). Chrome already points that window at the link; if only the
+ * fragment differed and the hash did not change by itself, this applies it so `hashchange` fires.
+ * Nothing happens outside an installed app (no `launchQueue`).
+ */
+export function followLaunchLinks() {
+  const queue = (window as unknown as { launchQueue?: { setConsumer(f: (p: { targetURL?: string }) => void): void } }).launchQueue
+  queue?.setConsumer(({ targetURL }) => {
+    if (!targetURL) return
+    try {
+      const u = new URL(targetURL)
+      if (u.origin === location.origin && u.pathname === location.pathname && u.hash && u.hash !== location.hash) location.hash = u.hash
+    } catch {
+      /* not a URL: ignore */
+    }
+  })
+}

@@ -4,7 +4,7 @@ import './family/fonts.css'
 import './family/tokens.css'
 import './family/switcher.js'
 import './index.css'
-import { registerServiceWorker } from './pwa/register'
+import { followLaunchLinks, registerServiceWorker } from './pwa/register'
 import { App } from './ui/App'
 import { initEngine } from './ui/store'
 
@@ -17,3 +17,4 @@ createRoot(document.getElementById('root')!).render(
 )
 
 registerServiceWorker()
+followLaunchLinks()
