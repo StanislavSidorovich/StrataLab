@@ -147,7 +147,7 @@ export function App() {
           <div
             onPointerDown={startSideResize}
             onDoubleClick={() => setSideW(SIDE_DEFAULT)}
-            className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-[var(--accent)] z-30"
+            className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-[var(--accent)] z-20"
             title="Drag to resize; double-click to reset"
             role="separator"
             aria-orientation="vertical"
