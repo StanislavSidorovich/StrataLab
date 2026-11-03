@@ -71,6 +71,8 @@ interface BookEngine {
   writeHint: string
   empty: string
   intro: ReactNode
+  /** Shown after the last task, if the book has a next step elsewhere. */
+  outro?: ReactNode
   run: (code: string, tag: string, isStopped: () => boolean, onProgress: (text: string) => void) => Promise<BookRun>
   /** the cell's result as rows to compare */
   rows: (code: string, tag: string) => Promise<ResultData>
@@ -153,6 +155,15 @@ const PY_ENGINE: BookEngine = {
         pandas notebook
       </a>
       . Every cell starts clean, with <code className="mono">pd</code>, <code className="mono">np</code> and the tables ready as variables, so cells never depend on each other. The last line of a cell is its answer. Python runs in this browser and starts once, in about ten seconds.
+    </>
+  ),
+  outro: (
+    <>
+      Next:{' '}
+      <a href="https://pandas.quaera.app" target="_blank" rel="noreferrer" style={linkStyle}>
+        a real Colab notebook on a cloud dataset (BigQuery, TheLook), 137 tasks
+      </a>
+      .
     </>
   ),
   run: async (code) => {
@@ -929,6 +940,11 @@ function Page() {
               <SectionView section={s} onNext={toTask} />
             </div>
           ))}
+          {book.outro && (
+            <p className={`m-0 ${READABLE}`} style={{ color: 'var(--muted)' }}>
+              {book.outro}
+            </p>
+          )}
           <div className="flex justify-end">
             <button
               className="btn btn-ghost"
