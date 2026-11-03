@@ -104,9 +104,12 @@ const SQL_ENGINE: BookEngine = {
         SQL track on quaera.app
       </a>
       . Your queries are T-SQL, translated to DuckDB in this browser: nearly the same as Fabric Warehouse, and a yellow note marks where it is not.
-      <span className="block mt-2">
-        Every table lives in a schema, a folder inside the database, and here that schema is called <code className="mono">quaera</code>. So a table is always written with it in front:{' '}
-        <code className="mono">SELECT * FROM quaera.dim_product</code>. Without <code className="mono">quaera.</code> the database does not know where to look.
+      <span className="block mt-3 px-3 py-2 rounded-md" style={{ background: 'var(--accent-soft)', borderLeft: '3px solid var(--accent)', color: 'var(--text)' }}>
+        <strong>Why every table starts with quaera.</strong>
+        <br />
+        Tables live in a schema, a folder inside the database, and here that schema is called <strong>quaera</strong>. So a table is always written with it in front:{' '}
+        <code className="mono px-1 rounded" style={{ background: 'var(--panel)', border: '1px solid var(--line)', fontWeight: 600 }}>SELECT * FROM quaera.dim_product</code>. Without{' '}
+        <code className="mono px-1 rounded" style={{ background: 'var(--panel)', border: '1px solid var(--line)', fontWeight: 600 }}>quaera.</code> the database does not know where to look.
       </span>
     </>
   ),
