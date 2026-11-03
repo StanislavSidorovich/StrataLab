@@ -257,6 +257,8 @@ function CellEditor({ value, onChange, onRun, onCheck, minLines, hint, label }: 
         ),
         basicSetup,
         EditorView.lineWrapping,
+        // No clipping box around the editor, so the completion list can reach out of it: round the editor itself.
+        EditorView.theme({ '&': { borderRadius: '5px' }, '.cm-scroller': { borderRadius: '5px' }, '.cm-gutters': { borderRadius: '5px 0 0 5px' } }),
         book.language(tables),
         dark ? [Prec.high(darkBackground), oneDark] : lightTheme,
         hint ? placeholder(hint) : [],
@@ -275,7 +277,7 @@ function CellEditor({ value, onChange, onRun, onCheck, minLines, hint, label }: 
 
   const lines = Math.max(minLines, text.current.split('\n').length)
   return (
-    <div ref={box} style={{ minHeight: lines * LINE + 8, border: '1px solid var(--line)', borderRadius: 6, overflow: 'hidden', background: 'var(--code-bg)' }}>
+    <div ref={box} style={{ minHeight: lines * LINE + 8, border: '1px solid var(--line)', borderRadius: 6, background: 'var(--code-bg)' }}>
       {visible ? (
         <div ref={host} data-testid="practice-editor" />
       ) : (
