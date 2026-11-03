@@ -14,7 +14,6 @@ import { create } from 'zustand'
 import { compareResults, describeVerdict, type ResultData, type Verdict } from '../core/check'
 import type { Output } from '../core/ipynb'
 import { fabricNotes, hashWithPractice, nextTask, offersKnown, practiceCounts, practiceFromHash, readProgress, type BookKind, type FabricNote, type PracticeProgress, type SectionTasks } from '../core/sqlPractice'
-import { parseZoom, ZOOM_KEY, ZOOM_STEPS, zoomLabel } from '../core/practiceZoom'
 import { cancelQuery } from '../db/engine'
 import { resultRows } from '../db/export'
 import { SECTIONS as SQL_SECTIONS, SECTION_TASKS as SQL_TASKS } from '../data/sqlPractice'
@@ -105,6 +104,10 @@ const SQL_ENGINE: BookEngine = {
         SQL track on quaera.app
       </a>
       . Your queries are T-SQL, translated to DuckDB in this browser: nearly the same as Fabric Warehouse, and a yellow note marks where it is not.
+      <span className="block mt-2">
+        Every table lives in a schema, a folder inside the database, and here that schema is called <code className="mono">quaera</code>. So a table is always written with it in front:{' '}
+        <code className="mono">SELECT * FROM quaera.dim_product</code>. Without <code className="mono">quaera.</code> the database does not know where to look.
+      </span>
     </>
   ),
   run: async (code, tag, isStopped, onProgress) => {
@@ -786,21 +789,6 @@ function Page() {
   const main = useRef<HTMLDivElement>(null)
   const [active, setActive] = useState(() => practiceFromHash(location.hash)?.at ?? SECTIONS[0].id)
   const [tablesOpen, setTablesOpen] = useState(false)
-  const [zoom, setZoom] = useState(() => {
-    try {
-      return parseZoom(localStorage.getItem(ZOOM_KEY))
-    } catch {
-      return 1
-    }
-  })
-  const chooseZoom = (z: number) => {
-    setZoom(z)
-    try {
-      localStorage.setItem(ZOOM_KEY, String(z))
-    } catch {
-      /* private mode: the size is not remembered */
-    }
-  }
   const tablesBlock = useMemo(() => SECTIONS.flatMap((s) => s.blocks).find((b): b is PracticeTables => b.kind === 'tables'), [SECTIONS])
   const shown = useMemo(() => SECTIONS.filter((s) => !progress.hideKnown || !progress.known.includes(s.id)), [progress.hideKnown, progress.known])
 
@@ -858,7 +846,7 @@ function Page() {
 
   return (
     <MenuContext.Provider value={openMenu}>
-    <div className="absolute inset-0 z-30 flex min-w-0" style={{ background: 'var(--bg)', zoom: zoom === 1 ? undefined : zoom }} data-testid="sql-practice">
+    <div className="absolute inset-0 z-30 flex min-w-0" style={{ background: 'var(--bg)', zoom: 'var(--practice-zoom, 1)' }} data-testid="sql-practice">
       <nav aria-label="Sections" className="hidden md:flex flex-col w-56 shrink-0 overflow-y-auto p-2" style={{ background: 'var(--panel)', borderRight: '1px solid var(--line)' }}>
         <ul className="m-0 p-0 list-none flex-1">
           {SECTIONS.map((s) => {
@@ -903,13 +891,6 @@ function Page() {
               {counts.solved} solved · {counts.known} known · {counts.left} left
             </div>
           </div>
-          <select className="field" aria-label="Text size" title="Text size" value={zoom} onChange={(e) => chooseZoom(Number(e.target.value))}>
-            {ZOOM_STEPS.map((z) => (
-              <option key={z} value={z}>
-                Size {zoomLabel(z)}
-              </option>
-            ))}
-          </select>
           {tablesBlock && (
             <button className="btn" aria-expanded={tablesOpen} onClick={() => setTablesOpen(!tablesOpen)} title="Tables and their columns, without leaving your place">
               <Table2 size={14} /> Tables

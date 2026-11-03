@@ -3,6 +3,7 @@
 import { Moon, Sun } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { applyBorders, readBorders, type Borders } from '../core/borders'
+import { parseZoom, ZOOM_KEY, ZOOM_STEPS, zoomLabel } from '../core/practiceZoom'
 import { lookColor, lookVars, NO_LOOK, parseLook, setLookColor, SWATCHES, type Look, type LookPart } from '../core/look'
 import { toggleTheme, useLab } from './store'
 
@@ -20,6 +21,13 @@ export function AppearanceButton({ className = '' }: { className?: string }) {
   const theme = useLab((s) => s.theme)
   const [look, setLook] = useState(readLook)
   const [borders, setBorders] = useState<Borders>(readBorders)
+  const [zoom, setZoom] = useState(() => {
+    try {
+      return parseZoom(localStorage.getItem(ZOOM_KEY))
+    } catch {
+      return 1
+    }
+  })
   const [open, setOpen] = useState(false)
   const root = useRef<HTMLDivElement>(null)
 
@@ -37,6 +45,16 @@ export function AppearanceButton({ className = '' }: { className?: string }) {
   }, [look, theme])
 
   useEffect(() => applyBorders(borders), [borders])
+
+  // The practice pages read --practice-zoom (PracticeBook.tsx).
+  useEffect(() => {
+    document.documentElement.style.setProperty('--practice-zoom', String(zoom))
+    try {
+      localStorage.setItem(ZOOM_KEY, String(zoom))
+    } catch {
+      /* private mode: the size is not remembered */
+    }
+  }, [zoom])
 
   useEffect(() => {
     if (!open) return
@@ -134,12 +152,31 @@ export function AppearanceButton({ className = '' }: { className?: string }) {
               ))}
             </div>
           </div>
+          <div>
+            <div className="mb-1.5" style={{ color: 'var(--muted)' }}>Practice text size</div>
+            <div className="inline-flex rounded-md overflow-hidden" role="radiogroup" aria-label="Practice text size" style={{ border: '1px solid var(--line)' }}>
+              {ZOOM_STEPS.map((z) => (
+                <button
+                  key={z}
+                  type="button"
+                  role="radio"
+                  aria-checked={zoom === z}
+                  className="px-3 py-1"
+                  style={zoom === z ? { background: 'var(--accent-soft)', color: 'var(--accent)', fontWeight: 600 } : { color: 'var(--muted)' }}
+                  onClick={() => setZoom(z)}
+                >
+                  {zoomLabel(z)}
+                </button>
+              ))}
+            </div>
+          </div>
           {colorRow('editor', 'SQL editor')}
           {colorRow('panels', 'Panels (top bar, tree, results, dialogs)')}
           <div style={{ color: 'var(--muted)', fontSize: 12 }}>Colours are kept separately for the light and dark theme, in this browser.</div>
           <button type="button" className="btn self-start" onClick={() => {
               setLook(NO_LOOK)
               setBorders('strong')
+              setZoom(1)
             }}>
             Reset to default
           </button>
