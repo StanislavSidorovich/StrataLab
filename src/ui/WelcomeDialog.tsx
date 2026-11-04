@@ -2,8 +2,8 @@
 // Shown once on a first visit (not to someone arriving with a model or a dataset link: they came
 // for that), and again from the Help (?) menu in the header.
 import { useState } from 'react'
-import { Database, Download, FileUp, HelpCircle, Library, Play, Store, X } from 'lucide-react'
-import { closeWelcome, enqueueFiles, hasDemoTables, openAndRun, openCatalog, showDemo, useLab } from './store'
+import { Database, Download, FileUp, GraduationCap, HelpCircle, Library, Play, Store, X } from 'lucide-react'
+import { closeWelcome, enqueueFiles, hasDemoTables, openAndRun, openCatalog, openPracticeBook, showDemo, useLab } from './store'
 import { ACCEPT } from './Sidebar'
 import { AuthorLinks } from './AuthorLinks'
 import { WELCOME_SQL } from '../data/demo'
@@ -115,6 +115,17 @@ export function WelcomeDialog() {
                 onClick={start(pickFiles)}
                 disabled={!ready}
               />
+            </div>
+            {/* On a phone the Practice button is not in the header: this is its way in (Help has it too). */}
+            <div className="rounded-lg p-3 mt-3 flex flex-col sm:flex-row sm:items-center gap-2" style={{ border: '1px solid var(--line)', background: 'var(--panel-2)' }}>
+              <div className="flex-1">
+                <div className="flex items-center gap-2 font-semibold"><GraduationCap size={18} style={{ color: 'var(--accent)' }} /> Practice on Kaiyo Trading</div>
+                <p style={{ color: 'var(--muted)' }}>Graded tasks with hints, from the first SELECT up: 127 in SQL, 108 in Python.</p>
+              </div>
+              <div className="flex gap-2">
+                <button className="btn flex-1 justify-center" onClick={start(() => openPracticeBook('sql'))}>SQL practice</button>
+                <button className="btn flex-1 justify-center" onClick={start(() => openPracticeBook('python'))}>Python practice</button>
+              </div>
             </div>
           </section>
 
