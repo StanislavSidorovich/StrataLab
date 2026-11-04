@@ -17,6 +17,7 @@ import { AboutDialog } from './AboutDialog'
 import { ShareDialog } from './ShareDialog'
 import { PracticeDialog, TaskBar } from './Practice'
 import { PracticeBookPage } from './PracticeBook'
+import { PipelinePage } from './PipelinePage'
 import { GuideDialog } from './Guide'
 import { CompareDialog } from './Compare'
 import { DialectBar } from './DialectBar'
@@ -24,7 +25,7 @@ import { checkForUpdates, updateCheckMessage, useUpdateReady } from '../pwa/regi
 import { memoryNote } from '../core/dbLock'
 import { takeDatabaseHere } from '../db/engine'
 import { engineLoadingLabel, engineLoadingShort } from './EngineLoading'
-import { addTab, closeTabs, currentPythonStarter, newPythonTab, openPractice, openPracticeBook, switchTabDialect, tabDialect, downloadBackup, duplicateTab, enqueueFiles, openAbout, openCatalog, openShare, openTables, openWelcome, pasteTable, pasteTableFromClipboard, renameTab, reopenClosedTab, updateNow, useLab } from './store'
+import { addTab, closeTabs, currentPythonStarter, newPythonTab, openPipeline, openPractice, openPracticeBook, switchTabDialect, tabDialect, downloadBackup, duplicateTab, enqueueFiles, openAbout, openCatalog, openShare, openTables, openWelcome, pasteTable, pasteTableFromClipboard, renameTab, reopenClosedTab, updateNow, useLab } from './store'
 import { AppearanceButton } from './Appearance'
 import { Menu, useLongPress, type MenuItem } from './Menu'
 import { tabsToClose } from '../core/tabs'
@@ -51,7 +52,7 @@ export function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       // The practice page covers the workbench: its keys must not run a hidden tab.
-      if (e.defaultPrevented || useLab.getState().practiceBook) return
+      if (e.defaultPrevented || useLab.getState().practiceBook || useLab.getState().pipeline) return
       const mod = e.ctrlKey || e.metaKey
       const key = e.key.toLowerCase()
       // Ctrl+Shift+T is the browser's own; Alt+Shift+T reopens a tab closed here.
@@ -142,6 +143,7 @@ export function App() {
       <MemoryBanner />
       <div className="flex-1 min-h-0 flex relative">
         <PracticeBookPage />
+        <PipelinePage />
         <div className="shrink-0 hidden md:block relative" style={{ width: sideW }}>
           <Sidebar />
           <div
@@ -373,6 +375,7 @@ function HelpMenu() {
     ['Practice on the demo shop…', () => openPractice()],
     ['SQL practice on Kaiyo Trading', () => openPracticeBook('sql')],
     ['Python practice on Kaiyo Trading', () => openPracticeBook('python')],
+    ['Data pipeline on Kaiyo Trading', () => openPipeline('kaiyo-sellout')],
     'separator',
     ['Check for updates', () => void runUpdateCheck()],
     ['About & licences', () => openAbout('about')],

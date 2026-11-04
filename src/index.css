@@ -210,3 +210,141 @@ button:disabled {
   outline: 2px solid var(--accent);
   outline-offset: -1px;
 }
+
+
+/* The data pipeline page (src/ui/PipelinePage.tsx): lanes with fixed slots, blocks, status chips. */
+.pl-lane {
+  display: grid;
+  grid-template-columns: 9.5rem minmax(0, 1fr);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--panel);
+}
+.pl-lane-label {
+  padding: 0.6rem 0.75rem;
+  font-weight: 600;
+  border-right: 1px solid var(--line);
+  border-left: 4px solid var(--lane);
+  background: color-mix(in srgb, var(--lane) 12%, var(--panel));
+}
+.pl-slots {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  overflow-x: auto;
+}
+.pl-slot {
+  min-height: 4.75rem;
+  display: flex;
+  border: 1.5px dashed var(--line);
+  border-radius: 8px;
+}
+.pl-slot.filled {
+  border-style: solid;
+  border-color: transparent;
+}
+.pl-slot.target {
+  border-color: var(--lane);
+  background: color-mix(in srgb, var(--lane) 8%, transparent);
+}
+.pl-slot.dim {
+  opacity: 0.45;
+}
+.pl-empty {
+  flex: 1;
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: default;
+}
+.pl-slot.target .pl-empty {
+  cursor: pointer;
+  color: var(--text);
+}
+.pl-block {
+  position: relative;
+  flex: 1;
+  text-align: left;
+  border: 1.5px solid var(--lane);
+  border-radius: 8px;
+  padding: 0.4rem 0.5rem 0.4rem 1.6rem;
+  font-size: 12px;
+  line-height: 1.25;
+  color: var(--text);
+  background: color-mix(in srgb, var(--lane) 14%, var(--panel));
+  cursor: pointer;
+}
+.pl-block.pl-chipblock {
+  flex: none;
+  padding-left: 0.6rem;
+  font-size: 13px;
+}
+.pl-block.picked {
+  outline: 2px solid var(--lane);
+  outline-offset: 1px;
+}
+.pl-no {
+  position: absolute;
+  left: 0.35rem;
+  top: 0.35rem;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--lane);
+}
+.pl-unset {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-left: 4px;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--warn-soft);
+  color: var(--warn-text);
+}
+.pl-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  white-space: nowrap;
+  color: var(--c);
+  border: 1px solid var(--c);
+  background: color-mix(in srgb, var(--c) 10%, transparent);
+}
+.pl-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  color: #fff;
+  flex: none;
+}
+.pl-code {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  overflow-x: auto;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--code-bg);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.pl-blank {
+  font: inherit;
+  color: var(--text);
+  padding: 0 4px;
+  border: 0;
+  border-bottom: 2px solid var(--accent);
+  background: var(--accent-soft);
+  border-radius: 3px;
+  min-width: 6ch;
+}

@@ -1,8 +1,8 @@
 // Practice on the demo shop (stage 5): the dialog with worked examples and tasks, and the bar
 // above the editor of a task's tab (the question, Check, hints one at a time, the solution).
-import { Check, CheckCircle2, ChevronRight, Eye, GraduationCap, Lightbulb, Link2, Loader2, NotebookText, Play, X, XCircle } from 'lucide-react'
+import { Check, CheckCircle2, ChevronRight, Eye, GraduationCap, Lightbulb, Link2, Loader2, NotebookText, Play, Workflow, X, XCircle } from 'lucide-react'
 import { useState } from 'react'
-import { checkTask, nextHint, openExample, openPractice, openPracticeBook, openTask, openWalkthrough, useLab } from './store'
+import { checkTask, nextHint, openExample, openPractice, openPipeline, openPracticeBook, openTask, openWalkthrough, useLab } from './store'
 import { activeSql, appendToActive } from './SqlEditor'
 import { EXAMPLES, LEVELS, TASKS, taskById, type PracticeTask } from '../data/practice'
 import { describeVerdict } from '../core/check'
@@ -65,6 +65,23 @@ export function PracticeDialog() {
               <ChevronRight size={16} className="shrink-0 mt-0.5" />
             </button>
           ))}
+          <button
+            className="w-full text-left rounded-lg p-3 flex items-start gap-2 hover:bg-[var(--panel)]"
+            style={{ border: '1px solid var(--accent)', background: 'var(--accent-soft)' }}
+            onClick={() => {
+              openPractice(false)
+              openPipeline('kaiyo-sellout')
+            }}
+          >
+            <Workflow size={15} className="shrink-0 mt-0.5" style={{ color: 'var(--accent)' }} />
+            <span className="flex-1 min-w-0">
+              <span className="font-semibold">Data pipeline on Kaiyo Trading: place the blocks, run it, check it</span>
+              <span className="block" style={{ color: 'var(--muted)' }}>
+                Follow the distributor files through three roles, from a data engineer to an analyst, and find why the top chain changes. A laptop is needed.
+              </span>
+            </span>
+            <ChevronRight size={16} className="shrink-0 mt-0.5" />
+          </button>
           <section>
             <h2 className="font-semibold mb-2 px-1">Worked examples</h2>
             <ul className="grid gap-2 sm:grid-cols-2">

@@ -27,6 +27,7 @@ import { planGeneration, type GenPlan, type GenTable } from '../core/generate'
 import { runGeneration, type GenOutcome } from '../db/generate'
 import { runOrder } from '../core/pdScript'
 import { hashWithPractice, hashWithoutPractice, practiceFromHash, readableError, type BookKind } from '../core/sqlPractice'
+import { hashWithPipeline, hashWithoutPipeline, pipelineFromHash } from '../core/pipeline'
 import { BOOK_TABLES } from '../data/pyPractice/tables'
 import { duckdbScript, translateTsql, type TranslatedStatement, type TranslatorProgress } from '../dialects/tsql'
 import { copyToPostgres, explainPostgres, getPostgres, postgresCatalog, runPostgres } from '../dialects/postgres'
@@ -180,6 +181,8 @@ interface State {
   welcomeOpen: boolean
   /** the practice page on Kaiyo that is open (`#practice=sql`, `#practice=python`, src/ui/PracticeBook.tsx) */
   practiceBook: BookKind | null
+  /** the data pipeline page that is open (`#pipeline=kaiyo-sellout`, src/ui/PipelinePage.tsx) */
+  pipeline: string | null
   /** the dialect comparison (src/ui/Compare.tsx) is open */
   compareOpen: boolean
   /** per tab, for T-SQL tabs */
@@ -319,8 +322,9 @@ export const useLab = create<State>(() => ({
   dataset: null,
   catalogOpen: false,
   generate: null,
-  welcomeOpen: !practiceFromHash(location.hash) && firstVisit(),
+  welcomeOpen: !practiceFromHash(location.hash) && !pipelineFromHash(location.hash) && firstVisit(),
   practiceBook: practiceFromHash(location.hash)?.kind ?? null,
+  pipeline: practiceFromHash(location.hash) ? null : pipelineFromHash(location.hash),
   compareOpen: false,
   translations: {},
   postgres: { status: 'off' },
@@ -446,7 +450,8 @@ export async function initEngine() {
     const fromTask = await openTaskFromHash()
     const fromShare = await openShareFromHash()
     window.addEventListener('hashchange', () => {
-      if (practiceFromHash(location.hash)) set({ practiceBook: practiceFromHash(location.hash)!.kind })
+      if (practiceFromHash(location.hash)) set({ practiceBook: practiceFromHash(location.hash)!.kind, pipeline: null })
+      else if (pipelineFromHash(location.hash)) set({ pipeline: pipelineFromHash(location.hash), practiceBook: null })
       void openDdlFromHash()
       void openDatasetFromHash()
       void openTaskFromHash()
@@ -462,7 +467,7 @@ export async function initEngine() {
       /* ignore */
     }
     // Someone arriving with a model came for that model, not for the demo shop.
-    if (!fromModel && !fromLink && !fromTask && !fromShare && !get().practiceBook && ownTables(get().tables).length === 0 && (!e.persistent || !offered)) await loadDemo()
+    if (!fromModel && !fromLink && !fromTask && !fromShare && !get().practiceBook && !get().pipeline && ownTables(get().tables).length === 0 && (!e.persistent || !offered)) await loadDemo()
   } catch (e) {
     set({ engine: { status: 'error', error: String(e instanceof Error ? e.message : e) } })
   }
@@ -1702,9 +1707,19 @@ export async function openWalkthrough(w: Walkthrough) {
 // ------------------------------------------------------------------ practice pages on Kaiyo
 
 export function openPracticeBook(kind: BookKind | null, at: string | null = null) {
-  const hash = kind ? hashWithPractice(location.hash, at, kind) : hashWithoutPractice(location.hash)
+  const base = hashWithoutPipeline(location.hash)
+  const hash = kind ? hashWithPractice(base, at, kind) : hashWithoutPractice(base)
   history.replaceState(null, '', location.pathname + location.search + hash)
-  set({ practiceBook: kind })
+  set({ practiceBook: kind, ...(kind ? { pipeline: null } : {}) })
+}
+
+// ------------------------------------------------------------------ data pipeline on Kaiyo
+
+export function openPipeline(id: string | null) {
+  const base = hashWithoutPractice(location.hash)
+  const hash = id ? hashWithPipeline(base, id) : hashWithoutPipeline(base)
+  history.replaceState(null, '', location.pathname + location.search + hash)
+  set({ pipeline: id, ...(id ? { practiceBook: null } : {}) })
 }
 
 /** The dataset the page's queries read; loaded with the usual progress card the first time. */
