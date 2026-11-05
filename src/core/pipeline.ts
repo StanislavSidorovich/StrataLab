@@ -6,6 +6,7 @@ import {
   BLOCKS,
   BUILDER,
   DIAGNOSIS_TEXT,
+  WHY_TEXT,
   LANES,
   LAYER_OF,
   NEXT_TEXT,
@@ -16,6 +17,7 @@ import {
   laneOfSlot,
   slotId,
   type BlockId,
+  type DiagKey,
   type Settings,
   type WorkTable,
   WORK_TABLES,
@@ -49,7 +51,7 @@ export interface PipelineState {
   settings: Record<string, Settings>
   /** the SQL step's blank */
   blank: string
-  /** false: the first pass of the story, types only. Not on the screen in the first slice. */
+  /** false: the first pass of the story (phase `first-pass`): types only, no blank. The page sets it from the phase. */
   dedup: boolean
 }
 
@@ -146,13 +148,18 @@ export function nextSlotFor(state: PipelineState, id: BlockId): string | null {
 }
 
 /** What the page says to do now: a sentence after "Next:", and the block and slot it is about (null when nothing is left to place). */
-export function nextStep(state: PipelineState, o: { ran: boolean; solved: boolean }): { text: string; block: BlockId | null; slot: string | null } {
+export function nextStep(state: PipelineState, o: { ran: boolean; solved: boolean; firstPass?: boolean }): { text: string; block: BlockId | null; slot: string | null } {
   const block = nextRequired(state)
   if (block) return { text: NEXT_TEXT[block], block, slot: nextSlotFor(state, block) }
   const unset = missingSetting(state)
-  if (unset) return { text: `set up the block marked ? (${unset.message.charAt(0).toLowerCase()}${unset.message.slice(1)})`, block: null, slot: null }
+  if (unset) return { text: `set up the block marked ? (${unset.message})`, block: null, slot: null }
   if (!o.ran) return { text: 'press Run and watch each step in the journal', block: null, slot: null }
-  if (!o.solved) return { text: 'press Check my pipeline: it runs everything twice and judges the result', block: null, slot: null }
+  if (!o.solved)
+    return {
+      text: o.firstPass ? 'read what stopped the run in the journal, fix it and press Run again' : 'press Check my pipeline: it runs everything twice and judges the result',
+      block: null,
+      slot: null,
+    }
   return { text: 'nothing, the pipeline works', block: null, slot: null }
 }
 
@@ -210,7 +217,7 @@ export interface Missing {
 export function unsetOf(state: PipelineState, id: BlockId, index: number): string | null {
   const s = state.settings[id]
   if (id === 'copy-files' && s.mode === null) return `${shortName(id)}: choose the write mode`
-  if (id === 'sql-silver') {
+  if (id === 'sql-silver' && state.dedup) {
     const bad = checkBlank(state.blank)
     if (bad) return `SQL step: fill the blank (${bad.replace(/\.$/, '').toLowerCase()})`
   }
@@ -297,6 +304,8 @@ export interface ProofLine {
   ok: boolean
   /** why not, for a failed proof */
   diagnosis?: string
+  /** two or three sentences under "Why?" */
+  why?: string
 }
 
 export interface Proofs {
@@ -317,10 +326,12 @@ export function proofs(f: Facts, answerOk: boolean): Proofs {
   const fact = f.counts2.gold_fact_sellout
   const clean = fact != null && fact > 0 && f.noKey === 0 && f.dupGroups === 0
   const base: Proofs = { answer: { ok: answerOk }, again: { ok: again }, clean: { ok: clean } }
-  const lines = diagnose({ ...f, answerOk }, [answerOk, again, clean])
-  if (!answerOk) base.answer.diagnosis = lines[0] ?? DIAGNOSIS_TEXT.generic
-  if (!again) base.again.diagnosis = lines[1] ?? DIAGNOSIS_TEXT.generic
-  if (!clean) base.clean.diagnosis = lines[2] ?? DIAGNOSIS_TEXT.generic
+  const picks = pickRules({ ...f, answerOk }, [answerOk, again, clean])
+  for (const [i, line] of [base.answer, base.again, base.clean].entries()) {
+    if (line.ok) continue
+    line.diagnosis = picks[i]?.line ?? DIAGNOSIS_TEXT.generic
+    line.why = WHY_TEXT[picks[i]?.key ?? 'generic']
+  }
   const stopped = checkStopped(f)
   if (stopped) base.note = DIAGNOSIS_TEXT.checkStopped
   return base
@@ -331,7 +342,7 @@ function checkStopped(f: Facts): boolean {
   return f.run1.some((r, i) => r.block.startsWith('check-') && r.status === 'failed' && f.run1[i + 1]?.status === 'skipped')
 }
 
-type Rule = { proofs: (0 | 1 | 2)[]; line: (f: Facts) => string | null }
+type Rule = { key: DiagKey; proofs: (0 | 1 | 2)[]; line: (f: Facts) => string | null }
 
 const rowsOf = (r: StepResult[], id: BlockId) => r.find((s) => s.block === id)
 
@@ -349,7 +360,7 @@ function missingTable(f: Facts): string | null {
 }
 
 const RULES: Rule[] = [
-  {
+  { key: 'delimiter',
     proofs: [0, 1, 2],
     line: (f) => {
       const s = f.settings['copy-files']
@@ -358,9 +369,9 @@ const RULES: Rule[] = [
       return copy?.status === 'failed' || !f.bronzeColumns?.includes('raw_id') ? DIAGNOSIS_TEXT.delimiter : null
     },
   },
-  { proofs: [0, 1, 2], line: (f) => (f.bronzeColumns?.includes('content') ? DIAGNOSIS_TEXT.binary : null) },
-  { proofs: [0, 1, 2], line: (f) => (f.bronzeColumns?.includes('column0') ? DIAGNOSIS_TEXT.header : null) },
-  {
+  { key: 'binary', proofs: [0, 1, 2], line: (f) => (f.bronzeColumns?.includes('content') ? DIAGNOSIS_TEXT.binary : null) },
+  { key: 'header', proofs: [0, 1, 2], line: (f) => (f.bronzeColumns?.includes('column0') ? DIAGNOSIS_TEXT.header : null) },
+  { key: 'append',
     proofs: [1],
     line: (f) => {
       const a = f.counts1.bronze_sellout_raw
@@ -368,11 +379,11 @@ const RULES: Rule[] = [
       return a != null && b != null && b > a ? DIAGNOSIS_TEXT.append(b - a, a, b) : null
     },
   },
-  {
+  { key: 'latest',
     proofs: [0],
     line: (f) => (f.settings['copy-files']?.files === 'latest' && f.order.includes('copy-files') ? DIAGNOSIS_TEXT.latest(f.counts1.bronze_sellout_raw ?? 0) : null),
   },
-  {
+  { key: 'clearAfter',
     proofs: [0, 2],
     line: (f) => {
       const copy = rowsOf(f.run1, 'copy-files')
@@ -380,19 +391,19 @@ const RULES: Rule[] = [
       return copy?.status === 'succeeded' && clear && f.counts1.bronze_sellout_raw === 0 ? DIAGNOSIS_TEXT.clearAfter : null
     },
   },
-  { proofs: [0, 1, 2], line: missingTable },
-  {
+  { key: 'missing', proofs: [0, 1, 2], line: missingTable },
+  { key: 'failed',
     proofs: [0, 1, 2],
     line: (f) => {
       const r = f.run1.find((s) => s.status === 'failed' && !s.block.startsWith('check-'))
       return r ? DIAGNOSIS_TEXT.failed(blockById(r.block)!.label, r.error ?? r.message) : null
     },
   },
-  {
+  { key: 'measure',
     proofs: [2],
     line: (f) => (f.answerOk && f.settings['card-top-chain']?.measure === 'distinct' && (f.dupGroups ?? 0) > 0 ? DIAGNOSIS_TEXT.measure(f.dupGroups!) : null),
   },
-  {
+  { key: 'rawId',
     proofs: [0, 2],
     line: (f) => {
       const silver = f.counts1.silver_sellout
@@ -400,7 +411,7 @@ const RULES: Rule[] = [
       return f.order.includes('sql-silver') && /\braw_id\b/i.test(f.blank) && silver != null && silver === bronze && silver > f.refRows ? DIAGNOSIS_TEXT.rawId : null
     },
   },
-  {
+  { key: 'doubled',
     proofs: [0, 2],
     line: (f) => {
       const silver = f.counts1.silver_sellout
@@ -412,21 +423,57 @@ const RULES: Rule[] = [
       return DIAGNOSIS_TEXT.doubled(extra, wrong?.chain ?? '', wrong ? fmtRevenue(wrong.revenue) : '', wrong && refRow ? fmtRevenue(refRow.revenue) : null)
     },
   },
-  {
+  { key: 'tooShort',
     proofs: [0],
     line: (f) => {
       const silver = f.counts1.silver_sellout
       return silver != null && silver > 0 && silver < f.refRows ? DIAGNOSIS_TEXT.tooShort(silver, f.refRows) : null
     },
   },
-  {
+  { key: 'checkIgnored',
     proofs: [0, 2],
     line: (f) => (f.run1.some((r, i) => r.block.startsWith('check-') && r.status === 'failed' && f.run1[i + 1]?.status && f.run1[i + 1].status !== 'skipped' && f.settings[f.run1[i + 1].block]?.when === 'completed') ? DIAGNOSIS_TEXT.checkIgnored : null),
   },
-  { proofs: [0], line: (f) => (!f.order.includes('card-top-chain') || rowsOf(f.run1, 'card-top-chain')?.status !== 'succeeded' ? DIAGNOSIS_TEXT.noCard : null) },
+  { key: 'noCard', proofs: [0], line: (f) => (!f.order.includes('card-top-chain') || rowsOf(f.run1, 'card-top-chain')?.status !== 'succeeded' ? DIAGNOSIS_TEXT.noCard : null) },
 ]
+
+type Picked = { line: string; key: DiagKey } | null
+
+/** The first rule that fits each failed proof, with its text and key; null for a proof that passed or that no rule explains. */
+function pickRules(f: Facts, ok: [boolean, boolean, boolean]): Picked[] {
+  return ok.map((good, i) => {
+    if (good) return null
+    for (const r of RULES) {
+      if (!r.proofs.includes(i as 0 | 1 | 2)) continue
+      const line = r.line(f)
+      if (line) return { line, key: r.key }
+    }
+    return null
+  })
+}
 
 /** One line per failed proof (answer, safe to run again, gold is clean), by priority; null for a proof that passed. */
 export function diagnose(f: Facts, ok: [boolean, boolean, boolean]): (string | null)[] {
-  return ok.map((good, i) => (good ? null : (RULES.filter((r) => r.proofs.includes(i as 0 | 1 | 2)).map((r) => r.line(f)).find(Boolean) ?? null)))
+  return pickRules(f, ok).map((p) => p?.line ?? null)
+}
+
+// ---------------------------------------------------------------- the story: first pass, then fix
+
+export type Phase = 'first-pass' | 'fix'
+
+/** A saved phase; a pipeline already solved before the story existed is past it. */
+export function readPhase(phase: unknown, solved: boolean): Phase {
+  return phase === 'first-pass' || phase === 'fix' ? phase : solved ? 'fix' : 'first-pass'
+}
+
+/**
+ * After a run in the first pass: once the card has been built, the story moves on to the fix. `mismatch` is true when the card
+ * does not say what the Head of Sales' own file says (the reference), which is what the first pass is built to do.
+ */
+export function afterRun(phase: Phase, journal: StepResult[], top: TopRow | null, ref: TopRow[]): { phase: Phase; mismatch: boolean } {
+  if (phase === 'fix') return { phase, mismatch: false }
+  const card = journal.find((r) => r.block === 'card-top-chain')
+  if (card?.status !== 'succeeded' || !top || !ref[0]) return { phase, mismatch: false }
+  const same = top.chain === ref[0].chain && Number(top.revenue) === Number(ref[0].revenue)
+  return { phase: 'fix', mismatch: !same }
 }

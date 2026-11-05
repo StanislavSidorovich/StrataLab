@@ -1,18 +1,21 @@
 // The data pipeline page (`#pipeline=kaiyo-sellout`, docs/pipeline-mvp-spec.md): three lanes with fixed slots, a palette
 // of blocks, each block's settings, a run that fills a journal, and "Check my pipeline". The rules are in
 // src/core/pipeline.ts, the engine in src/db/pipelineRun.ts. Under 768 px there is no board: a laptop is needed.
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowRight, Check, ChevronDown, ChevronRight, Copy, Laptop, Lightbulb, ListChecks, Loader2, Play, RotateCcw, Share2, Trash2, Workflow, X } from 'lucide-react'
-import { checkBlank, emptyState, missingSetting, nextStep, place, progressNote, readState, remove, runOrder, softNotes, unsetOf, type PipelineState, type StepResult, type StepStatus } from '../core/pipeline'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { ArrowRight, Check, ChevronDown, ChevronRight, Copy, Laptop, Lightbulb, ListChecks, Loader2, Play, RotateCcw, Share2, Undo2, Trash2, Workflow, X } from 'lucide-react'
+import { afterRun, checkBlank, emptyState, missingSetting, nextStep, place, progressNote, readPhase, readState, remove, runOrder, softNotes, unsetOf, type Phase, type PipelineState, type StepResult, type StepStatus } from '../core/pipeline'
 import type { ResultData } from '../core/check'
 import {
   BLOCKS,
   BLOCK_TIPS,
   INTRO,
   LANES,
+  LANE_LINES,
   LANE_PLAN,
   PIPELINE_ID,
   PROOF_TITLES,
+  RETURN_URL,
+  TWIST,
   SCHEMA,
   SILVER_HINTS,
   SILVER_PROMPT,
@@ -20,6 +23,7 @@ import {
   WHEN_TIP,
   blockById,
   laneOfSlot,
+  silverSql,
   silverTemplate,
   slotId,
   type Block,
@@ -27,7 +31,7 @@ import {
   type LaneId,
   type Settings,
 } from '../data/pipelines/kaiyoSellout'
-import { checkPipeline, prepare, resetWork, runAll, type CheckReport } from '../db/pipelineRun'
+import { checkPipeline, currentTop, prepare, referenceTop, resetWork, runAll, type CheckReport } from '../db/pipelineRun'
 import { enginePort } from '../db/pipelinePort'
 import { checkpoint } from '../db/engine'
 import { openPipeline, refreshCatalog, useLab } from './store'
@@ -38,19 +42,31 @@ const URL_HERE = () => `${location.origin}${location.pathname}#pipeline=${PIPELI
 
 const INFO: Record<BlockId, string> = Object.fromEntries(Object.entries(BLOCK_TIPS).map(([k, v]) => [k, v.does])) as Record<BlockId, string>
 
+interface Twist {
+  /** the card disagreed with the Head of Sales' file */
+  mismatch: boolean
+  /** what the card said, "Nagisa, 95,406.98" */
+  mine: string
+}
+
 interface Saved {
   state: PipelineState
   hints: number
   solved: boolean
+  phase: Phase
+  twist: Twist | null
 }
 
 function readSaved(): Saved {
   try {
     const raw = localStorage.getItem(KEY)
     const p = raw ? JSON.parse(raw) : {}
-    return { state: readState(raw), hints: p?.hints === 1 || p?.hints === 2 ? p.hints : 0, solved: p?.solved === true }
+    const solved = p?.solved === true
+    const t = p?.twist
+    const twist = t && typeof t.mine === 'string' && typeof t.mismatch === 'boolean' ? { mismatch: t.mismatch, mine: t.mine } : null
+    return { state: readState(raw), hints: p?.hints === 1 || p?.hints === 2 ? p.hints : 0, solved, phase: readPhase(p?.phase, solved), twist }
   } catch {
-    return { state: emptyState(), hints: 0, solved: false }
+    return { state: emptyState(), hints: 0, solved: false, phase: 'first-pass', twist: null }
   }
 }
 
@@ -152,6 +168,8 @@ function Board() {
   const [state, setState] = useState<PipelineState>(saved.state)
   const [hints, setHints] = useState(saved.hints)
   const [solved, setSolved] = useState(saved.solved)
+  const [phase, setPhase] = useState<Phase>(saved.phase)
+  const [twist, setTwist] = useState<Twist | null>(saved.twist)
   const [picked, setPicked] = useState<BlockId | null>(null)
   const [open, setOpen] = useState<BlockId | null>(null)
   const [prep, setPrep] = useState<'loading' | 'ready' | string>('loading')
@@ -172,11 +190,11 @@ function Board() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(KEY, JSON.stringify({ ...state, hints, solved }))
+      localStorage.setItem(KEY, JSON.stringify({ ...state, hints, solved, phase, twist }))
     } catch {
       /* private mode: the pipeline just is not kept */
     }
-  }, [state, hints, solved])
+  }, [state, hints, solved, phase, twist])
 
   useEffect(() => {
     let alive = true
@@ -192,12 +210,14 @@ function Board() {
     }
   }, [])
 
+  /** What runs: the first pass has no de-duplication (and no blank); the fix has both. */
+  const eff = useMemo(() => ({ ...state, dedup: phase === 'fix' }), [state, phase])
   const order = useMemo(() => runOrder(state), [state])
-  const missing = missingSetting(state)
+  const missing = missingSetting(eff)
   const reason = prep === 'loading' ? 'Preparing the data…' : prep !== 'ready' ? 'The data could not be prepared' : order.length === 0 ? 'Place a block first' : (missing?.message ?? null)
   const placed = new Set(order)
   const palette = BLOCKS.filter((b) => !placed.has(b.id))
-  const next = nextStep(state, { ran, solved })
+  const next = nextStep(eff, { ran, solved, firstPass: phase === 'first-pass' })
   const hintLevel = hint.for === next.block ? hint.level : 0
 
   const tipProps = (id: BlockId) => ({
@@ -257,7 +277,7 @@ function Board() {
     if (there) setOpen(open === there ? null : there)
   }
 
-  const afterRun = async () => {
+  const afterRunSync = async () => {
     await checkpoint()
     await refreshCatalog()
   }
@@ -275,12 +295,18 @@ function Board() {
     setReport(null)
     setNote(null)
     try {
-      const j = await runAll(enginePort, state, setJournal)
+      const j = await runAll(enginePort, eff, setJournal)
       setJournal(j)
       setRan(true)
-      await afterRun()
+      await afterRunSync()
       setAnswer(await readAnswer())
-      setNote(progressNote(state, j))
+      setNote(progressNote(eff, j))
+      const top = await currentTop(enginePort)
+      const moved = afterRun(phase, j, top, await referenceTop(enginePort))
+      if (moved.phase !== phase) {
+        setPhase(moved.phase)
+        setTwist({ mismatch: moved.mismatch, mine: top ? `${top.chain}, ${money(top.revenue)}` : '' })
+      }
     } finally {
       setBusy(null)
     }
@@ -289,13 +315,13 @@ function Board() {
     setBusy('check')
     setNote(null)
     try {
-      const r = await checkPipeline(enginePort, state, (j) => setJournal(j))
+      const r = await checkPipeline(enginePort, eff, (j) => setJournal(j))
       setJournal(r.run2)
       setRan(true)
       setReport(r)
       setAnswer(r.answer && r.answer.rows.length ? r.answer : null)
-      if (r.solved) setSolved(true)
-      await afterRun()
+      if (r.solved && phase === 'fix') setSolved(true)
+      await afterRunSync()
     } finally {
       setBusy(null)
     }
@@ -309,7 +335,26 @@ function Board() {
       setAnswer(null)
       setRan(false)
       setNote(`The tables in ${SCHEMA} are dropped. The source tables stay.`)
-      await afterRun()
+      await afterRunSync()
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const replay = async () => {
+    setBusy('run')
+    try {
+      await resetWork(enginePort)
+      setJournal([])
+      setReport(null)
+      setAnswer(null)
+      setRan(false)
+      setSolved(false)
+      setPhase('first-pass')
+      setTwist(null)
+      setHints(0)
+      setNote('The story starts again from the first pass. Your blocks stay where they are.')
+      await afterRunSync()
     } finally {
       setBusy(null)
     }
@@ -331,6 +376,8 @@ function Board() {
             </span>
           )}
         </div>
+
+        {twist && <TwistCard twist={twist} phase={phase} solved={solved} />}
 
         <Intro />
 
@@ -418,7 +465,7 @@ function Board() {
                       }}
                     >
                       {block ? (
-                        <PlacedBlock block={block} state={state} index={order.indexOf(block.id)} active={open === block.id} onClick={() => clickSlot(slot)} tip={tipProps(block.id)} />
+                        <PlacedBlock block={block} state={eff} index={order.indexOf(block.id)} active={open === block.id} onClick={() => clickSlot(slot)} tip={tipProps(block.id)} />
                       ) : (
                         <button className="pl-empty" aria-label={`Empty slot ${i + 1} in the ${lane.label} lane${isNext ? ' (next step goes here)' : ''}`} onClick={() => clickSlot(slot)} disabled={!target}>
                           {target ? 'Place here' : isNext ? 'Next block here' : ''}
@@ -464,7 +511,8 @@ function Board() {
         {openBlock && (
           <BlockSettings
             block={openBlock}
-            state={state}
+            state={eff}
+            phase={phase}
             first={order[0] === openBlock.id}
             set={(p) => setSettings(openBlock.id, p)}
             setBlank={(blank) => setState((s) => ({ ...s, blank }))}
@@ -483,12 +531,17 @@ function Board() {
           <button className="btn btn-primary" onClick={() => void run()} disabled={busy !== null || reason !== null} title={reason ?? 'Run the pipeline once on what is there now'}>
             {busy === 'run' ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />} {ran ? 'Run again' : 'Run'}
           </button>
-          <button className="btn" onClick={() => void check()} disabled={busy !== null || reason !== null} title={reason ?? 'Start from scratch, run it twice and judge the result'}>
+          <button className="btn" onClick={() => void check()} disabled={busy !== null || reason !== null || phase === 'first-pass'} title={reason ?? (phase === 'first-pass' ? 'Run the pipeline first: the Head of Sales will look at the number' : 'Start from scratch, run it twice and judge the result')}>
             {busy === 'check' ? <Loader2 size={14} className="animate-spin" /> : <ListChecks size={14} />} Check my pipeline
           </button>
           <button className="btn btn-ghost" onClick={() => void scratch()} disabled={busy !== null || prep !== 'ready'} title={`Drops the tables the pipeline built in ${SCHEMA} (bronze, silver, gold, report). Your blocks and settings stay where they are.`}>
             <RotateCcw size={14} /> Start from scratch
           </button>
+          {(twist || solved) && (
+            <button className="btn btn-ghost" onClick={() => void replay()} disabled={busy !== null || prep !== 'ready'} title="Go back to the first pass of the story. Your blocks stay where they are.">
+              <Undo2 size={14} /> Replay the story
+            </button>
+          )}
           <span style={{ color: 'var(--muted)', fontSize: 12 }}>{reason ?? `Start from scratch drops the tables built in ${SCHEMA} and keeps your blocks. Open the tables in the tree.`}</span>
           {typeof prep === 'string' && prep !== 'loading' && prep !== 'ready' && (
             <span style={{ color: 'var(--danger)', fontSize: 12 }}>{prep}</span>
@@ -502,8 +555,9 @@ function Board() {
         )}
         {journal.length > 0 && <Journal journal={journal} />}
         {answer && <Card answer={answer} />}
-        {report && <Report report={report} notes={softNotes(state)} />}
-        {!report && journal.length > 0 && softNotes(state).length > 0 && <Notes notes={softNotes(state)} />}
+        {report && <Report report={report} notes={softNotes(eff)} fixed={twist?.mismatch === true} />}
+        {!report && journal.length > 0 && softNotes(eff).length > 0 && <Notes notes={softNotes(eff)} />}
+        {solved && <BackToQuaera />}
       </div>
       {tip && <BlockTip id={tip.id} x={tip.x} y={tip.y} />}
     </div>
@@ -632,6 +686,7 @@ function Choice<T extends string | boolean | null>({ label, value, options, onCh
 function BlockSettings({
   block,
   state,
+  phase,
   first,
   set,
   setBlank,
@@ -643,6 +698,7 @@ function BlockSettings({
 }: {
   block: Block
   state: PipelineState
+  phase: Phase
   first: boolean
   set: (p: Partial<Settings>) => void
   setBlank: (b: string) => void
@@ -687,7 +743,7 @@ function BlockSettings({
       {block.id === 'card-top-chain' && (
         <Choice label="Measure" value={s.measure} onChange={(measure) => set({ measure })} options={[{ v: 'sum', text: 'Sum of revenue' }, { v: 'distinct', text: 'Sum of revenue over distinct rows' }]} />
       )}
-      {block.id === 'sql-silver' && <SqlStep blank={state.blank} setBlank={setBlank} hints={hints} moreHint={moreHint} result={journal.find((j) => j.block === 'sql-silver')} />}
+      {block.id === 'sql-silver' && <SqlStep phase={phase} blank={state.blank} setBlank={setBlank} hints={hints} moreHint={moreHint} result={journal.find((j) => j.block === 'sql-silver')} />}
       {first ? (
         <div style={{ color: 'var(--muted)', fontSize: 13 }}>This is the first step, so it always runs.</div>
       ) : (
@@ -700,11 +756,25 @@ function BlockSettings({
   )
 }
 
-function SqlStep({ blank, setBlank, hints, moreHint, result }: { blank: string; setBlank: (b: string) => void; hints: number; moreHint: () => void; result?: StepResult }) {
+function SqlStep({ phase, blank, setBlank, hints, moreHint, result }: { phase: Phase; blank: string; setBlank: (b: string) => void; hints: number; moreHint: () => void; result?: StepResult }) {
   const { before, after } = useMemo(silverTemplate, [])
   const bad = blank.trim() ? checkBlank(blank) : null
   const ref = useRef<HTMLInputElement>(null)
   const exact = result?.verdict && result.verdict.extra === 0 && result.verdict.missing === 0
+  if (phase === 'first-pass')
+    return (
+      <div className="space-y-2">
+        <div className="font-medium">{TWIST.prompt}</div>
+        <pre className="pl-code" data-testid="pipeline-sql">
+          {silverSql('', { dedup: false })}
+        </pre>
+        {result && result.status === 'failed' && (
+          <div style={{ color: 'var(--danger)', fontSize: 13 }} data-testid="pipeline-verdict">
+            {result.message}
+          </div>
+        )}
+      </div>
+    )
   return (
     <div className="space-y-2">
       <div className="font-medium">{SILVER_PROMPT}</div>
@@ -751,6 +821,56 @@ function SqlStep({ blank, setBlank, hints, moreHint, result }: { blank: string; 
   )
 }
 
+// ---------------------------------------------------------------- the story, the return
+
+/** Whether row i is the first step of its lane that the run has reached (running, done or failed; not queued or skipped). */
+function reachedFirst(journal: StepResult[], i: number): boolean {
+  const reached = (r: StepResult) => r.status === 'running' || r.status === 'succeeded' || r.status === 'failed'
+  const lane = blockById(journal[i].block)!.lane
+  if (!reached(journal[i])) return false
+  return !journal.slice(0, i).some((r) => blockById(r.block)!.lane === lane && reached(r))
+}
+
+function Why({ text, id }: { text: string; id: number }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="mt-1" style={{ fontSize: 13 }}>
+      <button className="btn btn-ghost" onClick={() => setOpen(!open)} aria-expanded={open} data-testid={`pipeline-why-${id}`}>
+        {open ? 'Hide why' : 'Why?'}
+      </button>
+      {open && (
+        <div className="mt-1" style={{ color: 'var(--text)' }} data-testid={`pipeline-why-text-${id}`}>
+          {text}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** The Head of Sales answers the first pass: the card does not match his own file. */
+function TwistCard({ twist, phase, solved }: { twist: Twist; phase: Phase; solved: boolean }) {
+  return (
+    <section aria-label={TWIST.title} className="rounded-lg px-4 py-3 space-y-1" style={{ background: 'var(--accent-soft)', border: '1px solid var(--accent)' }} data-testid="pipeline-twist">
+      <div style={{ fontSize: 12, color: 'var(--muted)' }}>Head of Sales{twist.mismatch ? `: ${TWIST.title.toLowerCase()}` : ''}</div>
+      <div className="font-semibold">“{twist.mismatch ? TWIST.ask(twist.mine) : TWIST.askSame}”</div>
+      {twist.mismatch && phase === 'fix' && !solved && <div style={{ fontSize: 13 }}>{TWIST.next}</div>}
+    </section>
+  )
+}
+
+/** After all three proofs: back to the trainer, which keeps a mark (a new tab, so the pipeline stays open here). */
+function BackToQuaera() {
+  return (
+    <section className="rounded-lg px-4 py-3 flex flex-wrap items-center gap-3" style={{ background: 'var(--panel)', border: '1px solid #16a34a' }} data-testid="pipeline-back">
+      <Check size={16} style={{ color: '#16a34a' }} />
+      <span className="flex-1 min-w-0">You built a working pipeline. Quaera will remember it.</span>
+      <a className="btn btn-primary" href={RETURN_URL} target="_blank" rel="noopener">
+        Back to Quaera
+      </a>
+    </section>
+  )
+}
+
 // ---------------------------------------------------------------- journal, card, proofs
 
 const STATUS: Record<StepStatus, { text: string; color: string }> = {
@@ -776,7 +896,15 @@ function Journal({ journal }: { journal: StepResult[] }) {
         </thead>
         <tbody>
           {journal.map((r, i) => (
-            <tr key={`${r.block}-${i}`} style={{ borderTop: '1px solid var(--line)' }}>
+            <Fragment key={`${r.block}-${i}`}>
+              {reachedFirst(journal, i) && (
+                <tr data-testid="pipeline-line" style={{ borderTop: '1px solid var(--line)' }}>
+                  <td colSpan={6} className="px-3 py-1.5" style={{ fontSize: 13 }}>
+                    <b style={{ color: LANE_COLOR[blockById(r.block)!.lane] }}>{LANES.find((l) => l.id === blockById(r.block)!.lane)!.label}:</b> “{LANE_LINES[blockById(r.block)!.lane]}”
+                  </td>
+                </tr>
+              )}
+            <tr style={{ borderTop: '1px solid var(--line)' }}>
               <td className="px-3 py-1.5">{i + 1}</td>
               <td className="px-3 py-1.5">{blockById(r.block)!.label}</td>
               <td className="px-3 py-1.5">
@@ -795,6 +923,7 @@ function Journal({ journal }: { journal: StepResult[] }) {
                 {r.message}
               </td>
             </tr>
+            </Fragment>
           ))}
         </tbody>
       </table>
@@ -836,7 +965,7 @@ function Notes({ notes }: { notes: string[] }) {
   )
 }
 
-function Report({ report, notes }: { report: CheckReport; notes: string[] }) {
+function Report({ report, notes, fixed }: { report: CheckReport; notes: string[]; fixed: boolean }) {
   const { proofs, answer, gold } = report
   const lines = [proofs.answer, proofs.again, proofs.clean]
   const shown = [
@@ -864,6 +993,7 @@ function Report({ report, notes }: { report: CheckReport; notes: string[] }) {
                 <ChevronRight size={12} className="inline" /> {p.diagnosis}
               </div>
             )}
+            {p.why && <Why text={p.why} id={i + 1} />}
             {i === 1 && (
               <table className="mt-2" style={{ fontSize: 12, borderCollapse: 'collapse' }}>
                 <thead>
@@ -892,7 +1022,11 @@ function Report({ report, notes }: { report: CheckReport; notes: string[] }) {
         </div>
       ))}
       {proofs.note && <div style={{ color: 'var(--muted)', fontSize: 13 }}>{proofs.note}</div>}
-      {report.solved && <div className="font-semibold" style={{ color: '#16a34a' }}>All three proofs passed. The pipeline works.</div>}
+      {report.solved && (
+        <div className="font-semibold" style={{ color: '#16a34a' }}>
+          All three proofs passed. The pipeline works.{fixed ? ` ${TWIST.fixed}` : ''}
+        </div>
+      )}
       {notes.length > 0 && <Notes notes={notes} />}
     </section>
   )

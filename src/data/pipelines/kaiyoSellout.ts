@@ -325,3 +325,60 @@ export const LANE_PLAN: Record<LaneId, { block: BlockId; caption: string }[]> = 
   ],
   analyst: [{ block: 'card-top-chain', caption: 'The card reads gold and shows the answer: revenue per chain, January to June 2026.' }],
 }
+
+// ---------------------------------------------------------------- session 2: the people, the Why texts, the twist
+
+/** The pipeline's own text for a diagnosis: the key says which rule fired, so each line has a Why. */
+export type DiagKey = 'delimiter' | 'binary' | 'header' | 'append' | 'latest' | 'clearAfter' | 'missing' | 'failed' | 'measure' | 'rawId' | 'doubled' | 'tooShort' | 'checkIgnored' | 'noCard' | 'generic'
+
+/** Two or three sentences under "Why?" for each diagnosis line. */
+export const WHY_TEXT: Record<DiagKey, string> = {
+  delimiter:
+    'A delimiter tells the reader where one field ends and the next begins. These files use semicolons, so a comma never appears between fields. Open one file in a text editor, look at its first line, and pick the character you see.',
+  binary:
+    'Binary copies each file as raw bytes, one blob per file, without looking inside. That is right for pictures or archives, not for a table you want to query. Choose delimited text so every line is split into columns.',
+  header:
+    'The first line of each file names the columns. If you say there is no header, that line becomes a data row and the columns get placeholder names. Later steps ask for sale_date by name and cannot find it.',
+  append:
+    'Append adds rows to what is already in the table, so running twice stacks two copies. A real pipeline runs again every night, so it has to be safe to run again. Empty the table first with Clear before Copy, or choose Replace, which rebuilds it each time.',
+  latest:
+    'Each file is one month and the question covers six. Loading only the latest file answers a smaller question than the one asked. Load all the files, so every month from January to June reaches bronze.',
+  clearAfter:
+    'Steps run in the order of the slots, left to right. Clear after Copy deletes the rows Copy has just loaded, and nothing is left for silver. Put Clear before Copy, or leave it out when Copy uses Replace.',
+  missing:
+    'Each step reads tables that earlier steps built. A step placed before its builder looks for a table that does not exist yet. Move it to the right of the step that builds that table: the order of the slots is the order of the run.',
+  failed:
+    "A step failed, so every step that waited for it was skipped. The message in the journal is the database's own words, and its first sentence usually names the table or the column. Fix that step and run again.",
+  measure:
+    'Counting distinct rows in the card hides the copies, but gold still holds them, and the next report that sums gold will be wrong again. Repeated sales belong in silver, where one step cleans them for every report after it.',
+  rawId:
+    'raw_id numbers the lines of a file, so two copies of one sale get different numbers and both stay. Two rows are the same sale when the facts about the sale match: when, where and what. Ask which columns a repeat shares with the original.',
+  doubled:
+    'The distributor sent some sales twice, so silver and gold count them twice, and a chain with more repeats climbs the table. A good pipeline recognises rows that are the same sale and keeps one of them. This is why a number from a pipeline is checked against a source you trust.',
+  tooShort:
+    'A key that is too short treats different sales as one and throws real rows away. The key should be as short as it can be and still tell two sales apart. Add a column and watch the row count change.',
+  checkIgnored:
+    'A check exists to stop bad data before it spreads. Set to Completed, the next step runs even after the check failed, so gold is built from rows the check rejected. Set the step after a check to Succeeded.',
+  noCard:
+    'The Head of Sales asked a question, and nothing in the pipeline answers it without the top chain card, however clean the tables are. Put the card in the Analyst lane, after the fact table.',
+  generic: 'This proof did not pass. Open the journal, find the first step that failed or that built an unexpected number of rows, and read what it says.',
+}
+
+/** One line from each role when a run reaches its lane (no voice in the MVP). */
+export const LANE_LINES: Record<LaneId, string> = {
+  engineer: "The distributor's files are in. I copy them into bronze exactly as they came, nothing cleaned yet.",
+  ae: 'I turn the raw text into real dates and numbers, build the stores and products tables, and join them to the sales.',
+  analyst: 'Gold is ready. Here is the answer for the Head of Sales.',
+}
+
+/** The story: the first pass has no de-duplication, and the card contradicts the Head of Sales' own file. */
+export const TWIST = {
+  title: "The number doesn't match",
+  ask: (mine: string) => `Your card says ${mine}. My file from the distributor portal says Minori leads with 90,829.50. Which one is right?`,
+  askSame: 'That matches my file from the distributor portal. Now show me it holds when the pipeline runs twice.',
+  next: 'Look at the data first: add "Check: one row per sale" after the SQL step and run again, or open the SQL step, where a new part and a blank have appeared.',
+  prompt: 'Types only: the raw text becomes dates and numbers. Nothing else happens to the rows yet.',
+  fixed: 'Now it matches: Minori, 90,829.50.',
+}
+
+export const RETURN_URL = 'https://quaera.app/#lab-done=pipeline:kaiyo-sellout'

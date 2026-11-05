@@ -93,6 +93,19 @@ async function prepareOnce(port: SqlPort, onStep?: (text: string) => void): Prom
   await port.query(refTopSql())
 }
 
+/** The reference answer: the five chains, as the Head of Sales' own file has them. */
+export async function referenceTop(port: SqlPort): Promise<TopRow[]> {
+  const r = await port.query(`SELECT chain_name, revenue FROM ${REF_TOP} ORDER BY revenue DESC`)
+  return r.rows.map((x) => ({ chain: String(x[0]), revenue: String(x[1]) }))
+}
+
+/** The card as it stands now (its first row), or null when there is none. */
+export async function currentTop(port: SqlPort): Promise<TopRow | null> {
+  if (!(await exists(port, 'report_top_chain'))) return null
+  const r = (await port.query(`SELECT chain_name, revenue FROM ${T('report_top_chain')}`)).rows[0]
+  return r ? { chain: String(r[0]), revenue: String(r[1]) } : null
+}
+
 /** Drops the work tables; the sources and the reference stay. */
 export async function resetWork(port: SqlPort): Promise<void> {
   for (const t of WORK_TABLES) await port.query(`DROP TABLE IF EXISTS ${T(t)}`)
@@ -143,7 +156,12 @@ async function build(port: SqlPort, id: BlockId, s: Settings, state: PipelineSta
       return {
         rows: v.rows,
         verdict: v,
-        message: v.extra === 0 && v.missing === 0 ? `Silver matches the reference: ${fmt(v.rows)} rows` : `Silver has ${fmt(v.rows)} rows; ${fmt(v.extra)} too many, ${fmt(v.missing)} missing against the reference`,
+        // the first pass of the story does not say what is wrong with its rows: the Head of Sales does
+        message: !state.dedup
+          ? `Silver built: ${fmt(v.rows)} rows`
+          : v.extra === 0 && v.missing === 0
+            ? `Silver matches the reference: ${fmt(v.rows)} rows`
+            : `Silver has ${fmt(v.rows)} rows; ${fmt(v.extra)} too many, ${fmt(v.missing)} missing against the reference`,
       }
     }
     case 'check-unique': {

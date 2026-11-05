@@ -10,13 +10,16 @@ import {
   hashWithPipeline,
   hashWithoutPipeline,
   missingSetting,
+  afterRun,
   nextRequired,
+  readPhase,
   nextSlotFor,
   nextStatus,
   nextStep,
   progressNote,
   pipelineFromHash,
   place,
+  proofs,
   readState,
   remove,
   runOrder,
@@ -29,7 +32,7 @@ import {
 import type { ResultData } from '../src/core/check'
 import { checkPipeline, exportFiles, exportText, prepare, resetWork, runAll, snapshot, type SqlPort } from '../src/db/pipelineRun'
 import { resultRows } from '../src/db/export'
-import { BLOCKS, LANES, silverSql, silverTemplate, slotId, type BlockId, type Settings } from '../src/data/pipelines/kaiyoSellout'
+import { BLOCKS, LANES, LANE_LINES, RETURN_URL, TWIST, WHY_TEXT, silverSql, silverTemplate, slotId, type BlockId, type Settings } from '../src/data/pipelines/kaiyoSellout'
 
 const require = createRequire(import.meta.url)
 
@@ -126,6 +129,62 @@ describe('pipeline: what to do next', () => {
   })
 })
 
+describe('pipeline: the story phases', () => {
+  const ref = [
+    { chain: 'Minori', revenue: '90829.50' },
+    { chain: 'Nagisa', revenue: '87647.48' },
+  ]
+  const card = (status: StepResult['status']): StepResult[] => [{ block: 'card-top-chain', status, ms: 1, rows: 'x', message: '' }]
+  it('reads a saved phase, and treats a pipeline solved before the story existed as past it', () => {
+    expect(readPhase('fix', false)).toBe('fix')
+    expect(readPhase('first-pass', true)).toBe('first-pass')
+    expect(readPhase(undefined, true)).toBe('fix')
+    expect(readPhase('nonsense', false)).toBe('first-pass')
+  })
+  it('moves on to the fix once the first pass has built a card that disagrees with the Head of Sales', () => {
+    expect(afterRun('first-pass', card('succeeded'), { chain: 'Nagisa', revenue: '95406.98' }, ref)).toEqual({ phase: 'fix', mismatch: true })
+  })
+  it('moves on without a mismatch when the card already says what his file says', () => {
+    expect(afterRun('first-pass', card('succeeded'), { chain: 'Minori', revenue: '90829.50' }, ref)).toEqual({ phase: 'fix', mismatch: false })
+  })
+  it('stays in the first pass while there is no card, a failed card, or no reference', () => {
+    expect(afterRun('first-pass', [], null, ref).phase).toBe('first-pass')
+    expect(afterRun('first-pass', card('failed'), { chain: 'Nagisa', revenue: '1' }, ref).phase).toBe('first-pass')
+    expect(afterRun('first-pass', card('succeeded'), null, ref).phase).toBe('first-pass')
+    expect(afterRun('first-pass', card('succeeded'), { chain: 'Nagisa', revenue: '1' }, []).phase).toBe('first-pass')
+  })
+  it('never goes back by itself', () => {
+    expect(afterRun('fix', card('succeeded'), { chain: 'Nagisa', revenue: '1' }, ref)).toEqual({ phase: 'fix', mismatch: false })
+  })
+  it('does not ask for the blank in the first pass, which has none', () => {
+    const state = { ...built([['copy-files', { mode: 'replace' }], ['sql-silver']], ''), dedup: false }
+    expect(missingSetting(state)).toBeNull()
+    expect(missingSetting({ ...state, dedup: true })?.message).toMatch(/fill the blank/)
+  })
+  it('shows the types-only SQL without numbering in the first pass', () => {
+    const sql = silverSql('', { dedup: false })
+    expect(sql).not.toMatch(/ROW_NUMBER|copy_no/)
+    expect(silverSql('a, b')).toMatch(/PARTITION BY a, b/)
+  })
+})
+
+describe('pipeline: the texts', () => {
+  it('has a line from each role of at most 140 characters, and the return address Quaera reads', () => {
+    for (const l of LANES) expect(LANE_LINES[l.id].length).toBeGreaterThan(0)
+    for (const l of LANES) expect(LANE_LINES[l.id].length).toBeLessThanOrEqual(140)
+    expect(RETURN_URL).toBe('https://quaera.app/#lab-done=pipeline:kaiyo-sellout')
+  })
+  it('has two or three sentences of Why for every diagnosis, and no long dashes', () => {
+    for (const [key, text] of Object.entries(WHY_TEXT)) {
+      const sentences = text.split(/(?<=[.!?])\s+/).filter(Boolean)
+      expect(sentences.length, key).toBeGreaterThanOrEqual(2)
+      expect(sentences.length, key).toBeLessThanOrEqual(3)
+      expect(text, key).not.toMatch(/[\u2014\u2013]/)
+    }
+    expect(TWIST.ask('Nagisa, 95,406.98')).toContain('Minori leads with 90,829.50')
+  })
+})
+
 describe('pipeline: status', () => {
   it('runs after a success, after a failure only when Completed, never after a skip', () => {
     expect(nextStatus(null, null)).toBe('run')
@@ -202,6 +261,13 @@ describe('pipeline: the diagnosis picks the first line that fits', () => {
     dupGroups: 0,
     noKey: 0,
     ...over,
+  })
+  it('attaches the Why of the rule that fired, and the generic one when no rule fits', () => {
+    const doubled = proofs(facts({ counts1: { bronze_sellout_raw: 3110 }, counts2: { bronze_sellout_raw: 6220 } }), true)
+    expect(doubled.again.why).toBe(WHY_TEXT.append)
+    expect(doubled.answer.why).toBeUndefined()
+    const none = proofs(facts({ counts1: {}, counts2: {} }), false)
+    expect(none.answer.why).toBe(WHY_TEXT.noCard === none.answer.why ? WHY_TEXT.noCard : WHY_TEXT.generic)
   })
   it('names the semicolons, the blob and the header', () => {
     const f = facts({ settings: built([['copy-files', { mode: 'replace', delim: ',' }]]).settings, run1: [step('copy-files', 'failed')] })
