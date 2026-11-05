@@ -43,7 +43,8 @@ const T = (name: string) => `${SCHEMA}.${name}`
 
 /** Names of the 30 monthly exports as registered with the engine. */
 let registered: string[] = []
-const prepared = new WeakSet<SqlPort>()
+/** One preparation per port, shared by callers that arrive while it runs (React's dev double mount made 60 file names). */
+const preparing = new WeakMap<SqlPort, Promise<void>>()
 
 export const exportFiles = () => registered
 
@@ -61,8 +62,17 @@ export function exportText(rows: Cell[][]): string {
  * Once per page open: the schema, the three source tables (tables, not views, so the page works offline after the
  * first load), the 30 exports cut from the raw rows by source file, and the reference silver and answer.
  */
-export async function prepare(port: SqlPort, onStep?: (text: string) => void): Promise<void> {
-  if (prepared.has(port)) return
+export function prepare(port: SqlPort, onStep?: (text: string) => void): Promise<void> {
+  let p = preparing.get(port)
+  if (!p) {
+    p = prepareOnce(port, onStep)
+    preparing.set(port, p)
+    p.catch(() => preparing.delete(port))
+  }
+  return p
+}
+
+async function prepareOnce(port: SqlPort, onStep?: (text: string) => void): Promise<void> {
   onStep?.('Preparing the data…')
   await port.query(`CREATE SCHEMA IF NOT EXISTS ${SCHEMA}`)
   for (const s of SOURCES) {
@@ -81,7 +91,6 @@ export async function prepare(port: SqlPort, onStep?: (text: string) => void): P
   }
   await port.query(refSilverSql())
   await port.query(refTopSql())
-  prepared.add(port)
 }
 
 /** Drops the work tables; the sources and the reference stay. */

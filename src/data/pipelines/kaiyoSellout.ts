@@ -252,3 +252,76 @@ function fmt(n: number): string {
 }
 
 export const PROOF_TITLES = ['The answer is right', 'Safe to run again', 'Gold is clean'] as const
+
+// ---------------------------------------------------------------- for someone new to pipelines
+
+export const ROLE_NAME: Record<LaneId, string> = { engineer: 'data engineer', ae: 'analytics engineer', analyst: 'analyst' }
+
+/** What a block does, whose job it is and what it is called in Microsoft Fabric. Shown on hover, focus and tap. */
+export const BLOCK_TIPS: Record<BlockId, { does: string; fabric: string }> = {
+  'copy-files': { does: 'Copies the distributor files, as they came, into the bronze table.', fabric: 'Copy data activity of a Data Factory pipeline, writing into a Lakehouse table.' },
+  'clear-bronze': { does: 'Empties the bronze table so the next copy does not pile on top of the old rows.', fabric: 'Script or Stored procedure activity running a DELETE or TRUNCATE.' },
+  'notify-team': { does: 'Tells the team the load is done. It does not touch any data.', fabric: 'Teams or Office 365 Outlook activity.' },
+  'sql-silver': { does: 'Turns the raw text of bronze into silver: real dates, real numbers, trimmed names.', fabric: 'Notebook, Dataflow Gen2 or Stored procedure; here it is one SQL script.' },
+  'check-unique': { does: 'Stops the run when two silver rows are the same sale.', fabric: 'Script or Lookup activity plus an If condition and a Fail activity; in dbt, a unique test.' },
+  'check-rows': { does: 'Stops the run when silver has no rows at all.', fabric: 'Script or Lookup activity plus an If condition; in dbt, a row-count test.' },
+  'check-keys': { does: 'Stops the run when a sale finds no store or no product in gold.', fabric: 'Script or Lookup activity plus an If condition; in dbt, a relationships test.' },
+  'dim-customer': { does: 'Builds the stores table in gold: one row per store, with its chain.', fabric: 'Dataflow Gen2 or Stored procedure writing a gold table (Lakehouse or Warehouse).' },
+  'dim-product': { does: 'Builds the products table in gold: one row per product.', fabric: 'Dataflow Gen2 or Stored procedure writing a gold table (Lakehouse or Warehouse).' },
+  'fact-sellout': { does: 'Builds the sales table in gold, with a store and a product on every sale. It reads both dimensions, so they come first.', fabric: 'Stored procedure or Notebook writing the fact table of a star schema.' },
+  'card-top-chain': { does: 'The answer for the Head of Sales: revenue per chain, January to June 2026.', fabric: 'A card and a bar visual in a Power BI report on the gold tables.' },
+  'card-row-count': { does: 'Counts the sales in January to June 2026. Useful to find out what went wrong.', fabric: 'A card visual in a Power BI report.' },
+}
+
+export const WHEN_TIP = 'Runs when the previous step: Succeeded is the green "On success" arrow between two Fabric activities, Completed is the blue "On completion" arrow (it also runs after a failure).'
+
+/** The blocks a working pipeline needs, in the order a newcomer builds them. */
+export const REQUIRED: BlockId[] = ['copy-files', 'sql-silver', 'dim-customer', 'dim-product', 'fact-sellout', 'card-top-chain']
+
+/** "Next: the …" for each required block, and the table it builds (for the line after a partial run). */
+export const NEXT_TEXT: Record<string, string> = {
+  'copy-files': 'the data engineer loads the raw files',
+  'sql-silver': 'the analytics engineer turns the raw text into clean silver rows',
+  'dim-customer': 'the analytics engineer builds the stores table',
+  'dim-product': 'the analytics engineer builds the products table',
+  'fact-sellout': 'the analytics engineer joins sales to stores and products in the fact table',
+  'card-top-chain': 'the analyst puts the answer on a card',
+}
+
+export const LAYER_OF: Partial<Record<BlockId, string>> = {
+  'copy-files': 'bronze',
+  'sql-silver': 'silver',
+  'dim-customer': 'gold',
+  'dim-product': 'gold',
+  'fact-sellout': 'gold',
+  'card-top-chain': 'the report',
+}
+
+export const INTRO = {
+  title: 'What is a pipeline?',
+  lines: [
+    'A pipeline is a chain of steps that turns raw files into one answer you can trust.',
+    'Each step does one job and starts when the step before it is done, so you place the steps in order, from left to right.',
+    'You build it once and it runs the same way every time, so nobody has to repeat the work by hand.',
+  ],
+  fabric: 'In Microsoft Fabric this is a Data Factory pipeline plus a Lakehouse (bronze/silver/gold); Azure Data Factory, Airflow and dbt work the same way.',
+  stages: [
+    { name: 'source', note: 'the distributor files', lane: null },
+    { name: 'bronze', note: 'raw copy', lane: 'engineer' },
+    { name: 'silver', note: 'cleaned', lane: 'ae' },
+    { name: 'gold', note: 'ready to count', lane: 'ae' },
+    { name: 'report', note: 'the answer', lane: 'analyst' },
+  ] as { name: string; note: string; lane: LaneId | null }[],
+}
+
+/** "Show me this lane": the blocks one lane needs, each with the reason it is there. The SQL blank is left to the learner. */
+export const LANE_PLAN: Record<LaneId, { block: BlockId; caption: string }[]> = {
+  engineer: [{ block: 'copy-files', caption: 'Copy all 30 files as delimited text, split by ";", first row is the header. Write mode Replace: a second run then gives the same rows instead of doubling them.' }],
+  ae: [
+    { block: 'sql-silver', caption: 'The SQL step types the raw text into dates and numbers. Its one blank is yours to fill.' },
+    { block: 'dim-customer', caption: 'The stores table: one row per store, with its chain.' },
+    { block: 'dim-product', caption: 'The products table: one row per product.' },
+    { block: 'fact-sellout', caption: 'The fact joins every sale to its store and product, so it goes after both dimensions.' },
+  ],
+  analyst: [{ block: 'card-top-chain', caption: 'The card reads gold and shows the answer: revenue per chain, January to June 2026.' }],
+}

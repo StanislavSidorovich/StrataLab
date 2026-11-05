@@ -7,6 +7,9 @@ import {
   BUILDER,
   DIAGNOSIS_TEXT,
   LANES,
+  LAYER_OF,
+  NEXT_TEXT,
+  REQUIRED,
   PIPELINE_ID,
   blockById,
   defaultSettings,
@@ -121,6 +124,48 @@ export function place(state: PipelineState, id: BlockId, slot: string): Pipeline
 
 export function remove(state: PipelineState, id: BlockId): PipelineState {
   return { ...state, slots: Object.fromEntries(ALL_SLOTS.map((s) => [s, state.slots[s] === id ? null : state.slots[s]])) }
+}
+
+// ---------------------------------------------------------------- what to do next
+
+/** The first block a working pipeline needs that is not placed yet, or null when all are. */
+export const nextRequired = (state: PipelineState): BlockId | null => REQUIRED.find((id) => slotOf(state, id) === null) ?? null
+
+/**
+ * The slot to highlight for a block: the first free slot of its lane to the right of what is already placed there,
+ * else the first free one; null when the lane is full.
+ */
+export function nextSlotFor(state: PipelineState, id: BlockId): string | null {
+  const block = blockById(id)
+  const lane = LANES.find((l) => l.id === block?.lane)
+  if (!lane) return null
+  const free = Array.from({ length: lane.slots }, (_, i) => i).filter((i) => !state.slots[slotId(lane.id, i)])
+  const last = Math.max(-1, ...Array.from({ length: lane.slots }, (_, i) => i).filter((i) => state.slots[slotId(lane.id, i)]))
+  const i = free.find((n) => n > last) ?? free[0]
+  return i === undefined ? null : slotId(lane.id, i)
+}
+
+/** What the page says to do now: a sentence after "Next:", and the block and slot it is about (null when nothing is left to place). */
+export function nextStep(state: PipelineState, o: { ran: boolean; solved: boolean }): { text: string; block: BlockId | null; slot: string | null } {
+  const block = nextRequired(state)
+  if (block) return { text: NEXT_TEXT[block], block, slot: nextSlotFor(state, block) }
+  const unset = missingSetting(state)
+  if (unset) return { text: `set up the block marked ? (${unset.message.charAt(0).toLowerCase()}${unset.message.slice(1)})`, block: null, slot: null }
+  if (!o.ran) return { text: 'press Run and watch each step in the journal', block: null, slot: null }
+  if (!o.solved) return { text: 'press Check my pipeline: it runs everything twice and judges the result', block: null, slot: null }
+  return { text: 'nothing, the pipeline works', block: null, slot: null }
+}
+
+/** After a run: what was built, and what is still missing, so a partial pipeline reads as a start and not as an error. */
+export function progressNote(state: PipelineState, journal: StepResult[]): string | null {
+  const ok = journal.filter((r) => r.status === 'succeeded').map((r) => r.block)
+  if (journal.length === 0 || journal.some((r) => r.status === 'failed')) return null
+  const next = nextRequired(state)
+  const built = [...new Set(ok.map((b) => LAYER_OF[b]).filter(Boolean))]
+  const steps = `Ran ${journal.length} step${journal.length === 1 ? '' : 's'}`
+  if (!next) return null
+  const layers = built.length ? ` and built ${built.join(', ')}. Open the tables under pipe_kaiyo in the tree to look at them` : ''
+  return `${steps}${layers}. The run stops here because nothing is placed after it yet. Next: ${NEXT_TEXT[next]}.`
 }
 
 // ---------------------------------------------------------------- status

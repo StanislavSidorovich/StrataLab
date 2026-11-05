@@ -2,17 +2,22 @@
 // of blocks, each block's settings, a run that fills a journal, and "Check my pipeline". The rules are in
 // src/core/pipeline.ts, the engine in src/db/pipelineRun.ts. Under 768 px there is no board: a laptop is needed.
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Check, ChevronRight, Copy, Laptop, Lightbulb, ListChecks, Loader2, Play, RotateCcw, Share2, Trash2, Workflow, X } from 'lucide-react'
-import { checkBlank, emptyState, missingSetting, place, readState, remove, runOrder, softNotes, unsetOf, type PipelineState, type StepResult, type StepStatus } from '../core/pipeline'
+import { ArrowRight, Check, ChevronDown, ChevronRight, Copy, Laptop, Lightbulb, ListChecks, Loader2, Play, RotateCcw, Share2, Trash2, Workflow, X } from 'lucide-react'
+import { checkBlank, emptyState, missingSetting, nextStep, place, progressNote, readState, remove, runOrder, softNotes, unsetOf, type PipelineState, type StepResult, type StepStatus } from '../core/pipeline'
 import type { ResultData } from '../core/check'
 import {
   BLOCKS,
+  BLOCK_TIPS,
+  INTRO,
   LANES,
+  LANE_PLAN,
   PIPELINE_ID,
   PROOF_TITLES,
   SCHEMA,
   SILVER_HINTS,
   SILVER_PROMPT,
+  ROLE_NAME,
+  WHEN_TIP,
   blockById,
   laneOfSlot,
   silverTemplate,
@@ -31,20 +36,7 @@ const KEY = `stratalab.pipeline.${PIPELINE_ID}`
 const LANE_COLOR: Record<LaneId, string> = { engineer: '#3b82f6', ae: '#a855f7', analyst: '#10b981' }
 const URL_HERE = () => `${location.origin}${location.pathname}#pipeline=${PIPELINE_ID}`
 
-const INFO: Record<BlockId, string> = {
-  'copy-files': 'Brings the distributor files into the bronze table, as they came.',
-  'clear-bronze': 'Empties the bronze table.',
-  'notify-team': 'Tells the team the load is done. It does not touch any data.',
-  'sql-silver': 'Turns bronze into silver: real dates and numbers, one row per sale.',
-  'check-unique': 'Fails when two rows in silver are the same sale.',
-  'check-rows': 'Fails when silver has no rows.',
-  'check-keys': 'Fails when a sale finds no store or no product in gold.',
-  'dim-customer': 'Builds the stores table in gold.',
-  'dim-product': 'Builds the products table in gold.',
-  'fact-sellout': 'Builds the sales table in gold, with a store and a product on every sale.',
-  'card-top-chain': 'The answer for the Head of Sales: revenue per chain, January to June 2026.',
-  'card-row-count': 'Counts the sales in January to June 2026. Useful to find out what went wrong.',
-}
+const INFO: Record<BlockId, string> = Object.fromEntries(Object.entries(BLOCK_TIPS).map(([k, v]) => [k, v.does])) as Record<BlockId, string>
 
 interface Saved {
   state: PipelineState
@@ -169,6 +161,14 @@ function Board() {
   const [report, setReport] = useState<CheckReport | null>(null)
   const [answer, setAnswer] = useState<ResultData | null>(null)
   const [note, setNote] = useState<string | null>(null)
+  const [tip, setTip] = useState<{ id: BlockId; x: number; y: number } | null>(null)
+  const [hint, setHint] = useState<{ for: BlockId | null; level: number }>({ for: null, level: 0 })
+  const [demo, setDemo] = useState<{ lane: LaneId; steps: { block: BlockId; caption: string }[]; busy: boolean } | null>(null)
+  const alive = useRef(true)
+  useEffect(() => {
+    alive.current = true
+    return () => void (alive.current = false)
+  }, [])
 
   useEffect(() => {
     try {
@@ -197,6 +197,50 @@ function Board() {
   const reason = prep === 'loading' ? 'Preparing the data…' : prep !== 'ready' ? 'The data could not be prepared' : order.length === 0 ? 'Place a block first' : (missing?.message ?? null)
   const placed = new Set(order)
   const palette = BLOCKS.filter((b) => !placed.has(b.id))
+  const next = nextStep(state, { ran, solved })
+  const hintLevel = hint.for === next.block ? hint.level : 0
+
+  const tipProps = (id: BlockId) => ({
+    'aria-describedby': tip?.id === id ? 'pl-tip' : undefined,
+    onMouseEnter: (e: React.MouseEvent<HTMLElement>) => showTip(id, e.currentTarget),
+    onMouseLeave: () => setTip(null),
+    onFocus: (e: React.FocusEvent<HTMLElement>) => showTip(id, e.currentTarget),
+    onBlur: () => setTip(null),
+  })
+  const showTip = (id: BlockId, el: HTMLElement) => {
+    const r = el.getBoundingClientRect()
+    setTip({ id, x: Math.max(8, Math.min(r.left, window.innerWidth - 328)), y: r.bottom + 6 })
+  }
+  useEffect(() => {
+    if (!tip) return
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && setTip(null)
+    window.addEventListener('keydown', esc)
+    return () => window.removeEventListener('keydown', esc)
+  }, [tip])
+
+  /** Hint 3: builds one lane, a block at a time, with a line on each. The SQL blank is never filled. */
+  const showLane = async (lane: LaneId) => {
+    const plan = LANE_PLAN[lane]
+    setDemo({ lane, steps: [], busy: true })
+    setOpen(null)
+    setPicked(null)
+    setState((s) => {
+      let n = s
+      for (const b of BLOCKS.filter((b) => b.lane === lane)) n = remove(n, b.id)
+      return n
+    })
+    for (const [i, step] of plan.entries()) {
+      await new Promise((r) => setTimeout(r, 700))
+      if (!alive.current) return
+      setState((s) => {
+        const n = place(s, step.block, slotId(lane, i))
+        n.settings[step.block] = { ...n.settings[step.block], when: 'succeeded', ...(step.block === 'copy-files' ? { files: 'all', format: 'text', delim: ';', header: true, mode: 'replace' } : {}) }
+        return { ...n, settings: { ...n.settings } }
+      })
+      setDemo((d) => d && { ...d, steps: [...d.steps, step] })
+    }
+    setDemo((d) => d && { ...d, busy: false })
+  }
 
   const setSettings = (id: BlockId, patch: Partial<Settings>) => setState((s) => ({ ...s, settings: { ...s.settings, [id]: { ...s.settings[id], ...patch } } }))
 
@@ -236,6 +280,7 @@ function Board() {
       setRan(true)
       await afterRun()
       setAnswer(await readAnswer())
+      setNote(progressNote(state, j))
     } finally {
       setBusy(null)
     }
@@ -287,6 +332,60 @@ function Board() {
           )}
         </div>
 
+        <Intro />
+
+        <div className="rounded-lg px-3 py-2 flex flex-wrap items-center gap-2" style={{ border: '1px solid var(--line)', background: 'var(--panel)' }} data-testid="pipeline-next">
+          <ArrowRight size={14} style={{ color: 'var(--accent)' }} />
+          <span className="flex-1 min-w-0" style={{ fontSize: 14 }}>
+            <b>Next:</b> {next.text}
+            {next.slot && <span style={{ color: 'var(--muted)' }}> (the highlighted slot in the {LANES.find((l) => l.id === blockById(next.block!)!.lane)!.label} lane)</span>}
+          </span>
+          {next.block && hintLevel < 3 && (
+            <button className="btn btn-ghost" onClick={() => setHint({ for: next.block, level: hintLevel + 1 })}>
+              <Lightbulb size={14} /> {hintLevel === 0 ? 'Hint' : 'Another hint'}
+            </button>
+          )}
+        </div>
+        {next.block && hintLevel > 0 && (
+          <ul className="m-0 pl-5 space-y-1" style={{ fontSize: 13 }} data-testid="pipeline-hints">
+            <li>
+              Look in the <b>{LANES.find((l) => l.id === blockById(next.block!)!.lane)!.label}</b> lane, at the highlighted slot: {LANES.find((l) => l.id === blockById(next.block!)!.lane)!.layer}.
+            </li>
+            {hintLevel > 1 && (
+              <li>
+                Take <b>“{blockById(next.block)!.label}”</b> from the blocks below and put it there.
+              </li>
+            )}
+            {hintLevel > 2 && (
+              <li>
+                <button className="btn" onClick={() => void showLane(blockById(next.block!)!.lane)} disabled={demo?.busy}>
+                  Show me this lane
+                </button>{' '}
+                <span style={{ color: 'var(--muted)' }}>It rebuilds the {ROLE_NAME[blockById(next.block!)!.lane]}&apos;s lane step by step; blocks you placed in that lane go back to the palette.</span>
+              </li>
+            )}
+          </ul>
+        )}
+        {next.block && hintLevel === 2 && <div style={{ fontSize: 12, color: 'var(--muted)' }}>Still stuck? One more hint can build this lane for you, one block at a time.</div>}
+        {demo && (
+          <section aria-label="This lane, step by step" className="rounded-lg p-3 space-y-1" style={{ border: `1.5px solid ${LANE_COLOR[demo.lane]}`, background: 'var(--panel)' }} data-testid="pipeline-demo">
+            <div className="flex items-center gap-2">
+              <b className="flex-1">{LANES.find((l) => l.id === demo.lane)!.label} lane, step by step</b>
+              {demo.busy && <Loader2 size={14} className="animate-spin" />}
+              <button className="btn btn-ghost" onClick={() => setDemo(null)} aria-label="Close">
+                <X size={14} />
+              </button>
+            </div>
+            <ol className="m-0 pl-5" style={{ fontSize: 13 }}>
+              {demo.steps.map((st) => (
+                <li key={st.block}>
+                  <b>{blockById(st.block)!.label}.</b> {st.caption}
+                </li>
+              ))}
+            </ol>
+          </section>
+        )}
+
         <div className="space-y-2">
           {LANES.map((lane) => (
             <div key={lane.id} className="pl-lane" style={{ ['--lane' as string]: LANE_COLOR[lane.id] }}>
@@ -301,10 +400,12 @@ function Board() {
                   const block = id ? blockById(id) : undefined
                   const target = picked !== null && blockById(picked)!.lane === lane.id
                   const dim = picked !== null && !target
+                  const isNext = next.slot === slot && !block
                   return (
                     <div
                       key={slot}
-                      className={`pl-slot${block ? ' filled' : ''}${target ? ' target' : ''}${dim ? ' dim' : ''}`}
+                      className={`pl-slot${block ? ' filled' : ''}${target ? ' target' : ''}${dim ? ' dim' : ''}${isNext ? ' next' : ''}`}
+                      data-next={isNext ? 'true' : undefined}
                       data-slot={slot}
                       onDragOver={(e) => e.preventDefault()}
                       onDrop={(e) => {
@@ -317,10 +418,10 @@ function Board() {
                       }}
                     >
                       {block ? (
-                        <PlacedBlock block={block} state={state} index={order.indexOf(block.id)} active={open === block.id} onClick={() => clickSlot(slot)} />
+                        <PlacedBlock block={block} state={state} index={order.indexOf(block.id)} active={open === block.id} onClick={() => clickSlot(slot)} tip={tipProps(block.id)} />
                       ) : (
-                        <button className="pl-empty" aria-label={`Empty slot ${i + 1} in the ${lane.label} lane`} onClick={() => clickSlot(slot)} disabled={!target}>
-                          {target ? 'Place here' : ''}
+                        <button className="pl-empty" aria-label={`Empty slot ${i + 1} in the ${lane.label} lane${isNext ? ' (next step goes here)' : ''}`} onClick={() => clickSlot(slot)} disabled={!target}>
+                          {target ? 'Place here' : isNext ? 'Next block here' : ''}
                         </button>
                       )}
                     </div>
@@ -351,7 +452,7 @@ function Board() {
                 style={{ ['--lane' as string]: LANE_COLOR[b.lane] }}
                 onClick={() => setPicked(picked === b.id ? null : b.id)}
                 aria-pressed={picked === b.id}
-                title={INFO[b.id]}
+                {...tipProps(b.id)}
               >
                 {b.label}
               </button>
@@ -385,25 +486,31 @@ function Board() {
           <button className="btn" onClick={() => void check()} disabled={busy !== null || reason !== null} title={reason ?? 'Start from scratch, run it twice and judge the result'}>
             {busy === 'check' ? <Loader2 size={14} className="animate-spin" /> : <ListChecks size={14} />} Check my pipeline
           </button>
-          <button className="btn btn-ghost" onClick={() => void scratch()} disabled={busy !== null || prep !== 'ready'} title={`Drop the tables the pipeline built in ${SCHEMA}`}>
+          <button className="btn btn-ghost" onClick={() => void scratch()} disabled={busy !== null || prep !== 'ready'} title={`Drops the tables the pipeline built in ${SCHEMA} (bronze, silver, gold, report). Your blocks and settings stay where they are.`}>
             <RotateCcw size={14} /> Start from scratch
           </button>
-          <span style={{ color: 'var(--muted)', fontSize: 12 }}>{reason ?? note ?? `The tables are in the ${SCHEMA} schema: open them in the tree.`}</span>
+          <span style={{ color: 'var(--muted)', fontSize: 12 }}>{reason ?? `Start from scratch drops the tables built in ${SCHEMA} and keeps your blocks. Open the tables in the tree.`}</span>
           {typeof prep === 'string' && prep !== 'loading' && prep !== 'ready' && (
             <span style={{ color: 'var(--danger)', fontSize: 12 }}>{prep}</span>
           )}
         </div>
 
+        {note && !reason && (
+          <div style={{ fontSize: 13 }} data-testid="pipeline-note">
+            {note}
+          </div>
+        )}
         {journal.length > 0 && <Journal journal={journal} />}
         {answer && <Card answer={answer} />}
         {report && <Report report={report} notes={softNotes(state)} />}
         {!report && journal.length > 0 && softNotes(state).length > 0 && <Notes notes={softNotes(state)} />}
       </div>
+      {tip && <BlockTip id={tip.id} x={tip.x} y={tip.y} />}
     </div>
   )
 }
 
-function PlacedBlock({ block, state, index, active, onClick }: { block: Block; state: PipelineState; index: number; active: boolean; onClick: () => void }) {
+function PlacedBlock({ block, state, index, active, onClick, tip }: { block: Block; state: PipelineState; index: number; active: boolean; onClick: () => void; tip: React.HTMLAttributes<HTMLElement> }) {
   const unset = unsetOf(state, block.id, index)
   return (
     <button
@@ -413,7 +520,7 @@ function PlacedBlock({ block, state, index, active, onClick }: { block: Block; s
       onDragStart={(e) => e.dataTransfer.setData('text/plain', block.id)}
       onClick={onClick}
       aria-expanded={active}
-      title={unset ?? INFO[block.id]}
+      {...tip}
     >
       <span className="pl-no">{index + 1}</span>
       {block.label}
@@ -423,6 +530,77 @@ function PlacedBlock({ block, state, index, active, onClick }: { block: Block; s
         </span>
       )}
     </button>
+  )
+}
+
+// ---------------------------------------------------------------- the strip for newcomers, and the block tips
+
+const INTRO_KEY = 'stratalab.pipeline.intro-open'
+
+function Intro() {
+  const [open, setOpen] = useState(() => {
+    try {
+      return localStorage.getItem(INTRO_KEY) !== 'closed'
+    } catch {
+      return true
+    }
+  })
+  const toggle = () => {
+    setOpen(!open)
+    try {
+      localStorage.setItem(INTRO_KEY, open ? 'closed' : 'open')
+    } catch {
+      /* not kept */
+    }
+  }
+  return (
+    <section aria-label={INTRO.title} className="rounded-lg" style={{ border: '1px solid var(--line)', background: 'var(--panel)' }} data-testid="pipeline-intro">
+      <button className="w-full flex items-center gap-2 px-3 py-2 text-left" onClick={toggle} aria-expanded={open} style={{ background: 'transparent', border: 0, color: 'var(--text)' }}>
+        {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        <span className="font-semibold">{INTRO.title}</span>
+        {!open && <span style={{ color: 'var(--muted)', fontSize: 12 }}>source → bronze → silver → gold → report</span>}
+      </button>
+      {open && (
+        <div className="px-3 pb-3 space-y-2">
+          <ol className="m-0 pl-5" style={{ fontSize: 13 }}>
+            {INTRO.lines.map((l) => (
+              <li key={l}>{l}</li>
+            ))}
+          </ol>
+          <div className="flex flex-wrap items-center gap-1" aria-label="source, bronze, silver, gold, report">
+            {INTRO.stages.map((st, i) => (
+              <span key={st.name} className="inline-flex items-center gap-1">
+                {i > 0 && <ArrowRight size={14} style={{ color: 'var(--muted)' }} />}
+                <span className="pl-stage" style={{ ['--lane' as string]: st.lane ? LANE_COLOR[st.lane] : '#6b7280' }}>
+                  <b>{st.name}</b> <span style={{ fontWeight: 400 }}>{st.note}</span>
+                </span>
+              </span>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-3" style={{ fontSize: 12 }}>
+            {LANES.map((l) => (
+              <span key={l.id} className="inline-flex items-center gap-1">
+                <span className="pl-dot" style={{ background: LANE_COLOR[l.id] }} /> {l.label}
+              </span>
+            ))}
+          </div>
+          <div style={{ color: 'var(--muted)', fontSize: 12 }}>{INTRO.fabric}</div>
+        </div>
+      )}
+    </section>
+  )
+}
+
+/** A block's tip (hover, focus, tap): what it does, whose job it is, its Fabric name. One popover for the page, fixed so no lane clips it. */
+function BlockTip({ id, x, y }: { id: BlockId; x: number; y: number }) {
+  const b = blockById(id)!
+  return (
+    <div id="pl-tip" role="tooltip" className="pl-tip" style={{ left: x, top: y }}>
+      <div className="font-semibold">{b.label}</div>
+      <div>{BLOCK_TIPS[id].does}</div>
+      <div style={{ color: LANE_COLOR[b.lane], fontWeight: 600, fontSize: 12 }}>Whose job: the {ROLE_NAME[b.lane]}</div>
+      <div style={{ color: 'var(--muted)', fontSize: 12 }}>In Fabric: {BLOCK_TIPS[id].fabric}</div>
+    </div>
   )
 }
 
@@ -482,6 +660,9 @@ function BlockSettings({
         <div className="flex-1 min-w-0">
           <div className="font-semibold">{block.label}</div>
           <div style={{ color: 'var(--muted)', fontSize: 13 }}>{INFO[block.id]}</div>
+          <div style={{ color: 'var(--muted)', fontSize: 12 }}>
+            Whose job: the {ROLE_NAME[block.lane]}. In Fabric: {BLOCK_TIPS[block.id].fabric}
+          </div>
         </div>
         <button className="btn btn-ghost" onClick={onRemove} title="Put the block back in the palette">
           <Trash2 size={14} /> Remove
@@ -510,7 +691,10 @@ function BlockSettings({
       {first ? (
         <div style={{ color: 'var(--muted)', fontSize: 13 }}>This is the first step, so it always runs.</div>
       ) : (
-        <Choice label="Runs when the previous step" value={s.when} onChange={(when) => set({ when })} options={[{ v: 'succeeded', text: 'Succeeded' }, { v: 'completed', text: 'Completed' }]} />
+        <>
+          <Choice label="Runs when the previous step" value={s.when} onChange={(when) => set({ when })} options={[{ v: 'succeeded', text: 'Succeeded' }, { v: 'completed', text: 'Completed' }]} />
+          <div style={{ color: 'var(--muted)', fontSize: 12 }}>{WHEN_TIP}</div>
+        </>
       )}
     </section>
   )

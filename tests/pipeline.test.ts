@@ -10,7 +10,11 @@ import {
   hashWithPipeline,
   hashWithoutPipeline,
   missingSetting,
+  nextRequired,
+  nextSlotFor,
   nextStatus,
+  nextStep,
+  progressNote,
   pipelineFromHash,
   place,
   readState,
@@ -86,6 +90,39 @@ describe('pipeline: slots and run order', () => {
     // a block in the wrong lane, or twice, is dropped
     const odd = JSON.stringify({ slots: { 'engineer-0': 'sql-silver', 'ae-0': 'sql-silver', 'ae-1': 'sql-silver' } })
     expect(runOrder(readState(odd))).toEqual(['sql-silver'])
+  })
+})
+
+describe('pipeline: what to do next', () => {
+  it('walks the required blocks in the order a newcomer builds them', () => {
+    let s = emptyState()
+    expect(nextRequired(s)).toBe('copy-files')
+    expect(nextStep(s, { ran: false, solved: false }).text).toBe('the data engineer loads the raw files')
+    expect(nextStep(s, { ran: false, solved: false }).slot).toBe('engineer-0')
+    s = place(s, 'copy-files', slotId('engineer', 0))
+    expect(nextRequired(s)).toBe('sql-silver')
+    expect(nextSlotFor(s, 'sql-silver')).toBe('ae-0')
+  })
+  it('continues to the right of what is placed in the lane, and falls back to the first free slot', () => {
+    let s = emptyState()
+    s = place(s, 'dim-customer', slotId('ae', 2))
+    expect(nextSlotFor(s, 'sql-silver')).toBe('ae-3')
+    expect(nextSlotFor(emptyState(), 'card-top-chain')).toBe('analyst-0')
+  })
+  it('after every required block: settings, then Run, then Check, then done', () => {
+    const s = built([['copy-files', { mode: 'replace' }], ['sql-silver'], ...dims, ['card-top-chain']])
+    expect(nextRequired(s)).toBeNull()
+    expect(nextStep(s, { ran: false, solved: false }).text).toMatch(/^press Run/)
+    expect(nextStep(s, { ran: true, solved: false }).text).toMatch(/^press Check/)
+    expect(nextStep(s, { ran: true, solved: true }).text).toMatch(/works/)
+    expect(nextStep(built([['copy-files', { mode: 'replace' }], ['sql-silver', { when: null }], ...dims, ['card-top-chain']]), { ran: false, solved: false }).text).toMatch(/^set up the block marked \?/)
+  })
+  it('says what a partial run built and what comes next, and nothing after a failure', () => {
+    const s = built([['copy-files', { mode: 'replace' }]])
+    const ok: StepResult = { block: 'copy-files', status: 'succeeded', ms: 5, rows: 3110, message: '' }
+    expect(progressNote(s, [ok])).toBe('Ran 1 step and built bronze. Open the tables under pipe_kaiyo in the tree to look at them. The run stops here because nothing is placed after it yet. Next: the analytics engineer turns the raw text into clean silver rows.')
+    expect(progressNote(s, [{ ...ok, status: 'failed' }])).toBeNull()
+    expect(progressNote(s, [])).toBeNull()
   })
 })
 
@@ -349,6 +386,30 @@ describe('pipeline: cases', () => {
     const r = await cases('fact first', built([['copy-files', COPY], ['sql-silver'], ['fact-sellout'], ['dim-customer'], ['dim-product'], ['card-top-chain']]), { bronze: 3110, silver: 3000 }, { bronze: 3110, silver: 3000 }, [false, null, false])
     expect(r.run1[2].status).toBe('failed')
     expect(r.proofs.answer.diagnosis).toBe('Fact: sell-out reads pipe_kaiyo.gold_dim_customer, which isn\'t built yet at this point. Move it after Dimension: stores.')
+  })
+})
+
+describe('pipeline: a partial run', () => {
+  it('runs only the first lane: bronze is built, nothing after it, and no step fails', async () => {
+    await resetWork(port)
+    const state = built([['copy-files', { mode: 'replace' }]])
+    const j = await runAll(port, state)
+    expect(j.map((r) => r.status)).toEqual(['succeeded'])
+    const snap = await snapshot(port)
+    expect(snap.counts.bronze_sellout_raw).toBe(3110)
+    expect(snap.counts.silver_sellout).toBeNull()
+    expect(snap.counts.gold_fact_sellout).toBeNull()
+    expect(progressNote(state, j)).toMatch(/built bronze/)
+  })
+  it('runs two lanes with the analyst missing: silver and gold are there, the card is not', async () => {
+    await resetWork(port)
+    const state = built([['copy-files', { mode: 'replace' }], ['sql-silver'], ...dims])
+    const j = await runAll(port, state)
+    expect(j.map((r) => r.status)).toEqual(Array(5).fill('succeeded'))
+    const snap = await snapshot(port)
+    expect(snap.counts.gold_fact_sellout).toBe(3000)
+    expect(snap.counts.report_top_chain).toBeNull()
+    expect(progressNote(state, j)).toMatch(/built bronze, silver, gold.*Next: the analyst puts the answer on a card\.$/)
   })
 })
 

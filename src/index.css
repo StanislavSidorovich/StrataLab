@@ -363,3 +363,53 @@ button:disabled {
     overscroll-behavior-x: contain;
   }
 }
+
+/* pipeline page: the highlighted next slot, the stage strip, the block tip */
+.pl-slot.next {
+  border-color: var(--accent);
+  border-style: solid;
+  background: var(--accent-soft);
+  animation: pl-pulse 1.8s ease-in-out infinite;
+}
+.pl-slot.next .pl-empty {
+  color: var(--text);
+  font-weight: 600;
+}
+@keyframes pl-pulse {
+  50% {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pl-slot.next {
+    animation: none;
+  }
+}
+.pl-stage {
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  border: 1.5px solid var(--lane);
+  background: color-mix(in srgb, var(--lane) 14%, var(--panel));
+}
+.pl-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.pl-tip {
+  position: fixed;
+  z-index: 60;
+  width: 320px;
+  max-width: calc(100vw - 16px);
+  padding: 0.55rem 0.7rem;
+  border-radius: 8px;
+  font-size: 13px;
+  display: grid;
+  gap: 0.25rem;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.22);
+  pointer-events: none;
+}
