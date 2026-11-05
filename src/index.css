@@ -348,3 +348,18 @@ button:disabled {
   border-radius: 3px;
   min-width: 6ch;
 }
+
+/* Phone: a long line of code wraps inside the editor instead of running off the screen (CodeMirror
+   reads white-space from the DOM, so this is the same as its lineWrapping extension), and a swipe
+   along the editor never pans the page. */
+@media (max-width: 767px) {
+  .cm-editor .cm-scroller .cm-content {
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    flex-shrink: 1;
+  }
+  .cm-editor .cm-scroller {
+    overscroll-behavior-x: contain;
+  }
+}
