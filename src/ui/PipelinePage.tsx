@@ -1,14 +1,15 @@
 // The data pipeline page (`#pipeline=kaiyo-sellout`, docs/pipeline-mvp-spec.md): three lanes with fixed slots, a palette
 // of blocks, each block's settings, a run that fills a journal, and "Check my pipeline". The rules are in
 // src/core/pipeline.ts, the engine in src/db/pipelineRun.ts. Under 768 px there is no board: a laptop is needed.
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ArrowRight, Check, ChevronDown, ChevronRight, Copy, Laptop, Lightbulb, ListChecks, Loader2, Play, RotateCcw, Share2, Undo2, Trash2, Workflow, X } from 'lucide-react'
-import { afterRun, checkBlank, emptyState, missingSetting, nextStep, place, progressNote, readPhase, readState, remove, runOrder, softNotes, unsetOf, type Phase, type PipelineState, type StepResult, type StepStatus } from '../core/pipeline'
+import { afterRun, checkBlank, emptyState, missingAll, missingSetting, nextStep, place, progressNote, readPhase, readState, remove, runOrder, softNotes, unsetOf, type Phase, type PipelineState, type StepResult, type StepStatus } from '../core/pipeline'
 import type { ResultData } from '../core/check'
 import {
   BLOCKS,
   BLOCK_TIPS,
   INTRO,
+  LANE_COLOR,
   LANES,
   LANE_LINES,
   LANE_PLAN,
@@ -35,9 +36,10 @@ import { checkPipeline, currentTop, prepare, referenceTop, resetWork, runAll, ty
 import { enginePort } from '../db/pipelinePort'
 import { checkpoint } from '../db/engine'
 import { openPipeline, refreshCatalog, useLab } from './store'
+import { PipelineTutorial } from './PipelineTutorial'
+import { TUT_STORAGE } from '../data/pipelines/storesByRegion'
 
 const KEY = `stratalab.pipeline.${PIPELINE_ID}`
-const LANE_COLOR: Record<LaneId, string> = { engineer: '#3b82f6', ae: '#a855f7', analyst: '#10b981' }
 const URL_HERE = () => `${location.origin}${location.pathname}#pipeline=${PIPELINE_ID}`
 
 const INFO: Record<BlockId, string> = Object.fromEntries(Object.entries(BLOCK_TIPS).map(([k, v]) => [k, v.does])) as Record<BlockId, string>
@@ -93,8 +95,25 @@ export function PipelinePage() {
   return <Shell />
 }
 
+/** The warm-up is offered once: not to someone who has already built something, finished it or skipped it. */
+function readIntro(): boolean {
+  try {
+    return localStorage.getItem(TUT_STORAGE) === null && localStorage.getItem(KEY) === null
+  } catch {
+    return false
+  }
+}
+function markIntro(v: 'done' | 'skipped') {
+  try {
+    localStorage.setItem(TUT_STORAGE, v)
+  } catch {
+    /* not kept: the warm-up is offered again next time */
+  }
+}
+
 function Shell() {
   const wide = useWide()
+  const [intro, setIntro] = useState(readIntro)
   return (
     <div className="absolute inset-0 z-30 flex flex-col min-w-0" style={{ background: 'var(--bg)' }} data-testid="pipeline">
       <header className="shrink-0 flex items-center gap-3 px-4 py-2" style={{ background: 'var(--panel)', borderBottom: '1px solid var(--line)' }}>
@@ -107,7 +126,7 @@ function Shell() {
           <X size={16} />
         </button>
       </header>
-      {wide ? <Board /> : <PhoneNotice />}
+      {wide ? intro ? <PipelineTutorial onDone={() => (markIntro('done'), setIntro(false))} onSkip={() => (markIntro('skipped'), setIntro(false))} /> : <Board onWarmUp={() => setIntro(true)} /> : <PhoneNotice />}
     </div>
   )
 }
@@ -163,7 +182,7 @@ function PhoneNotice() {
 
 // ---------------------------------------------------------------- the board
 
-function Board() {
+function Board({ onWarmUp }: { onWarmUp: () => void }) {
   const [saved] = useState(readSaved)
   const [state, setState] = useState<PipelineState>(saved.state)
   const [hints, setHints] = useState(saved.hints)
@@ -179,7 +198,10 @@ function Board() {
   const [report, setReport] = useState<CheckReport | null>(null)
   const [answer, setAnswer] = useState<ResultData | null>(null)
   const [note, setNote] = useState<string | null>(null)
-  const [tip, setTip] = useState<{ id: BlockId; x: number; y: number } | null>(null)
+  /** blocks the last click on a grey-looking button pointed at */
+  const [attention, setAttention] = useState<{ ids: BlockId[]; text: string } | null>(null)
+  const [prepTry, setPrepTry] = useState(0)
+  const [tip, setTip] = useState<{ id: BlockId; x: number; top: number; bottom: number } | null>(null)
   const [hint, setHint] = useState<{ for: BlockId | null; level: number }>({ for: null, level: 0 })
   const [demo, setDemo] = useState<{ lane: LaneId; steps: { block: BlockId; caption: string }[]; busy: boolean } | null>(null)
   const alive = useRef(true)
@@ -198,6 +220,7 @@ function Board() {
 
   useEffect(() => {
     let alive = true
+    setPrep('loading')
     prepare(enginePort)
       .then(async () => {
         await checkpoint()
@@ -208,15 +231,32 @@ function Board() {
     return () => {
       alive = false
     }
-  }, [])
+  }, [prepTry])
 
   /** What runs: the first pass has no de-duplication (and no blank); the fix has both. */
   const eff = useMemo(() => ({ ...state, dedup: phase === 'fix' }), [state, phase])
   const order = useMemo(() => runOrder(state), [state])
   const missing = missingSetting(eff)
+  const unsetAll = missingAll(eff)
   const reason = prep === 'loading' ? 'Preparing the data…' : prep !== 'ready' ? 'The data could not be prepared' : order.length === 0 ? 'Place a block first' : (missing?.message ?? null)
   const placed = new Set(order)
   const palette = BLOCKS.filter((b) => !placed.has(b.id))
+  /** A click on Run, Check or Start from scratch that cannot go on: say why and point at the blocks, never just stay grey. */
+  const explain = (): boolean => {
+    if (prep === 'loading') setAttention({ ids: [], text: 'Still preparing the data: this takes a few seconds the first time. Try again in a moment.' })
+    else if (prep !== 'ready') setAttention({ ids: [], text: `The data could not be prepared: ${prep}. Press Try again.` })
+    else if (order.length === 0) setAttention({ ids: [], text: 'There is nothing to run yet: place a block in the Data engineer lane first.' })
+    else if (unsetAll.length > 0) {
+      setAttention({
+        ids: unsetAll.map((m) => m.block),
+        text: `${unsetAll.length} block${unsetAll.length === 1 ? ' needs' : 's need'} a setting before Run: ${unsetAll.map((m) => blockById(m.block)!.label).join('; ')}. Open each block marked ? and choose.`,
+      })
+      setOpen(unsetAll[0].block)
+    } else return false
+    return true
+  }
+  useEffect(() => setAttention(null), [state, phase])
+
   const next = nextStep(eff, { ran, solved, firstPass: phase === 'first-pass' })
   const hintLevel = hint.for === next.block ? hint.level : 0
 
@@ -229,7 +269,7 @@ function Board() {
   })
   const showTip = (id: BlockId, el: HTMLElement) => {
     const r = el.getBoundingClientRect()
-    setTip({ id, x: Math.max(8, Math.min(r.left, window.innerWidth - 328)), y: r.bottom + 6 })
+    setTip({ id, x: Math.max(8, Math.min(r.left, window.innerWidth - 328)), top: r.top, bottom: r.bottom })
   }
   useEffect(() => {
     if (!tip) return
@@ -380,6 +420,12 @@ function Board() {
         {twist && <TwistCard twist={twist} phase={phase} solved={solved} />}
 
         <Intro />
+        <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+          New to pipelines?{' '}
+          <button className="underline" style={{ background: 'transparent', border: 0, color: 'var(--accent)', cursor: 'pointer' }} onClick={onWarmUp} data-testid="pipeline-warmup">
+            Do the three-minute warm-up first
+          </button>
+        </div>
 
         <div className="rounded-lg px-3 py-2 flex flex-wrap items-center gap-2" style={{ border: '1px solid var(--line)', background: 'var(--panel)' }} data-testid="pipeline-next">
           <ArrowRight size={14} style={{ color: 'var(--accent)' }} />
@@ -465,7 +511,7 @@ function Board() {
                       }}
                     >
                       {block ? (
-                        <PlacedBlock block={block} state={eff} index={order.indexOf(block.id)} active={open === block.id} onClick={() => clickSlot(slot)} tip={tipProps(block.id)} />
+                        <PlacedBlock block={block} state={eff} index={order.indexOf(block.id)} active={open === block.id} onClick={() => clickSlot(slot)} tip={tipProps(block.id)} attn={attention?.ids.includes(block.id) ?? false} />
                       ) : (
                         <button className="pl-empty" aria-label={`Empty slot ${i + 1} in the ${lane.label} lane${isNext ? ' (next step goes here)' : ''}`} onClick={() => clickSlot(slot)} disabled={!target}>
                           {target ? 'Place here' : isNext ? 'Next block here' : ''}
@@ -528,13 +574,13 @@ function Board() {
         )}
 
         <div className="flex flex-wrap items-center gap-2">
-          <button className="btn btn-primary" onClick={() => void run()} disabled={busy !== null || reason !== null} title={reason ?? 'Run the pipeline once on what is there now'}>
+          <button className="btn btn-primary" onClick={() => (explain() ? undefined : void run())} disabled={busy !== null} aria-disabled={reason !== null} title={reason ?? 'Run the pipeline once on what is there now'}>
             {busy === 'run' ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />} {ran ? 'Run again' : 'Run'}
           </button>
-          <button className="btn" onClick={() => void check()} disabled={busy !== null || reason !== null || phase === 'first-pass'} title={reason ?? (phase === 'first-pass' ? 'Run the pipeline first: the Head of Sales will look at the number' : 'Start from scratch, run it twice and judge the result')}>
+          <button className="btn" onClick={() => (phase === 'first-pass' ? setAttention({ ids: [], text: 'Run the pipeline first: the Head of Sales will look at the number, and then Check opens.' }) : explain() ? undefined : void check())} disabled={busy !== null} aria-disabled={reason !== null || phase === 'first-pass'} title={reason ?? (phase === 'first-pass' ? 'Run the pipeline first: the Head of Sales will look at the number' : 'Start from scratch, run it twice and judge the result')}>
             {busy === 'check' ? <Loader2 size={14} className="animate-spin" /> : <ListChecks size={14} />} Check my pipeline
           </button>
-          <button className="btn btn-ghost" onClick={() => void scratch()} disabled={busy !== null || prep !== 'ready'} title={`Drops the tables the pipeline built in ${SCHEMA} (bronze, silver, gold, report). Your blocks and settings stay where they are.`}>
+          <button className="btn btn-ghost" onClick={() => (prep !== 'ready' ? void explain() : void scratch())} disabled={busy !== null} aria-disabled={prep !== 'ready'} title={`Drops the tables the pipeline built in ${SCHEMA} (bronze, silver, gold, report). Your blocks and settings stay where they are.`}>
             <RotateCcw size={14} /> Start from scratch
           </button>
           {(twist || solved) && (
@@ -542,13 +588,23 @@ function Board() {
               <Undo2 size={14} /> Replay the story
             </button>
           )}
-          <span style={{ color: 'var(--muted)', fontSize: 12 }}>{reason ?? `Start from scratch drops the tables built in ${SCHEMA} and keeps your blocks. Open the tables in the tree.`}</span>
+          {prep !== 'ready' && prep !== 'loading' && (
+            <button className="btn" onClick={() => setPrepTry((n) => n + 1)}>
+              Try again
+            </button>
+          )}
+          <span style={{ color: reason ? 'var(--warn-text)' : 'var(--muted)', fontSize: 13 }} data-testid="pipeline-reason">{reason ?? `Start from scratch drops the tables built in ${SCHEMA} and keeps your blocks. Open the tables in the tree.`}</span>
           {typeof prep === 'string' && prep !== 'loading' && prep !== 'ready' && (
             <span style={{ color: 'var(--danger)', fontSize: 12 }}>{prep}</span>
           )}
         </div>
 
-        {note && !reason && (
+        {attention && (
+          <div className="rounded-lg px-3 py-2" style={{ background: 'var(--warn-soft)', color: 'var(--warn-text)', fontSize: 13 }} role="alert" data-testid="pipeline-attention">
+            {attention.text}
+          </div>
+        )}
+        {note && (
           <div style={{ fontSize: 13 }} data-testid="pipeline-note">
             {note}
           </div>
@@ -559,16 +615,16 @@ function Board() {
         {!report && journal.length > 0 && softNotes(eff).length > 0 && <Notes notes={softNotes(eff)} />}
         {solved && <BackToQuaera />}
       </div>
-      {tip && <BlockTip id={tip.id} x={tip.x} y={tip.y} />}
+      {tip && <BlockTip id={tip.id} x={tip.x} top={tip.top} bottom={tip.bottom} />}
     </div>
   )
 }
 
-function PlacedBlock({ block, state, index, active, onClick, tip }: { block: Block; state: PipelineState; index: number; active: boolean; onClick: () => void; tip: React.HTMLAttributes<HTMLElement> }) {
+function PlacedBlock({ block, state, index, active, onClick, tip, attn }: { block: Block; state: PipelineState; index: number; active: boolean; onClick: () => void; tip: React.HTMLAttributes<HTMLElement>; attn: boolean }) {
   const unset = unsetOf(state, block.id, index)
   return (
     <button
-      className={`pl-block${active ? ' picked' : ''}`}
+      className={`pl-block${active ? ' picked' : ''}${attn ? ' attn' : ''}`}
       style={{ ['--lane' as string]: LANE_COLOR[block.lane] }}
       draggable
       onDragStart={(e) => e.dataTransfer.setData('text/plain', block.id)}
@@ -646,10 +702,19 @@ function Intro() {
 }
 
 /** A block's tip (hover, focus, tap): what it does, whose job it is, its Fabric name. One popover for the page, fixed so no lane clips it. */
-function BlockTip({ id, x, y }: { id: BlockId; x: number; y: number }) {
+function BlockTip({ id, x, top, bottom }: { id: BlockId; x: number; top: number; bottom: number }) {
   const b = blockById(id)!
+  const ref = useRef<HTMLDivElement>(null)
+  const [y, setY] = useState(bottom + 6)
+  // Below the block when it fits, else above it, else pinned inside the window: the tray sits at the bottom edge.
+  useLayoutEffect(() => {
+    const h = ref.current?.offsetHeight ?? 0
+    const below = bottom + 6
+    const fits = below + h <= window.innerHeight - 8
+    setY(fits ? below : Math.max(8, Math.min(top - h - 6, window.innerHeight - h - 8)))
+  }, [id, top, bottom])
   return (
-    <div id="pl-tip" role="tooltip" className="pl-tip" style={{ left: x, top: y }}>
+    <div ref={ref} id="pl-tip" role="tooltip" className="pl-tip" style={{ left: x, top: y }}>
       <div className="font-semibold">{b.label}</div>
       <div>{BLOCK_TIPS[id].does}</div>
       <div style={{ color: LANE_COLOR[b.lane], fontWeight: 600, fontSize: 12 }}>Whose job: the {ROLE_NAME[b.lane]}</div>

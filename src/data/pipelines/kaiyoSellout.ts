@@ -255,6 +255,8 @@ export const PROOF_TITLES = ['The answer is right', 'Safe to run again', 'Gold i
 
 // ---------------------------------------------------------------- for someone new to pipelines
 
+export const LANE_COLOR: Record<LaneId, string> = { engineer: '#3b82f6', ae: '#a855f7', analyst: '#10b981' }
+
 export const ROLE_NAME: Record<LaneId, string> = { engineer: 'data engineer', ae: 'analytics engineer', analyst: 'analyst' }
 
 /** What a block does, whose job it is and what it is called in Microsoft Fabric. Shown on hover, focus and tap. */

@@ -225,6 +225,16 @@ export function unsetOf(state: PipelineState, id: BlockId, index: number): strin
   return null
 }
 
+/** Every placed block with a setting still unset, in run order. */
+export function missingAll(state: PipelineState): Missing[] {
+  const out: Missing[] = []
+  for (const [i, id] of runOrder(state).entries()) {
+    const message = unsetOf(state, id, i)
+    if (message) out.push({ block: id, message })
+  }
+  return out
+}
+
 /** The first block (in run order) with a setting still unset, with the sentence that names it. */
 export function missingSetting(state: PipelineState): Missing | null {
   for (const [i, id] of runOrder(state).entries()) {

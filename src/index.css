@@ -413,3 +413,11 @@ button:disabled {
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.22);
   pointer-events: none;
 }
+
+.pl-block.attn {
+  outline: 3px solid var(--warn-text);
+  outline-offset: 1px;
+}
+button[aria-disabled='true'] {
+  opacity: 0.6;
+}
