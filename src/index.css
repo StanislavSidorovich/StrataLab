@@ -421,3 +421,34 @@ button:disabled {
 button[aria-disabled='true'] {
   opacity: 0.6;
 }
+
+/* pipeline page, step by step: the muted slots, the stage buttons, the lit cells of "What came out" */
+.pl-slot.muted {
+  opacity: 0.4;
+}
+.pl-stage-btn {
+  color: var(--text);
+  cursor: pointer;
+}
+.pl-stage-btn:disabled {
+  cursor: default;
+}
+.pl-stage.off {
+  opacity: 0.5;
+  border-style: dashed;
+  background: transparent;
+}
+.pl-stage.now {
+  opacity: 1;
+  border-style: solid;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--lane) 35%, transparent);
+}
+.pl-stage.view {
+  outline: 2px solid var(--lane);
+  outline-offset: 2px;
+}
+.pl-lit {
+  background: var(--warn-soft);
+  color: var(--warn-text);
+  font-weight: 600;
+}

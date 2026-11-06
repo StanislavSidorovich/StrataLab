@@ -3,7 +3,7 @@
 // src/core/pipeline.ts, the engine in src/db/pipelineRun.ts. Under 768 px there is no board: a laptop is needed.
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ArrowRight, Check, ChevronDown, ChevronRight, Copy, Laptop, Lightbulb, ListChecks, Loader2, Play, RotateCcw, Share2, Undo2, Trash2, Workflow, X } from 'lucide-react'
-import { afterRun, checkBlank, emptyState, missingAll, missingSetting, nextStep, place, progressNote, readPhase, readState, remove, runOrder, softNotes, unsetOf, type Phase, type PipelineState, type StepResult, type StepStatus } from '../core/pipeline'
+import { afterRun, checkBlank, emptyState, missingAll, missingSetting, nextSlotFor, nextStep, place, slotOf, progressNote, readPhase, readState, remove, runOrder, softNotes, unsetOf, type Phase, type PipelineState, type StepResult, type StepStatus } from '../core/pipeline'
 import type { ResultData } from '../core/check'
 import {
   BLOCKS,
@@ -13,6 +13,7 @@ import {
   LANES,
   LANE_LINES,
   LANE_PLAN,
+  NEXT_TEXT,
   PIPELINE_ID,
   PROOF_TITLES,
   RETURN_URL,
@@ -33,6 +34,9 @@ import {
   type Settings,
 } from '../data/pipelines/kaiyoSellout'
 import { checkPipeline, currentTop, prepare, referenceTop, resetWork, runAll, type CheckReport } from '../db/pipelineRun'
+import { takeSnapshot } from '../db/pipelineSnapshot'
+import { MODE_KEY, STEPS, activeStep, freshOnly, helpFor, lastStep, prefixState, readMode, type Mode } from '../core/pipelineSteps'
+import { CameOut, StageStrip, StepPanel, type Kept } from './PipelineSteps'
 import { enginePort } from '../db/pipelinePort'
 import { checkpoint } from '../db/engine'
 import { openPipeline, refreshCatalog, useLab } from './store'
@@ -204,11 +208,32 @@ function Board({ onWarmUp }: { onWarmUp: () => void }) {
   const [tip, setTip] = useState<{ id: BlockId; x: number; top: number; bottom: number } | null>(null)
   const [hint, setHint] = useState<{ for: BlockId | null; level: number }>({ for: null, level: 0 })
   const [demo, setDemo] = useState<{ lane: LaneId; steps: { block: BlockId; caption: string }[]; busy: boolean } | null>(null)
+  const [mode, setModeState] = useState<Mode>(() => {
+    try {
+      return readMode(localStorage.getItem(MODE_KEY), saved.solved)
+    } catch {
+      return readMode(null, saved.solved)
+    }
+  })
+  /** the first rows of what each step built, kept for the strip: page state only, a reload starts without them */
+  const [snaps, setSnaps] = useState<Partial<Record<string, Kept>>>({})
+  const [viewed, setViewed] = useState<BlockId | null>(null)
+  /** the line "placed for you" under the step, by block */
+  const [captions, setCaptions] = useState<Partial<Record<BlockId, string>>>({})
   const alive = useRef(true)
+  const autoShown = useRef(new Set<BlockId>())
   useEffect(() => {
     alive.current = true
     return () => void (alive.current = false)
   }, [])
+  const setMode = (m: Mode) => {
+    setModeState(m)
+    try {
+      localStorage.setItem(MODE_KEY, m)
+    } catch {
+      /* not kept: the choice is lost on reload */
+    }
+  }
 
   useEffect(() => {
     try {
@@ -255,10 +280,36 @@ function Board({ onWarmUp }: { onWarmUp: () => void }) {
     } else return false
     return true
   }
+  /** The same for "Run this step": say why it cannot go on and point at the blocks, never just stay grey. */
+  const explainStep = (): boolean => {
+    if (prep === 'loading') setAttention({ ids: [], text: 'Still preparing the data: this takes a few seconds the first time. Try again in a moment.' })
+    else if (prep !== 'ready') setAttention({ ids: [], text: `The data could not be prepared: ${prep}. Press Try again.` })
+    else if (active && !activePlaced) setAttention({ ids: [], text: `Place “${blockById(active)!.label}” first: it goes in the highlighted slot of the ${LANES.find((l) => l.id === blockById(active)!.lane)!.label} lane.` })
+    else if (stepUnset.length > 0) {
+      setAttention({ ids: stepUnset.map((m) => m.block), text: `${stepUnset.length} block${stepUnset.length === 1 ? ' needs' : 's need'} a setting before this step runs: ${stepUnset.map((m) => blockById(m.block)!.label).join('; ')}. Open each block marked ? and choose.` })
+      setOpen(stepUnset[0].block)
+    } else return false
+    return true
+  }
   useEffect(() => setAttention(null), [state, phase])
+  // a line placed for the first pass does not describe the fix
+  useEffect(() => setCaptions({}), [phase])
 
   const next = nextStep(eff, { ran, solved, firstPass: phase === 'first-pass' })
-  const hintLevel = hint.for === next.block ? hint.level : 0
+  const stepMode = mode === 'step'
+  const fresh = useMemo(() => freshOnly(snaps, phase), [snaps, phase])
+  const active = activeStep(fresh)
+  const stepIdx = active ? STEPS.indexOf(active) : STEPS.length
+  const help = active ? helpFor(stepIdx) : null
+  const activePlaced = active ? slotOf(state, active) !== null : false
+  /** the one slot the learner may use now */
+  const allowedSlot = stepMode && active && !activePlaced ? nextSlotFor(state, active) : null
+  const hintLevel = stepMode ? (hint.for === active ? hint.level : 0) : hint.for === next.block ? hint.level : 0
+  const stepUnset = active ? missingAll(prefixState(eff, active)) : []
+  const stepReason =
+    prep === 'loading' ? 'Preparing the data…' : prep !== 'ready' ? 'The data could not be prepared' : !active ? null : !activePlaced ? `Place “${blockById(active)!.label}” first` : (stepUnset[0]?.message ?? null)
+  const rest = active && activePlaced ? lastStep(eff) : null
+  const viewedSnap = viewed ? snaps[viewed] : undefined
 
   const tipProps = (id: BlockId) => ({
     'aria-describedby': tip?.id === id ? 'pl-tip' : undefined,
@@ -302,11 +353,38 @@ function Board({ onWarmUp }: { onWarmUp: () => void }) {
     setDemo((d) => d && { ...d, busy: false })
   }
 
+  /** "Show me this step": the block goes in its slot with its settings, except the part that is the learner's (when it runs, the blank). */
+  const showStep = (block: BlockId) => {
+    const step = LANE_PLAN[blockById(block)!.lane].find((p) => p.block === block)
+    setState((s) => {
+      const slot = slotOf(s, block) ? null : nextSlotFor(s, block)
+      if (!slot) return s
+      const n = place(s, block, slot)
+      return { ...n, settings: { ...n.settings, [block]: { ...n.settings[block], ...(block === 'copy-files' ? { files: 'all', format: 'text', delim: ';', header: true, mode: 'replace' } : {}) } } }
+    })
+    // the first pass has no blank yet: it comes with the twist
+    const caption = (step?.caption ?? NEXT_TEXT[block]).replace(phase === 'first-pass' ? ' Its one blank is yours to fill.' : '\u0000', '')
+    setCaptions((c) => ({ ...c, [block]: caption }))
+    setOpen(block)
+    setPicked(null)
+  }
+  // The first two steps place their block themselves, a moment after they come up.
+  useEffect(() => {
+    if (!stepMode || !active || help !== 'show' || activePlaced || autoShown.current.has(active)) return
+    const t = setTimeout(() => {
+      autoShown.current.add(active)
+      showStep(active)
+    }, 700)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stepMode, active, help, activePlaced])
+
   const setSettings = (id: BlockId, patch: Partial<Settings>) => setState((s) => ({ ...s, settings: { ...s.settings, [id]: { ...s.settings[id], ...patch } } }))
 
   const clickSlot = (slot: string) => {
     const there = state.slots[slot]
     if (picked) {
+      if (stepMode && slot !== allowedSlot) return
       const block = blockById(picked)!
       if (laneOfSlot(slot) !== block.lane) return
       setState(place(state, picked, slot))
@@ -330,17 +408,41 @@ function Board({ onWarmUp }: { onWarmUp: () => void }) {
     }
   }
 
-  const run = async () => {
+  /** After a run: the first rows of every step that built its table, for "What came out" and the strip. */
+  const capture = async (j: StepResult[]) => {
+    const got: Partial<Record<string, Kept>> = {}
+    let last: BlockId | null = null
+    for (const b of STEPS) {
+      if (!j.some((r) => r.block === b && r.status === 'succeeded')) continue
+      try {
+        const s = await takeSnapshot(enginePort, b, { dedup: phase === 'fix' })
+        if (s) {
+          got[b] = { ...s, phase }
+          last = b
+        }
+      } catch {
+        /* the table cannot be read: this step just has no picture */
+      }
+    }
+    if (!alive.current) return
+    setSnaps((p) => ({ ...p, ...got }))
+    if (last) setViewed(last)
+  }
+
+  /** Run (all at once), or a run up to and including `through` (step by step). */
+  const run = async (through?: BlockId) => {
     setBusy('run')
     setReport(null)
     setNote(null)
     try {
-      const j = await runAll(enginePort, eff, setJournal)
+      const part = through ? prefixState(eff, through) : eff
+      const j = await runAll(enginePort, part, setJournal)
       setJournal(j)
       setRan(true)
       await afterRunSync()
       setAnswer(await readAnswer())
-      setNote(progressNote(eff, j))
+      await capture(j)
+      setNote(through ? null : progressNote(eff, j))
       const top = await currentTop(enginePort)
       const moved = afterRun(phase, j, top, await referenceTop(enginePort))
       if (moved.phase !== phase) {
@@ -362,6 +464,7 @@ function Board({ onWarmUp }: { onWarmUp: () => void }) {
       setAnswer(r.answer && r.answer.rows.length ? r.answer : null)
       if (r.solved && phase === 'fix') setSolved(true)
       await afterRunSync()
+      await capture(r.run2)
     } finally {
       setBusy(null)
     }
@@ -374,6 +477,8 @@ function Board({ onWarmUp }: { onWarmUp: () => void }) {
       setReport(null)
       setAnswer(null)
       setRan(false)
+      setSnaps({})
+      setViewed(null)
       setNote(`The tables in ${SCHEMA} are dropped. The source tables stay.`)
       await afterRunSync()
     } finally {
@@ -393,6 +498,8 @@ function Board({ onWarmUp }: { onWarmUp: () => void }) {
       setPhase('first-pass')
       setTwist(null)
       setHints(0)
+      setSnaps({})
+      setViewed(null)
       setNote('The story starts again from the first pass. Your blocks stay where they are.')
       await afterRunSync()
     } finally {
@@ -419,14 +526,43 @@ function Board({ onWarmUp }: { onWarmUp: () => void }) {
 
         {twist && <TwistCard twist={twist} phase={phase} solved={solved} />}
 
+        {stepMode && (
+          <>
+            <StageStrip snaps={snaps} fresh={fresh} viewed={viewed} active={active} onView={setViewed} />
+            <StepPanel
+              active={active}
+              index={stepIdx}
+              help={help}
+              hintLevel={hintLevel}
+              placed={activePlaced}
+              caption={active ? (captions[active] ?? null) : null}
+              note={phase === 'fix' && active === 'sql-silver' && activePlaced ? 'The SQL step has a blank now: open it, fill it, then Run this step.' : null}
+              closing={next.text === 'nothing, the pipeline works' ? 'The pipeline works.' : `Next: ${next.text}.`}
+              onHint={() => active && setHint({ for: active, level: Math.min(2, hintLevel + 1) })}
+              onShow={() => active && showStep(active)}
+            />
+          </>
+        )}
+
         <Intro />
-        <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-          New to pipelines?{' '}
-          <button className="underline" style={{ background: 'transparent', border: 0, color: 'var(--accent)', cursor: 'pointer' }} onClick={onWarmUp} data-testid="pipeline-warmup">
-            Do the three-minute warm-up first
-          </button>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1" style={{ fontSize: 12, color: 'var(--muted)' }}>
+          <span>
+            New to pipelines?{' '}
+            <button className="underline" style={{ background: 'transparent', border: 0, color: 'var(--accent)', cursor: 'pointer' }} onClick={onWarmUp} data-testid="pipeline-warmup">
+              Do the three-minute warm-up first
+            </button>
+          </span>
+          <span className="flex-1" />
+          <span data-testid="pipeline-mode" data-mode={mode}>
+            {stepMode ? 'Step by step: one step, then what it built.' : 'All at once: the whole board.'}{' '}
+            <button className="underline" style={{ background: 'transparent', border: 0, color: 'var(--accent)', cursor: 'pointer' }} onClick={() => setMode(stepMode ? 'all' : 'step')} data-testid="pipeline-mode-switch">
+              {stepMode ? 'Build it all at once' : 'Go step by step'}
+            </button>
+          </span>
         </div>
 
+        {!stepMode && (
+        <>
         <div className="rounded-lg px-3 py-2 flex flex-wrap items-center gap-2" style={{ border: '1px solid var(--line)', background: 'var(--panel)' }} data-testid="pipeline-next">
           <ArrowRight size={14} style={{ color: 'var(--accent)' }} />
           <span className="flex-1 min-w-0" style={{ fontSize: 14 }}>
@@ -478,6 +614,8 @@ function Board({ onWarmUp }: { onWarmUp: () => void }) {
             </ol>
           </section>
         )}
+        </>
+        )}
 
         <div className="space-y-2">
           {LANES.map((lane) => (
@@ -493,18 +631,19 @@ function Board({ onWarmUp }: { onWarmUp: () => void }) {
                   const block = id ? blockById(id) : undefined
                   const target = picked !== null && blockById(picked)!.lane === lane.id
                   const dim = picked !== null && !target
-                  const isNext = next.slot === slot && !block
+                  const isNext = !block && (stepMode ? allowedSlot === slot && (help !== 'self' || hintLevel > 0) : next.slot === slot)
+                  const muted = stepMode && !block && slot !== allowedSlot
                   return (
                     <div
                       key={slot}
-                      className={`pl-slot${block ? ' filled' : ''}${target ? ' target' : ''}${dim ? ' dim' : ''}${isNext ? ' next' : ''}`}
+                      className={`pl-slot${block ? ' filled' : ''}${target && !muted ? ' target' : ''}${dim ? ' dim' : ''}${isNext ? ' next' : ''}${muted ? ' muted' : ''}`}
                       data-next={isNext ? 'true' : undefined}
                       data-slot={slot}
                       onDragOver={(e) => e.preventDefault()}
                       onDrop={(e) => {
                         const dragged = e.dataTransfer.getData('text/plain') as BlockId
                         const b = blockById(dragged)
-                        if (b && b.lane === lane.id) {
+                        if (b && b.lane === lane.id && (!stepMode || slot === allowedSlot)) {
                           setState(place(state, dragged, slot))
                           setOpen(dragged)
                         }
@@ -513,8 +652,8 @@ function Board({ onWarmUp }: { onWarmUp: () => void }) {
                       {block ? (
                         <PlacedBlock block={block} state={eff} index={order.indexOf(block.id)} active={open === block.id} onClick={() => clickSlot(slot)} tip={tipProps(block.id)} attn={attention?.ids.includes(block.id) ?? false} />
                       ) : (
-                        <button className="pl-empty" aria-label={`Empty slot ${i + 1} in the ${lane.label} lane${isNext ? ' (next step goes here)' : ''}`} onClick={() => clickSlot(slot)} disabled={!target}>
-                          {target ? 'Place here' : isNext ? 'Next block here' : ''}
+                        <button className="pl-empty" aria-label={`Empty slot ${i + 1} in the ${lane.label} lane${isNext ? ' (next step goes here)' : ''}`} onClick={() => clickSlot(slot)} disabled={!target || muted}>
+                          {target && !muted ? 'Place here' : isNext ? 'Next block here' : ''}
                         </button>
                       )}
                     </div>
@@ -531,6 +670,8 @@ function Board({ onWarmUp }: { onWarmUp: () => void }) {
               <>
                 Now tap a free slot in the <b>{LANES.find((l) => l.id === blockById(picked)!.lane)!.label}</b> lane for “{blockById(picked)!.label}”.
               </>
+            ) : stepMode ? (
+              'Tap a block, then tap the highlighted slot. Tap a placed block to set it up. Not every block belongs in the pipeline.'
             ) : (
               'Tap a block, then tap a slot in its lane. Tap a placed block to set it up. Not every block belongs in the pipeline.'
             )}
@@ -574,9 +715,29 @@ function Board({ onWarmUp }: { onWarmUp: () => void }) {
         )}
 
         <div className="flex flex-wrap items-center gap-2">
-          <button className="btn btn-primary" onClick={() => (explain() ? undefined : void run())} disabled={busy !== null} aria-disabled={reason !== null} title={reason ?? 'Run the pipeline once on what is there now'}>
-            {busy === 'run' ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />} {ran ? 'Run again' : 'Run'}
-          </button>
+          {stepMode ? (
+            <>
+              <button
+                className="btn btn-primary"
+                onClick={() => (active === null ? void run(lastStep(eff) ?? undefined) : explainStep() ? undefined : void run(active))}
+                disabled={busy !== null}
+                aria-disabled={stepReason !== null}
+                title={stepReason ?? 'Runs the pipeline up to this step and shows what it built'}
+                data-testid="pipeline-run-step"
+              >
+                {busy === 'run' ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />} {active === null ? 'Run again' : 'Run this step'}
+              </button>
+              {rest && rest !== active && (
+                <button className="btn" onClick={() => (explainStep() ? undefined : void run(rest))} disabled={busy !== null} aria-disabled={stepReason !== null} title="The next steps are already on the board: run them all, then look at the last table" data-testid="pipeline-run-rest">
+                  <Play size={14} /> Run the rest
+                </button>
+              )}
+            </>
+          ) : (
+            <button className="btn btn-primary" onClick={() => (explain() ? undefined : void run())} disabled={busy !== null} aria-disabled={reason !== null} title={reason ?? 'Run the pipeline once on what is there now'}>
+              {busy === 'run' ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />} {ran ? 'Run again' : 'Run'}
+            </button>
+          )}
           <button className="btn" onClick={() => (phase === 'first-pass' ? setAttention({ ids: [], text: 'Run the pipeline first: the Head of Sales will look at the number, and then Check opens.' }) : explain() ? undefined : void check())} disabled={busy !== null} aria-disabled={reason !== null || phase === 'first-pass'} title={reason ?? (phase === 'first-pass' ? 'Run the pipeline first: the Head of Sales will look at the number' : 'Start from scratch, run it twice and judge the result')}>
             {busy === 'check' ? <Loader2 size={14} className="animate-spin" /> : <ListChecks size={14} />} Check my pipeline
           </button>
@@ -593,7 +754,7 @@ function Board({ onWarmUp }: { onWarmUp: () => void }) {
               Try again
             </button>
           )}
-          <span style={{ color: reason ? 'var(--warn-text)' : 'var(--muted)', fontSize: 13 }} data-testid="pipeline-reason">{reason ?? `Start from scratch drops the tables built in ${SCHEMA} and keeps your blocks. Open the tables in the tree.`}</span>
+          <span style={{ color: (stepMode ? stepReason : reason) ? 'var(--warn-text)' : 'var(--muted)', fontSize: 13 }} data-testid="pipeline-reason">{(stepMode ? stepReason : reason) ?? (stepMode ? 'Runs everything up to this step, then shows what it built.' : `Start from scratch drops the tables built in ${SCHEMA} and keeps your blocks. Open the tables in the tree.`)}</span>
           {typeof prep === 'string' && prep !== 'loading' && prep !== 'ready' && (
             <span style={{ color: 'var(--danger)', fontSize: 12 }}>{prep}</span>
           )}
@@ -609,6 +770,7 @@ function Board({ onWarmUp }: { onWarmUp: () => void }) {
             {note}
           </div>
         )}
+        {stepMode && viewedSnap && <CameOut snap={viewedSnap} stale={viewedSnap.phase !== phase && viewedSnap.block !== 'copy-files'} />}
         {journal.length > 0 && <Journal journal={journal} />}
         {answer && <Card answer={answer} />}
         {report && <Report report={report} notes={softNotes(eff)} fixed={twist?.mismatch === true} />}

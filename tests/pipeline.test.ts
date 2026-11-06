@@ -30,6 +30,25 @@ import {
   type StepResult,
 } from '../src/core/pipeline'
 import type { ResultData } from '../src/core/check'
+import {
+  MODE_KEY,
+  STEPS,
+  activeStep,
+  bronzeChange,
+  cardChange,
+  changedMarks,
+  dirtyMarks,
+  freshOnly,
+  factChange,
+  helpFor,
+  lastStep,
+  prefixState,
+  readMode,
+  silverChange,
+  stagePassed,
+  stepForStage,
+} from '../src/core/pipelineSteps'
+import { takeSnapshot } from '../src/db/pipelineSnapshot'
 import { checkPipeline, exportFiles, exportText, prepare, resetWork, runAll, snapshot, type SqlPort } from '../src/db/pipelineRun'
 import { resultRows } from '../src/db/export'
 import { BLOCKS, LANES, LANE_LINES, RETURN_URL, TWIST, WHY_TEXT, silverSql, silverTemplate, slotId, type BlockId, type Settings } from '../src/data/pipelines/kaiyoSellout'
@@ -526,5 +545,199 @@ describe('pipeline: Run again without reset', () => {
     expect(j[1].status).toBe('failed')
     expect(j[1].message).toContain('raw_id, source_file, sale_date')
     expect(j[2].status).toBe('skipped')
+  })
+})
+
+// ---------------------------------------------------------------- Step by step
+
+describe('pipeline: step by step, the rules', () => {
+  it('walks six steps in the order of the Next line', () => {
+    expect(STEPS).toEqual(['copy-files', 'sql-silver', 'dim-customer', 'dim-product', 'fact-sellout', 'card-top-chain'])
+    let s = emptyState()
+    for (const b of STEPS) {
+      expect(nextRequired(s)).toBe(b)
+      s = place(s, b, nextSlotFor(s, b)!)
+    }
+    expect(nextRequired(s)).toBeNull()
+  })
+  it('the active step is the first without a snapshot, and a stage is passed when all its steps are', () => {
+    expect(activeStep({})).toBe('copy-files')
+    expect(activeStep({ 'copy-files': 1, 'sql-silver': 1 })).toBe('dim-customer')
+    expect(activeStep(Object.fromEntries(STEPS.map((b) => [b, 1])))).toBeNull()
+    const some = { 'copy-files': 1, 'sql-silver': 1, 'dim-customer': 1 }
+    expect(stagePassed('gold', some)).toBe(false)
+    expect(stagePassed('silver', some)).toBe(true)
+    expect(stagePassed('source', {})).toBe(true)
+    expect(stepForStage('gold', { ...some, 'dim-product': 1 })).toBe('dim-product')
+    expect(stepForStage('report', some)).toBeNull()
+  })
+  it('after the story turns, silver and what was built on it are done again, bronze is not', () => {
+    const all = Object.fromEntries(STEPS.map((b) => [b, { phase: 'first-pass' }]))
+    expect(Object.keys(freshOnly(all, 'first-pass'))).toHaveLength(6)
+    expect(Object.keys(freshOnly(all, 'fix'))).toEqual(['copy-files'])
+    expect(activeStep(freshOnly(all, 'fix'))).toBe('sql-silver')
+    expect(activeStep(freshOnly({ ...all, 'sql-silver': { phase: 'fix' } }, 'fix'))).toBe('dim-customer')
+  })
+  it('fades help: show, show, hint, hint, on your own, on your own', () => {
+    expect(STEPS.map((_, i) => helpFor(i))).toEqual(['show', 'show', 'hint', 'hint', 'self', 'self'])
+  })
+  it('a run up to a step leaves the later blocks on the board but out of the run', () => {
+    const s = correct()
+    const part = prefixState(s, 'sql-silver')
+    expect(runOrder(part)).toEqual(['copy-files', 'sql-silver'])
+    expect(runOrder(s)).toHaveLength(6)
+    expect(prefixState(s, 'card-top-chain')).toEqual(s)
+    expect(lastStep(s)).toBe('card-top-chain')
+  })
+  it('the mode is remembered; without a choice it depends on whether the pipeline is solved; it does not touch the state', () => {
+    expect(readMode('all', false)).toBe('all')
+    expect(readMode('step', true)).toBe('step')
+    expect(readMode(null, false)).toBe('step')
+    expect(readMode(null, true)).toBe('all')
+    expect(readMode('nonsense', false)).toBe('step')
+    const s = correct()
+    const before = JSON.stringify(s)
+    readMode('all', false)
+    readMode('step', false)
+    expect(JSON.stringify(s)).toBe(before)
+    expect(MODE_KEY).toBe('stratalab.pipeline.mode')
+  })
+  it('lights up untidy bronze cells and changed silver cells', () => {
+    const h = ['raw_id', 'sale_date', 'customer_name', 'sku_code', 'units', 'revenue']
+    const rows = [
+      [1, '2024-02-19', '  Minori #1013 ', 'nett005', '2', '392,44'],
+      [4, '2024-5-20', 'Minori #1013', 'KROS006', '2', '112.19'],
+      [2, '11.03.2024', 'Minori #1013', 'KROS006', '2', '112.19'],
+    ]
+    expect(dirtyMarks(h, rows)).toEqual([
+      [false, false, true, true, false, true],
+      [false, true, false, false, false, false],
+      [false, true, false, false, false, false],
+    ])
+    const before = new Map<number, (string | number | null)[]>([
+      [1, rows[0]],
+      [4, rows[1]],
+    ])
+    const silver = [
+      [1, '2024-02-19', 'Minori #1013', 'NETT005', 2, '392.44'],
+      [4, '2024-05-20', 'Minori #1013', 'KROS006', 2, '112.19'],
+      [9, '2024-05-20', 'x', 'y', 1, '1'],
+    ]
+    expect(changedMarks(h, silver, before, h)).toEqual([
+      [false, false, true, true, false, true],
+      [false, true, false, false, false, false],
+      [false, false, false, false, false, false],
+    ])
+  })
+  it('says what changed in the words of the data', () => {
+    const first = silverChange({ rows: 3110, bronzeRows: 3110, dedup: false, changed: 12, shown: 56 })
+    expect(first).toMatch(/^Same 3,110 rows as bronze\. .*12 of the 56 cells/)
+    expect(first).not.toMatch(/twice|repeat|duplicate|left out/i)
+    expect(silverChange({ rows: 3000, bronzeRows: 3110, dedup: true, changed: 0, shown: 0 })).toMatch(/^110 fewer rows than bronze \(3,110 → 3,000\)/)
+    expect(silverChange({ rows: 3110, bronzeRows: 3110, dedup: true, changed: 0, shown: 0 })).toMatch(/no row was left out/)
+    expect(factChange({ rows: 3110, silverRows: 3110, noKey: 0 })).toMatch(/the same as silver.*Every sale found its store and product/)
+    expect(factChange({ rows: 3110, silverRows: 3110, noKey: 4 })).toMatch(/4 sales found no store or product/)
+    expect(cardChange({ rows: 5, factRows: 3110 })).toMatch(/^3,110 sales became 5 rows, one per chain/)
+    expect(bronzeChange({ rows: 5, files: 1, header: ['column0'], dots: 0, slashes: 0, iso: 0, loose: 0, other: 0, spaced: 0 })).toMatch(/one column, column0/)
+  })
+})
+
+describe('pipeline: step by step, snapshots on the real files', () => {
+  const run = async (state: PipelineState, upto: BlockId) => {
+    await resetWork(port)
+    return runAll(port, prefixState(state, upto))
+  }
+  const snap = async (b: BlockId, dedup = true) => (await takeSnapshot(port, b, { dedup }))!
+  const q = async (sql: string) => Number((await port.query(sql)).rows[0][0])
+
+  it('bronze: the first rows as they came, untidy cells lit, the date formats counted', async () => {
+    await run(correct(), 'copy-files')
+    const s = await snap('copy-files')
+    expect(s.total).toBe(3110)
+    expect(s.rows).toHaveLength(8)
+    expect(s.header.slice(0, 6)).toEqual(['raw_id', 'sale_date', 'customer_name', 'sku_code', 'units', 'revenue'])
+    expect(s.rows[0].slice(1, 6)).toEqual(['2024-02-19', '  Minori #1013 ', 'nett005', '2', '392,44'])
+    expect(s.marks[0].slice(0, 6)).toEqual([false, false, true, true, false, true])
+    expect(s.marks[3][1]).toBe(true) // 2024-5-20
+    expect(await q("SELECT count(*) FROM pipe_kaiyo.bronze_sellout_raw WHERE sale_date LIKE '%.%'")).toBe(803)
+    expect(await q("SELECT count(*) FROM pipe_kaiyo.bronze_sellout_raw WHERE sale_date LIKE '%/%'")).toBe(764)
+    expect(s.change).toMatch(/^3,110 rows from 30 files, copied as they came\. Every column is still text\./)
+    expect(await q("SELECT count(*) FROM pipe_kaiyo.bronze_sellout_raw WHERE regexp_full_match(sale_date, '[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}') AND NOT regexp_full_match(sale_date, '[0-9]{4}-[0-9]{2}-[0-9]{2}')")).toBe(650)
+    expect(s.change).toContain('893 as 2024-03-11, 650 as 2024-3-11, no leading zero, 803 with dots, 764 with slashes.'.replace(/\.$/, ''))
+    expect(s.change).not.toContain('some other way')
+    expect(s.change).toContain('803 with dots')
+    expect(s.change).toContain('764 with slashes')
+    expect(s.change).toContain('919 store names have spaces round them')
+  })
+
+  it('silver in the first pass: the same rows, changed cells lit, nothing said about repeats', async () => {
+    await run({ ...correct(), dedup: false }, 'sql-silver')
+    const s = await snap('sql-silver', false)
+    expect(s.total).toBe(3110)
+    expect(s.change).toMatch(/^Same 3,110 rows as bronze\./)
+    expect(s.change).not.toMatch(/twice|repeat|duplicate|fewer/i)
+    expect(s.header).toEqual(['raw_id', 'source_file', 'sale_date', 'customer_name', 'sku_code', 'units', 'revenue'])
+    expect(s.rows[3][2]).toBe('2024-05-20') // raw_id 4 was "2024-5-20"
+    const lit = (r: number, name: string) => s.marks[r][s.header.indexOf(name)]
+    expect(lit(0, 'customer_name')).toBe(true)
+    expect(lit(0, 'sku_code')).toBe(true)
+    expect(lit(0, 'revenue')).toBe(true)
+    expect(lit(0, 'sale_date')).toBe(false)
+    expect(lit(3, 'sale_date')).toBe(true)
+    expect(lit(0, 'raw_id')).toBe(false)
+    expect(s.change).toContain(`${s.marks.flat().filter(Boolean).length} of the 56 cells`)
+  })
+
+  it('silver in the fix: 110 fewer rows than bronze', async () => {
+    await run(correct(), 'sql-silver')
+    const s = await snap('sql-silver', true)
+    expect(s.total).toBe(3000)
+    expect(s.change).toMatch(/^110 fewer rows than bronze \(3,110 → 3,000\)/)
+  })
+
+  it('gold: stores, products, the fact with its keys lit, and the card with fewer rows', async () => {
+    await run(correct(), 'card-top-chain')
+    const c = await snap('dim-customer')
+    expect(c.total).toBe(144)
+    expect(c.change).toMatch(/^A new table next to silver.*144 stores, one row each\./)
+    const p = await snap('dim-product')
+    expect(p.total).toBe(47)
+    expect(p.change).toContain('47 products')
+    const f = await snap('fact-sellout')
+    expect(f.total).toBe(3000)
+    expect(f.change).toMatch(/^3,000 rows, the same as silver\./)
+    expect(f.change).toContain('Every sale found its store and product.')
+    expect(f.marks[0][f.header.indexOf('customer_id')]).toBe(true)
+    expect(f.marks[0][f.header.indexOf('units')]).toBe(false)
+    const r = await snap('card-top-chain')
+    expect(r.total).toBe(5)
+    expect(r.rows[0][0]).toBe('Minori')
+    expect(r.change).toMatch(/^3,000 sales became 5 rows, one per chain/)
+    expect(r.marks[0][r.header.indexOf('revenue')]).toBe(true)
+  })
+
+  it('a table that is not built has no snapshot, and a partial run leaves the pipeline state alone', async () => {
+    await resetWork(port)
+    expect(await takeSnapshot(port, 'sql-silver', { dedup: true })).toBeNull()
+    expect(await takeSnapshot(port, 'check-unique', { dedup: true })).toBeNull()
+    const state = correct()
+    const before = JSON.stringify(state)
+    await run(state, 'dim-customer')
+    expect(JSON.stringify(state)).toBe(before)
+  })
+
+  it('a copy without the header row still gives a snapshot that says the columns are wrong', async () => {
+    await resetWork(port)
+    await runAll(port, prefixState(correct({ header: false, mode: 'replace' }), 'copy-files'))
+    const s = await snap('copy-files')
+    expect(s.header[0]).toBe('column0')
+    expect(s.change).toMatch(/The files have the columns raw_id, sale_date/)
+  })
+
+  it('a binary copy gives short cells', async () => {
+    await resetWork(port)
+    await runAll(port, prefixState(correct({ format: 'binary', mode: 'replace' }), 'copy-files'))
+    const s = await snap('copy-files')
+    expect(s.rows.every((r) => r.every((c) => String(c).length <= 60))).toBe(true)
   })
 })
