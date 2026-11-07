@@ -80,7 +80,7 @@ missing[missing > 0].rename_axis("column").reset_index(name="missing").sort_valu
       kind: 'task',
       id: 'py-missing-not-promo-5',
       title: 'Lines outside one promotion',
-      question: 'In 2025 (week_start in 2025), how many sellout lines were not sold under promotion 5? Lines with no promotion at all count. Give the number.',
+      question: 'In 2025 only (week_start from 2025-01-01 to 2025-12-31), how many sellout lines were not sold under promotion 5? Lines with no promotion at all count. Give the number.',
       ordered: false,
       skills: ['filter-missing', 'keep-missing', 'size', 'date-part'],
       hints: ['Two kinds of lines qualify: no promo_id, and a promo_id other than 5.', '`!= 5` alone gives NA on the lines with no promotion, so add the missing ones with |.', 'len(y[y["promo_id"].isna() | (y["promo_id"] != 5)]) where y holds the lines of 2025.'],
