@@ -425,8 +425,8 @@ const READABLE = 'max-w-[46rem]'
 function NoteBlock({ block, afterWork }: { block: PracticeNote; afterWork: boolean }) {
   return (
     <div className={afterWork ? 'space-y-2 pt-5 mt-2' : 'space-y-2'} style={afterWork ? { borderTop: '1px solid var(--line)' } : undefined}>
-      <div className="font-semibold" style={{ color: 'var(--muted)', fontWeight: 500 }}>
-        Reminder
+      <div className="font-semibold" style={block.topic ? { color: 'var(--accent)' } : { color: 'var(--muted)', fontWeight: 500 }}>
+        {block.topic ? `New: ${block.topic}` : 'Reminder'}
       </div>
       <p className={`m-0 ${READABLE}`} style={{ fontSize: 15, lineHeight: 1.55 }}>
         <Prose text={block.text} />
@@ -560,6 +560,12 @@ function ExampleBlock({ block }: { block: PracticeExampleCell }) {
       </div>
       <CellEditor value={block.code} onChange={setText} onRun={go} minLines={1} label={`Example: ${block.title}`} />
       <RunResult run={run} />
+      {block.sees && run.status === 'done' && (
+        <p className={`m-0 ${READABLE}`}>
+          <span className="font-semibold">What you see: </span>
+          <Prose text={block.sees} />
+        </p>
+      )}
     </div>
   )
 }

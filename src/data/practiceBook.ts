@@ -10,6 +10,8 @@ export interface PracticeTrap {
 
 export interface PracticeNote {
   kind: 'note'
+  /** a topic the learner has not met yet: the note is headed "New: <topic>" instead of "Reminder", and the example after it is the walk-through */
+  topic?: string
   /** a sentence or two; `code` in backticks */
   text: string
   /** one line of syntax, shown as code */
@@ -39,6 +41,8 @@ export interface PracticeExampleCell {
   title: string
   /** ready to run */
   code: string
+  /** one line on what the result shows, said under it once the cell has run ("What you see:") */
+  sees?: string
 }
 
 export interface PracticeTaskCell {

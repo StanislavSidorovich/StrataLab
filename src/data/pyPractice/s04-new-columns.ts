@@ -8,9 +8,16 @@ export const NEW_COLUMNS: PracticeSection = {
   blocks: [
     {
       kind: 'note',
-      text: 'A new column is computed for every row at once, with no loop. `assign` returns a copy with the column added, and `df["name"] = ...` adds it to the table itself.',
-      syntax: 'df = df.assign(per_unit=df["revenue"] / df["units"])   df["per_unit"] = df["revenue"] / df["units"]',
-      trap: '`assign` does not change `df`: keep its result.',
+      topic: 'a new column',
+      text: 'A new column is computed for every row at once, with no loop. `assign` returns a copy of the table with the column added, and `products["name"] = ...` adds it to the table itself.',
+      trap: '`assign` does not change `products`: keep its result in a variable, or the new column is gone after the cell.',
+    },
+    {
+      kind: 'example',
+      id: 'py-new-columns-assign',
+      title: 'Prices with a 20% tax',
+      code: `products.assign(price_with_tax=products["list_price"] * 1.2)[["product_name", "list_price", "price_with_tax"]].head()`,
+      sees: 'A new last column: each row has its list_price times 1.2, for example 38.0 becomes 45.6. The other columns are as they were.',
     },
     {
       kind: 'task',
@@ -42,14 +49,15 @@ ph.assign(above_min=ph["list_price"] - ph["list_price"].min())[["product_name", 
     },
     {
       kind: 'note',
-      text: '`np.where` chooses between two values for every row, from a condition.',
-      syntax: 'np.where(df["units"] >= 10, "bulk", "regular")',
+      topic: 'a column that chooses between two values',
+      text: '`np.where` takes a condition, a value for the rows where it is true and a value for the rest. It returns one value for every row, so it fits inside `assign`.',
     },
     {
       kind: 'example',
       id: 'py-new-columns-pharma-group',
-      title: 'Two groups from the division',
-      code: `products.assign(group=np.where(products["division"] == "Pharma", "health", "consumer"))["group"].value_counts()`,
+      title: 'Cheap or dear',
+      code: `products.assign(price_class=np.where(products["list_price"] > 100, "dear", "cheap"))[["product_name", "list_price", "price_class"]].head(6)`,
+      sees: 'Prices over 100 are labelled dear and the rest cheap, row by row: 128.0 is dear, 79.0 is cheap.',
     },
     {
       kind: 'task',
@@ -81,8 +89,8 @@ y.assign(kind=np.where(y["units"] > 10, "bulk", "regular"))["kind"].value_counts
     },
     {
       kind: 'note',
-      text: '`np.select` walks a list of conditions and takes the first that is true, so it gives more than two outcomes. A row that meets none gets the `default`.',
-      syntax: 'np.select([df["units"] >= 10, df["units"] >= 5], ["big", "medium"], default="small")',
+      topic: 'more than two outcomes',
+      text: '`np.select` takes a list of conditions and a list of values, and uses the value of the first condition that is true. A row that meets none gets the `default`.',
     },
     {
       kind: 'example',
@@ -94,12 +102,20 @@ y.assign(kind=np.where(y["units"] > 10, "bulk", "regular"))["kind"].value_counts
     default="regular line",
 )
 sellout.assign(kind=kind)["kind"].value_counts()`,
+      sees: 'Three labels with their number of lines: most are regular, 94,600. Order matters: a promo line of 10 units or more meets the first condition and gets "big promo line", not the second.',
     },
     {
       kind: 'note',
-      text: '`pd.cut` puts numbers into bands, which turns a price or a size into a label to count by.',
-      syntax: 'pd.cut(df["units"], [0, 2, 5, np.inf], labels=["low", "mid", "high"])',
+      topic: 'bands of numbers',
+      text: '`pd.cut` puts numbers into bands, which turns a price or a size into a label to count by. Give it the column, the edges of the bands (`np.inf` is an open end) and a label for each band.',
       trap: '`pd.cut` bands include their upper edge: with edges 0, 2 and 5, the number 2 is in the first band.',
+    },
+    {
+      kind: 'example',
+      id: 'py-new-columns-cut',
+      title: 'Three price bands',
+      code: `products.assign(band=pd.cut(products["list_price"], [0, 50, 200, np.inf], labels=["cheap", "regular", "dear"]))[["product_name", "list_price", "band"]].head(8)`,
+      sees: '38.0 is in the first band (0 to 50) and 62.0 in the second (50 to 200). Three edges after the first make three bands, so three labels.',
     },
     {
       kind: 'task',
@@ -113,8 +129,15 @@ sellout.assign(kind=kind)["kind"].value_counts()`,
     },
     {
       kind: 'note',
-      text: '`value_counts` sorts by how often a value comes, and `sort_index` puts the values back in their own order. `rename_axis` names the values and `reset_index(name=...)` names the count, which gives a table with the columns you want.',
-      syntax: 's.value_counts().sort_index().rename_axis("band").reset_index(name="lines")',
+      topic: 'a counts table with your own column names',
+      text: '`value_counts` sorts by how often a value comes, and `sort_index` puts the values back in their own order. `rename_axis` names the column of values and `reset_index(name=...)` names the column of counts.',
+    },
+    {
+      kind: 'example',
+      id: 'py-new-columns-unit-counts',
+      title: 'Products per unit, in alphabetical order',
+      code: `products["unit"].value_counts().sort_index().rename_axis("unit").reset_index(name="products")`,
+      sees: 'A table with the columns unit and products, sorted by unit: L has 13 products, caps 2, g 12, ml 10, sachet 1, tab 9.',
     },
     {
       kind: 'task',
@@ -158,8 +181,8 @@ band.value_counts().sort_index().rename_axis("band").reset_index(name="lines")`,
     },
     {
       kind: 'note',
-      text: '`map` with a dict recodes a column. A value that is not a key of the dict becomes NaN, with no error.',
-      syntax: 'df["category"].map({"Snacks": "Food", "Dairy": "Food"})',
+      topic: 'recoding values with a dict',
+      text: '`map` with a dict recodes a column: each value is replaced by what the dict says for it. A value that is not a key of the dict becomes NaN, with no error.',
       trap: '`value_counts` and `groupby` drop NaN, so a forgotten key makes rows vanish from the totals.',
     },
     {
@@ -167,6 +190,7 @@ band.value_counts().sort_index().rename_axis("band").reset_index(name="lines")`,
       id: 'py-new-columns-division-map',
       title: 'Divisions under new names',
       code: `products["division"].map({"FMCG": "Consumer", "Pharma": "Health"}).value_counts()`,
+      sees: 'The two divisions under their new names, with 29 and 18 products. Both values had a key, so nothing is lost.',
     },
     {
       kind: 'task',
@@ -204,9 +228,15 @@ dept.value_counts().rename_axis("department").reset_index(name="products").sort_
     },
     {
       kind: 'note',
-      text: '`.str` runs text methods on a whole column. `split` cuts the text at a separator and `.str[1]` takes one part, while `extract` pulls out the part of a regex in brackets. A row without a match gives NaN.',
-      syntax: 'df["name"].str.split(" ").str[1]   df["name"].str.extract(r" x(\\d+)$")[0]',
-      trap: '`extract` returns the first match only: anchor the pattern when a name holds several numbers.',
+      topic: 'cutting text into parts',
+      text: '`.str` runs text methods on a whole column. `split(" ")` cuts each text at the spaces into a list of words, and `.str[1]` takes the second word, because counting starts at 0.',
+    },
+    {
+      kind: 'example',
+      id: 'py-new-columns-split',
+      title: 'The second word of a name',
+      code: `products.assign(word2=products["product_name"].str.split(" ").str[1])[["product_name", "word2"]].head()`,
+      sees: '"Aqualis Still 0.5 L" gives Still, and "Aqualis Sparkling 0.5 L" gives Sparkling: one word per row, in a new column.',
     },
     {
       kind: 'task',
@@ -231,9 +261,16 @@ f["product_name"].str.split(" ").str[1].value_counts().rename_axis("variant").re
     },
     {
       kind: 'note',
-      text: 'Use `astype` to change the type of a column: text to numbers, so they can be added up, or numbers to text, so they can be glued to a label.',
-      syntax: 'df["x"].astype(float)   "P" + df["id"].astype(str)',
+      topic: 'changing the type of a column',
+      text: 'Use `astype` to change the type of a column: numbers to text, so they can be glued to a label, or text to numbers, so they can be added up. `astype(str)` makes text and `astype(float)` makes numbers.',
       trap: '`astype(int)` fails on a column that has NaN: use `float`.',
+    },
+    {
+      kind: 'example',
+      id: 'py-new-columns-astype',
+      title: 'A brand and its price in one text',
+      code: `(products["brand"] + " " + products["list_price"].astype(str)).head(3)`,
+      sees: 'list_price is a number, and a number cannot be added to text. After `astype(str)` it is text and joins the brand: Aqualis 38.0.',
     },
     {
       kind: 'task',
@@ -244,6 +281,20 @@ f["product_name"].str.split(" ").str[1].value_counts().rename_axis("variant").re
       skills: ['to-type', 'add-column', 'pick-columns'],
       hints: ['Text and a number cannot be joined as they are.', 'Make product_id text with astype(str), then add it to "P".', 'products.assign(code="P" + products["product_id"].astype(str))[["product_name", "code"]]'],
       solution: `products.assign(code="P" + products["product_id"].astype(str))[["product_name", "code"]]`,
+    },
+    {
+      kind: 'note',
+      topic: 'pulling a number out of text',
+      text: '`extract` keeps the part of the text that matches a pattern in round brackets, and a row without a match gives NaN. The pattern `x(\\d+)$` means: an x, then digits, at the very end. The result is still text.',
+      trap: '`extract` returns the first match only: anchor the pattern when a name holds several numbers.',
+    },
+    {
+      kind: 'example',
+      id: 'py-new-columns-extract',
+      title: 'Tablets in a Pyrexan pack',
+      code: `pyrexan = products[products["brand"] == "Pyrexan"]
+pyrexan.assign(pieces=pyrexan["product_name"].str.extract(r" x(\\d+)$")[0])[["product_name", "pieces"]]`,
+      sees: '"Pyrexan 500 mg x10" gives 10 and "Pyrexan Powder x5" gives 5, but the syrup has no x number at the end, so it gets NaN.',
     },
     {
       kind: 'task',
@@ -257,9 +308,17 @@ f["product_name"].str.split(" ").str[1].value_counts().rename_axis("variant").re
     },
     {
       kind: 'note',
-      text: '`dropna(subset=[...])` removes the rows where one of the listed columns is missing, which keeps only the rows that have a value.',
-      syntax: 'df.dropna(subset=["promo_id"])',
+      topic: 'dropping rows with a gap',
+      text: '`dropna(subset=[...])` removes the rows where one of the listed columns is missing, so only the rows that have a value stay.',
       trap: 'Without `subset`, `dropna()` removes a row for a gap in any column.',
+    },
+    {
+      kind: 'example',
+      id: 'py-new-columns-dropna',
+      title: 'Rows with a promo_id, counted',
+      code: `print(len(sellout))
+len(sellout.dropna(subset=["promo_id"]))`,
+      sees: 'Of 118,449 rows only 23,849 have a promo_id, about a fifth. The rest were dropped.',
     },
     {
       kind: 'task',

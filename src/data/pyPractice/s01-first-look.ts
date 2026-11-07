@@ -7,15 +7,17 @@ export const FIRST_LOOK: PracticeSection = {
   blocks: [
     {
       kind: 'note',
-      text: 'Before any question, find out how big a table is, what its columns hold, and whether their types are what you expect. `shape` and `dtypes` are attributes, so they take no brackets, and `len(df)` gives just the number of rows.',
-      syntax: 'df.shape   len(df)   df.dtypes   df.info()   df.describe()',
+      topic: 'the size and types of a table',
+      text: 'Before any question, find out how big a table is and what its columns hold. `shape` gives the number of rows and columns, `len(sellout)` gives only the rows, and `dtypes` gives the type of each column. `shape` and `dtypes` take no brackets.',
     },
     {
       kind: 'example',
       id: 'py-first-look-shape',
       title: 'Size and types of the sales table',
       code: `print(sellout.shape)
+print(len(sellout))
 sellout.dtypes`,
+      sees: '`shape` is (rows, columns): sellout has 118,449 rows and 8 columns. `len` repeats the row count, and `dtypes` lists a type per column, such as int32 for whole numbers, float64 for decimals and a date type for week_start.',
     },
     {
       kind: 'task',
@@ -29,15 +31,17 @@ sellout.dtypes`,
     },
     {
       kind: 'note',
-      text: 'One column is a Series, and a list of columns is a DataFrame. `nunique` counts different values, and `unique` lists them.',
-      syntax: 'df["brand"]   df[["brand", "category"]]   df["brand"].nunique()',
-      trap: '`df["brand", "category"]` with one pair of brackets looks for one column with that double name: a list of columns needs two pairs.',
+      topic: 'picking columns',
+      text: 'The name of one column in brackets gives that column alone, and a list of names in double brackets gives a smaller table. `head()` shows only the first rows of whatever it follows, which keeps a long result short.',
+      trap: '`products["brand", "category"]` with one pair of brackets looks for one column with that double name: a list of columns needs two pairs.',
     },
     {
       kind: 'example',
       id: 'py-first-look-pick',
-      title: 'Two columns of the catalogue',
-      code: `products[["product_name", "brand"]].head()`,
+      title: 'One column and two columns of the catalogue',
+      code: `print(products["brand"].head(3))
+products[["product_name", "brand"]].head()`,
+      sees: 'The first result is one column, a list of brand names. The second is a table with only the two columns you named.',
     },
     {
       kind: 'task',
@@ -50,10 +54,17 @@ sellout.dtypes`,
       solution: `products[["sku_code", "product_name"]]`,
     },
     {
+      kind: 'note',
+      topic: 'different values',
+      text: '`unique` lists the values of a column, each one once, and `nunique` counts how many different values there are. Use them to learn what a column holds before you filter on it.',
+    },
+    {
       kind: 'example',
       id: 'py-first-look-divisions',
       title: 'The divisions in the catalogue',
-      code: `products["division"].unique()`,
+      code: `print(products["division"].unique())
+products["division"].nunique()`,
+      sees: 'The catalogue has two divisions, FMCG and Pharma, listed once each by `unique`. `nunique` counts them: 2.',
     },
     {
       kind: 'task',
@@ -78,14 +89,16 @@ sellout.dtypes`,
     },
     {
       kind: 'note',
-      text: '`describe` gives the spread of the numbers in one line of code, which is the quickest way to spot a strange value. A single number comes from `max`, `min`, `mean` or `median`, and `min` and `max` on a date column show the period a table covers.',
-      syntax: 'df["units"].describe()   df["units"].mean()   df["units"].median()   df["week_start"].min()',
+      topic: 'the spread of a column',
+      text: '`describe` shows the spread of a column of numbers in one go, which is the quickest way to spot a strange value. A single number comes from `max`, `min`, `mean` or `median`, and on a date column `min` and `max` show the period a table covers.',
     },
     {
       kind: 'example',
       id: 'py-first-look-describe',
       title: 'The spread of units sold',
-      code: `sellout["units"].describe()`,
+      code: `print(sellout["units"].median(), sellout["week_start"].min())
+sellout["units"].describe()`,
+      sees: 'The median is 5 units and the first week is 2024-01-01. `describe` adds the count, the mean (about 9), the quartiles and the extremes: a row sells 1 unit at least and 232 at most.',
     },
     {
       kind: 'task',
@@ -119,8 +132,15 @@ sellout.dtypes`,
     },
     {
       kind: 'note',
-      text: 'These results are plain numbers, so you can do arithmetic on them.',
-      syntax: 'len(df) / df["brand"].nunique()',
+      topic: 'an average per group',
+      text: 'A count is a plain number, so you can divide one count by another. The rows divided by the number of different values in a column is an average per value.',
+    },
+    {
+      kind: 'example',
+      id: 'py-first-look-per-brand',
+      title: 'Products per brand, on average',
+      code: `len(products) / products["brand"].nunique()`,
+      sees: '47 products spread over 9 brands is about 5.2 products per brand. The result is a plain number, so it can go into more arithmetic.',
     },
     {
       kind: 'task',

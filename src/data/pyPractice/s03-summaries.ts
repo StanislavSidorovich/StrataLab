@@ -7,14 +7,15 @@ export const SUMMARIES: PracticeSection = {
   blocks: [
     {
       kind: 'note',
-      text: '`value_counts` is the fastest answer to "what is in this column, and how often". It sorts from the most frequent and gives a named index, so the values are a column of the answer once `reset_index` makes it a table.',
-      syntax: 'df["brand"].value_counts()   df["brand"].value_counts(normalize=True)   df["brand"].value_counts().reset_index()',
+      topic: 'counting the values of a column',
+      text: '`value_counts` answers "what is in this column, and how often": it lists each value with its count, the most frequent first. With `normalize=True` it gives shares of 1 instead of counts.',
     },
     {
       kind: 'example',
       id: 'py-summaries-categories',
       title: 'Products per category',
       code: `products["category"].value_counts()`,
+      sees: 'Each category once, with its number of products: OTC has 18, the most, and the list ends with the smallest. The categories are the row labels, not a column.',
     },
     {
       kind: 'task',
@@ -37,10 +38,16 @@ export const SUMMARIES: PracticeSection = {
       solution: `products["division"].value_counts(normalize=True)`,
     },
     {
+      kind: 'note',
+      topic: 'counts as a table',
+      text: 'The values of `value_counts` are row labels, so you cannot sort by them or use them as a column. `reset_index()` turns the result into an ordinary table with the values in a column and the counts in another.',
+    },
+    {
       kind: 'example',
       id: 'py-summaries-categories-table',
       title: 'The same counts as a table',
       code: `products["category"].value_counts().reset_index()`,
+      sees: 'The same five rows, now with two named columns, category and count, and ordinary row numbers 0 to 4.',
     },
     {
       kind: 'task',
@@ -54,14 +61,17 @@ export const SUMMARIES: PracticeSection = {
     },
     {
       kind: 'note',
-      text: 'A filter followed by a total answers most first questions without any grouping. Totals skip missing values, so `count` on a column tells how many rows have one. The mean of True and False is the share of True.',
-      syntax: 'df[df["x"] == 1]["units"].sum()   df["promo_id"].count()   df["promo_id"].isna().mean()   round(x, 1)   df["x"].round(1)',
+      topic: 'a total of the rows you filtered',
+      text: 'A filter, one column and a total answer most first questions: keep the rows, pick the column, then call `sum` (or `mean`, `max`). Totals skip missing values, and `count` tells how many rows have a value.',
     },
     {
       kind: 'example',
       id: 'py-summaries-total-2025',
       title: 'Sell-out revenue in 2025',
-      code: `sellout[sellout["week_start"].dt.year == 2025]["revenue"].sum()`,
+      code: `y = sellout[sellout["week_start"].dt.year == 2025]
+print(y["revenue"].sum())
+y["promo_id"].count()`,
+      sees: 'The first number is the revenue of 2025, about 51.5 million. The second counts the 2025 rows that have a promo_id: 9,845. The rows without one are not counted.',
     },
     {
       kind: 'task',
@@ -72,6 +82,18 @@ export const SUMMARIES: PracticeSection = {
       skills: ['filter-missing', 'one-number'],
       hints: ['First the rows with a promo_id, then one column of them.', 'sellout[sellout["promo_id"].notna()]["units"]', 'Finish with .sum().'],
       solution: `sellout[sellout["promo_id"].notna()]["units"].sum()`,
+    },
+    {
+      kind: 'note',
+      topic: 'a share of the rows',
+      text: 'A condition gives True or False for every row, and the mean of True and False is the share of True. Multiply by 100 for a percentage, and wrap it in `round(x, 1)` to keep one decimal.',
+    },
+    {
+      kind: 'example',
+      id: 'py-summaries-pharma-share',
+      title: 'The share of Pharma products',
+      code: `round((products["division"] == "Pharma").mean() * 100, 1)`,
+      sees: '38.3: of the 47 products, 18 are Pharma, which is 38.3 per cent.',
     },
     {
       kind: 'task',

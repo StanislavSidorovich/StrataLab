@@ -7,14 +7,16 @@ export const FILTER: PracticeSection = {
   blocks: [
     {
       kind: 'note',
-      text: 'A condition on a column gives a True or False for each row, and the table keeps the rows with True.',
-      syntax: 'df[df["units"] > 100]',
+      topic: 'keeping the rows that meet a condition',
+      text: 'A condition on a column, such as `sellout["units"] > 100`, gives True or False for every row. Put it inside the brackets of the table, and the table keeps only the rows with True.',
     },
     {
       kind: 'example',
       id: 'py-filter-big-weeks',
       title: 'Weeks an outlet sold over 100 units',
-      code: `sellout[sellout["units"] > 100].head()`,
+      code: `print((sellout["units"] > 100).head(3))
+sellout[sellout["units"] > 100].head()`,
+      sees: 'The first lines are the True/False answers for the first three rows (all False). The table then keeps only the rows with True: 106 rows in all, and `head()` shows the first five.',
     },
     {
       kind: 'task',
@@ -28,8 +30,15 @@ export const FILTER: PracticeSection = {
     },
     {
       kind: 'note',
-      text: 'A filter gives a table, so you can pick columns from it in the next pair of brackets.',
-      syntax: 'df[df["units"] > 100][["week_start", "units"]]',
+      topic: 'filter first, then pick columns',
+      text: 'A filter gives a table, so you can pick columns from it with a second pair of brackets. The first brackets choose the rows, and the double brackets after them choose the columns.',
+    },
+    {
+      kind: 'example',
+      id: 'py-filter-rows-then-columns',
+      title: 'Big weeks, three columns',
+      code: `sellout[sellout["units"] > 100][["week_start", "customer_id", "units"]].head()`,
+      sees: 'The same rows as before, but only the three columns you listed.',
     },
     {
       kind: 'task',
@@ -43,14 +52,15 @@ export const FILTER: PracticeSection = {
     },
     {
       kind: 'note',
-      text: '`sort_values` orders the rows by one column or a list of them, and `ascending` gives the direction of each.',
-      syntax: 'df.sort_values(["list_price", "brand"], ascending=[False, True])',
+      topic: 'sorting rows',
+      text: '`sort_values` orders the rows by a column, and `ascending=False` puts the largest first. To break ties, pass a list of columns and a list of directions: the first `True` or `False` belongs to the first column, the second to the second.',
     },
     {
       kind: 'example',
       id: 'py-filter-sorted-prices',
-      title: 'The most expensive products',
-      code: `products.sort_values("list_price", ascending=False).head()`,
+      title: 'Division first, then the dearest',
+      code: `products.sort_values(["division", "list_price"], ascending=[True, False])[["division", "product_name", "list_price"]].head(6)`,
+      sees: 'FMCG rows come first because division is sorted A to Z (True), and Pharma would follow. Inside a division the prices go from the highest down (False).',
     },
     {
       kind: 'task',
@@ -61,6 +71,16 @@ export const FILTER: PracticeSection = {
       skills: ['sort'],
       hints: ['Two sort keys, because some prices are the same.', 'Pass a list of columns and a list for ascending.', 'products.sort_values(["list_price", "product_name"], ascending=[False, True])'],
       solution: `products.sort_values(["list_price", "product_name"], ascending=[False, True])`,
+    },
+    {
+      kind: 'task',
+      id: 'py-filter-fmcg-by-brand',
+      title: 'The FMCG range by brand',
+      question: 'Which products are in the division FMCG? Show all their columns, sorted by brand from A to Z, then by list_price from the highest, then by product_name.',
+      ordered: true,
+      skills: ['filter', 'sort'],
+      hints: ['Filter on division first, then sort the result.', 'Three sort keys, and the directions differ: brand goes up, list_price goes down.', 'products[products["division"] == "FMCG"].sort_values(["brand", "list_price", "product_name"], ascending=[True, False, True])'],
+      solution: `products[products["division"] == "FMCG"].sort_values(["brand", "list_price", "product_name"], ascending=[True, False, True])`,
     },
     {
       kind: 'task',
@@ -80,9 +100,16 @@ export const FILTER: PracticeSection = {
     },
     {
       kind: 'note',
-      text: 'Join conditions with `&` and `|`, each in its own brackets.',
-      syntax: 'df[(df["units"] > 100) & (df["revenue"] < 5000)]',
+      topic: 'two conditions at once',
+      text: 'Join two conditions with `&` when both must hold, or with `|` when either is enough. Each condition goes in its own round brackets.',
       trap: '`and` and `or` raise an error on columns, and without brackets `&` binds before `>`.',
+    },
+    {
+      kind: 'example',
+      id: 'py-filter-two-conditions',
+      title: 'FMCG products over 170',
+      code: `products[(products["division"] == "FMCG") & (products["list_price"] > 170)][["product_name", "division", "list_price"]]`,
+      sees: 'Only five rows pass both tests: FMCG and above 170. With `|` in place of `&`, every FMCG product and every product over 170 would stay.',
     },
     {
       kind: 'task',
@@ -96,14 +123,15 @@ export const FILTER: PracticeSection = {
     },
     {
       kind: 'note',
-      text: '`isin` tests against a list and `between` against a range that includes both ends. `.str.contains` looks inside text.',
-      syntax: 'df["brand"].isin(["a", "b"])   df["units"].between(1, 5)   df["name"].str.contains("x")',
+      topic: 'a value from a list',
+      text: '`isin` tests each row against a list of allowed values. It replaces a chain of `==` joined with `|`.',
     },
     {
       kind: 'example',
-      id: 'py-filter-cheap-fmcg',
-      title: 'Low-priced products outside Pharma',
-      code: `products[(products["division"] != "Pharma") & products["list_price"].between(50, 100)][["product_name", "list_price"]]`,
+      id: 'py-filter-isin-brands',
+      title: 'Two brands from one list',
+      code: `products[products["brand"].isin(["Gastrivo", "Rhinolar"])][["product_name", "brand"]]`,
+      sees: 'Every product of either brand, eight rows. A brand that is not in the list does not appear.',
     },
     {
       kind: 'task',
@@ -116,6 +144,23 @@ export const FILTER: PracticeSection = {
       solution: `products[products["brand"].isin(["Aqualis", "Fruvia"])]`,
     },
     {
+      kind: 'note',
+      topic: 'a range of values',
+      text: '`between` keeps the rows whose value lies in a range, and both ends of the range are included. It works on numbers and on dates.',
+    },
+    {
+      kind: 'example',
+      id: 'py-filter-cheap-fmcg',
+      title: 'Prices from 62 to 74',
+      code: `products[products["list_price"].between(62, 74)][["product_name", "list_price"]]`,
+      sees: 'Prices of 62 and of 74 are both in the table, because the ends count. Anything cheaper than 62 or dearer than 74 is out.',
+    },
+    {
+      kind: 'note',
+      text: 'To count the rows a filter keeps, wrap it in `len(...)`.',
+      syntax: 'len(products[products["division"] == "Pharma"])',
+    },
+    {
       kind: 'task',
       id: 'py-filter-q1-2026',
       title: 'Rows of the first quarter of 2026',
@@ -124,6 +169,19 @@ export const FILTER: PracticeSection = {
       skills: ['size', 'filter-list'],
       hints: ['A range on one column.', 'between takes dates as text: "2026-01-01".', 'len(sellout[sellout["week_start"].between("2026-01-01", "2026-03-31")])'],
       solution: `len(sellout[sellout["week_start"].between("2026-01-01", "2026-03-31")])`,
+    },
+    {
+      kind: 'note',
+      topic: 'text that contains a word',
+      text: '`.str.contains` keeps the rows whose text has a given piece anywhere inside. The match is exact, capital letters included.',
+      trap: 'Searching for "kids" in lower case finds nothing here: the names say "Kids", and no match gives an empty table, not an error.',
+    },
+    {
+      kind: 'example',
+      id: 'py-filter-contains-kids',
+      title: 'Products with Kids in the name',
+      code: `products[products["product_name"].str.contains("Kids")][["product_name", "brand"]]`,
+      sees: 'Three products from three brands, wherever the word stands in the name.',
     },
     {
       kind: 'task',
@@ -137,14 +195,15 @@ export const FILTER: PracticeSection = {
     },
     {
       kind: 'note',
-      text: '`loc` picks rows and columns in one step, which reads better once conditions get long. `nlargest` gives the top rows of a column without a full sort.',
-      syntax: 'df.loc[df["units"] > 100, ["week_start", "units"]]   df.nlargest(5, "units")',
+      topic: 'the top rows of a column',
+      text: '`nlargest` gives the rows with the largest values of a column, biggest first, without sorting the whole table. Give it how many rows and which column.',
     },
     {
       kind: 'example',
       id: 'py-filter-top-lines',
       title: 'The five biggest sales lines',
       code: `sellout.nlargest(5, "revenue")[["week_start", "customer_id", "product_id", "revenue"]]`,
+      sees: 'Five rows, the one with the highest revenue on top. `nsmallest` is the same from the other end.',
     },
     {
       kind: 'task',
@@ -158,8 +217,15 @@ export const FILTER: PracticeSection = {
     },
     {
       kind: 'note',
-      text: '`notna` is the opposite of `isna`. `.dt` reads a part of a date column, such as its year.',
-      syntax: 'df["promo_id"].notna()   df["week_start"].dt.year == 2025',
+      topic: 'rows that have a value',
+      text: 'A gap in a column is missing, shown as NaN or as <NA>. `notna` is True where a value is there, and `isna` is the opposite.',
+    },
+    {
+      kind: 'example',
+      id: 'py-filter-notna',
+      title: 'Rows with a promo_id',
+      code: `sellout[sellout["promo_id"].notna()][["week_start", "customer_id", "promo_id"]].head()`,
+      sees: 'Every row kept has a promo_id. The rows with a gap are gone, and `isna` would have kept exactly those.',
     },
     {
       kind: 'task',
@@ -173,6 +239,18 @@ export const FILTER: PracticeSection = {
       traps: [{ code: `len(sellout[sellout["promo_id"].isna()])`, says: '`isna` keeps the rows without a promotion. Rows on one have a `promo_id`, so the test is `notna`.' }],
     },
     {
+      kind: 'note',
+      topic: 'a part of a date',
+      text: '`.dt` reads a part of a date column: `.dt.year` and `.dt.month` give a number for every row. Compare that number to filter by year or by month.',
+    },
+    {
+      kind: 'example',
+      id: 'py-filter-dt-month',
+      title: 'Weeks that start in December',
+      code: `sellout[sellout["week_start"].dt.month == 12][["week_start", "units"]].head()`,
+      sees: 'Only dates in December are left, from several years. `.dt.year == 2025` would keep one year.',
+    },
+    {
       kind: 'task',
       id: 'py-filter-rows-2025',
       title: 'Rows of 2025',
@@ -181,6 +259,18 @@ export const FILTER: PracticeSection = {
       skills: ['size', 'date-part'],
       hints: ['A condition on the year of week_start.', 'df["week_start"].dt.year == 2025 is the condition.', 'len(sellout[sellout["week_start"].dt.year == 2025])'],
       solution: `len(sellout[sellout["week_start"].dt.year == 2025])`,
+    },
+    {
+      kind: 'note',
+      topic: 'rows and columns in one step',
+      text: '`loc` takes the rows condition and the list of columns inside one pair of brackets, separated by a comma. It reads better than two bracket pairs once the conditions get long.',
+    },
+    {
+      kind: 'example',
+      id: 'py-filter-loc',
+      title: 'Big weeks with loc',
+      code: `sellout.loc[sellout["units"] > 100, ["week_start", "customer_id", "units"]].head()`,
+      sees: 'The same table as with two pairs of brackets: rows over 100 units, three columns.',
     },
     {
       kind: 'task',
