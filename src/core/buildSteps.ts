@@ -1,7 +1,8 @@
 // Applied steps of the build page (spec docs/build-kaiyo-sales-spec.md, 2.6 and 3.3 to 3.5): a step is a SELECT that reads
 // `{prev}`; the clean table of a source is rebuilt from bronze through the whole list. Pure: the engine part is
 // src/db/buildRun.ts. What is kept in localStorage is only {id, kind, params}; the SQL is written again on reading.
-import { CLEAN_IDS, GIVEN_SQL, SCHEMA, sourceById, type BuildSourceId, type CleanId } from '../data/build/kaiyoSales'
+import { BUILD_DIAGNOSIS, CLEAN_IDS, GIVEN_SQL, SCHEMA, sourceById, type BuildSourceId, type CleanId } from '../data/build/kaiyoSales'
+import { DIAGNOSIS_TEXT } from '../data/pipelines/kaiyoSellout'
 import { checkBlank } from './pipeline'
 
 export type StepKind = 'given' | 'distinct' | 'latest' | 'trim' | 'upper' | 'dedup'
@@ -196,3 +197,86 @@ export function passedInOrder(list: readonly unknown[]): CleanId[] {
 export const activeCard = (passed: readonly CleanId[]): CleanId | null => CLEAN_IDS.find((c) => !passed.includes(c)) ?? null
 
 export const cleanDone = (passed: readonly CleanId[]) => CLEAN_IDS.every((c) => passed.includes(c))
+
+// ---------------------------------------------------------------- diagnoses (3.3 to 3.5)
+
+export interface Diagnosis {
+  ok: boolean
+  /** the line to show; null when passed */
+  line: string | null
+}
+
+export interface P1Facts {
+  /** SKUs not written the standard way */
+  c1: number
+  /** SKUs sold in the files that products can't find */
+  c2: number
+  /** sales rows without a product */
+  rowsWithoutProduct: number
+  /** rows different from the reference, both ways */
+  diff: number
+  /** SKUs that are not in capitals, SKUs with edge spaces (as they are in the table) */
+  lowerLeft: string[]
+  spacesLeft: string[]
+  /** columns other than sku_code that a Trim or Uppercase step was put on */
+  otherColumns: string[]
+}
+
+export function diagnoseP1(f: P1Facts): Diagnosis {
+  if (f.c1 === 0 && f.c2 === 0 && f.diff === 0) return { ok: true, line: null }
+  if (f.c1 > 0 && f.otherColumns.length > 0) return { ok: false, line: BUILD_DIAGNOSIS.skuWrongColumn(f.otherColumns[0]) }
+  if (f.spacesLeft.length === 0 && f.lowerLeft.length > 0) return { ok: false, line: BUILD_DIAGNOSIS.skuCase(f.lowerLeft) }
+  if (f.lowerLeft.length === 0 && f.spacesLeft.length > 0) return { ok: false, line: BUILD_DIAGNOSIS.skuSpaces(f.spacesLeft) }
+  if (f.c2 > 0) return { ok: false, line: BUILD_DIAGNOSIS.skuMissing(f.c2, f.rowsWithoutProduct) }
+  return { ok: false, line: BUILD_DIAGNOSIS.generic }
+}
+
+export interface P2Facts {
+  rows: number
+  /** copies still in (the check) */
+  twice: number
+  /** rows different from the reference, both ways */
+  diff: number
+  blank: string
+  /** the blank was refused by the engine, with the message */
+  error: string | null
+}
+
+export function diagnoseP2(f: P2Facts): Diagnosis {
+  if (f.error) return { ok: false, line: BUILD_DIAGNOSIS.syntax(f.error, CLEAN_COLUMNS.sales.slice()) }
+  if (f.twice === 0 && f.diff === 0) return { ok: true, line: null }
+  if (/\braw_id\b/i.test(f.blank)) return { ok: false, line: DIAGNOSIS_RAW_ID }
+  if (f.twice === 0) return { ok: false, line: TOO_SHORT(f.rows, 3000) }
+  return { ok: false, line: BUILD_DIAGNOSIS.twice(f.twice) }
+}
+
+export interface P3Facts {
+  rows: number
+  /** customers still in twice (the check) */
+  twice: number
+  /** rows of the table not in the reference / reference rows missing from the table */
+  notInRef: number
+  refMissing: number
+  /** the learner's steps on customers */
+  steps: StepSpec[]
+  /** the first stale store (Kaiyo #1017): its city in the table, its current city and date in the reference */
+  sample: { name: string; city: string; refCity: string; refDate: string } | null
+}
+
+export function diagnoseP3(f: P3Facts): Diagnosis {
+  if (f.twice === 0 && f.notInRef === 0 && f.refMissing === 0) return { ok: true, line: null }
+  if (f.twice > 0 && f.steps.some((s) => s.kind === 'distinct')) return { ok: false, line: BUILD_DIAGNOSIS.distinctKeepsBoth(f.twice) }
+  if (f.twice === 0 && f.rows < 144) {
+    const key = [...f.steps].reverse().find((s) => s.kind === 'latest')?.params.key ?? 'that column'
+    return { ok: false, line: BUILD_DIAGNOSIS.keyTooWide(key, f.rows) }
+  }
+  if (f.twice === 0 && f.sample && f.sample.city !== f.sample.refCity) {
+    return { ok: false, line: BUILD_DIAGNOSIS.keptOldest(f.sample.name, f.sample.city, f.sample.refCity, f.sample.refDate) }
+  }
+  if (f.twice > 0) return { ok: false, line: BUILD_DIAGNOSIS.stillTwice(f.twice) }
+  return { ok: false, line: BUILD_DIAGNOSIS.generic }
+}
+
+// the pipeline's lines, imported, not copied (3.4)
+const DIAGNOSIS_RAW_ID = DIAGNOSIS_TEXT.rawId
+const TOO_SHORT = DIAGNOSIS_TEXT.tooShort

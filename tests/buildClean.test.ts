@@ -7,9 +7,10 @@ import type { ResultData } from '../src/core/check'
 import { CLEAN_COLUMNS, addSpec, chainSql, dedupSql, emptyWork, latestSql, makeStep, readWork, removeSpec, shownSql, stepsOf, trimSql, upperSql, type StepSpec } from '../src/core/buildSteps'
 import { readBuild } from '../src/core/build'
 import { resultRows } from '../src/db/export'
-import { applySteps, connect, prepare, quickLook, restore } from '../src/db/buildRun'
+import { applySteps, checkP1, checkP2, checkP3, connect, prepare, quickLook, restore } from '../src/db/buildRun'
 import type { SqlPort } from '../src/db/pipelineRun'
-import { BUILD_SOURCES, WATCH_STEPS } from '../src/data/build/kaiyoSales'
+import { DIAGNOSIS_TEXT } from '../src/data/pipelines/kaiyoSellout'
+import { BUILD_DIAGNOSIS, BUILD_SOURCES, WATCH_STEPS } from '../src/data/build/kaiyoSales'
 
 const require = createRequire(import.meta.url)
 
@@ -175,5 +176,121 @@ describe('restore', () => {
   })
   it('turns a SQL error into a short message', async () => {
     await expect(applySteps(port, 'sales', [{ id: 's1', kind: 'dedup', params: { blank: 'no_such_column' } }])).rejects.toThrow(/no_such_column/i)
+  })
+})
+
+// ---------------------------------------------------------------- Б4b: P1, P2, P3 (the tables of 3.3 to 3.5)
+
+const sp = (kind: StepSpec['kind'], params: Record<string, string> = {}, id = 's1'): StepSpec => ({ id, kind, params })
+const DEDUP = (blank: string) => [sp('dedup', { blank })]
+
+describe('P1: SKUs in products (3.3)', () => {
+  const run = async (products: StepSpec[], p2Done: boolean) => {
+    await applySteps(port, 'sales', p2Done ? DEDUP('sale_date, customer_name, sku_code') : [])
+    await applySteps(port, 'products', products)
+    return checkP1(port, products)
+  }
+  const T1 = sp('trim', { column: 'sku_code' }, 's1')
+  const U1 = sp('upper', { column: 'sku_code' }, 's2')
+  // name, steps, c1 = c2, rows without product (P2 not done), (P2 done), diff
+  const cases: [string, StepSpec[], number, number, number, number][] = [
+    ['nothing', [], 6, 746, 714, 12],
+    ['Trim only', [T1], 3, 385, 368, 6],
+    ['Uppercase only', [sp('upper', { column: 'sku_code' }, 's1')], 4, 478, 458, 8],
+    ['Trim, Uppercase', [T1, U1], 0, 0, 0, 0],
+    ['Uppercase, Trim', [sp('upper', { column: 'sku_code' }, 's1'), sp('trim', { column: 'sku_code' }, 's2')], 0, 0, 0, 0],
+    ['Trim on product_name', [sp('trim', { column: 'product_name' })], 6, 746, 714, 12],
+  ]
+  for (const [name, steps, c, noDone, noOk, diff] of cases) {
+    it(`${name}: c1 = c2 = ${c}, rows without product ${noDone} / ${noOk}, diff ${diff}`, async () => {
+      const a = await run(steps, false)
+      expect([a.facts.c1, a.facts.c2, a.facts.rowsWithoutProduct, a.facts.diff]).toEqual([c, c, noDone, diff])
+      const b = await run(steps, true)
+      expect([b.facts.c1, b.facts.c2, b.facts.rowsWithoutProduct, b.facts.diff]).toEqual([c, c, noOk, diff])
+      expect(b.ok).toBe(c === 0)
+      expect(b.chips.every((x) => x.ok)).toBe(c === 0)
+    })
+  }
+  it('names the SKUs left, as the CLI did', async () => {
+    expect((await run([T1], true)).line).toBe(BUILD_DIAGNOSIS.skuCase(['aqua002', 'nett002', 'milv004']))
+    expect((await run([sp('upper', { column: 'sku_code' })], true)).line).toBe(BUILD_DIAGNOSIS.skuSpaces(['FRUV002 ', ' KROS001', 'MILV001  ', ' MILV004']))
+    expect((await run([sp('trim', { column: 'product_name' })], true)).line).toBe(BUILD_DIAGNOSIS.skuWrongColumn('product_name'))
+    expect((await run([], true)).line).toBe(BUILD_DIAGNOSIS.skuMissing(6, 714))
+    expect((await run([T1, U1], true)).line).toBeNull()
+  })
+})
+
+describe('P2: sales sent twice (3.4)', () => {
+  const rows: [string, number, number, number][] = [
+    ['sale_date, customer_name, sku_code', 3000, 0, 0],
+    ['raw_id', 3110, 110, 110],
+    ['customer_name, sku_code', 660, 0, 2340],
+    ['sale_date, sku_code', 2049, 0, 951],
+    ['sale_date, customer_name', 2350, 0, 650],
+  ]
+  it('(step not added): 3,110 rows, check 110, diff 110', async () => {
+    await applySteps(port, 'sales', [])
+    const r = await checkP2(port, '')
+    expect([r.facts.rows, r.facts.twice, r.facts.diff]).toEqual([3110, 110, 110])
+    expect(r.line).toBe(BUILD_DIAGNOSIS.twice(110))
+    expect(r.ok).toBe(false)
+  })
+  for (const [blank, rowsN, check, diff] of rows) {
+    it(`blank ${blank}: ${rowsN} rows, check ${check}, diff ${diff}`, async () => {
+      await applySteps(port, 'sales', DEDUP(blank))
+      const r = await checkP2(port, blank)
+      expect([r.facts.rows, r.facts.twice, r.facts.diff]).toEqual([rowsN, check, diff])
+      expect(r.ok).toBe(diff === 0)
+    })
+  }
+  it('passes by the result, in any order and any case', async () => {
+    for (const blank of ['sale_date, customer_name, sku_code', 'SKU_CODE, Sale_Date, customer_name', 'source_file, sale_date, customer_name, sku_code', 'sale_date, customer_name, sku_code, units, revenue']) {
+      await applySteps(port, 'sales', DEDUP(blank))
+      const r = await checkP2(port, blank)
+      expect([r.ok, r.facts.rows, r.line], blank).toEqual([true, 3000, null])
+    }
+  })
+  it('diagnoses raw_id, a key too short, and a refused blank', async () => {
+    await applySteps(port, 'sales', DEDUP('raw_id'))
+    expect((await checkP2(port, 'raw_id')).line).toBe(DIAGNOSIS_TEXT.rawId)
+    await applySteps(port, 'sales', DEDUP('customer_name, sku_code'))
+    expect((await checkP2(port, 'customer_name, sku_code')).line).toContain('silver kept 660 of 3,000')
+    const err = await applySteps(port, 'sales', DEDUP('no_such_column')).catch((e: Error) => e.message)
+    expect(typeof err).toBe('string')
+    await applySteps(port, 'sales', [])
+    const r = await checkP2(port, 'no_such_column', String(err))
+    expect(r.line).toBe(BUILD_DIAGNOSIS.syntax(String(err), CLEAN_COLUMNS.sales.slice()))
+  })
+})
+
+describe('P3: stale customers (3.5)', () => {
+  const latest = (key: string, dir: 'newest' | 'oldest' = 'newest', order = 'updated_at') => [sp('latest', { key, order, direction: dir })]
+  const cases: [string, StepSpec[], number, number, number, number][] = [
+    ['nothing', [], 148, 4, 4, 0],
+    ['Remove duplicates', [sp('distinct')], 148, 4, 4, 0],
+    ['customer_id, updated_at, Newest', latest('customer_id'), 144, 0, 0, 0],
+    ['customer_name, updated_at, Newest', latest('customer_name'), 144, 0, 0, 0],
+    ['customer_id, updated_at, Oldest', latest('customer_id', 'oldest'), 144, 0, 4, 4],
+    ['chain_name', latest('chain_name'), 13, 0, 0, 131],
+    ['city', latest('city'), 32, 0, 1, 113],
+  ]
+  for (const [name, steps, rowsN, check, extra, missing] of cases) {
+    it(`${name}: ${rowsN} rows, check ${check}, not in ref ${extra}, ref missing ${missing}`, async () => {
+      await applySteps(port, 'customers', steps)
+      const r = await checkP3(port, steps)
+      expect([r.facts.rows, r.facts.twice, r.facts.notInRef, r.facts.refMissing]).toEqual([rowsN, check, extra, missing])
+      expect(r.ok).toBe(extra === 0 && missing === 0 && check === 0)
+    })
+  }
+  it('says why, with the values of the CLI', async () => {
+    const line = async (steps: StepSpec[]) => {
+      await applySteps(port, 'customers', steps)
+      return (await checkP3(port, steps)).line
+    }
+    expect(await line([sp('distinct')])).toBe(BUILD_DIAGNOSIS.distinctKeepsBoth(4))
+    expect(await line(latest('customer_id', 'oldest'))).toBe(BUILD_DIAGNOSIS.keptOldest('Kaigan #1017', 'Shizuoka', 'Nagoya', '2026-03-27'))
+    expect(await line(latest('chain_name'))).toBe(BUILD_DIAGNOSIS.keyTooWide('chain_name', 13))
+    expect(await line([])).toBe(BUILD_DIAGNOSIS.stillTwice(4))
+    expect(await line(latest('customer_id'))).toBeNull()
   })
 })

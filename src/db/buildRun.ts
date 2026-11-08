@@ -1,11 +1,11 @@
 // The engine of the build-by-hand page (`#build=kaiyo-sales`): prepares schema `build_kaiyo`, registers the 33 files,
 // connects a source, drops the work tables. Same port as the pipeline, so the page and the tests run the same code.
 import type { ResultData } from '../core/check'
-import { chainSql, stepsOf, type BuildWork, type Peek, type StepSpec } from '../core/buildSteps'
+import { CLEAN_COLUMNS, chainSql, diagnoseP1, diagnoseP2, diagnoseP3, stepsOf, type BuildWork, type Diagnosis, type P1Facts, type P2Facts, type P3Facts, type Peek, type StepSpec } from '../core/buildSteps'
 import { readableError } from '../core/sqlPractice'
 import { csvText } from '../core/csvText'
 import { exportText, type SqlPort } from './pipelineRun'
-import { BUILD_SOURCES, CONNECT_SQL, QUICK_LOOK_SQL, FILE_SQL, REF_SQL, SCHEMA, SOURCE_FOLDER, SOURCE_TABLES, T, WORK_TABLES, sourceById, type BuildSourceId } from '../data/build/kaiyoSales'
+import { BUILD_SOURCES, CHECK_SQL, CONNECT_SQL, QUICK_LOOK_SQL, FILE_SQL, REF_SQL, SCHEMA, SOURCE_FOLDER, SOURCE_TABLES, T, WORK_TABLES, sourceById, type BuildSourceId } from '../data/build/kaiyoSales'
 
 /** One preparation per port, shared by callers that arrive while it runs. */
 const preparing = new WeakMap<SqlPort, Promise<string[]>>()
@@ -110,4 +110,94 @@ export async function restore(port: SqlPort, work: BuildWork): Promise<void> {
     await connect(port, id)
     await applySteps(port, id, work.steps[id])
   }
+}
+
+// ---------------------------------------------------------------- the checks of P1 to P3 (3.3 to 3.5)
+
+export interface CheckChip {
+  label: string
+  value: number
+  ok: boolean
+}
+
+export interface CheckReport extends Diagnosis {
+  chips: CheckChip[]
+}
+
+const num = async (port: SqlPort, sql: string) => Number((await port.query(sql)).rows[0][0])
+const strings = async (port: SqlPort, sql: string) => (await port.query(sql)).rows.map((r) => String(r[0]))
+
+/** Rows of `table` not in `ref` and rows of `ref` not in `table`, on the source's columns (`EXCEPT ALL` both ways). */
+export async function diffAgainstRef(port: SqlPort, id: BuildSourceId, ref: string): Promise<{ extra: number; missing: number }> {
+  const cols = CLEAN_COLUMNS[id].join(', ')
+  const clean = T(sourceById(id).clean)
+  const extra = await num(port, `SELECT count(*) FROM (SELECT ${cols} FROM ${clean} EXCEPT ALL SELECT ${cols} FROM ${T(ref)})`)
+  const missing = await num(port, `SELECT count(*) FROM (SELECT ${cols} FROM ${T(ref)} EXCEPT ALL SELECT ${cols} FROM ${clean})`)
+  return { extra, missing }
+}
+
+export async function factsP1(port: SqlPort, specs: readonly StepSpec[]): Promise<P1Facts> {
+  const d = await diffAgainstRef(port, 'products', 'ref_products')
+  return {
+    c1: await num(port, CHECK_SQL.p1c1),
+    c2: await num(port, CHECK_SQL.p1c2),
+    rowsWithoutProduct: await num(port, CHECK_SQL.p1rows),
+    diff: d.extra + d.missing,
+    lowerLeft: await strings(port, `SELECT sku_code FROM ${T('clean_products')} WHERE sku_code <> upper(sku_code) ORDER BY product_id`),
+    spacesLeft: await strings(port, `SELECT sku_code FROM ${T('clean_products')} WHERE sku_code <> trim(sku_code) ORDER BY product_id`),
+    otherColumns: specs.filter((s) => (s.kind === 'trim' || s.kind === 'upper') && s.params.column !== 'sku_code').map((s) => s.params.column),
+  }
+}
+
+export async function checkP1(port: SqlPort, specs: readonly StepSpec[]): Promise<CheckReport & { facts: P1Facts }> {
+  const f = await factsP1(port, specs)
+  const chips: CheckChip[] = [
+    { label: 'SKUs not written the standard way', value: f.c1, ok: f.c1 === 0 },
+    { label: 'SKUs sold that products cannot find', value: f.c2, ok: f.c2 === 0 },
+    { label: 'Sales without a product', value: f.rowsWithoutProduct, ok: f.rowsWithoutProduct === 0 },
+    { label: 'Rows different from the expected table', value: f.diff, ok: f.diff === 0 },
+  ]
+  return { ...diagnoseP1(f), chips, facts: f }
+}
+
+export async function factsP2(port: SqlPort, blank: string, error: string | null): Promise<P2Facts> {
+  const d = await diffAgainstRef(port, 'sales', 'ref_sales')
+  return { rows: await num(port, `SELECT count(*) FROM ${T('clean_sales')}`), twice: await num(port, CHECK_SQL.p2), diff: d.extra + d.missing, blank, error }
+}
+
+export async function checkP2(port: SqlPort, blank: string, error: string | null = null): Promise<CheckReport & { facts: P2Facts }> {
+  const f = await factsP2(port, blank, error)
+  const chips: CheckChip[] = [
+    { label: 'Rows in clean sales', value: f.rows, ok: f.rows === 3000 },
+    { label: 'Sales still in twice', value: f.twice, ok: f.twice === 0 },
+    { label: 'Rows different from the expected table', value: f.diff, ok: f.diff === 0 },
+  ]
+  return { ...diagnoseP2(f), chips, facts: f }
+}
+
+export async function factsP3(port: SqlPort, specs: readonly StepSpec[]): Promise<P3Facts> {
+  const d = await diffAgainstRef(port, 'customers', 'ref_customers')
+  const s = (
+    await port.query(
+      `SELECT c.customer_name, c.city, r.city, CAST(r.updated_at AS VARCHAR) FROM ${T('clean_customers')} c JOIN ${T('ref_customers')} r USING (customer_id) WHERE c.customer_id = 17 ORDER BY c.updated_at LIMIT 1`,
+    )
+  ).rows[0]
+  return {
+    rows: await num(port, `SELECT count(*) FROM ${T('clean_customers')}`),
+    twice: await num(port, CHECK_SQL.p3),
+    notInRef: d.extra,
+    refMissing: d.missing,
+    steps: [...specs],
+    sample: s ? { name: String(s[0]), city: String(s[1]), refCity: String(s[2]), refDate: String(s[3]) } : null,
+  }
+}
+
+export async function checkP3(port: SqlPort, specs: readonly StepSpec[]): Promise<CheckReport & { facts: P3Facts }> {
+  const f = await factsP3(port, specs)
+  const chips: CheckChip[] = [
+    { label: 'Customers still in twice', value: f.twice, ok: f.twice === 0 },
+    { label: 'Rows not in the expected table', value: f.notInRef, ok: f.notInRef === 0 },
+    { label: 'Expected rows missing', value: f.refMissing, ok: f.refMissing === 0 },
+  ]
+  return { ...diagnoseP3(f), chips, facts: f }
 }
