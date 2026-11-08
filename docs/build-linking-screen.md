@@ -346,3 +346,11 @@ Every chip query is a scan of at most 3,000 rows; run them in one `Promise.all` 
 3. **Phone.** The frame has no "Open on a laptop" screen; the pipeline has one. One choice for the whole build page, or per step (this step has its list fallback either way)?
 4. **Order with Б6.** This design assumes Б6 ships v1's Model screen first and Б5b replaces it. If Б5 comes before Б6 is written, Б6 can skip `ModelScreen.tsx` and only provide `buildStar` for its tests.
 5. **Peek (hub decision 1 of the spec).** The peek after Connect shows the wrong KPI before cleaning. Should the Model step also show the effect of a link on a number (for example the H1 chain table under the panel, recomputed with the pair in the slots: 3,385 rows, Nagisa first)? It would make F-x and `notUnique` visible as money, at the cost of one more query per change.
+
+## 11. Hub decisions (2026-11-08)
+
+1. Second pass: the learner draws F1 and F2 by hand; the F-x trap stays. Linking is the heart of the page.
+2. P7 goes into Б5b; regions stay in the star, so the key-type trap has its case.
+3. Phone: one "Open on a laptop" screen for the whole build page below 768 px, as on the pipeline page; the list fallback of this step stays for narrow laptop windows.
+4. Order: Б6 ships the v1 Model screen first, Б5b replaces it.
+5. Yes: the Model step shows the H1 chain table recomputed with the current pair, so F-x and `notUnique` show up as money.
