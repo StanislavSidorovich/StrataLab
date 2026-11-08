@@ -2,7 +2,7 @@
 
 Design for the Model step of `#build=kaiyo-sales` once the learner links the keys by hand (2026-11-08, Opus). No code here: Sonnet sessions write it from this file, in the slices of section 8. It extends `docs/build-kaiyo-sales-spec.md` (the "spec" below): section 4.2 there has the pairs and the first checks; this file decides the screen, the moves, the states and the texts, and replaces the v1 star of spec 4.1 without breaking the Dashboard.
 
-Sources: spec sections 1, 4, 7, 10, 11; `research/celonis-case-study-2026-11/NOTES.md` 5.4 to 5.6 and the owner's screenshots described there (Celonis foreign-key dialog: "Dimension table (1)" left, "Fact table (N)" right, **Swap tables**, type icons ABC / 123 / DATE). **No screenshots folder** `research/fabric-screens-2026-11/` existed on 2026-11-08: what is said below about Power BI's Model view and Manage relationships and about Fabric's semantic model is from general knowledge of those products, not from frames, and should be checked against screenshots if the owner adds them.
+Sources: spec sections 1, 4, 7, 10, 11; `research/celonis-case-study-2026-11/NOTES.md` 5.4 to 5.6 and the owner's screenshots described there (Celonis foreign-key dialog: "Dimension table (1)" left, "Fact table (N)" right, **Swap tables**, type icons ABC / 123 / DATE). The first version of this file was written before the owner's screenshots arrived; they are now in `research/fabric-screens-2026-11/` and read in section 12. Three points of the design changed after them, each marked "(changed after the screenshots, 12)": line shape and end marks (5.1), Σ on measure columns (5.1), column lists in the panel's slots (5.2). What is said about Power BI's Edit relationship dialog, Autodetect and cross-filter settings is still from general knowledge: no frame of them yet (12.4).
 
 All numbers were computed with DuckDB 1.5.6 (Python) on `lab/public/datasets/quaera/*.parquet`, with the SQL of the spec (2.2, 2.4, 3.1) for the right clean state (W, P1, P2, P3, the given step), plus the spoiled states named in each row. The scratch script is not committed (as in Б1); `tests/buildModel.test.ts` (slice Б5a) replaces it.
 
@@ -17,7 +17,8 @@ Sales name the store and the product by text (`customer_name`, `sku_code`); the 
 | Product idea | Verdict | Why |
 |---|---|---|
 | Celonis: one panel with a "1" slot (dimension) and an "N" slot (fact), **Swap tables** between them, type icons on columns | **Take** | Direction is a choice the learner makes and can get wrong; the Swap button is the cheap repair. This is the core of the screen |
-| Power BI Model view: boxes, a line with `1` and `*` at the ends | **Take**, with `1` and `N` (the words of the spec and the courses) | The learner reads cardinality off the drawing |
+| Power BI Model view: boxes, a right-angle line with boxed `1` and `*` at the ends, Σ on summable columns (seen in `power bi relationships.png`) | **Take**, with `1` and `N` (the words of the spec and the courses) | The learner reads cardinality off the drawing |
+| Celonis Data Model canvas: boxes that list only key columns, **Set Identifier** per table, **New foreign key** per box, dashed lines with no cardinality (seen in `celonis (4).jpg`) | **Don't take** the key-only boxes and the bare lines; the explicit identifier is covered by the One side check | Showing only keys hides the choice the learner has to make |
 | Power BI's relationship dialog: a few rows of both tables under the column pickers | **Take** as three sample values per chosen column | The quickest way to see `Minori #1001` against `Minori` |
 | Power BI refusing "one to one" and warning on "many to many" from the data | **Take** as the uniqueness check | Our check says it in words and with numbers |
 | Power BI / Fabric **Autodetect relationships** (on load, by column name) | **Don't take** | It does the lesson for the learner, and here it would link by name silently |
@@ -207,13 +208,14 @@ starBridge: 'You linked by name to look the ids up. A store renamed tomorrow wou
 - One `<svg>` drawn in React, sized to its container with a `viewBox` and `ResizeObserver` as `Chart.tsx` does (the only SVG in Lab today; `Compare` and `PlanView` are HTML grids and trees, nothing to reuse but the tokens). Fixed box positions per pass in `src/data/build/kaiyoSales.ts`: no layout engine, no drag. ✱
 - Pass 1, viewBox 960 × 420: `sales` left (x 20), `customers` centre-top, `products` centre-bottom, `regions` right of customers. Pass 2, 960 × 360: `fact_sales` centre, `dim_customer` left, `dim_product` right (the textbook star).
 - **Box:** header with the short name and the row count ("sales · 3,000 rows"), one row per column (22 px) with a type icon (ABC text, 123 number, calendar date; lucide icons with a `<title>`) and the name. Widest box 210 px. `sales` 7 columns: 184 px high. No key icon until a link makes a column the "1" end: drawing keys up front gives the answer away. ✱
-- **Line:** from the N column row's edge to the 1 column row's edge, a cubic curve; `N` and `1` as small labels at the ends; the label at the midpoint, a pill with the main number. Accepted: solid, `var(--accent)`. Pair in the panel and failing: dashed `var(--danger)` with the failing number ("714 not found", "3,385 rows"). Pair in the panel, still running: dashed `var(--muted)`.
+- **Measures:** in pass 2 the fact's `units` and `revenue` carry a Σ in place of the 123 icon, as Power BI marks summable columns; ids keep 123. Fixed list in the data file, not guessed from the type. (Changed after the screenshots, 12: it tells keys from measures in the box without giving away which id goes where.)
+- **Line:** from the N column row's edge to the 1 column row's edge, drawn with right angles (horizontal, vertical, horizontal), as Power BI's Model view does; at each end, on the box edge, a small boxed mark `N` or `1` (Power BI draws `*` and `1` the same way). No arrow in the middle: Power BI's arrow is the cross-filter direction, which we don't teach (section 2). The label at the midpoint, a pill with the main number. (Changed after the screenshots, 12: was a cubic curve with loose labels; the right-angle line with boxed ends reads like the tool the learner will meet.) Accepted: solid, `var(--accent)`. Pair in the panel and failing: dashed `var(--danger)` with the failing number ("714 not found", "3,385 rows"). Pair in the panel, still running: dashed `var(--muted)`.
 - **Selection:** a picked column row gets the accent outline and the slot letter (N or 1) at its left; column rows are `<g role="button" tabindex="0">` with an `aria-label` ("sales, customer_name, text"), Enter picks.
 - Under the canvas: the links list (L1… with ✕) and the action of the pass (**Build the star** / **Continue**) with its lock reason ("Link the three tables first: 2 of 3").
 
 ### 5.2 Panel (right of the canvas)
 
-Top to bottom: title "New link"; slot **Many (N)** with "the column that refers" and three sample values; the **⇄ Swap** button; slot **One (1)** with "the column it refers to" and samples; the chips row; the diagnosis line (with Fix in Clean / Back to Clean / Swap as an inline button when the text points to one); notes; **Show the SQL**; **Create link**. Each slot has a table select and a column select under it (the keyboard and narrow-screen way, 7.4), synced with clicks on the canvas.
+Top to bottom: title "New link"; slot **Many (N)** with "the column that refers" and three sample values; the **⇄ Swap** button; slot **One (1)** with "the column it refers to" and samples; the chips row; the diagnosis line (with Fix in Clean / Back to Clean / Swap as an inline button when the text points to one); notes; **Show the SQL**; **Create link**. Each slot has a table select and, under it, **the table's columns as a short list** with type icons (at most 8 rows here, no search needed), as in Celonis's Foreign key settings: a click on a row fills the slot, the chosen column is pinned on top of the list, and a thin line joins the two chosen rows across the panel. The lists are synced with clicks on the canvas and are the keyboard and narrow-window way (5.3). (Changed after the screenshots, 12: was a second select per slot; a list shows the alternatives and their types at once, which is what makes Celonis's dialog easy to read.) The panel keeps our order, Many (N) first and One (1) second, read as "sales.customer_name refers to customers.customer_name"; Celonis puts the dimension (1) on the left. Swap is there in both, so the difference costs nothing.
 
 ### 5.3 What fits
 
@@ -354,3 +356,55 @@ Every chip query is a scan of at most 3,000 rows; run them in one `Promise.all` 
 3. Phone: one "Open on a laptop" screen for the whole build page below 768 px, as on the pipeline page; the list fallback of this step stays for narrow laptop windows.
 4. Order: Б6 ships the v1 Model screen first, Б5b replaces it.
 5. Yes: the Model step shows the H1 chain table recomputed with the current pair, so F-x and `notUnique` show up as money.
+
+## 12. Reference screenshots (`research/fabric-screens-2026-11/`, read 2026-11-08)
+
+Nine files from the owner. Two of them show the linking screen itself (`power bi relationships.png`, `celonis (1).jpg`); the rest are notes for other steps of the page or for the pipeline page.
+
+### 12.1 The linking screen
+
+| File | What is on it | Take | Don't take |
+|---|---|---|---|
+| `power bi relationships.png` | Power BI Model view of a bike sales model: the fact `Bike_Data` in the middle (`Business_Segment_ID`, `Category_ID`, `Color_ID`, Σ `Cost`, `Country_ID`, `Customer_ID`, Σ `ListPrice`, `Model_ID`, Σ `OrderQty`, scrolled), seven dimensions around it, each with two columns (a name and an `_ID`), "Collapse" under every box. Lines with right angles; on the box edges a boxed `1` at the dimension end and a boxed `*` at the fact end; a small triangle in the middle of each line (filter direction) | The star with the fact in the middle (our pass 2 already); right-angle lines with boxed end marks (5.1 changed); Σ on measures (5.1 changed); a table icon in the box header | The filter-direction triangle; Collapse and the ⋯ menu per box (our boxes are short); scrolling inside a box (our widest box has 8 columns, all shown); seven dimensions (ours has two, which keeps the star readable) |
+| `celonis (1).jpg` | Celonis **Foreign key settings** dialog: left "Dimension table (1)" with a table select, right "Fact table (N)" with a table select, **Swap tables** at the top between them; under each, the chosen key pinned (`CASE_KEY` and `_CASE_KEY`) and joined by a line across the dialog, a Search box, the full column list with type marks ABC / 123 / DATE and a key icon per row; Cancel, Save | Each slot as a list of the table's columns with type marks, the chosen one pinned, the two joined by a line (5.2 changed); a table select per slot; Swap (already) | Save without any check (we run four chips before Create link); a key icon per row (we pick by clicking the row); Search (at most 8 columns here); the 1 slot on the left (we keep N first, 5.2; Swap covers it). Celonis allows several key pairs in one link; ours never needs a composite key |
+| `celonis (4).jpg` | Celonis **Data Model** canvas "Pizzeria Mamma Mia": three boxes with machine names (`ub9jfkdu98v1-piz…`), each listing only its key columns (`_CASE_KEY`, `CUSTOMER_ID`), **Set Identifier** and **New foreign key** per box, dashed lines between boxes with no end marks; a yellow banner "Missing Identifiers", said to be optional; Eventlog automerge, Search tables, Add Tables, **Set foreign Keys**; Auto Align and zoom | Nothing new: "1" and "N" are set in the dialog and not seen on the canvas, the weakness our boxed marks fix | Key-only boxes; unmarked dashed lines; a warning that can be ignored (section 2); Auto Align and zoom (fixed layout, 5.1) |
+
+Nothing in these frames goes against the checks of section 4: neither tool shows on the canvas whether rows find a partner or whether the "1" side is unique. Power BI does refuse a "1" side that repeats when the relationship is made, but that dialog is not in the set (12.4).
+
+### 12.2 Other screenshots, for other steps
+
+| File | What is on it | Where it belongs |
+|---|---|---|
+| `celonis (2).jpg` | Data Models wizard, step 3 of 3 (Tables, Activity Table, Process): the event table with columns mapped to roles by chips (Case ID, Sorting, Timestamp, Activity name; mapped columns green, `AUTOMATION` and `_CELONIS_CHANGE_DATE` grey) | Process mining only; not this page (the direction is Fabric, not process mining, NOTES 5) |
+| `celonis (3).jpg` | File upload preview of `Pizza_Event_Pizzeria_Event` with the **Sheet has header row** tick and a 20-row preview, Previous / Next | Connect (spec 2.5): matches the card with a preview; the header tick is a setting trap the spec keeps out of v1 |
+| `celonis (5).jpg` | Data Pool overview (a video frame): Input (Connect to Data Source), Data Processing (Schedules; Data Jobs with Extractions 0, Transformations 0, Data Model Loads 0), Output (Objects and Events, Data Models 0), Query Engine; "You don't have any Data Models yet" | The frame's step strip: counters that grow as steps are done (already in NOTES 5.4); not this screen |
+| `fabric pipeline.png` | Fabric Data pipeline `PL_IMSALES_LOAD_STG`: three Script activities ("SQL clear sales facts in stg" and others), a Wait "Wait for cleaning", then Copy data "load stg dim client" and Dataflow "DF Load DIM Shipper"; success, failure, skip and completion ports on each block; General tab with Activity state, Timeout `0.12:00:00`, Enable retries | The pipeline page `#pipeline=kaiyo-sellout` (orchestration), not the build page; its "Runs when the previous step: Succeeded / Completed" already copies these ports |
+| `fabric tranform.png` | Power Query (Dataflow Gen2) on a shipper table, 6 rows, shippers 1 to 3 each twice; Applied steps Source, Navigation (four), Imported CSV, Promoted headers, Changed column type, **Kept duplicates** (selected, with ✕); the formula bar shows that step's M (`Table.Group(… "Count", Table.RowCount …)`); column headers with type marks (1²3, ABC); status bar "Completed (7.61 s) Columns: 5 Rows: 6"; Data destination Warehouse | Clean and the applied steps: 12.3 |
+| `fabric dashboard.jfif` | A Microsoft marketing image of the **OneLake catalog, Govern tab** (Domains 1, Workspaces 21, Items 175; bars of item types; Last refreshed; a donut of description coverage; Recommended actions). Not a sales report | The Dashboard only loosely: 12.3 |
+
+### 12.3 Notes for Clean and Dashboard (the spec is not changed here)
+
+**From `fabric tranform.png` to Clean and the applied steps (spec 2.6):**
+
+- The list already matches ours: step name, ✕ on the selected step, the step's code in a bar above the table. Our folded SQL of a step is that formula bar.
+- **A gear per step** to reopen its settings (Power Query has one on every step with settings). Spec 2.6 has only ✕; a gear on button steps (Keep latest row per key, Trim, Uppercase) that reopens the same settings and replaces the step saves a ✕ and a redo. Candidate for Б4 or later.
+- **Click a step to see the table as it was after it.** Power Query's main teaching trick: the preview follows the selected step. With our chain of CTEs (spec 2.6) it is `SELECT * FROM step<k> LIMIT 10` under the same WITH: cheap. Candidate, high value.
+- **Rows and columns after each step** in a status line ("Columns: 5 Rows: 6"): one line under the preview would show 3,110 to 3,000 at the step that does it.
+- **Kept duplicates as a "find" step**: Power Query keeps only the repeated rows to look at them. Our Watch (spec 3.2) finds them with GROUP BY HAVING, the better lesson; a "Show duplicates" view (not a step) could come later.
+- Don't take: M; Source and the four Navigation steps (our Connect is one card); the Data destination (the target is always `clean_<source>`); a ribbon of 30 icons (four buttons in v1); kind icons per step beyond a mark for "given".
+
+**From `fabric dashboard.jfif` (and the Celonis View described in NOTES; no frame of it here) to the Dashboard (spec 5):**
+
+- Big plain numbers with a small label (Domains 1, Workspaces 21, Items 175): the KPI tile as a number and its label, no decoration.
+- Cards of equal height in a fixed grid, each with a title and one chart: supports the fixed two-column grid of spec 5.
+- Don't take: the donut (one share reads better as a number); the Recommended actions cards; the marketing frame. A governance overview says nothing about lines or filters.
+
+### 12.4 Screenshots still missing
+
+1. **Power BI New / Edit relationship dialog**: the two tables with their top rows, the column pickers, Cardinality, Cross filter direction, "Make this relationship active", and its message when the "1" side repeats. It would confirm the "take" rows of section 2 about sample rows and refused cardinality.
+2. **Power BI Manage relationships list** (From / To columns, Active): our links list under the canvas is meant to read like it.
+3. **Power Query with View → Column quality, Column distribution, Column profile** on (Valid / Error / Empty bars under the headers): for P5 and P6 of the spec (dates that don't cast, decimal commas), where a quality bar shows the problem before any SQL.
+4. **Power Query: a step's settings dialog open** (Remove duplicates or Changed type) and **a step with an error** (the warning mark on a step): for the gear idea of 12.3 and for how a failing step looks.
+5. **A Power BI report page** with a line chart, a bar or table visual and a slicer: for the Dashboard and the later filter (spec 5, 6). The image in the folder is a catalog page.
+6. **The Celonis View built in the case study**: KPI card, a line or column chart, a table, the filter bar (NOTES 5.4 describes it from the video only).
+7. **Fabric semantic model, Model view in the browser**, of a Lakehouse or Warehouse: whether the web version marks relationships as the screenshot here does (that one is not named as Desktop or service).
