@@ -1,0 +1,20 @@
+.build-page { background: var(--bg); color: var(--text); }
+.build-head { background: var(--panel); border-bottom: 1px solid var(--line); }
+.build-strip { display: flex; gap: 6px; list-style: none; margin: 0; padding: 10px 16px; overflow-x: auto; background: var(--panel); border-bottom: 1px solid var(--line); }
+.build-chip { flex: 1 1 0; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--muted); font: inherit; text-align: left; cursor: pointer; }
+.build-chip:disabled { cursor: not-allowed; opacity: 0.7; }
+.build-chip-n { flex: none; width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; border: 1px solid var(--line); font-size: 12px; }
+.build-chip-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.build-chip.is-current { color: var(--text); border-color: var(--accent); }
+.build-chip.is-current .build-chip-n { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.build-chip.is-done { color: var(--text); }
+.build-chip.is-done .build-chip-n { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.build-chip.is-open { box-shadow: 0 0 0 2px var(--accent-soft); }
+.build-body { flex: 1; min-height: 0; overflow: auto; padding: 24px 16px; }
+.build-card { max-width: 720px; margin: 0 auto; padding: 20px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.build-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; background: var(--panel); border-top: 1px solid var(--line); }
+@media (max-width: 640px) {
+  .build-chip { flex: none; min-width: 44px; padding: 8px; }
+  .build-chip.is-open .build-chip-label { display: inline; }
+  .build-chip:not(.is-open) .build-chip-label { display: none; }
+}

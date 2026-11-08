@@ -18,6 +18,7 @@ import { ShareDialog } from './ShareDialog'
 import { PracticeDialog, TaskBar } from './Practice'
 import { PracticeBookPage } from './PracticeBook'
 import { PipelinePage } from './PipelinePage'
+import { BuildPage } from './build/BuildPage'
 import { GuideDialog } from './Guide'
 import { CompareDialog } from './Compare'
 import { DialectBar } from './DialectBar'
@@ -144,6 +145,7 @@ export function App() {
       <div className="flex-1 min-h-0 flex relative">
         <PracticeBookPage />
         <PipelinePage />
+        <BuildPage />
         <div className="shrink-0 hidden md:block relative" style={{ width: sideW }}>
           <Sidebar />
           <div
