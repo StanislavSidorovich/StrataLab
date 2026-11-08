@@ -82,6 +82,6 @@ describe('build storage', () => {
   })
   it('keeps a good state', () => {
     const s = readBuild(JSON.stringify({ done: ['connect', 'clean'], open: 'connect' }))
-    expect(s).toEqual({ done: ['connect', 'clean'], open: 'connect' })
+    expect(s).toEqual({ ...emptyBuild(), done: ['connect', 'clean'], open: 'connect' })
   })
 })

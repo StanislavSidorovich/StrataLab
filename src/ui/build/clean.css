@@ -1,0 +1,64 @@
+/* Connect and Clean screens of the build page. Colours come from the app's variables, so both themes work. */
+.build-lead { margin: 0; max-width: 70ch; }
+.build-muted { color: var(--muted); font-size: 12.5px; }
+.build-error { padding: 8px 10px; border-radius: 8px; background: var(--warn-soft); color: var(--danger); font-size: 13px; }
+.build-ok { display: inline-flex; align-items: center; gap: 6px; color: var(--accent); font-size: 13px; }
+.build-big { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.build-sources { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; }
+.build-source { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.build-source.is-on { border-color: var(--accent); }
+.build-source-head { display: flex; align-items: center; gap: 8px; }
+.build-source-name { flex: 1; min-width: 0; font-weight: 600; }
+.build-source-foot { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+
+.build-table-wrap { max-height: 280px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
+.build-table { border-collapse: collapse; font-size: 12px; width: max-content; min-width: 100%; }
+.build-table th { position: sticky; top: 0; text-align: left; padding: 4px 8px; background: var(--panel); border-bottom: 1px solid var(--line); font-weight: 600; white-space: nowrap; }
+.build-table td { padding: 3px 8px; white-space: nowrap; border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.build-table td.is-null { color: var(--muted); font-style: italic; }
+.build-type { display: block; font-weight: 400; font-size: 10.5px; color: var(--muted); }
+
+.build-sql summary { cursor: pointer; color: var(--muted); font-size: 12.5px; }
+.build-sql .pl-code { margin-top: 6px; white-space: pre; }
+
+.build-quick { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border: 1px solid var(--accent); border-radius: 12px; background: var(--accent-soft); }
+.build-quick-title { margin: 0; font-size: 16px; font-weight: 600; }
+.build-quick-nums { display: flex; flex-wrap: wrap; gap: 24px; }
+.build-remember { margin: 0; font-weight: 600; }
+
+.build-given { padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+.build-given summary { cursor: pointer; }
+.build-cards { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.build-clean-card { padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); display: flex; flex-direction: column; gap: 10px; }
+.build-clean-card.is-open { border-color: var(--accent); }
+.build-clean-card.is-passed .build-chip-n { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.build-clean-head { display: flex; align-items: center; gap: 10px; }
+.build-clean-head .build-chip-n { flex: none; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; border: 1px solid var(--line); font-size: 11px; font-weight: 600; }
+.build-clean-card.is-open .build-chip-n { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+
+.build-watch-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.build-watch-title { font-weight: 600; }
+.build-watch-fix { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13px; }
+
+.build-panel { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); min-width: 0; }
+.build-panel-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.build-tab { padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; }
+.build-tab.is-on { color: var(--text); border-color: var(--accent); background: var(--accent-soft); }
+.build-toolbar { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+.build-tool { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.build-set { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; color: var(--muted); }
+.build-select { font: inherit; font-size: 13px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); }
+.build-steps-title { font-weight: 600; margin-bottom: 4px; }
+.build-steps { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.build-step { padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+.build-step.is-source { color: var(--muted); border-style: dashed; }
+.build-step-row { display: flex; align-items: center; gap: 8px; }
+.build-step-label { flex: 1; min-width: 0; }
+.build-badge { font-size: 11px; padding: 1px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
+.build-x { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; }
+.build-x:hover:not(:disabled) { background: var(--accent-soft); color: var(--text); }
+.build-x:disabled { cursor: not-allowed; opacity: 0.5; }
+
+/* the whole page needs a laptop below 768 px */
+.build-phone { flex: 1; min-height: 0; overflow: auto; display: flex; align-items: center; justify-content: center; padding: 24px; }

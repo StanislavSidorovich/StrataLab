@@ -1,6 +1,8 @@
 // The rules of the build page (`#build=kaiyo-sales`): the address, the five steps, which one is open and which are
 // done. A step opens only after the one before it is done. Pure; the page is src/ui/build/BuildPage.tsx.
 
+import { emptyWork, readWork, type BuildWork } from './buildSteps'
+
 // ---------------------------------------------------------------- the address
 
 export const BUILD_ID = 'kaiyo-sales'
@@ -44,9 +46,11 @@ export interface BuildState {
   done: StepId[]
   /** the step on screen */
   open: StepId
+  /** what the learner did: sources connected, applied steps, the blank, cards passed (src/core/buildSteps.ts) */
+  work: BuildWork
 }
 
-export const emptyBuild = (): BuildState => ({ done: [], open: 'connect' })
+export const emptyBuild = (): BuildState => ({ done: [], open: 'connect', work: emptyWork() })
 
 const isStep = (v: unknown): v is StepId => typeof v === 'string' && (STEP_IDS as readonly string[]).includes(v)
 
@@ -113,7 +117,7 @@ export function readBuild(raw: string | null): BuildState {
     const p = JSON.parse(raw)
     if (!p || typeof p !== 'object') return emptyBuild()
     const done = contiguous(Array.isArray(p.done) ? p.done.filter(isStep) : [])
-    const state: BuildState = { done, open: currentStep({ done, open: 'connect' }) }
+    const state: BuildState = { done, open: currentStep({ done, open: 'connect', work: emptyWork() }), work: readWork(p.work) }
     return isStep(p.open) ? openStep(state, p.open) : state
   } catch {
     return emptyBuild()

@@ -111,3 +111,174 @@ FROM read_csv([${names.map(quoteName).join(', ')}], delim = ';', header = true, 
   return `CREATE OR REPLACE TABLE ${T(source.bronze)} AS
 SELECT * FROM read_csv([${quoteName(source.file)}], delim = '${source.delim}', header = true)`
 }
+
+// ---------------------------------------------------------------- the given step (3.1) and Quick look
+
+/** The sales of the given step "Changed type" (3.1), as the SQL that makes them, with `{prev}` for the table before it. */
+export const GIVEN_SQL = `SELECT
+    CAST(raw_id AS INTEGER) AS raw_id,
+    source_file,
+    CAST(CASE
+      WHEN sale_date LIKE '%.%' THEN strptime(sale_date, '%d.%m.%Y')
+      WHEN sale_date LIKE '%/%' THEN strptime(sale_date, '%d/%m/%Y')   -- 19/02/2024: day first
+      ELSE strptime(sale_date, '%Y-%m-%d')
+    END AS DATE) AS sale_date,
+    replace(trim(customer_name), 'Itiba', 'Ichiba') AS customer_name,  -- spaces; one chain, two spellings
+    upper(trim(sku_code)) AS sku_code,                                 -- nett005 and NETT005 are one SKU
+    CAST(CAST(replace(units, ',', '.') AS DOUBLE) AS INTEGER) AS units, -- decimal commas
+    CAST(replace(revenue, ',', '.') AS DECIMAL(12, 2)) AS revenue
+FROM {prev}`
+
+/**
+ * Right after Connect, on the files as they came (only the given step applied): the revenue of January to June 2026 and
+ * the first chain. The learner is asked to remember them; the numbers are the "Nothing done" row of spec section 7.
+ */
+export const QUICK_LOOK_SQL = {
+  kpi: `WITH sales AS (
+${GIVEN_SQL.replace('{prev}', T('bronze_sales'))}
+)
+SELECT SUM(s.revenue) AS revenue
+FROM sales s
+LEFT JOIN ${T('bronze_customers')} c ON c.customer_name = s.customer_name
+WHERE s.sale_date >= DATE '2026-01-01' AND s.sale_date < DATE '2026-07-01'`,
+  chain: `WITH sales AS (
+${GIVEN_SQL.replace('{prev}', T('bronze_sales'))}
+),
+fact AS (
+  SELECT s.sale_date, c.customer_id, s.revenue
+  FROM sales s
+  LEFT JOIN ${T('bronze_customers')} c ON c.customer_name = s.customer_name
+)
+SELECT c.chain_name, SUM(f.revenue) AS revenue
+FROM fact f
+JOIN ${T('bronze_customers')} c ON c.customer_id = f.customer_id
+WHERE f.sale_date >= DATE '2026-01-01' AND f.sale_date < DATE '2026-07-01' AND c.chain_name IS NOT NULL
+GROUP BY c.chain_name
+ORDER BY revenue DESC
+LIMIT 1`,
+} as const
+
+export const QUICK_LOOK_TEXT = {
+  title: 'Quick look',
+  lead: 'All four files are in. Before cleaning anything, a first look at the sales as they came: two numbers for the Head of Sales.',
+  kpiLabel: 'Revenue, January to June 2026',
+  chainLabel: 'First chain, January to June 2026',
+  remember: 'Remember these numbers. After the cleaning you will see them again.',
+}
+
+// ---------------------------------------------------------------- Clean: cards, hints, Watch (3.2 to 3.5)
+
+export type CleanId = 'W' | 'P1' | 'P2' | 'P3'
+export const CLEAN_IDS: readonly CleanId[] = ['W', 'P1', 'P2', 'P3']
+
+export interface CleanCard {
+  id: CleanId
+  source: BuildSourceId
+  title: string
+  text: string
+  hints: readonly string[]
+}
+
+export const CLEAN_CARDS: readonly CleanCard[] = [
+  { id: 'W', source: 'regions', title: 'Watch: a prefecture twice', text: 'One problem, solved in front of you. Press Next to see each step.', hints: [] },
+  {
+    id: 'P1',
+    source: 'products',
+    title: 'Wrong SKUs in products.csv',
+    text: "6 of the 29 SKUs in the sales files can't be found in products.csv as written.",
+    hints: [
+      "Put AQUA002 from the sales next to aqua002 here. To the computer these are different words, and so are 'FRUV002 ' and 'FRUV002'.",
+      'Two buttons on sku_code: Trim, then Uppercase.',
+    ],
+  },
+  {
+    id: 'P2',
+    source: 'sales',
+    title: 'Sales sent twice',
+    text: 'Some sales arrived twice: the same line in the same export. Keep one row per sale: what makes two rows the same sale?',
+    hints: ['Two copies of one sale share the date, the store and the SKU. Only raw_id differs.', 'List those columns, separated by commas.'],
+  },
+  {
+    id: 'P3',
+    source: 'customers',
+    title: 'Stores twice in customers.csv',
+    text: '4 stores are in customers.csv twice. Each needs exactly one row, or every sale of theirs will be counted twice.',
+    hints: [
+      'Look at the two rows of Nagisa #1045: the city differs, and so does updated_at. Which one is the store today?',
+      'Keep latest row per key: key customer_id, order by updated_at, newest.',
+    ],
+  },
+]
+
+export const cleanCard = (id: CleanId) => CLEAN_CARDS.find((c) => c.id === id)!
+
+/** The six SKUs of P1 as they are in the file, spaces drawn as a visible mark. */
+export const P1_SKUS = ['aqua002', 'FRUV002␣', '␣KROS001', 'nett002', 'MILV001␣␣', '␣milv004']
+
+export const GIVEN_NOTE = 'Lab did the routine part. Open it to see what it fixed; the problems below are yours.'
+export const P3_NOTE = 'This is the pattern you wrote in sales by hand. Here the order decides which copy stays.'
+
+export interface WatchStep {
+  title: string
+  /** shown and run (null: the button step) */
+  sql: string | null
+  caption: string
+}
+
+export const WATCH_STEPS: readonly WatchStep[] = [
+  {
+    title: 'Count',
+    sql: `SELECT count(*) AS rows FROM ${T('bronze_regions')}`,
+    caption: 'regions.csv has 17 rows. Kaiyo sells in 16 prefectures. One row is too many, or a prefecture is new.',
+  },
+  {
+    title: 'Find',
+    sql: `SELECT region_id, count(*) AS rows FROM ${T('bronze_regions')} GROUP BY region_id HAVING count(*) > 1`,
+    caption: 'Group by the key and keep groups with more than one row: R-03 is there twice.',
+  },
+  {
+    title: 'Compare',
+    sql: `SELECT * FROM ${T('bronze_regions')} WHERE region_id = 'R-03'`,
+    caption: 'The two rows match in every column. That is one row sent twice, safe to drop.',
+  },
+  {
+    title: 'Fix',
+    sql: null,
+    caption: 'The button wrote the SQL for you and added a step to the list. The file itself is never changed: steps run on a copy.',
+  },
+  {
+    title: 'Check',
+    sql: `SELECT count(*) - count(DISTINCT region_id) AS broken FROM ${T('clean_regions')}`,
+    caption: "A check is a query that should return 0. Zero rows broken: the fix worked. You'll write checks like this for the next problems.",
+  },
+]
+
+export const WATCH_CLOSING = 'Remove duplicates only helps when the rows match in every column. When they differ somewhere, it keeps both: you will meet that in customers.'
+
+// ---------------------------------------------------------------- the checks (3.3 to 3.5)
+
+export const CHECK_SQL = {
+  p1c1: `SELECT count(*) FROM ${T('clean_products')} WHERE sku_code <> upper(trim(sku_code))`,
+  p1c2: `SELECT count(DISTINCT s.sku_code) FROM ${T('clean_sales')} s
+WHERE NOT EXISTS (SELECT 1 FROM ${T('clean_products')} p WHERE p.sku_code = s.sku_code)`,
+  p1rows: `SELECT count(*) FROM ${T('clean_sales')} s
+WHERE NOT EXISTS (SELECT 1 FROM ${T('clean_products')} p WHERE p.sku_code = s.sku_code)`,
+  p2: `SELECT count(*) - count(DISTINCT (sale_date, customer_name, sku_code)) FROM ${T('clean_sales')}`,
+  p3: `SELECT count(*) - count(DISTINCT customer_id) FROM ${T('clean_customers')}`,
+} as const
+
+/** Lines shown by the diagnosis (3.3 to 3.5). */
+export const BUILD_DIAGNOSIS = {
+  skuCase: (left: string[]) => `Spaces are gone, but ${left.length} SKUs are still lower case: ${left.join(', ')}. Sales write them in capitals.`,
+  skuSpaces: (left: string[]) => `Capitals are right, but ${left.length} SKUs still have spaces at the edges: ${left.map((s) => `'${s}'`).join(', ')}.`,
+  skuWrongColumn: (col: string) => `The step changed ${col}. The column that has to match the sales is sku_code.`,
+  skuMissing: (n: number, rows: number) => `${n} SKUs sold in the files still find no product: ${rows.toLocaleString('en-US')} sales would have no brand or category.`,
+  twice: (n: number) => `${n} sales are still in twice. Two copies share the date, the store and the SKU.`,
+  syntax: (error: string, cols: string[]) => `${error}. The step reads these columns: ${cols.join(', ')}.`,
+  distinctKeepsBoth: (n: number) => `Remove duplicates kept both rows of ${n} stores: they differ in city, region_id and updated_at. Choose which row is current.`,
+  keptOldest: (name: string, oldCity: string, city: string, date: string) =>
+    `You kept the older row: ${name} is in ${oldCity} in your table, but its latest row (${date}) says ${city}.`,
+  keyTooWide: (col: string, n: number) => `One row per ${col} left ${n} of 144 customers. The key is what names one customer: customer_id.`,
+  stillTwice: (n: number) => `${n} customers are still in twice.`,
+  generic: "The table doesn't match the expected one yet. Compare it with the rows in the preview.",
+} as const
