@@ -2,6 +2,7 @@
 // done. A step opens only after the one before it is done. Pure; the page is src/ui/build/BuildPage.tsx.
 
 import { emptyWork, readWork, type BuildWork } from './buildSteps'
+import { modelLinked, readLinks, type Link } from './buildLinks'
 
 // ---------------------------------------------------------------- the address
 
@@ -48,9 +49,18 @@ export interface BuildState {
   open: StepId
   /** what the learner did: sources connected, applied steps, the blank, cards passed (src/core/buildSteps.ts) */
   work: BuildWork
+  /** the links the learner made (src/core/buildLinks.ts) */
+  links: Link[]
+  /** Build the star ran: the id links of the second pass are open */
+  star: boolean
+  /** saved by the first version of the Model step (no links): Model stays done, shown read-only with Try it */
+  v1: boolean
 }
 
-export const emptyBuild = (): BuildState => ({ done: [], open: 'connect', work: emptyWork() })
+export const emptyBuild = (): BuildState => ({ done: [], open: 'connect', work: emptyWork(), links: [], star: false, v1: false })
+
+/** The Model step can be marked done: F1 and F2 are made. */
+export const modelDone = (state: BuildState) => modelLinked(state.links)
 
 const isStep = (v: unknown): v is StepId => typeof v === 'string' && (STEP_IDS as readonly string[]).includes(v)
 
@@ -117,7 +127,15 @@ export function readBuild(raw: string | null): BuildState {
     const p = JSON.parse(raw)
     if (!p || typeof p !== 'object') return emptyBuild()
     const done = contiguous(Array.isArray(p.done) ? p.done.filter(isStep) : [])
-    const state: BuildState = { done, open: currentStep({ done, open: 'connect', work: emptyWork() }), work: readWork(p.work) }
+    const star = p.star === true
+    const state: BuildState = {
+      done,
+      open: currentStep({ ...emptyBuild(), done }),
+      work: readWork(p.work),
+      links: readLinks(p.links, star),
+      star,
+      v1: done.includes('model') && !('links' in p),
+    }
     return isStep(p.open) ? openStep(state, p.open) : state
   } catch {
     return emptyBuild()

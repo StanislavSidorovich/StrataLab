@@ -6,7 +6,7 @@ import { DIAGNOSIS_TEXT } from '../data/pipelines/kaiyoSellout'
 import { emptyDash, readDash, type DashWork } from './buildDashboard'
 import { checkBlank } from './pipeline'
 
-export type StepKind = 'given' | 'distinct' | 'latest' | 'trim' | 'upper' | 'dedup'
+export type StepKind = 'given' | 'distinct' | 'latest' | 'trim' | 'upper' | 'dedup' | 'extract'
 
 /** What is kept of a step. */
 export interface StepSpec {
@@ -45,6 +45,8 @@ function replaceColumn(cols: readonly string[], col: string, expr: string): stri
 export const distinctSql = () => 'SELECT DISTINCT * FROM {prev}'
 export const trimSql = (cols: readonly string[], col: string) => replaceColumn(cols, col, `trim(${col})`)
 export const upperSql = (cols: readonly string[], col: string) => replaceColumn(cols, col, `upper(${col})`)
+/** Extract number (spec 2.6, P7): the digits inside a text, as a whole number. R-03 gives 3. */
+export const extractSql = (cols: readonly string[], col: string) => replaceColumn(cols, col, `CAST(regexp_extract(${col}, '[0-9]+') AS INTEGER)`)
 
 export function latestSql(cols: readonly string[], key: string, order: string, newest: boolean): string {
   return `SELECT ${cols.join(', ')}
@@ -82,6 +84,10 @@ export function makeStep(source: BuildSourceId, spec: StepSpec): Step | null {
     case 'upper': {
       const c = col('column')
       return c ? { ...base, label: `Uppercased ${c}`, sql: upperSql(cols, c), given: false } : null
+    }
+    case 'extract': {
+      const c = col('column')
+      return c ? { ...base, label: `Extracted the number from ${c}`, sql: extractSql(cols, c), given: false } : null
     }
     case 'latest': {
       const key = col('key')
@@ -152,11 +158,13 @@ export interface BuildWork {
   peek: Peek | null
   /** the Dashboard blanks and passed tiles, the answers (src/core/buildDashboard.ts) */
   dash: DashWork
+  /** the extra Clean card P7 (region ids as numbers): shown once the Model step asked for it, then done */
+  p7: 'asked' | 'done' | null
 }
 
-export const emptyWork = (): BuildWork => ({ connected: [], steps: { sales: [], customers: [], products: [], regions: [] }, blank: '', passed: [], peek: null, dash: emptyDash() })
+export const emptyWork = (): BuildWork => ({ connected: [], steps: { sales: [], customers: [], products: [], regions: [] }, blank: '', passed: [], peek: null, dash: emptyDash(), p7: null })
 
-const KINDS: readonly StepKind[] = ['distinct', 'latest', 'trim', 'upper', 'dedup']
+const KINDS: readonly StepKind[] = ['distinct', 'latest', 'trim', 'upper', 'dedup', 'extract']
 
 /** Anything unreadable is dropped; a step that does not fit its source is dropped with it. */
 export function readWork(raw: unknown): BuildWork {
@@ -184,6 +192,7 @@ export function readWork(raw: unknown): BuildWork {
   const p = r.peek as Partial<Peek> | null | undefined
   if (p && typeof p.kpi === 'string' && typeof p.chain === 'string' && typeof p.chainRevenue === 'string') w.peek = { kpi: p.kpi, chain: p.chain, chainRevenue: p.chainRevenue }
   w.dash = readDash(r.dash)
+  if (r.p7 === 'asked' || r.p7 === 'done') w.p7 = r.p7
   return w
 }
 
@@ -284,3 +293,17 @@ export function diagnoseP3(f: P3Facts): Diagnosis {
 // the pipeline's lines, imported, not copied (3.4)
 const DIAGNOSIS_RAW_ID = DIAGNOSIS_TEXT.rawId
 const TOO_SHORT = DIAGNOSIS_TEXT.tooShort
+
+export interface P7Facts {
+  rows: number
+  /** region_id is a number now */
+  isNumber: boolean
+  /** rows different from the reference, both ways (0 when the type is not a number yet) */
+  diff: number
+}
+
+export function diagnoseP7(f: P7Facts): Diagnosis {
+  if (!f.isNumber) return { ok: false, line: BUILD_DIAGNOSIS.regionText }
+  if (f.rows === 16 && f.diff === 0) return { ok: true, line: null }
+  return { ok: false, line: BUILD_DIAGNOSIS.generic }
+}

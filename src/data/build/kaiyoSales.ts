@@ -280,6 +280,7 @@ export const BUILD_DIAGNOSIS = {
     `You kept the older row: ${name} is in ${oldCity} in your table, but its latest row (${date}) says ${city}.`,
   keyTooWide: (col: string, n: number) => `One row per ${col} left ${n} of 144 customers. The key is what names one customer: customer_id.`,
   stillTwice: (n: number) => `${n} customers are still in twice.`,
+  regionText: 'region_id is still text. Make it a number: R-03 is region 3. Then customers and regions can be linked.',
   generic: "The table doesn't match the expected one yet. Compare it with the rows in the preview.",
 } as const
 

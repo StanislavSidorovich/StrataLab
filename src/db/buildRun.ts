@@ -2,7 +2,8 @@
 // connects a source, drops the work tables. Same port as the pipeline, so the page and the tests run the same code.
 import { diagnoseKpi, diagnoseLine, tileBlankProblem, tileSql, type TileDiagnosis } from '../core/buildDashboard'
 import { compareResults, type ResultData } from '../core/check'
-import { CLEAN_COLUMNS, chainSql, cleanDone, diagnoseP1, diagnoseP2, diagnoseP3, stepsOf, type BuildWork, type Diagnosis, type P1Facts, type P2Facts, type P3Facts, type Peek, type StepSpec } from '../core/buildSteps'
+import { CLEAN_COLUMNS, chainSql, cleanDone, diagnoseP1, diagnoseP2, diagnoseP3, diagnoseP7, stepsOf, type BuildWork, type Diagnosis, type P1Facts, type P2Facts, type P3Facts, type P7Facts, type Peek, type StepSpec } from '../core/buildSteps'
+import { starStatements, typeFamily, type FoundFacts, type Link, type LinkFacts, type SideFacts, type Slot } from '../core/buildLinks'
 import { readableError } from '../core/sqlPractice'
 import { csvText } from '../core/csvText'
 import { exportText, type SqlPort } from './pipelineRun'
@@ -105,13 +106,15 @@ export async function quickLook(port: SqlPort): Promise<Peek> {
 }
 
 /** The page opens again: connects what was connected and rebuilds the clean tables from the saved steps. */
-export async function restore(port: SqlPort, work: BuildWork): Promise<void> {
+export async function restore(port: SqlPort, work: BuildWork, model: { links: readonly Link[]; star: boolean; done: boolean } = { links: [], star: false, done: cleanDone(work.passed) }): Promise<void> {
   await prepare(port)
   for (const id of work.connected) {
     await connect(port, id)
     await applySteps(port, id, work.steps[id])
   }
-  if (cleanDone(work.passed)) await buildStar(port)
+  // the star as it was last built: from the learner's links, or the first version's for a Model step done before the links
+  if (model.star) await buildStar(port, model.links)
+  else if (model.done) await buildStar(port)
 }
 
 // ---------------------------------------------------------------- the checks of P1 to P3 (3.3 to 3.5)
@@ -217,9 +220,9 @@ export interface StarFacts {
   noProduct: number
 }
 
-/** Builds the three gold tables from the clean ones and counts them. */
-export async function buildStar(port: SqlPort): Promise<StarFacts> {
-  for (const sql of GOLD_SQL) await port.query(sql)
+/** Builds the three gold tables from the clean ones (through the learner's links, or the first version's SQL) and counts them. */
+export async function buildStar(port: SqlPort, links?: readonly Link[]): Promise<StarFacts> {
+  for (const sql of (links && starStatements(links)) || GOLD_SQL) await port.query(sql)
   return {
     fact: await num(port, `SELECT count(*) FROM ${T('gold_fact_sales')}`),
     customers: await num(port, `SELECT count(*) FROM ${T('gold_dim_customer')}`),
@@ -281,4 +284,85 @@ export async function runTile(port: SqlPort, id: TileId, blank: string): Promise
   const expected = await port.query(`SELECT chain_name, revenue FROM ${T('ref_tile_chains')}`)
   const ok = compareResults(data, expected, true).ok
   return { ok, line: ok ? null : BUILD_DASH_DIAGNOSIS.chainsOff, data }
+}
+
+// ---------------------------------------------------------------- P7: region ids as numbers (spec 2.6, linking screen 8)
+
+export async function checkP7(port: SqlPort): Promise<CheckReport & { facts: P7Facts }> {
+  const cols = await describeTable(port, 'clean_regions')
+  const isNumber = typeFamily(cols.find((c) => c.name === 'region_id')?.type ?? '') === 'number'
+  const d = isNumber ? await diffAgainstRef(port, 'regions', 'ref_regions') : { extra: 0, missing: 0 }
+  const f: P7Facts = { rows: await num(port, `SELECT count(*) FROM ${T('clean_regions')}`), isNumber, diff: d.extra + d.missing }
+  const chips: CheckChip[] = [
+    { label: 'region_id is a number', value: isNumber ? 1 : 0, ok: isNumber },
+    { label: 'Rows different from the expected table', value: f.diff, ok: f.diff === 0 && isNumber },
+  ]
+  return { ...diagnoseP7(f), chips, facts: f }
+}
+
+// ---------------------------------------------------------------- the linking screen: facts of a pair (4.4)
+
+const ident = (cols: { name: string }[], name: string) => {
+  if (!cols.some((c) => c.name === name)) throw new Error(`No column ${name} in the table.`)
+  return name
+}
+
+async function sideFacts(port: SqlPort, slot: Slot): Promise<SideFacts> {
+  const cols = await describeTable(port, slot.table)
+  const c = ident(cols, slot.column)
+  const type = cols.find((x) => x.name === c)!.type
+  const r = (
+    await port.query(
+      `SELECT count(*), count(${c}), count(DISTINCT ${c}), CAST(min(${c}) AS VARCHAR), CAST(max(${c}) AS VARCHAR),
+              (SELECT count(*) FROM (SELECT ${c} FROM ${T(slot.table)} WHERE ${c} IS NOT NULL GROUP BY 1 HAVING count(*) > 1))
+       FROM ${T(slot.table)}`,
+    )
+  ).rows[0]
+  const samples = await strings(port, `SELECT DISTINCT ${c} FROM ${T(slot.table)} WHERE ${c} IS NOT NULL ORDER BY 1 LIMIT 3`)
+  return { slot, type, total: Number(r[0]), rows: Number(r[1]), distinct: Number(r[2]), min: r[3] == null ? null : String(r[3]), max: r[4] == null ? null : String(r[4]), repeated: Number(r[5]), samples }
+}
+
+/** The numbers behind the four chips for "many refers to one" (4.4). Found is skipped when the types differ. */
+export async function linkFacts(port: SqlPort, many: Slot, one: Slot): Promise<LinkFacts> {
+  const [m, o] = await Promise.all([sideFacts(port, many), sideFacts(port, one)])
+  const fm = typeFamily(m.type)
+  if (fm !== typeFamily(o.type) || fm === 'other') return { many: m, one: o, found: null }
+  const mt = T(many.table)
+  const ot = T(one.table)
+  const mc = many.column
+  const oc = one.column
+  const hasRevenue = (await describeTable(port, many.table)).some((c) => c.name === 'revenue' && typeFamily(c.type) === 'number')
+  const miss = `FROM ${mt} m WHERE m.${mc} IS NOT NULL AND NOT EXISTS (SELECT 1 FROM ${ot} o WHERE o.${oc} = m.${mc})`
+  const u = (await port.query(`SELECT count(*), count(DISTINCT m.${mc})${hasRevenue ? ', CAST(sum(m.revenue) AS VARCHAR)' : ''} ${miss}`)).rows[0]
+  const found: FoundFacts = {
+    unmatchedRows: Number(u[0]),
+    unmatchedValues: Number(u[1]),
+    unmatchedRevenue: hasRevenue && u[2] != null && Number(u[0]) > 0 ? String(u[2]) : null,
+    unmatchedSamples: Number(u[0]) > 0 ? await strings(port, `SELECT DISTINCT m.${mc} ${miss} ORDER BY 1 LIMIT 3`) : [],
+    joinRows: await num(port, `SELECT count(*) FROM ${mt} m JOIN ${ot} o ON o.${oc} = m.${mc}`),
+    oneUnused: await num(port, `SELECT count(DISTINCT o.${oc}) FROM ${ot} o WHERE NOT EXISTS (SELECT 1 FROM ${mt} m WHERE m.${mc} = o.${oc})`),
+  }
+  return { many: m, one: o, found }
+}
+
+export interface ChainPeek {
+  /** rows after the join */
+  rows: number
+  /** the top three chains, January to June 2026 */
+  top: [string, string][]
+}
+
+/** Decision 5 of the hub: what this pair would do to the chain table (needs sales in the many table and chain_name in the one). */
+export async function linkPeek(port: SqlPort, many: Slot, one: Slot): Promise<ChainPeek | null> {
+  const [mc, oc] = await Promise.all([describeTable(port, many.table), describeTable(port, one.table)])
+  const has = (cols: { name: string }[], n: string) => cols.some((c) => c.name === n)
+  if (!has(mc, 'sale_date') || !has(mc, 'revenue') || !has(oc, 'chain_name') || !has(mc, many.column) || !has(oc, one.column)) return null
+  const from = `FROM ${T(many.table)} m JOIN ${T(one.table)} o ON o.${one.column} = m.${many.column}`
+  const rows = await num(port, `SELECT count(*) ${from}`)
+  if (rows === 0) return null
+  const r = await port.query(
+    `SELECT coalesce(o.chain_name, 'no chain'), CAST(sum(m.revenue) AS VARCHAR) ${from}
+     WHERE m.sale_date >= DATE '2026-01-01' AND m.sale_date < DATE '2026-07-01' GROUP BY 1 ORDER BY sum(m.revenue) DESC, 1 LIMIT 3`,
+  )
+  return { rows, top: r.rows.map((x) => [String(x[0]), String(x[1])]) }
 }
