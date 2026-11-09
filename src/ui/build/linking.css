@@ -4,6 +4,7 @@
 .lk { display: flex; flex-direction: column; gap: 14px; }
 .lk-tabs { display: flex; gap: 6px; }
 .lk-grid { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; align-items: start; }
+.lk-grid.is-wide { grid-template-columns: minmax(0, 1fr); }
 .lk-board { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .lk-caption { margin: 0; font-size: 13px; color: var(--muted); }
 .lk-svg { width: 100%; height: auto; display: block; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }

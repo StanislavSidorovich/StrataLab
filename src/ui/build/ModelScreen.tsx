@@ -194,6 +194,8 @@ export function ModelScreen(p: Props) {
 
   const pending: PendingLine | null = pair && live ? { ...pair, state: run.busy || !diag ? 'run' : diag.key === 'pass' ? 'ok' : 'bad', label: diag && diag.key !== 'pass' ? diag.badLabel : null } : null
   const sql = starSql(links)
+  // the panel goes once every link of the pass is made: the drawing gets the whole card (a removed link brings it back)
+  const panelOn = live && !(pass === 1 ? canBuildStar(links) : modelLinked(links))
   const made = linksOfPass(links, pass)
   const pass1 = linksOfPass(links, 1)
   const pass2 = linksOfPass(links, 2)
@@ -227,7 +229,7 @@ export function ModelScreen(p: Props) {
           <Loader2 size={14} className="animate-spin" style={{ display: 'inline', verticalAlign: '-2px' }} /> Loading the tables…
         </div>
       ) : (
-        <div className="lk-grid">
+        <div className={`lk-grid${panelOn ? '' : ' is-wide'}`}>
           <div className="lk-board">
             {live && !pair && <p className="lk-caption">{pass === 2 ? LINK_TEXT.idleStar : LINK_TEXT.idle}</p>}
             <LinkCanvas pass={pass} tables={tables} links={legacy ? legacyLinks() : links} labels={legacy ? {} : labels} pending={pending} picked={{ many: filled(many) ? many : null, one: filled(one) ? one : null }} onPick={live ? pick : undefined} />
@@ -304,7 +306,7 @@ export function ModelScreen(p: Props) {
               </div>
             )}
           </div>
-          {live && <LinkPanel pass={pass} tables={tables} many={many} one={one} onSlot={onSlot} onSwap={doSwap} run={run} diag={diag} peek={peek} onCreate={create} onFix={fix} />}
+          {panelOn && <LinkPanel pass={pass} tables={tables} many={many} one={one} onSlot={onSlot} onSwap={doSwap} run={run} diag={diag} peek={peek} onCreate={create} onFix={fix} />}
         </div>
       )}
     </div>

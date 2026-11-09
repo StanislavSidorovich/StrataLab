@@ -640,6 +640,7 @@ function TaskBlock({ section, block, onNext }: { section: PracticeSection; block
     setInitial(next)
     setEditorKey((k) => k + 1)
     setSolutionShown(true)
+    useProgress.setState((p) => (p.peeked.includes(block.id) ? p : { peeked: [...p.peeked, block.id] }))
   }
   const next = check?.verdict.ok ? nextTask(book.tasks, useProgress.getState()) : null
   const said = check ? describeVerdict(check.verdict, book.kind) : null
@@ -947,7 +948,7 @@ function Page() {
             <div className="rounded-lg px-4 py-3 flex flex-wrap items-center gap-3" style={{ background: 'var(--panel)', border: '1px solid var(--accent)' }} data-testid="practice-count">
               <CheckCircle2 size={16} style={{ color: 'var(--accent)' }} />
               <span className="flex-1 min-w-0">
-                You've done {Math.round(sectionsDone.share * 100)}% of the {book.kind === 'sql' ? 'SQL' : 'Python'} practice: count it in Quaera.
+                You've done {Math.round(sectionsDone.share * 100)}% of the {book.kind === 'sql' ? 'SQL' : 'Python'} practice without hints: count it in Quaera.
               </span>
               <a className="btn btn-primary" href={PRACTICE_RETURN_URL[book.kind]} target="_blank" rel="noopener">
                 Count it in Quaera <ExternalLink size={14} />

@@ -7,6 +7,8 @@ export interface PracticeProgress {
   solved: string[]
   /** sections the learner marked "I know this": their own word, never counted as solved */
   known: string[]
+  /** tasks whose solution was shown: the task may be solved, but not without help */
+  peeked: string[]
   /** task → hints shown */
   hints: Record<string, number>
   /** task → the query being written */
@@ -14,7 +16,7 @@ export interface PracticeProgress {
   hideKnown: boolean
 }
 
-export const emptyProgress = (): PracticeProgress => ({ solved: [], known: [], hints: {}, drafts: {}, hideKnown: false })
+export const emptyProgress = (): PracticeProgress => ({ solved: [], known: [], peeked: [], hints: {}, drafts: {}, hideKnown: false })
 
 /** Progress from localStorage: anything unreadable starts afresh, a missing part stays empty. */
 export function readProgress(raw: string | null): PracticeProgress {
@@ -26,6 +28,7 @@ export function readProgress(raw: string | null): PracticeProgress {
     return {
       solved: Array.isArray(p.solved) ? p.solved : [],
       known: Array.isArray(p.known) ? p.known : [],
+      peeked: Array.isArray(p.peeked) ? p.peeked.filter((x: unknown) => typeof x === 'string') : [],
       hints: p.hints && typeof p.hints === 'object' ? p.hints : {},
       drafts: p.drafts && typeof p.drafts === 'object' ? p.drafts : {},
       hideKnown: p.hideKnown === true,
@@ -87,13 +90,17 @@ export function practiceCounts(sections: readonly SectionTasks[], p: PracticePro
 /** Share of the practice's sections done at which Lab offers to count it in Quaera. One place to change it. */
 export const PRACTICE_DONE_SHARE = 0.7
 
+/** A task solved with no hint shown and no solution shown. The progress ticks stay as they are; only the return to Quaera asks for this. */
+export const solvedClean = (p: PracticeProgress, task: string) => p.solved.includes(task) && !(p.hints[task] > 0) && !p.peeked.includes(task)
+
 /**
- * Sections done: every task solved, or the section marked as known (Test me, or the menu). Sections with no tasks are
- * not counted: there is nothing in them to pass.
+ * Sections done, for the offer to count the practice in Quaera ("without hints"): every task solved clean, or the
+ * section marked as known after its last task (the "Test me" one) was solved clean. A section marked "I know this"
+ * with nothing solved is the learner's own word and does not count. Sections with no tasks are left out.
  */
 export function practiceSections(sections: readonly SectionTasks[], p: PracticeProgress): { done: number; total: number; share: number; reached: boolean } {
   const counted = sections.filter((s) => s.taskIds.length > 0)
-  const done = counted.filter((s) => s.taskIds.every((t) => p.solved.includes(t)) || (p.known.includes(s.id) && p.solved.includes(s.taskIds[s.taskIds.length - 1]))).length
+  const done = counted.filter((s) => s.taskIds.every((t) => solvedClean(p, t)) || (p.known.includes(s.id) && solvedClean(p, s.taskIds[s.taskIds.length - 1]))).length
   const share = counted.length ? done / counted.length : 0
   return { done, total: counted.length, share, reached: counted.length > 0 && share >= PRACTICE_DONE_SHARE }
 }

@@ -1,6 +1,6 @@
 // The share of a practice's sections done, at which Lab offers to count it in Quaera, and the addresses it links to.
 import { describe, expect, it } from 'vitest'
-import { PRACTICE_DONE_SHARE, PRACTICE_RETURN_URL, practiceSections, readProgress, type SectionTasks } from '../src/core/sqlPractice'
+import { PRACTICE_DONE_SHARE, PRACTICE_RETURN_URL, practiceSections, readProgress, solvedClean, type SectionTasks } from '../src/core/sqlPractice'
 import { BUILD_RETURN_URL } from '../src/data/build/kaiyoSales'
 
 // ten sections of two tasks, one section without tasks
@@ -24,6 +24,33 @@ describe('practiceSections', () => {
   })
   it('an empty book never reaches it', () => {
     expect(practiceSections([], progress([])).reached).toBe(false)
+  })
+})
+
+describe('without hints', () => {
+  const withHelp = (solved: string[], hints: Record<string, number>, peeked: string[], known: string[] = []) => ({ ...readProgress(null), solved, hints, peeked, known })
+  it('a task solved after a hint or after the solution was shown is not clean; the ticks themselves are untouched', () => {
+    const p = withHelp(['a', 'b', 'c'], { a: 1, c: 0 }, ['b'])
+    expect(['a', 'b', 'c'].map((t) => solvedClean(p, t))).toEqual([false, false, true])
+    expect(p.solved).toEqual(['a', 'b', 'c'])
+    expect(solvedClean(p, 'not-solved')).toBe(false)
+  })
+  it('a section with one helped task does not count; seven clean sections reach 70%, a helped one in them does not', () => {
+    expect(practiceSections(SECTIONS, withHelp(solveSections(7), {}, [])).reached).toBe(true)
+    expect(practiceSections(SECTIONS, withHelp(solveSections(7), { s0a: 2 }, [])).reached).toBe(false)
+    expect(practiceSections(SECTIONS, withHelp(solveSections(7), {}, ['s6b'])).reached).toBe(false)
+    expect(practiceSections(SECTIONS, withHelp(solveSections(8), { s0a: 1 }, [])).reached).toBe(true)
+  })
+  it('known counts only when the last task of the section is clean', () => {
+    const base = solveSections(5)
+    expect(practiceSections(SECTIONS, withHelp([...base, 's7b', 's8b'], {}, [], ['s7', 's8'])).reached).toBe(true)
+    expect(practiceSections(SECTIONS, withHelp([...base, 's7b', 's8b'], {}, ['s8b'], ['s7', 's8'])).reached).toBe(false)
+    expect(practiceSections(SECTIONS, withHelp([...base, 's7b', 's8b'], { s7b: 1 }, [], ['s7', 's8'])).reached).toBe(false)
+  })
+  it('old progress with no peeked list reads as none shown, and bad values are dropped', () => {
+    expect(readProgress('{"solved":["a"]}').peeked).toEqual([])
+    expect(readProgress('{"peeked":["a",3,null]}').peeked).toEqual(['a'])
+    expect(readProgress('{"peeked":"x"}').peeked).toEqual([])
   })
 })
 
