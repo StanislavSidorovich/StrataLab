@@ -84,6 +84,26 @@ export function practiceCounts(sections: readonly SectionTasks[], p: PracticePro
   return { solved, known, left }
 }
 
+/** Share of the practice's sections done at which Lab offers to count it in Quaera. One place to change it. */
+export const PRACTICE_DONE_SHARE = 0.7
+
+/**
+ * Sections done: every task solved, or the section marked as known (Test me, or the menu). Sections with no tasks are
+ * not counted: there is nothing in them to pass.
+ */
+export function practiceSections(sections: readonly SectionTasks[], p: PracticeProgress): { done: number; total: number; share: number; reached: boolean } {
+  const counted = sections.filter((s) => s.taskIds.length > 0)
+  const done = counted.filter((s) => s.taskIds.every((t) => p.solved.includes(t)) || (p.known.includes(s.id) && p.solved.includes(s.taskIds[s.taskIds.length - 1]))).length
+  const share = counted.length ? done / counted.length : 0
+  return { done, total: counted.length, share, reached: counted.length > 0 && share >= PRACTICE_DONE_SHARE }
+}
+
+/** quaera.app counts these practices when it opens the address (src/labDone.ts there). */
+export const PRACTICE_RETURN_URL = {
+  sql: 'https://quaera.app/#lab-done=practice:sql',
+  python: 'https://quaera.app/#lab-done=practice:python',
+} as const
+
 /**
  * Solving the last task of a section ("Test me") offers to mark the rest as known, unless the
  * section has nothing left to skip or is marked already.

@@ -13,7 +13,7 @@ import { ArrowDown, ArrowRight, Check, CheckCircle2, ChevronDown, ChevronRight, 
 import { create } from 'zustand'
 import { compareResults, describeVerdict, type ResultData, type Verdict } from '../core/check'
 import type { Output } from '../core/ipynb'
-import { fabricNotes, hashWithPractice, nextTask, offersKnown, practiceCounts, practiceFromHash, readProgress, type BookKind, type FabricNote, type PracticeProgress, type SectionTasks } from '../core/sqlPractice'
+import { fabricNotes, hashWithPractice, nextTask, offersKnown, practiceCounts, practiceFromHash, practiceSections, PRACTICE_RETURN_URL, readProgress, type BookKind, type FabricNote, type PracticeProgress, type SectionTasks } from '../core/sqlPractice'
 import { cancelQuery } from '../db/engine'
 import { resultRows } from '../db/export'
 import { SECTIONS as SQL_SECTIONS, SECTION_TASKS as SQL_TASKS } from '../data/sqlPractice'
@@ -810,6 +810,7 @@ function Page() {
   const progress = useProgress()
   const counts = practiceCounts(SECTION_TASKS, progress)
   const next = nextTask(SECTION_TASKS, progress)
+  const sectionsDone = practiceSections(SECTION_TASKS, progress)
   const main = useRef<HTMLDivElement>(null)
   const [active, setActive] = useState(() => practiceFromHash(location.hash)?.at ?? SECTIONS[0].id)
   const [tablesOpen, setTablesOpen] = useState(false)
@@ -942,6 +943,17 @@ function Page() {
           <p className={`m-0 ${READABLE}`} style={{ color: 'var(--muted)' }}>
             {book.intro}
           </p>
+          {sectionsDone.reached && (
+            <div className="rounded-lg px-4 py-3 flex flex-wrap items-center gap-3" style={{ background: 'var(--panel)', border: '1px solid var(--accent)' }} data-testid="practice-count">
+              <CheckCircle2 size={16} style={{ color: 'var(--accent)' }} />
+              <span className="flex-1 min-w-0">
+                You've done {Math.round(sectionsDone.share * 100)}% of the {book.kind === 'sql' ? 'SQL' : 'Python'} practice: count it in Quaera.
+              </span>
+              <a className="btn btn-primary" href={PRACTICE_RETURN_URL[book.kind]} target="_blank" rel="noopener">
+                Count it in Quaera <ExternalLink size={14} />
+              </a>
+            </div>
+          )}
           {shown.map((s) => (
             <div key={s.id} className="space-y-4">
               {s.part && <div className="pt-2 text-xl font-semibold">{s.part}</div>}

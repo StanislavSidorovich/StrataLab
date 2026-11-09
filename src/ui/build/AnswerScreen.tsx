@@ -1,10 +1,10 @@
 // Step 5 of the build page: the Answer (spec 5.4). Three questions from the Head of Sales; the learner reads the numbers
 // off the dashboard and types them. The step is done when all three are right.
 import { useState } from 'react'
-import { Check, CheckCircle2 } from 'lucide-react'
+import { Check, CheckCircle2, ExternalLink } from 'lucide-react'
 import { answersDone, checkAnswer, type AnswerResult } from '../../core/buildDashboard'
 import type { BuildWork } from '../../core/buildSteps'
-import { ANSWERS, type AnswerId, type AnswerQuestion } from '../../data/build/kaiyoSales'
+import { ANSWERS, BUILD_RETURN_URL, type AnswerId, type AnswerQuestion } from '../../data/build/kaiyoSales'
 import './dashboard.css'
 
 interface Props {
@@ -35,6 +35,11 @@ export function AnswerScreen({ work, setWork }: Props) {
       {answersDone(answered) && (
         <div className="build-quick" data-testid="answer-done">
           <b>You built it.</b> From four raw files to a number, a month and a chain, with every step yours: connected, cleaned, modelled, shown. Minori carries the first half of 2026.
+          <div>
+            <a className="btn btn-primary" href={BUILD_RETURN_URL} target="_blank" rel="noopener" data-testid="answer-count">
+              Count it in Quaera <ExternalLink size={14} />
+            </a>
+          </div>
         </div>
       )}
     </div>

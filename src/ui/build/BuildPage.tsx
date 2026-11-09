@@ -7,7 +7,7 @@ import { BUILD_ID, STEP_IDS, STEP_LABEL, goNext, loadBuild, markDone, modelDone,
 import type { Link } from '../../core/buildLinks'
 import { answersDone, dashboardDone } from '../../core/buildDashboard'
 import { cleanDone, type BuildWork, type StepSpec } from '../../core/buildSteps'
-import { BUILD_SOURCES, type BuildSourceId } from '../../data/build/kaiyoSales'
+import { BUILD_RETURN_URL, BUILD_SOURCES, type BuildSourceId } from '../../data/build/kaiyoSales'
 import { applySteps, restore } from '../../db/buildRun'
 import { checkpoint } from '../../db/engine'
 import { enginePort } from '../../db/pipelinePort'
@@ -21,7 +21,7 @@ import './build.css'
 import './clean.css'
 
 /** Where the finish will lead back to. The trainer does not read this format yet, so nothing links here. */
-export const RETURN_URL = 'https://quaera.app/#lab-done=build:kaiyo-sales'
+export const RETURN_URL = BUILD_RETURN_URL
 
 export function BuildPage() {
   const id = useLab((s) => s.build)
