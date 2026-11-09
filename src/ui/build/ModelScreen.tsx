@@ -229,7 +229,7 @@ export function ModelScreen(p: Props) {
       ) : (
         <div className="lk-grid">
           <div className="lk-board">
-            {live && !pair && <p className="lk-caption">{LINK_TEXT.idle}</p>}
+            {live && !pair && <p className="lk-caption">{pass === 2 ? LINK_TEXT.idleStar : LINK_TEXT.idle}</p>}
             <LinkCanvas pass={pass} tables={tables} links={legacy ? legacyLinks() : links} labels={legacy ? {} : labels} pending={pending} picked={{ many: filled(many) ? many : null, one: filled(one) ? one : null }} onPick={live ? pick : undefined} />
             {!legacy && (
               <ul className="lk-links" aria-label="Links" data-testid="link-list">

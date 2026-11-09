@@ -121,7 +121,7 @@ export async function restore(port: SqlPort, work: BuildWork, model: { links: re
 
 export interface CheckChip {
   label: string
-  value: number
+  value: number | string
   ok: boolean
 }
 
@@ -299,7 +299,7 @@ export async function checkP7(port: SqlPort): Promise<CheckReport & { facts: P7F
   const d = isNumber ? await diffAgainstRef(port, 'regions', 'ref_regions') : { extra: 0, missing: 0 }
   const f: P7Facts = { rows: await num(port, `SELECT count(*) FROM ${T('clean_regions')}`), isNumber, diff: d.extra + d.missing }
   const chips: CheckChip[] = [
-    { label: 'region_id is a number', value: isNumber ? 1 : 0, ok: isNumber },
+    { label: 'region_id is a number', value: isNumber ? 'yes' : 'no', ok: isNumber },
     { label: 'Rows different from the expected table', value: f.diff, ok: f.diff === 0 && isNumber },
   ]
   return { ...diagnoseP7(f), chips, facts: f }

@@ -1,4 +1,6 @@
 /* The linking screen of the Model step. Colours come from the app's variables, so both themes work. */
+/* the drawing needs room: at 1366 px it is shown at about 0.95, so a column name reads at 13 px */
+.build-card:has([data-testid='build-model']) { max-width: 1300px; }
 .lk { display: flex; flex-direction: column; gap: 14px; }
 .lk-tabs { display: flex; gap: 6px; }
 .lk-grid { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; align-items: start; }
@@ -8,7 +10,7 @@
 
 /* boxes */
 .lk-box-bg { fill: var(--panel); stroke: var(--line); stroke-width: 1.2; }
-.lk-box-head { fill: var(--text); font-size: 13px; font-weight: 600; }
+.lk-box-head { fill: var(--text); font-size: 14px; font-weight: 600; }
 .lk-box-rule { stroke: var(--line); stroke-width: 1; }
 .lk-row-bg { fill: transparent; }
 .lk-row.is-live { cursor: pointer; }
@@ -16,8 +18,8 @@
 .lk-row.is-picked .lk-row-bg { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5; }
 .lk-row:focus { outline: none; }
 .lk-row:focus-visible .lk-row-bg { stroke: var(--accent); stroke-width: 2; }
-.lk-type { fill: var(--muted); font-size: 9.5px; font-weight: 600; font-family: ui-monospace, monospace; }
-.lk-col { fill: var(--text); font-size: 12.5px; font-family: ui-monospace, monospace; }
+.lk-type { fill: var(--muted); font-size: 10.5px; font-weight: 600; font-family: ui-monospace, monospace; }
+.lk-col { fill: var(--text); font-size: 14px; font-family: ui-monospace, monospace; }
 .lk-slot-letter { fill: var(--accent); font-size: 11px; font-weight: 700; }
 
 /* lines */

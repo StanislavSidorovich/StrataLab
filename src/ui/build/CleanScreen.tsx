@@ -162,7 +162,7 @@ function Verdict({ report }: { report: CheckReport }) {
       <div className="build-chips">
         {report.chips.map((c) => (
           <span key={c.label} className={`build-chipx ${c.ok ? 'is-ok' : 'is-bad'}`}>
-            {c.ok ? <Check size={12} /> : <XCircle size={12} />} {c.label}: <b>{c.value.toLocaleString('en-US')}</b>
+            {c.ok ? <Check size={12} /> : <XCircle size={12} />} {c.label}: <b>{typeof c.value === 'number' ? c.value.toLocaleString('en-US') : c.value}</b>
           </span>
         ))}
       </div>

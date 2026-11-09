@@ -108,6 +108,27 @@ describe('diagnoseLink (4.2)', () => {
     expect(part.line).toBe("714 sales found no product (6 different values: 'AQUA002', 'FRUV002␣', '␣KROS001', …): 392,540.33 of revenue would be left out. A key has to match to the character.")
     expect(part.badLabel).toBe('714 not found')
   })
+  it('two id columns of different things: the line says the numbers overlap, not that a key must match to the character', () => {
+    const fy = diagnoseLink(
+      facts(
+        side('gold_fact_sales', 'customer_id', 'INTEGER', { total: 3000, rows: 3000, distinct: 45, repeated: 45, max: '144' }),
+        side('gold_dim_product', 'product_id', 'INTEGER', { total: 47, rows: 47, distinct: 47, max: '47' }),
+        { ...FOUND_OK, unmatchedRows: 501, unmatchedValues: 10, unmatchedSamples: ['48', '49', '50'], unmatchedRevenue: '220484.87', joinRows: 2499 },
+      ),
+      2,
+    )
+    expect(fy.key).toBe('unmatched')
+    expect(fy.line).toBe('501 sales found no product. customer_id numbers customers, product_id numbers products: the numbers overlap by chance, they are not the same thing. Link customer_id to the customer table.')
+    expect(fy.line).not.toMatch(/to the character/)
+    const fx = diagnoseLink(
+      facts(side('gold_fact_sales', 'product_id', 'INTEGER', { total: 3000, rows: 3000, distinct: 29, repeated: 29, max: '47' }), side('gold_dim_customer', 'customer_id', 'INTEGER', { total: 144, rows: 144, distinct: 144, max: '144' }), FOUND_OK),
+      2,
+    )
+    expect(fx.line).toMatch(/only by chance: .* so every number finds a partner\. product_id numbers products, customer_id numbers customers: the numbers overlap by chance/)
+    // text keys keep the typo line
+    const text = diagnoseLink(facts(side('clean_sales', 'sku_code', 'VARCHAR', { rows: 3000, distinct: 29, repeated: 29 }), side('clean_products', 'sku_code', 'VARCHAR'), { ...FOUND_OK, unmatchedRows: 5, unmatchedValues: 2, unmatchedSamples: ['A', 'B'] }), 1)
+    expect(text.line).toMatch(/to the character/)
+  })
   it('F-x: every data check passes, so Right pair says it is by chance; other pairs say notExpected', () => {
     const fx = diagnoseLink(
       facts(side('gold_fact_sales', 'product_id', 'INTEGER', { total: 3000, rows: 3000, distinct: 29, repeated: 29, max: '47' }), side('gold_dim_customer', 'customer_id', 'INTEGER', { total: 144, rows: 144, distinct: 144, max: '144' }), FOUND_OK),

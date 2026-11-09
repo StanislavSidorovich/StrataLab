@@ -170,6 +170,13 @@ export function diagnoseLink(facts: LinkFacts, pass: Pass, taken = false): LinkD
     return { ...base, key: 'typeMismatch', ok: false, line, fix: regionText ? { kind: 'region' } : null, badLabel: 'types differ' }
   }
   const f = found!
+  // two numeric id columns of different things: a failing match is not a typo, the numbers just overlap
+  const bothIds = fm === 'number' && /_id$/.test(many.slot.column) && /_id$/.test(one.slot.column) && many.slot.column !== one.slot.column
+  const idsLine = LINK_DIAGNOSIS.idsApart(many.slot.column, one.slot.column)
+  if (bothIds && !expected && f.unmatchedRows > 0 && oneOk) {
+    const head = LINK_DIAGNOSIS.idsUnmatched(fmt(f.unmatchedRows), infoM?.plural ?? 'rows', infoO?.noun ?? 'row')
+    return { ...base, key: 'unmatched', ok: false, line: head + idsLine, fix: null, badLabel: `${fmt(f.unmatchedRows)} not found` }
+  }
   if (many.rows > 0 && f.unmatchedRows === many.rows) {
     const line = LINK_DIAGNOSIS.noMatch(nameM, nameO, f.unmatchedSamples.map((v) => quote(v, fm)), one.samples.map((v) => quote(v, fo)))
     return { ...base, key: 'noMatch', ok: false, line, fix: null, badLabel: 'none found' }
@@ -196,8 +203,8 @@ export function diagnoseLink(facts: LinkFacts, pass: Pass, taken = false): LinkD
     return { ...base, key: 'unmatched', ok: false, line, fix: source ? { kind: 'clean', source } : null, badLabel: `${fmt(f.unmatchedRows)} not found` }
   }
   if (!expected) {
-    const ids = fm === 'number' && /_id$/.test(many.slot.column) && /_id$/.test(one.slot.column)
-    const line = ids ? LINK_DIAGNOSIS.sameByChance(nameM, nameO, many.max ?? '?', one.max ?? '?') : LINK_DIAGNOSIS.notExpected(nameM, nameO)
+    const ids = bothIds
+    const line = ids ? LINK_DIAGNOSIS.sameByChance(nameM, nameO, many.max ?? '?', one.max ?? '?') + idsLine : LINK_DIAGNOSIS.notExpected(nameM, nameO)
     return { ...base, key: ids ? 'sameByChance' : 'notExpected', ok: false, line, fix: null, badLabel: 'not this pair' }
   }
   const notes: string[] = []

@@ -145,7 +145,7 @@ export function LinkPanel({ pass, tables, many, one, onSlot, onSwap, run, diag, 
           )}
         </div>
       )}
-      {!full && !run.error && <div className="lk-caption build-muted">{many.column || one.column ? 'Now the other end.' : LINK_TEXT.idle}</div>}
+      {!full && !run.error && <div className="lk-caption build-muted">{many.column || one.column ? 'Now the other end.' : pass === 2 ? LINK_TEXT.idleStar : LINK_TEXT.idle}</div>}
       {diag && !run.busy && (
         <div className="lk-result" data-testid="link-result">
           {diag.result}

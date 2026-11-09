@@ -76,6 +76,7 @@ export const LINK_TEXT = {
   lead1: 'Link the tables yourself. Sales name a store and a product by text; the reference tables have the ids. First link each text column to the table that describes it.',
   lead2: 'Now link the fact to its dimensions by id: that is the relationship a dashboard joins on.',
   idle: 'Click the column that names something, then the column it names. Sales name a store: start there.',
+  idleStar: 'Click an id in fact_sales, then the same id in its dimension.',
   bridge: 'You linked by name to look the ids up. A store renamed tomorrow would break a link by name, so the star links by id. Your turn: link the fact to its dimensions.',
   lookupNote: 'Linked by name: fine for looking the id up. The star will link by id.',
   shape: 'Many to one (*:1) · Single · Active',
@@ -105,8 +106,14 @@ export const LINK_DIAGNOSIS = {
   unmatched: (rows: string, noun: string, values: string, sm: string[], more: boolean, revenue: string | null, oneNoun: string) =>
     `${rows} ${noun} found no ${oneNoun} (${values} different values: ${sm.join(', ')}${more ? ', …' : ''})` + (revenue ? `: ${revenue} of revenue would be left out.` : '.') + ' A key has to match to the character.',
   notExpected: (many: string, one: string) => `Every check passes, but ${many} and ${one} don't name the same thing. Which table describes ${many}?`,
+  /** two id columns of different things: the numbers overlap by chance */
+  idsApart: (a: string, b: string) => {
+    const thing = (c: string) => c.replace(/_id$/, '').replace(/_/g, ' ')
+    return `${a} numbers ${thing(a)}s, ${b} numbers ${thing(b)}s: the numbers overlap by chance, they are not the same thing. Link ${a} to the ${thing(a)} table.`
+  },
+  idsUnmatched: (rows: string, noun: string, oneNoun: string) => `${rows} ${noun} found no ${oneNoun}. `,
   sameByChance: (many: string, one: string, maxMany: string, maxOne: string) =>
-    `Every check passes, but only by chance: ${many} runs 1 to ${maxMany} and ${one} runs 1 to ${maxOne}, so every number finds a partner. Product 2 is not customer 2. Link each id to its own table.`,
+    `Every check passes, but only by chance: ${many} runs 1 to ${maxMany} and ${one} runs 1 to ${maxOne}, so every number finds a partner. `,
   pass: (many: string, one: string, rows: string) => `One ${one} for each value, and all ${rows} rows of ${many} found theirs.`,
   unusedNote: (unused: string, of: string, what: string) => `${unused} of ${of} ${what} have no sales. Normal: a dimension lists everything, the fact only what was sold.`,
   already: 'This link is already made.',
