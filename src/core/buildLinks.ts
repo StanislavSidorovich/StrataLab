@@ -207,8 +207,8 @@ export function diagnoseLink(facts: LinkFacts, pass: Pass, taken = false): LinkD
   return { ...base, key: 'pass', ok: true, line: LINK_DIAGNOSIS.pass(shM, nounO, fmt(many.rows)), notes, fix: null, badLabel: null }
 }
 
-/** A short caption on an accepted line: "3,000 → 144 · all found". */
-export const acceptedLabel = (facts: LinkFacts) => `${fmt(facts.many.rows)} → ${fmt(facts.one.distinct)} · all found`
+/** A short caption on an accepted line: "3,000 → 144 ✓". */
+export const acceptedLabel = (facts: LinkFacts) => `${fmt(facts.many.rows)} → ${fmt(facts.one.distinct)} ✓`
 
 // ---------------------------------------------------------------- the links and what is kept (6)
 
@@ -275,3 +275,34 @@ LEFT JOIN ${t('gold_dim_product')} p ON p.${l2.one.column} = s.${l2.many.column}
 
 /** The same, as the text shown and opened in a tab. */
 export const starSql = (links: readonly Link[]): string | null => starStatements(links)?.map((s) => s + ';').join('\n\n') ?? null
+
+// ---------------------------------------------------------------- the SQL behind the chips (4.4), shown folded
+
+/** The queries `linkFacts` runs for a pair, written out with the table and column names filled in. */
+export function checkSqlText(many: Slot, one: Slot): string {
+  const mt = `${SCHEMA}.${many.table}`
+  const ot = `${SCHEMA}.${one.table}`
+  const mc = many.column
+  const oc = one.column
+  return `-- Types: the two data types
+SELECT table_name, column_name, data_type
+FROM information_schema.columns
+WHERE table_schema = '${SCHEMA}'
+  AND ((table_name = '${many.table}' AND column_name = '${mc}') OR (table_name = '${one.table}' AND column_name = '${oc}'));
+
+-- One side: rows, different values, values that repeat (0 repeats = ok)
+SELECT count(${oc}) AS rows, count(DISTINCT ${oc}) AS different,
+       (SELECT count(*) FROM (SELECT ${oc} FROM ${ot} WHERE ${oc} IS NOT NULL GROUP BY 1 HAVING count(*) > 1)) AS repeated
+FROM ${ot};
+
+-- Found: rows of the many side with no partner (0 = ok); skipped when the types differ
+SELECT count(*) AS rows, count(DISTINCT m.${mc}) AS different
+FROM ${mt} m
+WHERE m.${mc} IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM ${ot} o WHERE o.${oc} = m.${mc});
+
+-- rows after the join, and values of the one side nobody uses
+SELECT count(*) FROM ${mt} m JOIN ${ot} o ON o.${oc} = m.${mc};
+SELECT count(DISTINCT o.${oc}) FROM ${ot} o
+WHERE NOT EXISTS (SELECT 1 FROM ${mt} m WHERE m.${mc} = o.${oc});`
+}

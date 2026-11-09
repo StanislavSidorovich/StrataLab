@@ -113,8 +113,9 @@ export function StepsPanel({ source, work, ready, rev, onChange, onSource }: Pan
             </div>
             <div className="build-tool">
               <button className="btn" disabled={off} onClick={() => add('trim', { column: col })}>Trim</button>
-              {select(col, setCol, 'Column to trim or uppercase')}
+              {select(col, setCol, 'Column to trim, uppercase or extract the number from')}
               <button className="btn" disabled={off} onClick={() => add('upper', { column: col })}>Uppercase</button>
+              <button className="btn" disabled={off} onClick={() => add('extract', { column: col })} title="Keep the digits of a text as a whole number: R-03 becomes 3">Extract number</button>
             </div>
             <div className="build-tool">
               <button className="btn" disabled={off} onClick={() => add('latest', { key, order, direction: dir })}>Keep latest row per key</button>

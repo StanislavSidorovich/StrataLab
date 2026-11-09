@@ -50,7 +50,7 @@ describe('diagnoseLink (4.2)', () => {
     expect(d.line).toBe('One customer for each value, and all 3,000 rows of sales found theirs.')
     expect(d.notes).toEqual(['99 of 144 customers have no sales. Normal: a dimension lists everything, the fact only what was sold.', 'Linked by name: fine for looking the id up. The star will link by id.'])
     expect(d.result).toBe('customers: 144 rows, keys unique · sales: 0 of 3,000 rows found no customer')
-    expect(acceptedLabel(facts(sales(), customers(), FOUND_OK))).toBe('3,000 → 144 · all found')
+    expect(acceptedLabel(facts(sales(), customers(), FOUND_OK))).toBe('3,000 → 144 ✓')
   })
   it('refuses a made link', () => {
     const d = diagnoseLink(facts(sales(), customers(), FOUND_OK), 1, true)

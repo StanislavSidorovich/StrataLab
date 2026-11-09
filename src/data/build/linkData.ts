@@ -52,22 +52,22 @@ export const BOX_ROW = 22
 /** Fixed places of the boxes, one set per pass (5.1): no layout engine, no drag. */
 export const LINK_LAYOUT: Record<Pass, { width: number; height: number; boxes: Record<string, BoxPlace> }> = {
   1: {
-    width: 960,
+    width: 880,
     height: 430,
     boxes: {
-      clean_sales: { x: 16, y: 110, w: 210 },
-      clean_customers: { x: 370, y: 10, w: 220 },
-      clean_products: { x: 370, y: 250, w: 220 },
-      clean_regions: { x: 740, y: 40, w: 204 },
+      clean_sales: { x: 10, y: 110, w: 210 },
+      clean_customers: { x: 340, y: 10, w: 220 },
+      clean_products: { x: 340, y: 250, w: 220 },
+      clean_regions: { x: 680, y: 40, w: 190 },
     },
   },
   2: {
-    width: 960,
+    width: 880,
     height: 330,
     boxes: {
-      gold_dim_customer: { x: 16, y: 20, w: 230 },
-      gold_fact_sales: { x: 365, y: 70, w: 230 },
-      gold_dim_product: { x: 714, y: 20, w: 230 },
+      gold_dim_customer: { x: 10, y: 20, w: 210 },
+      gold_fact_sales: { x: 340, y: 70, w: 200 },
+      gold_dim_product: { x: 660, y: 20, w: 210 },
     },
   },
 }

@@ -1,9 +1,10 @@
-// The build page (`#build=kaiyo-sales`): five steps from the files to an answer. Connect and Clean are real (Б4); Model v1,
+// The build page (`#build=kaiyo-sales`): five steps from the files to an answer. Connect and Clean are real (Б4); the linking screen,
 // the Dashboard and the Answer are Б6. The rules are in src/core/build.ts. Under 768 px the whole
 // page is the "Open on a laptop" screen, as on the pipeline page.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowRight, Check, Copy, Hammer, Laptop, Lock, Share2, X } from 'lucide-react'
-import { BUILD_ID, STEP_IDS, STEP_LABEL, goNext, loadBuild, markDone, nextStep, openStep, saveBuild, statusOf } from '../../core/build'
+import { BUILD_ID, STEP_IDS, STEP_LABEL, goNext, loadBuild, markDone, modelDone, nextStep, openStep, saveBuild, statusOf } from '../../core/build'
+import type { Link } from '../../core/buildLinks'
 import { answersDone, dashboardDone } from '../../core/buildDashboard'
 import { cleanDone, type BuildWork, type StepSpec } from '../../core/buildSteps'
 import { BUILD_SOURCES, type BuildSourceId } from '../../data/build/kaiyoSales'
@@ -102,7 +103,8 @@ function Shell() {
     if (!wide) return
     let alive = true
     setEngine('loading')
-    restore(enginePort, stateRef.current.work)
+    const now = stateRef.current
+    restore(enginePort, now.work, { links: now.links, star: now.star, done: now.done.includes('model') })
       .then(async () => {
         await checkpoint()
         await refreshCatalog()
@@ -117,6 +119,17 @@ function Shell() {
     }
   }, [wide, tries])
   const ready = engine === 'ready'
+
+  // Model: the links, Build the star, Try it, and the trips to Clean and back
+  const [cleanFocus, setCleanFocus] = useState<BuildSourceId | undefined>(undefined)
+  const setLinks = useCallback((links: Link[], star: boolean) => setState((s) => ({ ...s, links, star })), [])
+  const markStar = useCallback(() => setState((s) => ({ ...s, star: true, v1: false })), [])
+  const tryIt = useCallback(() => setState((s) => ({ ...s, links: [], star: false, v1: false })), [])
+  const toClean = useCallback((source: BuildSourceId, asked: boolean) => {
+    setCleanFocus(source)
+    setState((s) => openStep({ ...s, work: asked && !s.work.p7 ? { ...s.work, p7: 'asked' } : s.work }, 'clean'))
+  }, [])
+  const backToModel = useCallback(() => setState((s) => openStep(s, 'model')), [])
 
   const setWork = useCallback((f: (w: BuildWork) => BuildWork) => setState((s) => ({ ...s, work: f(s.work) })), [])
   /** Sets a source's steps and rebuilds its clean table. A step the engine refuses is not kept: the old list is rebuilt. */
@@ -204,9 +217,22 @@ function Shell() {
               {open === 'connect' ? (
                 <ConnectScreen work={work} setWork={setWork} ready={ready} />
               ) : open === 'clean' ? (
-                <CleanScreen work={work} setWork={setWork} ready={ready} rebuild={rebuild} rev={rev} />
+                <CleanScreen work={work} setWork={setWork} ready={ready} rebuild={rebuild} rev={rev} focus={cleanFocus} onBackToModel={backToModel} />
               ) : open === 'model' ? (
-                <ModelScreen ready={ready} done={state.done.includes('model')} onContinue={() => setState((x) => goNext(markDone(x, 'model')))} />
+                <ModelScreen
+                  ready={ready}
+                  rev={rev}
+                  done={state.done.includes('model')}
+                  links={state.links}
+                  star={state.star}
+                  v1={state.v1}
+                  onLinks={setLinks}
+                  onStar={markStar}
+                  onTryIt={tryIt}
+                  onContinue={() => setState((x) => (modelDone(x) ? goNext(markDone(x, 'model')) : x))}
+                  onFixRegions={() => toClean('regions', true)}
+                  onBackToClean={(source) => toClean(source, false)}
+                />
               ) : open === 'dashboard' ? (
                 <DashboardScreen work={work} setWork={setWork} ready={ready} />
               ) : (

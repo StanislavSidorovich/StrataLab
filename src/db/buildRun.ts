@@ -223,6 +223,11 @@ export interface StarFacts {
 /** Builds the three gold tables from the clean ones (through the learner's links, or the first version's SQL) and counts them. */
 export async function buildStar(port: SqlPort, links?: readonly Link[]): Promise<StarFacts> {
   for (const sql of (links && starStatements(links)) || GOLD_SQL) await port.query(sql)
+  return starFacts(port)
+}
+
+/** The numbers of the star as it is now (after a build, or after a reload rebuilt it). */
+export async function starFacts(port: SqlPort): Promise<StarFacts> {
   return {
     fact: await num(port, `SELECT count(*) FROM ${T('gold_fact_sales')}`),
     customers: await num(port, `SELECT count(*) FROM ${T('gold_dim_customer')}`),

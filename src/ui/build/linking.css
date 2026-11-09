@@ -1,0 +1,86 @@
+/* The linking screen of the Model step. Colours come from the app's variables, so both themes work. */
+.lk { display: flex; flex-direction: column; gap: 14px; }
+.lk-tabs { display: flex; gap: 6px; }
+.lk-grid { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; align-items: start; }
+.lk-board { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.lk-caption { margin: 0; font-size: 13px; color: var(--muted); }
+.lk-svg { width: 100%; height: auto; display: block; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+
+/* boxes */
+.lk-box-bg { fill: var(--panel); stroke: var(--line); stroke-width: 1.2; }
+.lk-box-head { fill: var(--text); font-size: 13px; font-weight: 600; }
+.lk-box-rule { stroke: var(--line); stroke-width: 1; }
+.lk-row-bg { fill: transparent; }
+.lk-row.is-live { cursor: pointer; }
+.lk-row.is-live:hover .lk-row-bg { fill: var(--accent-soft); }
+.lk-row.is-picked .lk-row-bg { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5; }
+.lk-row:focus { outline: none; }
+.lk-row:focus-visible .lk-row-bg { stroke: var(--accent); stroke-width: 2; }
+.lk-type { fill: var(--muted); font-size: 9.5px; font-weight: 600; font-family: ui-monospace, monospace; }
+.lk-col { fill: var(--text); font-size: 12.5px; font-family: ui-monospace, monospace; }
+.lk-slot-letter { fill: var(--accent); font-size: 11px; font-weight: 700; }
+
+/* lines */
+.lk-line path { fill: none; stroke-width: 2; }
+.lk-line.is-made path { stroke: var(--accent); }
+.lk-line.is-bad path { stroke: var(--danger); stroke-dasharray: 7 5; }
+.lk-line.is-run path { stroke: var(--muted); stroke-dasharray: 7 5; }
+.lk-line.is-ok path { stroke: var(--accent); stroke-dasharray: 7 5; }
+.lk-arrow { fill: var(--accent); }
+.lk-end rect { fill: var(--panel); stroke: var(--accent); stroke-width: 1.5; }
+.lk-end text { fill: var(--text); font-size: 12px; font-weight: 700; }
+.lk-line.is-bad .lk-end rect { stroke: var(--danger); }
+.lk-line.is-run .lk-end rect { stroke: var(--muted); }
+.lk-pill rect { fill: var(--panel); stroke: var(--accent); stroke-width: 1.2; }
+.lk-pill text { fill: var(--text); font-size: 11px; font-variant-numeric: tabular-nums; }
+.lk-pill.is-bad rect { stroke: var(--danger); fill: var(--danger-soft); }
+.lk-pill.is-bad text { fill: var(--danger); font-weight: 600; }
+.lk-pill.is-run rect { stroke: var(--muted); }
+
+/* links list */
+.lk-links { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.lk-link { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); font-size: 13px; flex-wrap: wrap; }
+.lk-link-id { font-weight: 700; color: var(--accent); min-width: 22px; }
+.lk-link-text { flex: 1; min-width: 200px; font-family: ui-monospace, monospace; font-size: 12.5px; overflow-wrap: anywhere; }
+.lk-link-num { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.lk-confirm { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; width: 100%; padding-top: 4px; color: var(--danger); font-size: 12.5px; }
+
+/* the panel */
+.lk-panel { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); min-width: 0; }
+.lk-panel h3 { margin: 0; font-size: 15px; font-weight: 600; }
+.lk-slot { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); min-width: 0; }
+.lk-slot.is-set { border-color: var(--accent); }
+.lk-slot-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 13px; }
+.lk-slot-head span { color: var(--muted); font-size: 12px; }
+.lk-cols { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+.lk-colbtn { display: flex; align-items: center; gap: 8px; width: 100%; padding: 3px 6px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--text); font: inherit; font-size: 12.5px; font-family: ui-monospace, monospace; text-align: left; cursor: pointer; }
+.lk-colbtn:hover { background: var(--accent-soft); }
+.lk-colbtn.is-on { border-color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+.lk-colbtn .lk-ctype { flex: none; width: 34px; color: var(--muted); font-size: 9.5px; font-weight: 600; }
+.lk-stats { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.lk-swap { align-self: center; }
+.lk-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.lk-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; border: 1px solid var(--line); border-radius: 999px; font-size: 12px; color: var(--muted); background: var(--bg); }
+.lk-chip.is-pass { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.lk-chip.is-fail { border-color: var(--danger); color: var(--danger); background: var(--danger-soft); }
+.lk-diag { padding: 8px 10px; border-radius: 8px; font-size: 13px; }
+.lk-diag.is-bad { background: var(--danger-soft); color: var(--danger); }
+.lk-diag.is-ok { background: var(--accent-soft); }
+.lk-diag-fix { margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap; }
+.lk-result { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.lk-shape { font-size: 12px; color: var(--muted); }
+.lk-notes { margin: 0; padding-left: 18px; font-size: 12.5px; color: var(--muted); }
+.lk-peek { font-size: 12.5px; padding: 8px 10px; border-radius: 8px; border: 1px dashed var(--line); }
+.lk-peek table { border-collapse: collapse; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.lk-peek td { padding: 1px 12px 1px 0; }
+.lk-peek td:last-child { text-align: right; padding-right: 0; }
+
+/* Build the star, numbers */
+.lk-star { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--accent); border-radius: 12px; background: var(--accent-soft); }
+.lk-star .pl-code { max-height: 280px; overflow: auto; }
+.lk-nums { display: flex; flex-wrap: wrap; gap: 6px 22px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.lk-bridge { padding: 8px 12px; border-radius: 8px; background: var(--accent-soft); font-size: 13px; }
+
+@media (max-width: 1023px) {
+  .lk-grid { grid-template-columns: minmax(0, 1fr); }
+}
