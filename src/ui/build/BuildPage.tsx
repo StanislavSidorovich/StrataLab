@@ -90,6 +90,11 @@ function PhoneNotice() {
 
 function Shell() {
   const wide = useWide()
+  // while the build is open the page behind it does not scroll: the wheel at the end of a step stops there (the class is taken off on close)
+  useEffect(() => {
+    document.documentElement.classList.add('build-open')
+    return () => document.documentElement.classList.remove('build-open')
+  }, [])
   const [state, setState] = useState(loadBuild)
   useEffect(() => saveBuild(state), [state])
   const stateRef = useRef(state)
