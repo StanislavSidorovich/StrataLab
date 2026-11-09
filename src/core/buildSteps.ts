@@ -3,6 +3,7 @@
 // src/db/buildRun.ts. What is kept in localStorage is only {id, kind, params}; the SQL is written again on reading.
 import { BUILD_DIAGNOSIS, CLEAN_IDS, GIVEN_SQL, SCHEMA, sourceById, type BuildSourceId, type CleanId } from '../data/build/kaiyoSales'
 import { DIAGNOSIS_TEXT } from '../data/pipelines/kaiyoSellout'
+import { emptyDash, readDash, type DashWork } from './buildDashboard'
 import { checkBlank } from './pipeline'
 
 export type StepKind = 'given' | 'distinct' | 'latest' | 'trim' | 'upper' | 'dedup'
@@ -149,9 +150,11 @@ export interface BuildWork {
   passed: CleanId[]
   /** the Quick look numbers, kept to be shown again */
   peek: Peek | null
+  /** the Dashboard blanks and passed tiles, the answers (src/core/buildDashboard.ts) */
+  dash: DashWork
 }
 
-export const emptyWork = (): BuildWork => ({ connected: [], steps: { sales: [], customers: [], products: [], regions: [] }, blank: '', passed: [], peek: null })
+export const emptyWork = (): BuildWork => ({ connected: [], steps: { sales: [], customers: [], products: [], regions: [] }, blank: '', passed: [], peek: null, dash: emptyDash() })
 
 const KINDS: readonly StepKind[] = ['distinct', 'latest', 'trim', 'upper', 'dedup']
 
@@ -180,6 +183,7 @@ export function readWork(raw: unknown): BuildWork {
   if (Array.isArray(r.passed)) w.passed = passedInOrder(r.passed as unknown[])
   const p = r.peek as Partial<Peek> | null | undefined
   if (p && typeof p.kpi === 'string' && typeof p.chain === 'string' && typeof p.chainRevenue === 'string') w.peek = { kpi: p.kpi, chain: p.chain, chainRevenue: p.chainRevenue }
+  w.dash = readDash(r.dash)
   return w
 }
 

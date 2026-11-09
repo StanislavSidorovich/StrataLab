@@ -282,3 +282,197 @@ export const BUILD_DIAGNOSIS = {
   stillTwice: (n: number) => `${n} customers are still in twice.`,
   generic: "The table doesn't match the expected one yet. Compare it with the rows in the preview.",
 } as const
+
+// ---------------------------------------------------------------- Model v1 (4.1)
+
+/** The star built for the learner (4.1): two dimensions and the fact that carries their ids. */
+export const GOLD_SQL = [
+  `CREATE OR REPLACE TABLE ${T('gold_dim_customer')} AS
+SELECT customer_id, customer_name, customer_type, chain_name, region_id, city FROM ${T('clean_customers')}`,
+  `CREATE OR REPLACE TABLE ${T('gold_dim_product')} AS
+SELECT product_id, sku_code, product_name, brand, category FROM ${T('clean_products')}`,
+  `-- the sales carry names and SKUs; the fact carries ids, looked up through the dimensions
+CREATE OR REPLACE TABLE ${T('gold_fact_sales')} AS
+SELECT s.sale_date, c.customer_id, p.product_id, s.units, s.revenue
+FROM ${T('clean_sales')} s
+LEFT JOIN ${T('gold_dim_customer')} c ON c.customer_name = s.customer_name
+LEFT JOIN ${T('gold_dim_product')} p ON p.sku_code = s.sku_code`,
+] as const
+
+export const MODEL_TEXT = {
+  lead: 'The cleaned tables are linked into a star: sales in the middle, customers and products around them. Lab built it for you this time; you will link the keys yourself in a later version.',
+  link1: 'customer_name in the sales → customer_id',
+  link2: 'sku_code in the sales → product_id',
+  note: 'Customers and products without sales are normal: a dimension lists everything, the fact only what was sold.',
+  noRegions: 'Regions are not in this star yet: their ids are still text (R-03) while customers use numbers.',
+} as const
+
+// ---------------------------------------------------------------- Dashboard (5.1 to 5.3)
+
+export const TILE_IDS = ['kpi', 'line', 'chains'] as const
+export type TileId = (typeof TILE_IDS)[number]
+
+/** The tiles' SQL; `____` is the blank of the first two. */
+export const TILE_SQL: Record<TileId, string> = {
+  kpi: `CREATE OR REPLACE TABLE ${T('tile_kpi')} AS
+SELECT ____ AS revenue
+FROM ${T('gold_fact_sales')}
+WHERE sale_date >= DATE '2026-01-01' AND sale_date < DATE '2026-07-01'`,
+  line: `CREATE OR REPLACE TABLE ${T('tile_line')} AS
+SELECT ____ AS month, SUM(revenue) AS revenue
+FROM ${T('gold_fact_sales')}
+GROUP BY 1
+ORDER BY 1`,
+  chains: `CREATE OR REPLACE TABLE ${T('tile_chains')} AS
+SELECT c.chain_name, SUM(f.revenue) AS revenue
+FROM ${T('gold_fact_sales')} f
+JOIN ${T('gold_dim_customer')} c ON c.customer_id = f.customer_id
+WHERE f.sale_date >= DATE '2026-01-01' AND f.sale_date < DATE '2026-07-01'
+  AND c.chain_name IS NOT NULL
+GROUP BY c.chain_name
+ORDER BY revenue DESC`,
+}
+
+/** The table each tile builds. */
+export const TILE_TABLE: Record<TileId, string> = { kpi: 'tile_kpi', line: 'tile_line', chains: 'tile_chains' }
+
+export interface TileCard {
+  id: TileId
+  title: string
+  prompt: string
+  hints: readonly string[]
+}
+
+export const TILE_CARDS: readonly TileCard[] = [
+  {
+    id: 'kpi',
+    title: 'Revenue, January to June 2026',
+    prompt: 'One number for the Head of Sales: how much did we sell from January to June 2026?',
+    hints: ['Revenue of many sales together is their sum.', 'SUM(revenue)'],
+  },
+  {
+    id: 'line',
+    title: 'Revenue by month',
+    prompt: 'A line of revenue month by month, January 2024 to June 2026. What goes on the time axis?',
+    hints: [
+      'Each point is one month of one year: March 2025 and March 2026 are different points.',
+      "date_trunc('month', sale_date) turns every date into the first day of its month.",
+    ],
+  },
+  {
+    id: 'chains',
+    title: 'Revenue by chain, January to June 2026',
+    prompt: 'No blank here: the SQL is given. Run it and read the table.',
+    hints: [],
+  },
+]
+
+export const tileCard = (id: TileId) => TILE_CARDS.find((t) => t.id === id)!
+
+/** The reference star and tiles, built from the `ref_*` tables (the checks compare with these; the "Right" row of 7). */
+export const REF_TILE_SQL = [
+  `CREATE OR REPLACE TABLE ${T('ref_star_fact')} AS
+SELECT s.sale_date, c.customer_id, p.product_id, s.units, s.revenue
+FROM ${T('ref_sales')} s
+LEFT JOIN ${T('ref_customers')} c ON c.customer_name = s.customer_name
+LEFT JOIN ${T('ref_products')} p ON p.sku_code = s.sku_code`,
+  `CREATE OR REPLACE TABLE ${T('ref_tile_kpi')} AS
+SELECT SUM(revenue) AS revenue FROM ${T('ref_star_fact')}
+WHERE sale_date >= DATE '2026-01-01' AND sale_date < DATE '2026-07-01'`,
+  `CREATE OR REPLACE TABLE ${T('ref_tile_line')} AS
+SELECT date_trunc('month', sale_date) AS month, SUM(revenue) AS revenue FROM ${T('ref_star_fact')} GROUP BY 1 ORDER BY 1`,
+  `CREATE OR REPLACE TABLE ${T('ref_tile_chains')} AS
+SELECT c.chain_name, SUM(f.revenue) AS revenue
+FROM ${T('ref_star_fact')} f JOIN ${T('ref_customers')} c ON c.customer_id = f.customer_id
+WHERE f.sale_date >= DATE '2026-01-01' AND f.sale_date < DATE '2026-07-01' AND c.chain_name IS NOT NULL
+GROUP BY c.chain_name ORDER BY revenue DESC`,
+] as const
+
+export const BUILD_DASH_DIAGNOSIS = {
+  syntax: (error: string) => `${error}. The tile reads the gold tables: sale_date, customer_id, product_id, units, revenue.`,
+  kpiCount: (v: string) => `${v} is the number of sales, not the money. The tile asks for revenue.`,
+  kpiUnits: (v: string) => `${v} is units sold. The Head of Sales asked for revenue.`,
+  kpiAvg: (v: string) => `${v} is the average sale. Revenue for the half-year is all sales added up.`,
+  kpiMax: (v: string) => `${v} is the biggest single sale.`,
+  kpiOther: (v: string) => `${v} is not the revenue of the half-year. Revenue is all the sales added up.`,
+  lineMonthNumber: 'month() gives 1 to 12, so January 2024, 2025 and 2026 were added together: 12 points instead of 30.',
+  lineYear: 'One point per year: 3 points. The line needs one per month.',
+  lineQuarter: 'One point per quarter: 10 points. The line needs one per month.',
+  lineDays: (n: number) => `One point per day with sales: ${n} points, too jagged to read. Group the days into months.`,
+  lineOther: (n: number) => `${n} points. The line needs one point per month, January 2024 to June 2026: 30 points.`,
+  chainsOff: "The table doesn't match the expected one. Is the star built from the cleaned tables?",
+  pickFirst: (what: string) => `Pick a ${what.toLowerCase()} first.`,
+  typeNumber: 'Type the number as you read it from the dashboard.',
+  numberOff: (pick: string) => `${pick} is right, but the amount isn't. Read it from the dashboard again.`,
+  pickOff: 'The amount belongs to another one. Look again at which one it is.',
+  answerOff: (where: string) => `Not quite. Look again at ${where}.`,
+} as const
+
+// ---------------------------------------------------------------- Answer (5.4)
+
+export type AnswerId = 'A1' | 'A2' | 'A3'
+
+export const MONTHS_2025 = Array.from({ length: 12 }, (_, i) => {
+  const name = new Date(Date.UTC(2025, i, 1)).toLocaleString('en-US', { month: 'long', timeZone: 'UTC' })
+  return { value: `2025-${String(i + 1).padStart(2, '0')}`, label: `${name} 2025` }
+})
+export const CHAINS = ['Ichiba', 'Kaigan', 'Minori', 'Nagisa', 'Prima'] as const
+
+export interface AnswerWrong {
+  /** the pick that triggers the line (any when absent) */
+  pick?: string
+  /** the number that triggers it, within 0.5 (any when absent) */
+  value?: number
+  line: string
+}
+
+export interface AnswerQuestion {
+  id: AnswerId
+  question: string
+  /** a select before the number: its label and options */
+  pickLabel?: string
+  options?: readonly { value: string; label: string }[]
+  numberLabel: string
+  right: { pick?: string; pickText?: string; value: number }
+  /** where on the dashboard the answer is */
+  where: string
+  wrong: readonly AnswerWrong[]
+}
+
+export const ANSWERS: readonly AnswerQuestion[] = [
+  {
+    id: 'A1',
+    question: 'How much did we sell from January to June 2026?',
+    numberLabel: 'Revenue',
+    right: { value: 314906.13 },
+    where: 'the number tile',
+    wrong: [
+      { value: 595, line: "That's the number of sales." },
+      { value: 331604.58, line: 'That total still has the 110 sales sent twice.' },
+    ],
+  },
+  {
+    id: 'A2',
+    question: 'Which month of 2025 sold the most, and how much?',
+    pickLabel: 'Month',
+    options: MONTHS_2025,
+    numberLabel: 'Revenue',
+    right: { pick: '2025-08', pickText: 'August', value: 64592.75 },
+    where: 'the line, 2025 only',
+    wrong: [
+      { value: 79717.23, line: 'January 2026 is the best month of the whole line; the question asks about 2025.' },
+      { pick: '2025-06', line: 'June is second; look again at August.' },
+      { value: 59020.4, line: 'June is second; look again at August.' },
+    ],
+  },
+  {
+    id: 'A3',
+    question: 'Which chain sold the most from January to June 2026, and how much?',
+    pickLabel: 'Chain',
+    options: CHAINS.map((c) => ({ value: c, label: c })),
+    numberLabel: 'Revenue',
+    right: { pick: 'Minori', pickText: 'Minori', value: 90829.5 },
+    where: 'the table of chains',
+    wrong: [{ pick: 'Nagisa', line: 'Nagisa is second, 87,647.48.' }],
+  },
+]

@@ -1,11 +1,12 @@
 // The engine of the build-by-hand page (`#build=kaiyo-sales`): prepares schema `build_kaiyo`, registers the 33 files,
 // connects a source, drops the work tables. Same port as the pipeline, so the page and the tests run the same code.
-import type { ResultData } from '../core/check'
-import { CLEAN_COLUMNS, chainSql, diagnoseP1, diagnoseP2, diagnoseP3, stepsOf, type BuildWork, type Diagnosis, type P1Facts, type P2Facts, type P3Facts, type Peek, type StepSpec } from '../core/buildSteps'
+import { diagnoseKpi, diagnoseLine, tileBlankProblem, tileSql, type TileDiagnosis } from '../core/buildDashboard'
+import { compareResults, type ResultData } from '../core/check'
+import { CLEAN_COLUMNS, chainSql, cleanDone, diagnoseP1, diagnoseP2, diagnoseP3, stepsOf, type BuildWork, type Diagnosis, type P1Facts, type P2Facts, type P3Facts, type Peek, type StepSpec } from '../core/buildSteps'
 import { readableError } from '../core/sqlPractice'
 import { csvText } from '../core/csvText'
 import { exportText, type SqlPort } from './pipelineRun'
-import { BUILD_SOURCES, CHECK_SQL, CONNECT_SQL, QUICK_LOOK_SQL, FILE_SQL, REF_SQL, SCHEMA, SOURCE_FOLDER, SOURCE_TABLES, T, WORK_TABLES, sourceById, type BuildSourceId } from '../data/build/kaiyoSales'
+import { BUILD_DASH_DIAGNOSIS, BUILD_SOURCES, CHECK_SQL, GOLD_SQL, REF_TILE_SQL, TILE_TABLE, type TileId, CONNECT_SQL, QUICK_LOOK_SQL, FILE_SQL, REF_SQL, SCHEMA, SOURCE_FOLDER, SOURCE_TABLES, T, WORK_TABLES, sourceById, type BuildSourceId } from '../data/build/kaiyoSales'
 
 /** One preparation per port, shared by callers that arrive while it runs. */
 const preparing = new WeakMap<SqlPort, Promise<string[]>>()
@@ -110,6 +111,7 @@ export async function restore(port: SqlPort, work: BuildWork): Promise<void> {
     await connect(port, id)
     await applySteps(port, id, work.steps[id])
   }
+  if (cleanDone(work.passed)) await buildStar(port)
 }
 
 // ---------------------------------------------------------------- the checks of P1 to P3 (3.3 to 3.5)
@@ -200,4 +202,83 @@ export async function checkP3(port: SqlPort, specs: readonly StepSpec[]): Promis
     { label: 'Expected rows missing', value: f.refMissing, ok: f.refMissing === 0 },
   ]
   return { ...diagnoseP3(f), chips, facts: f }
+}
+
+// ---------------------------------------------------------------- Model v1 (4.1)
+
+export interface StarFacts {
+  fact: number
+  customers: number
+  customersSold: number
+  products: number
+  productsSold: number
+  /** fact rows with no customer / no product */
+  noCustomer: number
+  noProduct: number
+}
+
+/** Builds the three gold tables from the clean ones and counts them. */
+export async function buildStar(port: SqlPort): Promise<StarFacts> {
+  for (const sql of GOLD_SQL) await port.query(sql)
+  return {
+    fact: await num(port, `SELECT count(*) FROM ${T('gold_fact_sales')}`),
+    customers: await num(port, `SELECT count(*) FROM ${T('gold_dim_customer')}`),
+    customersSold: await num(port, `SELECT count(DISTINCT customer_id) FROM ${T('gold_fact_sales')}`),
+    products: await num(port, `SELECT count(*) FROM ${T('gold_dim_product')}`),
+    productsSold: await num(port, `SELECT count(DISTINCT product_id) FROM ${T('gold_fact_sales')}`),
+    noCustomer: await num(port, `SELECT count(*) FROM ${T('gold_fact_sales')} WHERE customer_id IS NULL`),
+    noProduct: await num(port, `SELECT count(*) FROM ${T('gold_fact_sales')} WHERE product_id IS NULL`),
+  }
+}
+
+// ---------------------------------------------------------------- Dashboard tiles (5.1 to 5.3)
+
+/** The reference star and tiles, built from `ref_*` (once per port; they do not depend on the learner). */
+const refBuilt = new WeakSet<SqlPort>()
+export async function refTiles(port: SqlPort): Promise<void> {
+  if (refBuilt.has(port)) return
+  await prepare(port)
+  for (const sql of REF_TILE_SQL) await port.query(sql)
+  refBuilt.add(port)
+}
+
+export interface TileRun extends TileDiagnosis {
+  /** what the tile shows (null when the SQL failed or was refused) */
+  data: ResultData | null
+}
+
+/** Runs a tile's SQL with the blank written in, reads the table it made and judges it against the reference. */
+export async function runTile(port: SqlPort, id: TileId, blank: string): Promise<TileRun> {
+  const refused = tileBlankProblem(id, blank)
+  if (refused) return { ok: false, line: refused, data: null }
+  await refTiles(port)
+  const table = T(TILE_TABLE[id])
+  let error: string | null = null
+  try {
+    await port.query(tileSql(id, blank))
+  } catch (e) {
+    error = readableError(String(e instanceof Error ? e.message : e)).split('\n')[0]
+  }
+  if (error) {
+    const d = id === 'kpi' ? diagnoseKpi({ value: null, match: false, error, blank }) : id === 'line' ? diagnoseLine({ points: 0, distinct: 0, diff: 0, error, blank }) : { ok: false, line: error }
+    return { ...d, data: null }
+  }
+  const data = await port.query(`SELECT * FROM ${table}`)
+  if (id === 'kpi') {
+    const match = await num(port, `SELECT count(*) FROM ${table} t, ${T('ref_tile_kpi')} r WHERE t.revenue = r.revenue`)
+    const rows = await num(port, `SELECT count(*) FROM ${table}`)
+    const value = data.rows[0]?.[0]
+    return { ...diagnoseKpi({ value: value == null ? null : String(value), match: match === 1 && rows === 1, error: null, blank }), data }
+  }
+  if (id === 'line') {
+    const ref = T('ref_tile_line')
+    const extra = await num(port, `SELECT count(*) FROM (SELECT revenue FROM ${table} EXCEPT ALL SELECT revenue FROM ${ref})`)
+    const missing = await num(port, `SELECT count(*) FROM (SELECT revenue FROM ${ref} EXCEPT ALL SELECT revenue FROM ${table})`)
+    const points = await num(port, `SELECT count(*) FROM ${table}`)
+    const distinct = await num(port, `SELECT count(DISTINCT month) FROM ${table}`)
+    return { ...diagnoseLine({ points, distinct, diff: extra + missing, error: null, blank }), data }
+  }
+  const expected = await port.query(`SELECT chain_name, revenue FROM ${T('ref_tile_chains')}`)
+  const ok = compareResults(data, expected, true).ok
+  return { ok, line: ok ? null : BUILD_DASH_DIAGNOSIS.chainsOff, data }
 }

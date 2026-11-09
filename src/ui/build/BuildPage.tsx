@@ -1,9 +1,10 @@
-// The build page (`#build=kaiyo-sales`): five steps from the files to an answer. Connect and Clean are real (Б4); the
-// other steps are still stubs with a temporary "Mark done". The rules are in src/core/build.ts. Under 768 px the whole
+// The build page (`#build=kaiyo-sales`): five steps from the files to an answer. Connect and Clean are real (Б4); Model v1,
+// the Dashboard and the Answer are Б6. The rules are in src/core/build.ts. Under 768 px the whole
 // page is the "Open on a laptop" screen, as on the pipeline page.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowRight, Check, Copy, Hammer, Laptop, Lock, Share2, X } from 'lucide-react'
-import { BUILD_ID, STEP_IDS, STEP_LABEL, goNext, loadBuild, markDone, nextStep, openStep, saveBuild, statusOf, type StepId } from '../../core/build'
+import { BUILD_ID, STEP_IDS, STEP_LABEL, goNext, loadBuild, markDone, nextStep, openStep, saveBuild, statusOf } from '../../core/build'
+import { answersDone, dashboardDone } from '../../core/buildDashboard'
 import { cleanDone, type BuildWork, type StepSpec } from '../../core/buildSteps'
 import { BUILD_SOURCES, type BuildSourceId } from '../../data/build/kaiyoSales'
 import { applySteps, restore } from '../../db/buildRun'
@@ -11,20 +12,15 @@ import { checkpoint } from '../../db/engine'
 import { enginePort } from '../../db/pipelinePort'
 import { openBuild, refreshCatalog, useLab } from '../store'
 import { CleanScreen } from './CleanScreen'
+import { AnswerScreen } from './AnswerScreen'
 import { ConnectScreen } from './ConnectScreen'
+import { DashboardScreen } from './DashboardScreen'
+import { ModelScreen } from './ModelScreen'
 import './build.css'
 import './clean.css'
 
 /** Where the finish will lead back to. The trainer does not read this format yet, so nothing links here. */
 export const RETURN_URL = 'https://quaera.app/#lab-done=build:kaiyo-sales'
-
-const SOON: Record<StepId, string> = {
-  connect: 'Here you will bring the Kaiyo Trading sales files into Lab.',
-  clean: 'Here you will find what is wrong in the raw rows and fix it.',
-  model: 'Here you will link the cleaned tables into a model that can be queried.',
-  dashboard: 'Here you will build the views that show how sales are going.',
-  answer: 'Here you will read the dashboard and answer the business question.',
-}
 
 export function BuildPage() {
   const id = useLab((s) => s.build)
@@ -149,6 +145,13 @@ function Shell() {
     if (cleanDone(work.passed)) setState((s) => markDone(s, 'clean'))
   }, [work.passed])
 
+  useEffect(() => {
+    if (dashboardDone(work.dash.tiles)) setState((s) => markDone(s, 'dashboard'))
+  }, [work.dash.tiles])
+  useEffect(() => {
+    if (answersDone(work.dash.answered)) setState((s) => markDone(s, 'answer'))
+  }, [work.dash.answered])
+
   const open = state.open
   const next = nextStep(state)
   const num = STEP_IDS.indexOf(open) + 1
@@ -202,17 +205,12 @@ function Shell() {
                 <ConnectScreen work={work} setWork={setWork} ready={ready} />
               ) : open === 'clean' ? (
                 <CleanScreen work={work} setWork={setWork} ready={ready} rebuild={rebuild} rev={rev} />
+              ) : open === 'model' ? (
+                <ModelScreen ready={ready} done={state.done.includes('model')} onContinue={() => setState((x) => goNext(markDone(x, 'model')))} />
+              ) : open === 'dashboard' ? (
+                <DashboardScreen work={work} setWork={setWork} ready={ready} />
               ) : (
-                <>
-                  <p style={{ margin: '0 0 16px' }}>{SOON[open]}</p>
-                  {state.done.includes(open) ? (
-                    <span style={{ color: 'var(--accent)' }}>
-                      <Check size={14} style={{ display: 'inline', verticalAlign: '-2px' }} /> Done
-                    </span>
-                  ) : (
-                    <button className="btn" onClick={() => setState(markDone(state))}>Mark done</button>
-                  )}
-                </>
+                <AnswerScreen work={work} setWork={setWork} />
               )}
             </section>
           </main>
