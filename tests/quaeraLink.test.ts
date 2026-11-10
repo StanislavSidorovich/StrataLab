@@ -8,6 +8,7 @@ const click = (extra: Record<string, unknown> = {}) => {
 }
 const env = (o: Partial<QuaeraEnv> & { calls?: [string, string][] } = {}): QuaeraEnv => ({
   standalone: o.standalone ?? (() => false),
+  quaeraOpener: o.quaeraOpener ?? (() => null),
   open: o.open ?? ((url, name) => (o.calls?.push([url, name]), { opener: 'lab' })),
 })
 
@@ -20,6 +21,23 @@ describe('followQuaeraLink', () => {
     expect(calls).toEqual([[url, QUAERA_WINDOW]])
     expect(QUAERA_WINDOW).toBe('quaera-quaera')
     expect(e.prevented).toBe(true)
+  })
+  it('sends the Quaera tab that opened Lab to the address, without a new window', () => {
+    const calls: [string, string][] = []
+    const opener = { location: { href: 'https://quaera.app/?roles=map' }, focused: false, focus() { this.focused = true } }
+    const e = click()
+    expect(followQuaeraLink(e, url, env({ calls, quaeraOpener: () => opener }))).toBe(true)
+    expect(opener.location.href).toBe(url)
+    expect(opener.focused).toBe(true)
+    expect(calls).toEqual([])
+    expect(e.prevented).toBe(true)
+  })
+  it('falls back to the named window when the opener cannot be navigated', () => {
+    const calls: [string, string][] = []
+    const opener = { get location(): { href: string } { throw new Error('gone') }, focus() {} }
+    const e = click()
+    expect(followQuaeraLink(e, url, env({ calls, quaeraOpener: () => opener }))).toBe(true)
+    expect(calls).toEqual([[url, QUAERA_WINDOW]])
   })
   it('lets the plain link go in an installed app', () => {
     const calls: [string, string][] = []
