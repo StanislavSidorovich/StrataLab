@@ -114,12 +114,31 @@ const nameOf = (i: number) => (i === 0 ? 'bronze' : `step${i}`)
 /** A step's SQL with `{prev}` replaced by the name of the step before it. */
 export const shownSql = (steps: readonly Step[], i: number) => steps[i].sql.replace('{prev}', nameOf(i))
 
-/** The statement that rebuilds `clean_<source>` from bronze through the steps (2.6). */
-export function chainSql(source: BuildSourceId, steps: readonly Step[]): string {
+function chainCtes(source: BuildSourceId, steps: readonly Step[]): string {
   const s = sourceById(source)
   const indent = (t: string) => t.split('\n').map((l) => '    ' + l).join('\n')
   const ctes = [`bronze AS (SELECT * FROM ${SCHEMA}.${s.bronze})`, ...steps.map((_, i) => `step${i + 1} AS (\n${indent(shownSql(steps, i))}\n  )`)]
-  return `CREATE OR REPLACE TABLE ${SCHEMA}.${s.clean} AS\nWITH ${ctes.join(',\n     ')}\nSELECT * FROM ${nameOf(steps.length)}`
+  return `WITH ${ctes.join(',\n     ')}`
+}
+
+/** The statement that rebuilds `clean_<source>` from bronze through the steps (2.6). */
+export function chainSql(source: BuildSourceId, steps: readonly Step[]): string {
+  return `CREATE OR REPLACE TABLE ${SCHEMA}.${sourceById(source).clean} AS
+${chainCtes(source, steps)}
+SELECT * FROM ${nameOf(steps.length)}`
+}
+
+/** One row of numbers: the rows of bronze, then the rows after step 1, step 2, and so on. */
+export function countsSql(source: BuildSourceId, steps: readonly Step[]): string {
+  const names = ['bronze', ...steps.map((_, i) => `step${i + 1}`)]
+  return `${chainCtes(source, steps)}
+SELECT ${names.map((n) => `(SELECT count(*) FROM ${n})`).join(', ')}`
+}
+
+/** "3,110 rows → 3,000 rows"; one number when nothing changed. */
+export function rowsChange(before: number, after: number): string {
+  const n = (x: number) => `${x.toLocaleString('en-US')} ${x === 1 ? 'row' : 'rows'}`
+  return before === after ? `${n(after)}, no change` : `${n(before)} → ${n(after)}`
 }
 
 // ---------------------------------------------------------------- changing the list

@@ -1,0 +1,10 @@
+/* Horizontal bars of the build page. Colours come from the app's variables, so both themes work. */
+.bc { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+.bc-row { display: grid; grid-template-columns: 72px minmax(0, 1fr) 84px; align-items: center; gap: 10px; font-size: 13px; }
+.bc-name { overflow-wrap: anywhere; }
+.bc-track { height: 18px; border-radius: 4px; background: var(--panel-2); overflow: hidden; }
+.bc-bar { display: block; height: 100%; border-radius: 4px; background: var(--series-1, var(--accent)); }
+.bc-value { text-align: right; font-variant-numeric: tabular-nums; }
+.bc.is-compact { gap: 5px; padding: 8px 10px; }
+.bc.is-compact .bc-row { grid-template-columns: 56px minmax(0, 1fr) 72px; gap: 6px; font-size: 12px; }
+.bc.is-compact .bc-track { height: 12px; }

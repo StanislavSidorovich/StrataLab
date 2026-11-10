@@ -4,10 +4,10 @@ import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
 import { beforeAll, describe, expect, it } from 'vitest'
 import type { ResultData } from '../src/core/check'
-import { CLEAN_COLUMNS, addSpec, chainSql, dedupSql, emptyWork, latestSql, makeStep, readWork, removeSpec, shownSql, stepsOf, trimSql, upperSql, type StepSpec } from '../src/core/buildSteps'
+import { CLEAN_COLUMNS, addSpec, chainSql, countsSql, dedupSql, emptyWork, latestSql, makeStep, readWork, removeSpec, rowsChange, shownSql, stepsOf, trimSql, upperSql, type StepSpec } from '../src/core/buildSteps'
 import { readBuild } from '../src/core/build'
 import { resultRows } from '../src/db/export'
-import { applySteps, checkP1, checkP2, checkP3, connect, prepare, quickLook, restore } from '../src/db/buildRun'
+import { affectedRows, applySteps, checkP1, checkP2, checkP3, connect, prepare, quickLook, restore, stepCounts } from '../src/db/buildRun'
 import type { SqlPort } from '../src/db/pipelineRun'
 import { DIAGNOSIS_TEXT } from '../src/data/pipelines/kaiyoSellout'
 import { BUILD_DIAGNOSIS, BUILD_SOURCES, WATCH_STEPS } from '../src/data/build/kaiyoSales'
@@ -292,5 +292,38 @@ describe('P3: stale customers (3.5)', () => {
     expect(await line(latest('chain_name'))).toBe(BUILD_DIAGNOSIS.keyTooWide('chain_name', 13))
     expect(await line([])).toBe(BUILD_DIAGNOSIS.stillTwice(4))
     expect(await line(latest('customer_id'))).toBeNull()
+  })
+})
+
+describe('rows after each step, and the rows a card is about', () => {
+  it('says "N rows → M rows", or no change', () => {
+    expect(rowsChange(3110, 3000)).toBe('3,110 rows → 3,000 rows')
+    expect(rowsChange(3000, 3000)).toBe('3,000 rows, no change')
+    expect(rowsChange(2, 1)).toBe('2 rows → 1 row')
+  })
+  it('counts bronze, the given step and each step after it', async () => {
+    expect(countsSql('sales', stepsOf('sales', []))).toMatch(/SELECT \(SELECT count\(\*\) FROM bronze\), \(SELECT count\(\*\) FROM step1\)$/)
+    expect(await stepCounts(port, 'sales', [])).toEqual([3110, 3110])
+    expect(await stepCounts(port, 'sales', [sp('dedup', { blank: 'sale_date, customer_name, sku_code' })])).toEqual([3110, 3110, 3000])
+    expect(await stepCounts(port, 'customers', [sp('latest', { key: 'customer_id', order: 'updated_at', direction: 'newest' })])).toEqual([148, 144])
+    expect(await stepCounts(port, 'regions', [])).toEqual([17])
+  })
+  it('P3: eight rows of four stores in the file, eight now, four after Keep latest', async () => {
+    await applySteps(port, 'customers', [])
+    let a = await affectedRows(port, 'P3')
+    expect([a.groups, a.file.rows.length, a.now.rows.length]).toEqual([4, 8, 8])
+    await applySteps(port, 'customers', [sp('latest', { key: 'customer_id', order: 'updated_at', direction: 'newest' })])
+    a = await affectedRows(port, 'P3')
+    expect([a.groups, a.file.rows.length, a.now.rows.length]).toEqual([4, 8, 4])
+    await applySteps(port, 'customers', [])
+  })
+  it('P2: 110 sales sent twice, the first four shown as pairs, one row each after the step', async () => {
+    await applySteps(port, 'sales', [])
+    let a = await affectedRows(port, 'P2')
+    expect([a.groups, a.file.rows.length, a.now.rows.length]).toEqual([110, 8, 8])
+    await applySteps(port, 'sales', [sp('dedup', { blank: 'sale_date, customer_name, sku_code' })])
+    a = await affectedRows(port, 'P2')
+    expect([a.groups, a.file.rows.length, a.now.rows.length]).toEqual([110, 8, 4])
+    await applySteps(port, 'sales', [])
   })
 })

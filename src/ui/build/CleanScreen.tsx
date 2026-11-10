@@ -9,6 +9,7 @@ import { CLEAN_CARDS, GIVEN_NOTE, P1_SKUS, P3_NOTE, sourceById, type BuildSource
 import { LINK_TEXT } from '../../data/build/linkData'
 import { checkP1, checkP2, checkP3, checkP7, type CheckReport } from '../../db/buildRun'
 import { enginePort } from '../../db/pipelinePort'
+import { AffectedRows } from './AffectedRows'
 import { StepsPanel } from './StepsPanel'
 import { WatchRegions } from './WatchRegions'
 import './clean.css'
@@ -81,6 +82,7 @@ export function CleanScreen({ work, setWork, ready, rebuild, rev, focus, onBackT
                       ))}
                     </div>
                   )}
+                  {(c.id === 'P2' || c.id === 'P3') && <AffectedRows card={c.id} ready={ready} rev={rev} />}
                   {c.id === 'P2' && <SalesBlank work={work} setWork={setWork} ready={ready} rebuild={rebuild} onReport={(r) => setReport((x) => ({ ...x, P2: r }))} />}
                   {c.id === 'P3' && <p className="build-muted" style={{ margin: 0 }}>{P3_NOTE}</p>}
                   <Hints card={c} level={level} onMore={() => setHints((h) => ({ ...h, [c.id]: level + 1 }))} />

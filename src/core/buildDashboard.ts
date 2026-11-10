@@ -1,18 +1,28 @@
 // Model v1, Dashboard and Answer of the build page (spec docs/build-kaiyo-sales-spec.md, sections 4.1, 5.1 to 5.4). Pure:
 // the blanks of the two tiles, the lines said about a wrong result, the answer parser and checker, and the part of the
 // saved state that belongs to these steps. The engine part is src/db/buildRun.ts.
-import { ANSWERS, BUILD_DASH_DIAGNOSIS, TILE_IDS, TILE_SQL, type AnswerId, type TileId } from '../data/build/kaiyoSales'
+import { ANSWERS, BUILD_DASH_DIAGNOSIS, TILE_IDS, TILE_SQL, TILE_TABLE, T, type AnswerId, type TileId } from '../data/build/kaiyoSales'
 import { checkBlank } from './pipeline'
 
 export type { AnswerId, TileId }
 
 // ---------------------------------------------------------------- the tiles
 
-/** The SQL of a tile with the learner's blank written in (the chains tile has none). */
-export const tileSql = (id: TileId, blank: string): string => TILE_SQL[id].replace('____', blank.trim())
+/** The blank as written into the SQL: the join of the chains tile already says `f.`, so `f.customer_id` is accepted too. */
+const blankText = (id: TileId, blank: string): string => (id === 'chains' ? blank.trim().replace(/^f\s*\.\s*/i, '') : blank.trim())
 
-/** Why a blank can't be run, or null. The chains tile needs no blank. */
-export const tileBlankProblem = (id: TileId, blank: string): string | null => (id === 'chains' ? null : checkBlank(blank))
+/** The SQL of a tile as the learner reads it: a plain SELECT with their blank written in. */
+export const tileSql = (id: TileId, blank: string): string => TILE_SQL[id].replace('____', () => blankText(id, blank))
+
+/** What Lab runs: the learner's SELECT inside the statement that keeps its result as the tile's table. */
+export const tileRunSql = (id: TileId, blank: string): string => `CREATE OR REPLACE TABLE ${T(TILE_TABLE[id])} AS
+${tileSql(id, blank)}`
+
+/** Why a blank can't be run, or null. */
+export const tileBlankProblem = (_id: TileId, blank: string): string | null => checkBlank(blank)
+
+/** The chains blank names another column than the key of the customers (the check says so only when the result is wrong). */
+export const chainsKeyOff = (blank: string): boolean => blankText('chains', blank).toLowerCase() !== 'customer_id'
 
 const intLike = (n: number) => Number.isInteger(n)
 /** 595, 3,523, 552.47: whole numbers without decimals, the rest with two. */
@@ -129,8 +139,8 @@ export function checkAnswer(id: AnswerId, input: AnswerInput): AnswerResult {
 // ---------------------------------------------------------------- what is kept
 
 export interface DashWork {
-  /** the blanks of the two tiles */
-  blanks: { kpi: string; line: string }
+  /** the blank of each tile */
+  blanks: Record<TileId, string>
   /** tiles that passed */
   tiles: TileId[]
   /** what was typed in the answers */
@@ -140,7 +150,7 @@ export interface DashWork {
 }
 
 export const emptyDash = (): DashWork => ({
-  blanks: { kpi: '', line: '' },
+  blanks: { kpi: '', line: '', chains: '' },
   tiles: [],
   answers: { A1: { pick: '', number: '' }, A2: { pick: '', number: '' }, A3: { pick: '', number: '' } },
   answered: [],
@@ -157,7 +167,10 @@ export function readDash(raw: unknown): DashWork {
   const b = r.blanks as Record<string, unknown> | undefined
   if (b && typeof b.kpi === 'string') d.blanks.kpi = b.kpi.slice(0, 200)
   if (b && typeof b.line === 'string') d.blanks.line = b.line.slice(0, 200)
+  if (b && typeof b.chains === 'string') d.blanks.chains = b.chains.slice(0, 200)
   if (Array.isArray(r.tiles)) d.tiles = TILE_IDS.filter((t) => (r.tiles as unknown[]).includes(t))
+  // saved before the third tile had a blank: its SQL was given, so a passed tile keeps the answer it had
+  if (d.tiles.includes('chains') && !d.blanks.chains.trim()) d.blanks.chains = 'customer_id'
   const a = r.answers as Record<string, Partial<AnswerInput> | undefined> | undefined
   for (const q of ANSWERS) {
     const x = a?.[q.id]

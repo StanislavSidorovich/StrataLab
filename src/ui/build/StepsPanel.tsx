@@ -3,9 +3,9 @@
 import { useEffect, useState } from 'react'
 import { ExternalLink, Loader2, X } from 'lucide-react'
 import type { ResultData } from '../../core/check'
-import { CLEAN_COLUMNS, addSpec, chainSql, removeSpec, shownSql, stepsOf, type BuildWork, type StepSpec } from '../../core/buildSteps'
+import { CLEAN_COLUMNS, addSpec, chainSql, removeSpec, rowsChange, shownSql, stepsOf, type BuildWork, type StepSpec } from '../../core/buildSteps'
 import { BUILD_SOURCES, sourceById, type BuildSourceId } from '../../data/build/kaiyoSales'
-import { previewTable } from '../../db/buildRun'
+import { previewTable, stepCounts } from '../../db/buildRun'
 import { enginePort } from '../../db/pipelinePort'
 import { addTab } from '../store'
 import { BuildTable, FoldedSql, fmtN } from './BuildTable'
@@ -28,6 +28,8 @@ export function StepsPanel({ source, work, ready, rev, onChange, onSource }: Pan
   const cols = CLEAN_COLUMNS[source]
   const [data, setData] = useState<ResultData | null>(null)
   const [rows, setRows] = useState<number | null>(null)
+  /** rows of bronze, then after each step; null while loading */
+  const [counts, setCounts] = useState<number[] | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
@@ -54,10 +56,11 @@ export function StepsPanel({ source, work, ready, rev, onChange, onSource }: Pan
     const clean = sourceById(source).clean
     void (async () => {
       try {
-        const [d, n] = await Promise.all([previewTable(enginePort, clean), enginePort.query(`SELECT count(*) FROM build_kaiyo.${clean}`)])
+        const [d, n, c] = await Promise.all([previewTable(enginePort, clean), enginePort.query(`SELECT count(*) FROM build_kaiyo.${clean}`), stepCounts(enginePort, source, work.steps[source])])
         if (alive) {
           setData(d)
           setRows(Number(n.rows[0][0]))
+          setCounts(c)
         }
       } catch (e) {
         if (alive) setError(String(e instanceof Error ? e.message : e))
@@ -104,7 +107,15 @@ export function StepsPanel({ source, work, ready, rev, onChange, onSource }: Pan
       ) : (
         <>
           <div className="build-muted" data-testid="build-rows">
-            {sourceById(source).clean}: {rows === null ? '…' : fmtN(rows)} rows
+            {counts && rows !== null ? (
+              <span data-testid="build-rows-change">
+                {sourceById(source).bronze}: <b>{fmtN(counts[0])} rows</b> → {sourceById(source).clean}: <b>{fmtN(rows)} rows</b>
+              </span>
+            ) : (
+              <>
+                {sourceById(source).clean}: {rows === null ? '…' : fmtN(rows)} rows
+              </>
+            )}
           </div>
           <BuildTable data={data} caption={`${sourceById(source).clean}, first rows`} />
           <div className="build-toolbar" role="group" aria-label="Buttons">
@@ -134,11 +145,17 @@ export function StepsPanel({ source, work, ready, rev, onChange, onSource }: Pan
             <ol className="build-steps" data-testid="build-steps">
               <li className="build-step is-source">
                 <span className="build-step-label">Source: {sourceById(source).bronze}</span>
+                {counts && <span className="build-count">{fmtN(counts[0])} rows</span>}
               </li>
               {steps.map((st, i) => (
                 <li key={st.id} className="build-step" data-testid="build-step">
                   <div className="build-step-row">
                     <span className="build-step-label">{st.label}</span>
+                    {counts && counts.length > i + 1 && (
+                      <span className="build-count" data-testid="build-step-rows">
+                        {rowsChange(counts[i], counts[i + 1])}
+                      </span>
+                    )}
                     {st.given ? (
                       <span className="build-badge">given</span>
                     ) : (

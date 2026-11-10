@@ -3,16 +3,19 @@
 import { useState } from 'react'
 import { Check, CheckCircle2, ExternalLink } from 'lucide-react'
 import { answersDone, checkAnswer, type AnswerResult } from '../../core/buildDashboard'
+import { followQuaeraLink } from '../../core/quaeraLink'
 import type { BuildWork } from '../../core/buildSteps'
 import { ANSWERS, BUILD_RETURN_URL, type AnswerId, type AnswerQuestion } from '../../data/build/kaiyoSales'
+import { DashCopy } from './DashCopy'
 import './dashboard.css'
 
 interface Props {
   work: BuildWork
   setWork: (f: (w: BuildWork) => BuildWork) => void
+  ready: boolean
 }
 
-export function AnswerScreen({ work, setWork }: Props) {
+export function AnswerScreen({ work, setWork, ready }: Props) {
   const [results, setResults] = useState<Partial<Record<AnswerId, AnswerResult>>>({})
   const { answers, answered } = work.dash
 
@@ -27,16 +30,19 @@ export function AnswerScreen({ work, setWork }: Props) {
   return (
     <div className="space-y-4" data-testid="build-answer">
       <p className="build-lead">The Head of Sales asked: “How are we selling this year, and which chain is carrying it?” Read your dashboard and answer in numbers.</p>
-      <ol className="ba-list">
-        {ANSWERS.map((q) => (
-          <Question key={q.id} q={q} passed={answered.includes(q.id)} value={answers[q.id]} result={results[q.id]} onEdit={(p) => edit(q.id, p)} onCheck={() => check(q.id)} />
-        ))}
-      </ol>
+      <div className="ba-layout">
+        <DashCopy work={work} ready={ready} />
+        <ol className="ba-list ba-main">
+          {ANSWERS.map((q) => (
+            <Question key={q.id} q={q} passed={answered.includes(q.id)} value={answers[q.id]} result={results[q.id]} onEdit={(p) => edit(q.id, p)} onCheck={() => check(q.id)} />
+          ))}
+        </ol>
+      </div>
       {answersDone(answered) && (
         <div className="build-quick" data-testid="answer-done">
           <b>You built it.</b> From four raw files to a number, a month and a chain, with every step yours: connected, cleaned, modelled, shown. Minori carries the first half of 2026.
           <div>
-            <a className="btn btn-primary" href={BUILD_RETURN_URL} target="_blank" rel="noopener" data-testid="answer-count">
+            <a className="btn btn-primary" href={BUILD_RETURN_URL} target="_blank" rel="noopener" onClick={(e) => followQuaeraLink(e, BUILD_RETURN_URL)} data-testid="answer-count">
               Count it in Quaera <ExternalLink size={14} />
             </a>
           </div>

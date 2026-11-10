@@ -313,21 +313,18 @@ export const MODEL_TEXT = {
 export const TILE_IDS = ['kpi', 'line', 'chains'] as const
 export type TileId = (typeof TILE_IDS)[number]
 
-/** The tiles' SQL; `____` is the blank of the first two. */
+/** The tiles' SQL as the learner sees it: a plain SELECT; `____` is the blank of each tile. Lab wraps it (`tileRunSql`). */
 export const TILE_SQL: Record<TileId, string> = {
-  kpi: `CREATE OR REPLACE TABLE ${T('tile_kpi')} AS
-SELECT ____ AS revenue
+  kpi: `SELECT ____ AS revenue
 FROM ${T('gold_fact_sales')}
 WHERE sale_date >= DATE '2026-01-01' AND sale_date < DATE '2026-07-01'`,
-  line: `CREATE OR REPLACE TABLE ${T('tile_line')} AS
-SELECT ____ AS month, SUM(revenue) AS revenue
+  line: `SELECT ____ AS month, SUM(revenue) AS revenue
 FROM ${T('gold_fact_sales')}
 GROUP BY 1
 ORDER BY 1`,
-  chains: `CREATE OR REPLACE TABLE ${T('tile_chains')} AS
-SELECT c.chain_name, SUM(f.revenue) AS revenue
+  chains: `SELECT c.chain_name, SUM(f.revenue) AS revenue
 FROM ${T('gold_fact_sales')} f
-JOIN ${T('gold_dim_customer')} c ON c.customer_id = f.customer_id
+JOIN ${T('gold_dim_customer')} c ON c.customer_id = f.____
 WHERE f.sale_date >= DATE '2026-01-01' AND f.sale_date < DATE '2026-07-01'
   AND c.chain_name IS NOT NULL
 GROUP BY c.chain_name
@@ -363,8 +360,11 @@ export const TILE_CARDS: readonly TileCard[] = [
   {
     id: 'chains',
     title: 'Revenue by chain, January to June 2026',
-    prompt: 'No blank here: the SQL is given. Run it and read the table.',
-    hints: [],
+    prompt: 'Which customer does a sale belong to? The join needs the key you linked on the Model step.',
+    hints: [
+      'On the Model step you linked the sales to the customers by one column. The same column joins them here.',
+      'It is the key both gold_fact_sales and gold_dim_customer carry: customer_id.',
+    ],
   },
 ]
 
@@ -402,6 +402,7 @@ export const BUILD_DASH_DIAGNOSIS = {
   lineDays: (n: number) => `One point per day with sales: ${n} points, too jagged to read. Group the days into months.`,
   lineOther: (n: number) => `${n} points. The line needs one point per month, January 2024 to June 2026: 30 points.`,
   chainsOff: "The table doesn't match the expected one. Is the star built from the cleaned tables?",
+  chainsKey: 'Sales and customers are linked by customer_id, the key you linked on the Model step. Another column joins the wrong rows.',
   pickFirst: (what: string) => `Pick a ${what.toLowerCase()} first.`,
   typeNumber: 'Type the number as you read it from the dashboard.',
   numberOff: (pick: string) => `${pick} is right, but the amount isn't. Read it from the dashboard again.`,

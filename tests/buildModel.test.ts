@@ -181,7 +181,7 @@ describe('pass 2 and the star made from the links (6)', () => {
     const kpi = await runTile(port, 'kpi', 'SUM(revenue)')
     expect(kpi.ok).toBe(true)
     expect(Number(kpi.data!.rows[0][0])).toBeCloseTo(314906.13, 2)
-    const chains = await runTile(port, 'chains', '')
+    const chains = await runTile(port, 'chains', 'customer_id')
     expect(chains.ok).toBe(true)
     expect(chains.data!.rows.slice(0, 3).map((r) => String(r[0]))).toEqual(['Minori', 'Nagisa', 'Ichiba'])
     expect(Number(chains.data!.rows[0][1])).toBeCloseTo(90829.5, 2)

@@ -478,6 +478,8 @@ textKey: 'Linked by name: it works, but a store renamed tomorrow breaks every re
 
 ## 5. Dashboard (v1)
 
+*v0.31.0: the step shows "Your star" (the `gold_*` tables with columns and types, from `information_schema`; folded under 1000 px), and the Answer step shows a read-only copy of the three visuals beside the questions (above them under 1000 px).*
+
 Fixed grid, two columns: the KPI tile and the table on the left, the line across the full width below (or the hub's layout). Each tile has its SQL, **Run**, a result, and its check. The Dashboard step is done when the three tiles pass. All tiles read `gold_*` only.
 
 ### 5.1 KPI tile (blank): Revenue, January to June 2026
@@ -544,20 +546,21 @@ Reference line (CLI, `date_trunc` gives TIMESTAMP, shown as the month):
 
 Sum of the 30 months: 1,473,843.82 (= all clean revenue). Years: 2024 594,991.51, 2025 563,946.18, 2026 H1 314,906.13. H1 per year: 2024 299,159.07, 2025 292,807.75, 2026 314,906.13 (+7.5 % on 2025).
 
-### 5.3 Table tile (given SQL): revenue by chain, H1 2026
+### 5.3 Bars tile (blank): revenue by chain, H1 2026
+
+*v0.31.0: the learner reads a plain SELECT; Lab wraps it in `CREATE OR REPLACE TABLE build_kaiyo.tile_chains AS` before running (`tileRunSql`). The tile draws horizontal bars; the table shows only when the result is wrong. Same wrapper for the other two tiles.*
 
 ```sql
-CREATE OR REPLACE TABLE build_kaiyo.tile_chains AS
 SELECT c.chain_name, SUM(f.revenue) AS revenue
 FROM build_kaiyo.gold_fact_sales f
-JOIN build_kaiyo.gold_dim_customer c ON c.customer_id = f.customer_id
+JOIN build_kaiyo.gold_dim_customer c ON c.customer_id = f.____
 WHERE f.sale_date >= DATE '2026-01-01' AND f.sale_date < DATE '2026-07-01'
   AND c.chain_name IS NOT NULL
 GROUP BY c.chain_name
 ORDER BY revenue DESC
 ```
 
-No blank: **Run** and read it (the cheap tile). Check: equals the reference, ordered (`compareResults(…, true)`).
+Blank: `customer_id` (`f.customer_id` is accepted too), with two hints that point back to the keys linked on the Model step; another column gets a line naming the key. A tile passed before v0.31.0 keeps `customer_id` as its saved blank. Check: equals the reference, ordered (`compareResults(…, true)`).
 
 | chain_name | revenue |
 |---|---|

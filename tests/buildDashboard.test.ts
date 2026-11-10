@@ -4,9 +4,9 @@ import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
 import { beforeAll, describe, expect, it } from 'vitest'
 import type { ResultData } from '../src/core/check'
-import { checkAnswer, dashboardDone, answersDone, diagnoseKpi, diagnoseLine, emptyDash, parseAnswerNumber, readDash, tileBlankProblem, tileSql } from '../src/core/buildDashboard'
+import { checkAnswer, dashboardDone, answersDone, diagnoseKpi, diagnoseLine, emptyDash, parseAnswerNumber, readDash, tileBlankProblem, tileRunSql, tileSql } from '../src/core/buildDashboard'
 import { emptyWork, readWork, type StepSpec } from '../src/core/buildSteps'
-import { ANSWERS, BUILD_SOURCES, GOLD_SQL, TILE_IDS } from '../src/data/build/kaiyoSales'
+import { ANSWERS, BUILD_SOURCES, GOLD_SQL, TILE_IDS, TILE_SQL } from '../src/data/build/kaiyoSales'
 import { applySteps, buildStar, connect, prepare, restore, runTile } from '../src/db/buildRun'
 import { resultRows } from '../src/db/export'
 import type { SqlPort } from '../src/db/pipelineRun'
@@ -51,11 +51,11 @@ async function setUp(s: State) {
   return buildStar(port)
 }
 const RIGHT: Required<State> = { sales: SALES, customers: CUSTOMERS, products: PRODUCTS }
-const BLANKS = { kpi: 'SUM(revenue)', line: "date_trunc('month', sale_date)" }
+const BLANKS = { kpi: 'SUM(revenue)', line: "date_trunc('month', sale_date)", chains: 'customer_id' }
 const h1 = `sale_date >= DATE '2026-01-01' AND sale_date < DATE '2026-07-01'`
 
 async function top(k = 3): Promise<[string, number][]> {
-  const r = await runTile(port, 'chains', '')
+  const r = await runTile(port, 'chains', BLANKS.chains)
   return r.data!.rows.slice(0, k).map((x) => [String(x[0]), Number(x[1])])
 }
 const kpi = async () => Number((await runTile(port, 'kpi', BLANKS.kpi)).data!.rows[0][0])
@@ -177,7 +177,7 @@ describe('tiles (5)', () => {
   })
 
   it('chains: the five numbers, ordered', async () => {
-    const r = await runTile(port, 'chains', '')
+    const r = await runTile(port, 'chains', BLANKS.chains)
     expect(r.ok).toBe(true)
     expect(r.data!.rows.map((x) => [String(x[0]), Number(x[1])])).toEqual([
       ['Minori', 90829.5],
@@ -189,16 +189,25 @@ describe('tiles (5)', () => {
   })
   it('chains: a fanned-out star does not pass', async () => {
     await setUp({ ...RIGHT, customers: [] })
-    const r = await runTile(port, 'chains', '')
+    const r = await runTile(port, 'chains', BLANKS.chains)
     expect(r.ok).toBe(false)
     expect(r.line).toBeTruthy()
     await setUp(RIGHT)
+  })
+  it('chains: f.customer_id passes, another key is named, a missing column is an error line', async () => {
+    expect((await runTile(port, 'chains', 'f.customer_id')).ok).toBe(true)
+    const other = await runTile(port, 'chains', 'product_id')
+    expect(other.ok).toBe(false)
+    expect(other.line).toMatch(/customer_id/)
+    const nope = await runTile(port, 'chains', 'nope')
+    expect(nope.ok).toBe(false)
+    expect(nope.line).toBeTruthy()
   })
   it('the answers match the tiles', async () => {
     const line = (await runTile(port, 'line', BLANKS.line)).data!.rows
     const aug = line.find((x) => String(x[0]).startsWith('2025-08'))!
     expect(Number(aug[1])).toBeCloseTo(ANSWERS[1].right.value, 2)
-    const chains = (await runTile(port, 'chains', '')).data!.rows
+    const chains = (await runTile(port, 'chains', BLANKS.chains)).data!.rows
     expect(String(chains[0][0])).toBe(ANSWERS[2].right.pick)
     expect(Number(chains[0][1])).toBeCloseTo(ANSWERS[2].right.value, 2)
     expect(await kpi()).toBeCloseTo(ANSWERS[0].right.value, 2)
@@ -224,10 +233,19 @@ describe('blanks and tile SQL', () => {
   it('writes the blank into the SQL and refuses the usual mistakes', () => {
     expect(tileSql('kpi', ' SUM(revenue) ')).toContain('SELECT SUM(revenue) AS revenue')
     expect(tileSql('line', "date_trunc('month', sale_date)")).toContain("SELECT date_trunc('month', sale_date) AS month, SUM(revenue)")
-    expect(tileSql('chains', '')).toContain('ORDER BY revenue DESC')
+    expect(tileSql('chains', 'customer_id')).toContain('ON c.customer_id = f.customer_id\n')
+    expect(tileSql('chains', ' f.customer_id ')).toContain('ON c.customer_id = f.customer_id\n')
     expect(tileBlankProblem('kpi', '')).toBeTruthy()
     expect(tileBlankProblem('line', 'a; drop')).toBeTruthy()
-    expect(tileBlankProblem('chains', '')).toBeNull()
+    expect(tileBlankProblem('chains', '')).toBeTruthy()
+    expect(tileBlankProblem('chains', 'customer_id')).toBeNull()
+  })
+  it('shows a plain SELECT and wraps it in code before running', () => {
+    for (const id of TILE_IDS) {
+      expect(TILE_SQL[id]).not.toMatch(/CREATE/i)
+      expect(tileSql(id, 'x')).toMatch(/^SELECT/)
+      expect(tileRunSql(id, 'x')).toMatch(new RegExp(`^CREATE OR REPLACE TABLE build_kaiyo\\.tile_${id} AS\nSELECT`))
+    }
   })
   it('diagnoses by the blank and the number', () => {
     expect(diagnoseKpi({ value: '595', match: false, error: null, blank: 'COUNT(*)' }).line).toMatch(/595 is the number of sales/)
@@ -284,10 +302,14 @@ describe('the saved part', () => {
     expect(readWork({}).dash).toEqual(emptyDash())
     expect(emptyWork().dash).toEqual(emptyDash())
     const d = readDash({ blanks: { kpi: 'SUM(revenue)', line: 7 }, tiles: ['kpi', 'bogus'], answers: { A1: { pick: '', number: '12' }, A9: {} }, answered: ['A2', 'A9'] })
-    expect(d.blanks).toEqual({ kpi: 'SUM(revenue)', line: '' })
+    expect(d.blanks).toEqual({ kpi: 'SUM(revenue)', line: '', chains: '' })
     expect(d.tiles).toEqual(['kpi'])
     expect(d.answers.A1.number).toBe('12')
     expect(d.answered).toEqual(['A2'])
+  })
+  it('gives a chains tile passed before it had a blank the answer it had', () => {
+    expect(readDash({ tiles: ['chains'] }).blanks.chains).toBe('customer_id')
+    expect(readDash({ tiles: ['chains'], blanks: { chains: 'f.customer_id' } }).blanks.chains).toBe('f.customer_id')
   })
   it('knows when the step is done', () => {
     expect(dashboardDone(['kpi', 'line'])).toBe(false)

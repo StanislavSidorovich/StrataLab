@@ -52,7 +52,7 @@
 .build-steps-title { font-weight: 600; margin-bottom: 4px; }
 .build-steps { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .build-step { padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
-.build-step.is-source { color: var(--muted); border-style: dashed; }
+.build-step.is-source { color: var(--muted); border-style: dashed; display: flex; align-items: center; gap: 8px; }
 .build-step-row { display: flex; align-items: center; gap: 8px; }
 .build-step-label { flex: 1; min-width: 0; }
 .build-badge { font-size: 11px; padding: 1px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
@@ -70,3 +70,14 @@
 .build-chipx { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px; border-radius: 999px; font-size: 12px; border: 1px solid var(--line); }
 .build-chipx.is-ok { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
 .build-chipx.is-bad { color: var(--danger); }
+
+/* row counts per step, and the rows a problem is about */
+.build-count { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.build-count b { color: var(--text); font-weight: 600; }
+.build-table.is-warn tbody tr { background: var(--warn-soft); }
+.build-table.is-ok tbody tr { background: var(--accent-soft); }
+.build-affected { display: flex; flex-direction: column; gap: 6px; }
+.build-affected-head { font-size: 13px; }
+.build-affected-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.build-affected-box { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.build-affected-box .build-table-wrap { max-height: 240px; }

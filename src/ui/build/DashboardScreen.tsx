@@ -1,8 +1,8 @@
-// Step 4 of the build page: the Dashboard (spec section 5). Three tiles over the gold tables: a number and a line, each
-// SQL with one blank, and a table of chains with its SQL given. The step is done when all three pass.
+// Step 4 of the build page: the Dashboard (spec section 5). Three tiles over the gold tables: a number, a line and bars
+// of chains, each SQL a plain SELECT with one blank. The step is done when all three pass.
 import { useEffect, useState, type ReactNode } from 'react'
 import type { Table } from 'apache-arrow'
-import { Check, CheckCircle2, Lightbulb, Loader2, Play } from 'lucide-react'
+import { Check, CheckCircle2, Lightbulb, Loader2 } from 'lucide-react'
 import { dashboardDone } from '../../core/buildDashboard'
 import type { BuildWork } from '../../core/buildSteps'
 import { TILE_CARDS, TILE_IDS, TILE_SQL, T, TILE_TABLE, type TileCard, type TileId } from '../../data/build/kaiyoSales'
@@ -10,7 +10,9 @@ import { runTile, type TileRun } from '../../db/buildRun'
 import { query } from '../../db/engine'
 import { enginePort } from '../../db/pipelinePort'
 import { ChartView } from '../Chart'
+import { BarChart } from './BarChart'
 import { BuildTable, money } from './BuildTable'
+import { StarPanel } from './StarPanel'
 import './dashboard.css'
 
 interface Props {
@@ -43,7 +45,7 @@ export function DashboardScreen({ work, setWork, ready }: Props) {
   useEffect(() => {
     if (!ready) return
     void (async () => {
-      for (const id of dash.tiles) await run(id, id === 'chains' ? '' : dash.blanks[id])
+      for (const id of dash.tiles) await run(id, dash.blanks[id])
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready])
@@ -54,13 +56,13 @@ export function DashboardScreen({ work, setWork, ready }: Props) {
       key={id}
       card={card(id)}
       className={className}
-      blank={id === 'chains' ? '' : dash.blanks[id]}
+      blank={dash.blanks[id]}
       onBlank={(v) => setWork((w) => ({ ...w, dash: { ...w.dash, blanks: { ...w.dash.blanks, [id]: v } } }))}
       passed={dash.tiles.includes(id)}
       result={runs[id]}
       busy={busy === id}
       ready={ready && busy === null}
-      onRun={() => void run(id, id === 'chains' ? '' : dash.blanks[id])}
+      onRun={() => void run(id, dash.blanks[id])}
     >
       {id === 'kpi' && runs.kpi?.data && runs.kpi.ok && (
         <>
@@ -78,13 +80,15 @@ export function DashboardScreen({ work, setWork, ready }: Props) {
           <ChartView table={lineTable} tabId="build-line" fileName="kaiyo-revenue-by-month" />
         </div>
       )}
-      {id === 'chains' && runs.chains?.data && <BuildTable data={runs.chains.data} caption="Revenue by chain" />}
+      {id === 'chains' && runs.chains?.data && runs.chains.ok && <BarChart data={runs.chains.data} label="Revenue by chain" />}
+      {id === 'chains' && runs.chains?.data && !runs.chains.ok && <BuildTable data={runs.chains.data} caption="Chains tile result" />}
     </Tile>
   )
 
   return (
     <div className="space-y-4" data-testid="build-dashboard">
-      <p className="build-lead">Three tiles for the Head of Sales, all read from the star you just saw. Write the blank in the first two, run the third.</p>
+      <p className="build-lead">Three tiles for the Head of Sales, all read from the star you built. Write the blank in each tile.</p>
+      <StarPanel ready={ready} />
       <div className="bd-grid">
         {tile('kpi')}
         {tile('chains')}
@@ -112,7 +116,6 @@ function Tile({ card, className, blank, onBlank, passed, result, busy, ready, on
   children?: ReactNode
 }) {
   const [hints, setHints] = useState(0)
-  const hasBlank = card.id !== 'chains'
   const [before, after] = TILE_SQL[card.id].split('____')
   return (
     <section className={`bd-tile ${className}${passed ? ' is-passed' : ''}`} data-testid={`tile-${card.id}`}>
@@ -125,28 +128,24 @@ function Tile({ card, className, blank, onBlank, passed, result, busy, ready, on
         )}
       </div>
       <p style={{ margin: 0 }}>{card.prompt}</p>
-      {hasBlank ? (
-        <pre className="pl-code" data-testid={`tile-${card.id}-sql`}>
-          {before}
-          <input
-            className="pl-blank"
-            aria-label={`The blank of the ${card.title} tile`}
-            spellCheck={false}
-            autoComplete="off"
-            value={blank}
-            placeholder="____"
-            size={Math.max(8, Math.min(60, blank.length + 1))}
-            onChange={(e) => onBlank(e.target.value.replace(/\r?\n/g, ' '))}
-            onKeyDown={(e) => e.key === 'Enter' && ready && onRun()}
-          />
-          {after}
-        </pre>
-      ) : (
-        <pre className="pl-code">{TILE_SQL[card.id]}</pre>
-      )}
+      <pre className="pl-code" data-testid={`tile-${card.id}-sql`}>
+        {before}
+        <input
+          className="pl-blank"
+          aria-label={`The blank of the ${card.title} tile`}
+          spellCheck={false}
+          autoComplete="off"
+          value={blank}
+          placeholder="____"
+          size={Math.max(8, Math.min(60, blank.length + 1))}
+          onChange={(e) => onBlank(e.target.value.replace(/\r?\n/g, ' '))}
+          onKeyDown={(e) => e.key === 'Enter' && ready && onRun()}
+        />
+        {after}
+      </pre>
       <div className="flex flex-wrap items-center gap-2">
         <button className="btn btn-primary" disabled={!ready} onClick={onRun} data-testid={`tile-run-${card.id}`}>
-          {busy ? <Loader2 size={14} className="animate-spin" /> : hasBlank ? <CheckCircle2 size={14} /> : <Play size={14} />} {hasBlank ? 'Run and check' : 'Run'}
+          {busy ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />} Run and check
         </button>
         {card.hints.length > 0 && hints < card.hints.length && (
           <button className="btn" onClick={() => setHints(hints + 1)}>

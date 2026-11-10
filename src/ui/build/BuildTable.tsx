@@ -3,11 +3,11 @@ import type { ReactNode } from 'react'
 import type { ResultData } from '../../core/check'
 
 /** A few rows as a plain table; `types` (column → short type) is drawn under the names. */
-export function BuildTable({ data, types, caption }: { data: ResultData | null; types?: Record<string, string>; caption?: string }) {
+export function BuildTable({ data, types, caption, tone }: { data: ResultData | null; types?: Record<string, string>; caption?: string; tone?: 'warn' | 'ok' }) {
   if (!data) return <div className="build-muted">Loading…</div>
   return (
     <div className="build-table-wrap" tabIndex={0} role="region" aria-label={caption ?? 'Rows'}>
-      <table className="build-table">
+      <table className={`build-table${tone ? ` is-${tone}` : ''}`}>
         <thead>
           <tr>
             {data.header.map((c) => (

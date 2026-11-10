@@ -1,13 +1,13 @@
 // The engine of the build-by-hand page (`#build=kaiyo-sales`): prepares schema `build_kaiyo`, registers the 33 files,
 // connects a source, drops the work tables. Same port as the pipeline, so the page and the tests run the same code.
-import { diagnoseKpi, diagnoseLine, tileBlankProblem, tileSql, type TileDiagnosis } from '../core/buildDashboard'
+import { chainsKeyOff, diagnoseKpi, diagnoseLine, tileBlankProblem, tileRunSql, type TileDiagnosis } from '../core/buildDashboard'
 import { compareResults, type ResultData } from '../core/check'
-import { CLEAN_COLUMNS, chainSql, cleanDone, diagnoseP1, diagnoseP2, diagnoseP3, diagnoseP7, stepsOf, type BuildWork, type Diagnosis, type P1Facts, type P2Facts, type P3Facts, type P7Facts, type Peek, type StepSpec } from '../core/buildSteps'
+import { CLEAN_COLUMNS, chainSql, cleanDone, countsSql, diagnoseP1, diagnoseP2, diagnoseP3, diagnoseP7, stepsOf, type BuildWork, type Diagnosis, type P1Facts, type P2Facts, type P3Facts, type P7Facts, type Peek, type StepSpec } from '../core/buildSteps'
 import { starStatements, typeFamily, type FoundFacts, type Link, type LinkFacts, type SideFacts, type Slot } from '../core/buildLinks'
 import { readableError } from '../core/sqlPractice'
 import { csvText } from '../core/csvText'
 import { exportText, type SqlPort } from './pipelineRun'
-import { BUILD_DASH_DIAGNOSIS, BUILD_SOURCES, CHECK_SQL, GOLD_SQL, REF_TILE_SQL, TILE_TABLE, type TileId, CONNECT_SQL, QUICK_LOOK_SQL, FILE_SQL, REF_SQL, SCHEMA, SOURCE_FOLDER, SOURCE_TABLES, T, WORK_TABLES, sourceById, type BuildSourceId } from '../data/build/kaiyoSales'
+import { BUILD_DASH_DIAGNOSIS, BUILD_SOURCES, CHECK_SQL, GIVEN_SQL, GOLD_SQL, REF_TILE_SQL, TILE_TABLE, type TileId, CONNECT_SQL, QUICK_LOOK_SQL, FILE_SQL, REF_SQL, SCHEMA, SOURCE_FOLDER, SOURCE_TABLES, T, WORK_TABLES, sourceById, type BuildSourceId } from '../data/build/kaiyoSales'
 
 /** One preparation per port, shared by callers that arrive while it runs. */
 const preparing = new WeakMap<SqlPort, Promise<string[]>>()
@@ -96,6 +96,25 @@ export async function previewFile(port: SqlPort, id: BuildSourceId): Promise<Res
 export async function describeTable(port: SqlPort, table: string): Promise<{ name: string; type: string }[]> {
   const r = await port.query(`SELECT column_name, data_type FROM information_schema.columns WHERE table_schema = '${SCHEMA}' AND table_name = '${table}' ORDER BY ordinal_position`)
   return r.rows.map((row) => ({ name: String(row[0]), type: String(row[1]) }))
+}
+
+export interface GoldTable {
+  table: string
+  columns: { name: string; type: string }[]
+}
+
+/** The tables of the star as they are now (every `gold_*` of the schema), the fact first, with their columns. */
+export async function goldTables(port: SqlPort): Promise<GoldTable[]> {
+  const r = await port.query(
+    `SELECT table_name, column_name, data_type FROM information_schema.columns WHERE table_schema = '${SCHEMA}' AND starts_with(table_name, 'gold_') ORDER BY table_name, ordinal_position`,
+  )
+  const by = new Map<string, GoldTable>()
+  for (const [t, c, d] of r.rows) {
+    const g = by.get(String(t)) ?? { table: String(t), columns: [] }
+    g.columns.push({ name: String(c), type: String(d) })
+    by.set(g.table, g)
+  }
+  return [...by.values()].sort((a, b) => Number(/fact/.test(b.table)) - Number(/fact/.test(a.table)) || a.table.localeCompare(b.table))
 }
 
 /** Quick look: the two numbers on the files as they came (needs all four sources connected). */
@@ -263,12 +282,12 @@ export async function runTile(port: SqlPort, id: TileId, blank: string): Promise
   const table = T(TILE_TABLE[id])
   let error: string | null = null
   try {
-    await port.query(tileSql(id, blank))
+    await port.query(tileRunSql(id, blank))
   } catch (e) {
     error = readableError(String(e instanceof Error ? e.message : e)).split('\n')[0]
   }
   if (error) {
-    const d = id === 'kpi' ? diagnoseKpi({ value: null, match: false, error, blank }) : id === 'line' ? diagnoseLine({ points: 0, distinct: 0, diff: 0, error, blank }) : { ok: false, line: error }
+    const d = id === 'kpi' ? diagnoseKpi({ value: null, match: false, error, blank }) : id === 'line' ? diagnoseLine({ points: 0, distinct: 0, diff: 0, error, blank }) : { ok: false, line: BUILD_DASH_DIAGNOSIS.syntax(error) }
     return { ...d, data: null }
   }
   const data = await port.query(`SELECT * FROM ${table}`)
@@ -288,7 +307,7 @@ export async function runTile(port: SqlPort, id: TileId, blank: string): Promise
   }
   const expected = await port.query(`SELECT chain_name, revenue FROM ${T('ref_tile_chains')}`)
   const ok = compareResults(data, expected, true).ok
-  return { ok, line: ok ? null : BUILD_DASH_DIAGNOSIS.chainsOff, data }
+  return { ok, line: ok ? null : chainsKeyOff(blank) ? BUILD_DASH_DIAGNOSIS.chainsKey : BUILD_DASH_DIAGNOSIS.chainsOff, data }
 }
 
 // ---------------------------------------------------------------- P7: region ids as numbers (spec 2.6, linking screen 8)
@@ -370,4 +389,41 @@ export async function linkPeek(port: SqlPort, many: Slot, one: Slot): Promise<Ch
      WHERE m.sale_date >= DATE '2026-01-01' AND m.sale_date < DATE '2026-07-01' GROUP BY 1 ORDER BY sum(m.revenue) DESC, 1 LIMIT 3`,
   )
   return { rows, top: r.rows.map((x) => [String(x[0]), String(x[1])]) }
+}
+
+// ---------------------------------------------------------------- Clean: how many rows each step leaves, and the rows it is about
+
+/** Rows of the source's bronze table, then after each step of the list (the given step first for sales). */
+export async function stepCounts(port: SqlPort, id: BuildSourceId, specs: readonly StepSpec[]): Promise<number[]> {
+  return (await port.query(countsSql(id, stepsOf(id, specs)))).rows[0].map(Number)
+}
+
+export interface AffectedRows {
+  /** the rows of the problem as they are in the file (after the given step for sales) */
+  file: ResultData
+  /** the same rows in the clean table now */
+  now: ResultData
+  /** how many sales / stores the problem is about */
+  groups: number
+}
+
+const SALE_KEY = 'sale_date, customer_name, sku_code'
+/** Four copies of the problem are enough to see it: the first four by key. */
+const SHOWN_GROUPS = 4
+
+/** P2: the sales sent twice. P3: the stores in customers.csv twice. Both from the rows as they came, and as the clean table has them. */
+export async function affectedRows(port: SqlPort, card: 'P2' | 'P3'): Promise<AffectedRows> {
+  if (card === 'P3') {
+    const dup = `SELECT customer_id FROM ${T('bronze_customers')} GROUP BY customer_id HAVING count(*) > 1`
+    const rows = (table: string) => port.query(`SELECT * FROM ${T(table)} WHERE customer_id IN (${dup}) ORDER BY customer_id, updated_at`)
+    return { file: await rows('bronze_customers'), now: await rows('clean_customers'), groups: await num(port, `SELECT count(*) FROM (${dup})`) }
+  }
+  const given = GIVEN_SQL.replace('{prev}', T('bronze_sales'))
+  const dup = `SELECT ${SALE_KEY} FROM g GROUP BY ${SALE_KEY} HAVING count(*) > 1`
+  const rows = (from: string) =>
+    port.query(
+      `WITH g AS (${given}), d AS (${dup} ORDER BY ${SALE_KEY} LIMIT ${SHOWN_GROUPS})
+       SELECT t.* FROM ${from} t JOIN d USING (${SALE_KEY}) ORDER BY ${SALE_KEY}, raw_id`,
+    )
+  return { file: await rows('g'), now: await rows(T('clean_sales')), groups: await num(port, `WITH g AS (${given}) SELECT count(*) FROM (${dup})`) }
 }

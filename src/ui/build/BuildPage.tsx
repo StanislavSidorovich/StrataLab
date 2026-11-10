@@ -241,7 +241,7 @@ function Shell() {
               ) : open === 'dashboard' ? (
                 <DashboardScreen work={work} setWork={setWork} ready={ready} />
               ) : (
-                <AnswerScreen work={work} setWork={setWork} />
+                <AnswerScreen work={work} setWork={setWork} ready={ready} />
               )}
             </section>
           </main>

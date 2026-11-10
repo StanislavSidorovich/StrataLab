@@ -29,3 +29,27 @@
   .bm-star { grid-template-columns: minmax(0, 1fr); }
   .bd-grid { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* "Your star" on the Dashboard step */
+.bs-panel { padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+.bs-panel summary { cursor: pointer; font-weight: 600; }
+.bs-tables { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.bs-table { flex: 1 1 180px; min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+.bs-name { font-weight: 600; font-size: 12.5px; font-family: ui-monospace, monospace; overflow-wrap: anywhere; margin-bottom: 4px; }
+.bs-cols { list-style: none; margin: 0; padding: 0; font-size: 12px; font-family: ui-monospace, monospace; color: var(--muted); }
+.bs-cols li { display: flex; justify-content: space-between; gap: 8px; }
+.bs-type { font-family: inherit; opacity: 0.8; }
+
+/* the Answer step: the dashboard beside the questions on a wide screen, above them on a narrow one */
+.ba-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
+.ba-dash { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.ba-dash-title { font-weight: 600; font-size: 13px; color: var(--muted); }
+.ba-dash .bd-kpi { font-size: 26px; }
+.ba-dash .bd-chart { height: 220px; }
+.ba-dash-tile { display: flex; flex-direction: column; gap: 6px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); min-width: 0; }
+.ba-dash-tile .bd-tile-title { font-size: 13px; }
+@media (min-width: 1000px) {
+  .ba-layout { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); }
+  .ba-dash { grid-column: 2; grid-row: 1; position: sticky; top: 0; }
+  .ba-main { grid-column: 1; grid-row: 1; }
+}
