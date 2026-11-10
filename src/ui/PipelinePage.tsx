@@ -42,6 +42,7 @@ import { checkpoint } from '../db/engine'
 import { openPipeline, refreshCatalog, useLab } from './store'
 import { PipelineTutorial } from './PipelineTutorial'
 import { TUT_STORAGE } from '../data/pipelines/storesByRegion'
+import { followQuaeraLink } from '../core/quaeraLink'
 
 const KEY = `stratalab.pipeline.${PIPELINE_ID}`
 const URL_HERE = () => `${location.origin}${location.pathname}#pipeline=${PIPELINE_ID}`
@@ -119,7 +120,7 @@ function Shell() {
   const wide = useWide()
   const [intro, setIntro] = useState(readIntro)
   return (
-    <div className="absolute inset-0 z-30 flex flex-col min-w-0" style={{ background: 'var(--bg)' }} data-testid="pipeline">
+    <div className="absolute inset-0 z-30 flex flex-col min-w-0" style={{ background: 'var(--bg)', zoom: 'var(--practice-zoom, 1)' }} data-testid="pipeline">
       <header className="shrink-0 flex items-center gap-3 px-4 py-2" style={{ background: 'var(--panel)', borderBottom: '1px solid var(--line)' }}>
         <Workflow size={18} style={{ color: 'var(--accent)' }} />
         <div className="flex-1 min-w-0">
@@ -1091,7 +1092,7 @@ function BackToQuaera() {
     <section className="rounded-lg px-4 py-3 flex flex-wrap items-center gap-3" style={{ background: 'var(--panel)', border: '1px solid #16a34a' }} data-testid="pipeline-back">
       <Check size={16} style={{ color: '#16a34a' }} />
       <span className="flex-1 min-w-0">You built a working pipeline. Quaera will remember it.</span>
-      <a className="btn btn-primary" href={RETURN_URL} target="_blank" rel="noopener">
+      <a className="btn btn-primary" href={RETURN_URL} target="_blank" rel="noopener" onClick={(e) => followQuaeraLink(e, RETURN_URL)}>
         Back to Quaera
       </a>
     </section>

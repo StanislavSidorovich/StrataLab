@@ -52,8 +52,6 @@ function nextSlot(slots: Slots, b: TutBlock): string | null {
   return i === undefined ? null : tutSlot(b.lane, i)
 }
 
-const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
-
 function Preview({ title, data }: { title: string; data: ResultData | null }) {
   if (!data) return null
   return (
@@ -259,55 +257,76 @@ async function loadPreviews(): Promise<Record<string, ResultData | null>> {
 function Watch({ ready, alive, onNext }: { ready: boolean; alive: React.MutableRefObject<boolean>; onNext: () => void }) {
   const [slots, setSlots] = useState<Slots>(emptySlots)
   const [captions, setCaptions] = useState<{ key: string; text: string; arrow?: boolean }[]>([])
-  const [playing, setPlaying] = useState(false)
+  /** blocks placed so far; null before Start; TUT_BLOCKS.length means all placed, Run is next */
+  const [step, setStep] = useState<number | null>(null)
+  const [running, setRunning] = useState(false)
   const [done, setDone] = useState(false)
   const [journal, setJournal] = useState<TutStep[]>([])
   const [previews, setPreviews] = useState<Record<string, ResultData | null>>({})
+  const placed = useRef<Slots>(emptySlots())
+  const steps = useRef<TutPlacedStep[]>([])
+  const total = TUT_BLOCKS.length
 
-  const play = async () => {
-    setPlaying(true)
+  const start = async () => {
+    setRunning(true)
     setDone(false)
     setSlots(emptySlots())
     setCaptions([])
     setJournal([])
     setPreviews({})
+    placed.current = emptySlots()
+    steps.current = []
     await resetTutorial(enginePort)
-    const placed: Slots = emptySlots()
-    const steps: TutPlacedStep[] = []
-    for (const [n, b] of TUT_BLOCKS.entries()) {
-      await wait(1100)
-      if (!alive.current) return
-      const slot = nextSlot(placed, b)!
-      placed[slot] = b.id
-      setSlots({ ...placed })
-      setCaptions((c) => [...c, { key: b.id, text: `${b.label}. ${WATCH_CAPTIONS[b.id]} In Fabric: ${b.fabric}` }])
-      steps.push({ id: b.id, when: n === 0 ? null : 'succeeded' })
-      if (n > 0) {
-        await wait(700)
-        if (!alive.current) return
-        setCaptions((c) => [...c, { key: `${b.id}-arrow`, text: n === 1 ? ARROW_CAPTION : `Runs when the previous step: Succeeded, again.`, arrow: true }])
-      }
-    }
-    await wait(1200)
     if (!alive.current) return
+    setRunning(false)
+    setStep(0)
+  }
+
+  // One press of Next: the next block goes in (with the arrow that joins it to the one before), then Run.
+  const next = async () => {
+    if (step === null || running) return
+    if (step < total) {
+      const b = TUT_BLOCKS[step]
+      const slot = nextSlot(placed.current, b)!
+      placed.current[slot] = b.id
+      setSlots({ ...placed.current })
+      steps.current.push({ id: b.id, when: step === 0 ? null : 'succeeded' })
+      setCaptions((c) => [
+        ...c,
+        { key: b.id, text: `${b.label}. ${WATCH_CAPTIONS[b.id]} In Fabric: ${b.fabric}` },
+        ...(step > 0 ? [{ key: `${b.id}-arrow`, text: step === 1 ? ARROW_CAPTION : `Runs when the previous step: Succeeded, again.`, arrow: true }] : []),
+      ])
+      setStep(step + 1)
+      return
+    }
+    setRunning(true)
     setCaptions((c) => [...c, { key: 'run', text: 'Now Run: the steps go one after another, each only after the one before it succeeded.' }])
-    const j = await runTutorial(enginePort, steps, setJournal)
+    const j = await runTutorial(enginePort, steps.current, setJournal)
     setJournal(j)
     await checkpoint()
     await refreshCatalog()
     if (!alive.current) return
     setPreviews(await loadPreviews())
-    setPlaying(false)
+    setRunning(false)
     setDone(true)
+    setStep(total + 1)
   }
+
+  const nextLabel = step === null ? '' : step < total ? `Next: place ${TUT_BLOCKS[step].label}` : 'Next: Run the pipeline'
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <button className="btn btn-primary" onClick={() => void play()} disabled={!ready || playing} data-testid="tutorial-play">
-          {playing ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />} {done ? 'Watch again' : 'Play'}
-        </button>
-        {!ready && <span style={{ fontSize: 12, color: 'var(--muted)' }}>Play starts when the data is ready.</span>}
+        {step === null || done ? (
+          <button className="btn btn-primary" onClick={() => void start()} disabled={!ready || running} data-testid="tutorial-play">
+            {running ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />} {done ? 'Watch again' : 'Start'}
+          </button>
+        ) : (
+          <button className="btn btn-primary" onClick={() => void next()} disabled={!ready || running} data-testid="tutorial-step">
+            {running ? <Loader2 size={14} className="animate-spin" /> : <ArrowRight size={14} />} {nextLabel}
+          </button>
+        )}
+        {!ready && <span style={{ fontSize: 12, color: 'var(--muted)' }}>Start works when the data is ready.</span>}
         {done && (
           <button className="btn btn-primary" onClick={onNext} data-testid="tutorial-next">
             <ArrowRight size={14} /> Now you build it

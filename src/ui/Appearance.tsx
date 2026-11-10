@@ -46,7 +46,7 @@ export function AppearanceButton({ className = '' }: { className?: string }) {
 
   useEffect(() => applyBorders(borders), [borders])
 
-  // The practice pages read --practice-zoom (PracticeBook.tsx).
+  // The practice pages, the pipeline and the build page read --practice-zoom (PracticeBook.tsx, PipelinePage.tsx, build.css).
   useEffect(() => {
     document.documentElement.style.setProperty('--practice-zoom', String(zoom))
     try {

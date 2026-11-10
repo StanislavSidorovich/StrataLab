@@ -25,6 +25,7 @@ import { Menu, useLongPress, type MenuItem } from './Menu'
 import { completionSchema, darkBackground, lightTheme } from './SqlEditor'
 import { OutputView } from './PythonOutput'
 import { addTab, openAndRun, openPracticeBook, restartPython, runPracticePython, runPracticeQuery, startPython, useLab } from './store'
+import { followQuaeraLink } from '../core/quaeraLink'
 
 const LINE = 20
 
@@ -102,7 +103,7 @@ const SQL_ENGINE: BookEngine = {
   intro: (
     <>
       Look, remember, solve. For an explanation from the start, see the{' '}
-      <a href="https://quaera.app" target="_blank" rel="noreferrer" style={linkStyle}>
+      <a href="https://quaera.app" target="_blank" rel="noreferrer" style={linkStyle} onClick={(e) => followQuaeraLink(e, 'https://quaera.app')}>
         SQL track on quaera.app
       </a>
       . Your queries are T-SQL, translated to DuckDB in this browser: nearly the same as Fabric Warehouse, and a yellow note marks where it is not.
@@ -147,7 +148,7 @@ const PY_ENGINE: BookEngine = {
   intro: (
     <>
       Look, remember, solve, from a first look at the data to a business answer. For an explanation from the start, see the{' '}
-      <a href="https://quaera.app" target="_blank" rel="noreferrer" style={linkStyle}>
+      <a href="https://quaera.app" target="_blank" rel="noreferrer" style={linkStyle} onClick={(e) => followQuaeraLink(e, 'https://quaera.app')}>
         pandas track on quaera.app
       </a>{' '}
       or the{' '}
@@ -950,7 +951,7 @@ function Page() {
               <span className="flex-1 min-w-0">
                 You've done {Math.round(sectionsDone.share * 100)}% of the {book.kind === 'sql' ? 'SQL' : 'Python'} practice without hints: count it in Quaera.
               </span>
-              <a className="btn btn-primary" href={PRACTICE_RETURN_URL[book.kind]} target="_blank" rel="noopener">
+              <a className="btn btn-primary" href={PRACTICE_RETURN_URL[book.kind]} target="_blank" rel="noopener" onClick={(e) => followQuaeraLink(e, PRACTICE_RETURN_URL[book.kind])}>
                 Count it in Quaera <ExternalLink size={14} />
               </a>
             </div>

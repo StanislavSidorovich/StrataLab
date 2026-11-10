@@ -1,8 +1,8 @@
 // Practice on the demo shop (stage 5): the dialog with worked examples and tasks, and the bar
 // above the editor of a task's tab (the question, Check, hints one at a time, the solution).
-import { Check, CheckCircle2, ChevronRight, Eye, GraduationCap, Lightbulb, Link2, Loader2, NotebookText, Play, Workflow, X, XCircle } from 'lucide-react'
+import { Check, CheckCircle2, ChevronRight, Eye, GraduationCap, Hammer, Lightbulb, Link2, Loader2, NotebookText, Play, Workflow, X, XCircle } from 'lucide-react'
 import { useState } from 'react'
-import { checkTask, nextHint, openExample, openPractice, openPipeline, openPracticeBook, openTask, openWalkthrough, useLab } from './store'
+import { checkTask, nextHint, openExample, openPractice, openBuild, openPipeline, openPracticeBook, openTask, openWalkthrough, useLab } from './store'
 import { activeSql, appendToActive } from './SqlEditor'
 import { EXAMPLES, LEVELS, TASKS, taskById, type PracticeTask } from '../data/practice'
 import { describeVerdict } from '../core/check'
@@ -45,6 +45,24 @@ export function PracticeDialog() {
           </button>
         </div>
         <div className="overflow-auto min-h-0 p-3 space-y-4">
+          <button
+            className="w-full text-left rounded-lg p-3 flex items-start gap-2 hover:bg-[var(--panel)]"
+            style={{ border: '1px solid var(--accent)', background: 'var(--accent-soft)' }}
+            onClick={() => {
+              openPractice(false)
+              openBuild('kaiyo-sales')
+            }}
+            data-testid="practice-build"
+          >
+            <Hammer size={15} className="shrink-0 mt-0.5" style={{ color: 'var(--accent)' }} />
+            <span className="flex-1 min-w-0">
+              <span className="font-semibold">Build it by hand: four raw files to an answer for the Head of Sales</span>
+              <span className="block" style={{ color: 'var(--muted)' }}>
+                Connect the files, clean them, link the keys, write the tiles of a dashboard and read the answer off it. A laptop is needed.
+              </span>
+            </span>
+            <ChevronRight size={16} className="shrink-0 mt-0.5" />
+          </button>
           {BOOKS.map((b) => (
             <button
               key={b.kind}
@@ -67,7 +85,7 @@ export function PracticeDialog() {
           ))}
           <button
             className="w-full text-left rounded-lg p-3 flex items-start gap-2 hover:bg-[var(--panel)]"
-            style={{ border: '1px solid var(--accent)', background: 'var(--accent-soft)' }}
+            style={{ border: '1px solid var(--line)', background: 'var(--panel-2)' }}
             onClick={() => {
               openPractice(false)
               openPipeline('kaiyo-sellout')
@@ -75,9 +93,9 @@ export function PracticeDialog() {
           >
             <Workflow size={15} className="shrink-0 mt-0.5" style={{ color: 'var(--accent)' }} />
             <span className="flex-1 min-w-0">
-              <span className="font-semibold">Data pipeline on Kaiyo Trading: place the blocks, run it, check it</span>
+              <span className="font-semibold">Overview: watch a pipeline assemble from ready blocks</span>
               <span className="block" style={{ color: 'var(--muted)' }}>
-                Follow the distributor files through three roles, from a data engineer to an analyst, and find why the top chain changes. A laptop is needed.
+                Five minutes: place ready blocks and run a data pipeline on Kaiyo Trading, from a data engineer to an analyst. The build above is the long one, where you write the steps yourself. A laptop is needed.
               </span>
             </span>
             <ChevronRight size={16} className="shrink-0 mt-0.5" />

@@ -1,4 +1,5 @@
-.build-page { background: var(--bg); color: var(--text); }
+/* the size chosen under Aa (--practice-zoom) applies here as on the practice pages */
+.build-page { background: var(--bg); color: var(--text); zoom: var(--practice-zoom, 1); }
 .build-head { background: var(--panel); border-bottom: 1px solid var(--line); }
 .build-strip { display: flex; gap: 6px; list-style: none; margin: 0; padding: 10px 16px; overflow-x: auto; background: var(--panel); border-bottom: 1px solid var(--line); }
 .build-chip { flex: 1 1 0; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--muted); font: inherit; text-align: left; cursor: pointer; }
