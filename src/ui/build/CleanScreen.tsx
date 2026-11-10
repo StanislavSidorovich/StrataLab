@@ -1,18 +1,20 @@
 // Step 2 of the build page: Clean (spec section 3). Four cards open one after the other (W watched, P1 products by
 // buttons, P2 sales by a blank, P3 customers by a button with settings); the panel under them shows any source with its
 // toolbar and applied steps, so the learner chooses the tool and the check judges the table.
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ArrowRight, Check, CheckCircle2, Lightbulb, Loader2, Lock, XCircle } from 'lucide-react'
-import { CLEAN_COLUMNS, activeCard, addSpec, cleanDone, dedupSql, passedInOrder, type BuildWork, type StepSpec } from '../../core/buildSteps'
+import { CLEAN_COLUMNS, activeCard, addSpec, checkFormat, cleanDone, datesSql, hasFullGiven, passCard, typedColumn, type BuildWork, type StepSpec, dedupSql } from '../../core/buildSteps'
 import { checkBlank } from '../../core/pipeline'
 import { CLEAN_CARDS, GIVEN_NOTE, P1_SKUS, P3_NOTE, sourceById, type BuildSourceId, type CleanCard, type CleanId } from '../../data/build/kaiyoSales'
 import { LINK_TEXT } from '../../data/build/linkData'
-import { checkP1, checkP2, checkP3, checkP7, type CheckReport } from '../../db/buildRun'
+import { checkP1, checkP2, checkP3, checkP4, checkP5, checkP6, checkP7, salesErrors, type CheckReport, type ErrorColumn } from '../../db/buildRun'
 import { enginePort } from '../../db/pipelinePort'
 import { AffectedRows } from './AffectedRows'
+import { fmtN } from './BuildTable'
 import { StepsPanel } from './StepsPanel'
 import { WatchRegions } from './WatchRegions'
 import './clean.css'
+import './errors.css'
 
 interface Props {
   work: BuildWork
@@ -33,8 +35,21 @@ export function CleanScreen({ work, setWork, ready, rebuild, rev, focus, onBackT
   const [report, setReport] = useState<Partial<Record<CleanId, CheckReport>>>({})
   const connected = work.connected.length === 4
 
+  // [Error] cells in the sales, for the P5 and P6 cards (spec 3.6)
+  const [errs, setErrs] = useState<Record<ErrorColumn, number> | null>(null)
+  useEffect(() => {
+    if (!ready || !work.connected.includes('sales')) return
+    let alive = true
+    void salesErrors(enginePort)
+      .then((e) => alive && setErrs(e))
+      .catch(() => undefined)
+    return () => {
+      alive = false
+    }
+  }, [ready, work.connected, rev])
+
   const pass = (id: CleanId) => {
-    setWork((w) => ({ ...w, passed: passedInOrder([...w.passed, id]) }))
+    setWork((w) => ({ ...w, passed: passCard(w, id) }))
     const i = CLEAN_CARDS.findIndex((c) => c.id === id)
     const nextCard = CLEAN_CARDS[i + 1]
     if (nextCard) setSource(nextCard.source)
@@ -85,12 +100,14 @@ export function CleanScreen({ work, setWork, ready, rebuild, rev, focus, onBackT
                   {(c.id === 'P2' || c.id === 'P3') && <AffectedRows card={c.id} ready={ready} rev={rev} />}
                   {c.id === 'P2' && <SalesBlank work={work} setWork={setWork} ready={ready} rebuild={rebuild} onReport={(r) => setReport((x) => ({ ...x, P2: r }))} />}
                   {c.id === 'P3' && <p className="build-muted" style={{ margin: 0 }}>{P3_NOTE}</p>}
+                  {c.id === 'P5' && <DateStep work={work} setWork={setWork} ready={ready} rebuild={rebuild} errs={errs} onReport={(r) => setReport((x) => ({ ...x, P5: r }))} />}
+                  {c.id === 'P6' && <NumberNote work={work} errs={errs} />}
                   <Hints card={c} level={level} onMore={() => setHints((h) => ({ ...h, [c.id]: level + 1 }))} />
                   {c.id !== 'P2' && <CheckBar card={c} work={work} ready={ready} report={last} onReport={(r) => setReport((x) => ({ ...x, [c.id]: r }))} />}
                   {last && <Verdict report={last} />}
                   {last?.ok && (
                     <button className="btn btn-primary" onClick={() => pass(c.id)} data-testid={`clean-pass-${c.id}`}>
-                      {c.id === 'P3' ? 'Finish cleaning' : 'Next problem'} <ArrowRight size={14} />
+                      {c.id === 'P6' ? 'Finish cleaning' : 'Next problem'} <ArrowRight size={14} />
                     </button>
                   )}
                 </>
@@ -101,11 +118,16 @@ export function CleanScreen({ work, setWork, ready, rebuild, rev, focus, onBackT
       </ol>
       {cleanDone(work.passed) && (
         <div className="build-quick" data-testid="clean-done">
-          <b>Clean is done.</b> Every source is as it should be: regions 16 rows, products 47, sales 3,000, customers 144. The numbers from your Quick look will not come back the same.
+          <b>Clean is done.</b> Regions 16 rows, products 47, sales 3,000, customers 144, and the sales have dates and numbers.{' '}
+          {!hasFullGiven(work) && work.p4 !== 'done' && 'The names of the stores in the sales are still as the distributors typed them: the Model step will tell whether they link. '}
+          The numbers from your Quick look will not come back the same.
         </div>
       )}
+      {work.p4 && cleanDone(work.passed) && (
+        <ExtraCard id="P4" work={work} setWork={setWork} ready={ready} onFocus={() => setSource('sales')} onBack={onBackToModel} text={LINK_TEXT.p4} where="sales · asked for by the Model step" check={() => checkP4(enginePort, work.steps.sales)} />
+      )}
       {work.p7 && cleanDone(work.passed) && (
-        <P7Card work={work} setWork={setWork} ready={ready} onFocus={() => setSource('regions')} onBack={onBackToModel} />
+        <ExtraCard id="P7" work={work} setWork={setWork} ready={ready} onFocus={() => setSource('regions')} onBack={onBackToModel} text={LINK_TEXT.p7} where="regions.csv · asked for by the Model step" check={() => checkP7(enginePort)} />
       )}
       <StepsPanel source={source} work={work} ready={ready} rev={rev} onChange={rebuild} onSource={setSource} />
     </div>
@@ -140,7 +162,9 @@ function CheckBar({ card, work, ready, report, onReport }: { card: CleanCard; wo
     setBusy(true)
     setError(null)
     try {
-      onReport(card.id === 'P1' ? await checkP1(enginePort, work.steps.products) : await checkP3(enginePort, work.steps.customers))
+      onReport(
+        card.id === 'P1' ? await checkP1(enginePort, work.steps.products) : card.id === 'P5' ? await checkP5(enginePort, work.steps.sales) : card.id === 'P6' ? await checkP6(enginePort) : await checkP3(enginePort, work.steps.customers),
+      )
     } catch (e) {
       setError(String(e instanceof Error ? e.message : e))
     } finally {
@@ -234,18 +258,19 @@ function SalesBlank({ work, setWork, ready, rebuild, onReport }: { work: BuildWo
   )
 }
 
-/** P7, asked for by the Model step: region_id as a number, so customers and regions can be linked. */
-function P7Card({ work, setWork, ready, onFocus, onBack }: { work: BuildWork; setWork: Props['setWork']; ready: boolean; onFocus: () => void; onBack: () => void }) {
+/** The card the Model step asked for: P4 (names of the sales) or P7 (region ids as numbers). Same shape: text, hints, Check, back to Model. */
+function ExtraCard({ id, work, setWork, ready, onFocus, onBack, text, where, check }: { id: 'P4' | 'P7'; work: BuildWork; setWork: Props['setWork']; ready: boolean; onFocus: () => void; onBack: () => void; text: { title: string; text: string; hints: readonly string[] }; where: string; check: () => Promise<CheckReport> }) {
   const [level, setLevel] = useState(0)
   const [report, setReport] = useState<CheckReport | null>(null)
   const [busy, setBusy] = useState(false)
-  const passed = work.p7 === 'done'
+  const key = id === 'P4' ? 'p4' : 'p7'
+  const passed = work[key] === 'done'
   const run = async () => {
     setBusy(true)
     try {
-      const r = await checkP7(enginePort)
+      const r = await check()
       setReport(r)
-      if (r.ok) setWork((w) => ({ ...w, p7: 'done' }))
+      if (r.ok) setWork((w) => ({ ...w, [key]: 'done' }))
     } catch (e) {
       setReport({ ok: false, line: String(e instanceof Error ? e.message : e), chips: [] })
     } finally {
@@ -253,32 +278,32 @@ function P7Card({ work, setWork, ready, onFocus, onBack }: { work: BuildWork; se
     }
   }
   return (
-    <div className={`build-clean-card is-open${passed ? ' is-passed' : ''}`} data-testid="clean-card-P7">
+    <div className={`build-clean-card is-open${passed ? ' is-passed' : ''}`} data-testid={`clean-card-${id}`}>
       <div className="build-clean-head">
-        <span className="build-chip-n">{passed ? <Check size={13} /> : 'P7'}</span>
+        <span className="build-chip-n">{passed ? <Check size={13} /> : id}</span>
         <div>
-          <div className="font-semibold">{LINK_TEXT.p7.title}</div>
-          <div className="build-muted">regions.csv · asked for by the Model step</div>
+          <div className="font-semibold">{text.title}</div>
+          <div className="build-muted">{where}</div>
         </div>
       </div>
-      <p style={{ margin: 0 }}>{LINK_TEXT.p7.text}</p>
+      <p style={{ margin: 0 }}>{text.text}</p>
       <div>
         {level > 0 && (
           <ul className="m-0 pl-5" style={{ fontSize: 13 }} data-testid="clean-hints">
-            {LINK_TEXT.p7.hints.slice(0, level).map((h) => (
+            {text.hints.slice(0, level).map((h) => (
               <li key={h}>{h}</li>
             ))}
           </ul>
         )}
-        {level < LINK_TEXT.p7.hints.length && (
+        {level < text.hints.length && (
           <button className="btn" style={{ marginTop: level > 0 ? 6 : 0 }} onClick={() => setLevel(level + 1)}>
             <Lightbulb size={14} /> {level === 0 ? 'Hint' : 'Another hint'}
           </button>
         )}
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <button className="btn" onClick={onFocus}>Show regions.csv below</button>
-        <button className="btn btn-primary" disabled={!ready || busy} onClick={() => void run()} data-testid="clean-check-P7">
+        <button className="btn" onClick={onFocus}>Show {id === 'P4' ? 'sales' : 'regions.csv'} below</button>
+        <button className="btn btn-primary" disabled={!ready || busy} onClick={() => void run()} data-testid={`clean-check-${id}`}>
           {busy ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />} Check
         </button>
       </div>
@@ -288,6 +313,91 @@ function P7Card({ work, setWork, ready, onFocus, onBack }: { work: BuildWork; se
           Back to Model <ArrowRight size={14} />
         </button>
       )}
+    </div>
+  )
+}
+
+/** P5: the learner presses Change type with Date; it fails on the dates not written as 2024-01-05; the card then offers the SQL with the format blank. */
+function DateStep({ work, setWork, ready, rebuild, errs, onReport }: { work: BuildWork; setWork: Props['setWork']; ready: boolean; rebuild: Props['rebuild']; errs: Record<ErrorColumn, number> | null; onReport: (r: CheckReport) => void }) {
+  const { before, after } = useMemo(() => {
+    const [b, a] = datesSql(CLEAN_COLUMNS.sales, '\u0000').split('\u0000')
+    return { before: b, after: a }
+  }, [])
+  const [busy, setBusy] = useState(false)
+  const step = work.steps.sales.find((s) => typedColumn(s) === 'sale_date')
+  const format = work.format
+  const bad = format.trim() ? checkFormat(format) : null
+  const n = errs?.sale_date ?? 0
+
+  const apply = async () => {
+    const refused = checkFormat(format)
+    if (refused) {
+      onReport({ ok: false, line: refused, chips: [] })
+      return
+    }
+    setBusy(true)
+    try {
+      const err = await rebuild('sales', addSpec(work.steps.sales, 'dates', { format: format.trim() }))
+      onReport(await checkP5(enginePort, addSpec(work.steps.sales, 'dates', { format: format.trim() })))
+      if (err) onReport({ ok: false, line: err, chips: [] })
+    } catch (e) {
+      onReport({ ok: false, line: String(e instanceof Error ? e.message : e), chips: [] })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!step) return <p className="build-muted" style={{ margin: 0 }} data-testid="clean-p5-wait">Use the Change type buttons under the sales list below: column sale_date, to Date.</p>
+  return (
+    <div className="build-fixbox">
+      {step.kind === 'type' && n > 0 && (
+        <div className="build-error" role="alert" data-testid="clean-p5-failed">
+          The step is added, but it fails: <b>{fmtN(n)} rows [Error]</b> in the preview. A plain Change type reads 2024-01-05 and nothing else; the other dates are written another way. Show the error rows, look at them, then write the step yourself:
+        </div>
+      )}
+      {step.kind === 'type' && n === 0 && <p className="build-muted" style={{ margin: 0 }}>The step is added and there are no errors. Check it.</p>}
+      {(n > 0 || step.kind === 'dates') && (
+        <>
+          <pre className="pl-code" data-testid="clean-p5-sql">
+            {before}
+            <input
+              className="pl-blank"
+              aria-label="The blank: the format of the slash dates"
+              spellCheck={false}
+              autoComplete="off"
+              value={format}
+              placeholder="____"
+              size={Math.max(8, Math.min(30, format.length + 1))}
+              onChange={(e) => {
+                const v = e.target.value.replace(/\r?\n/g, ' ')
+                setWork((w) => ({ ...w, format: v }))
+              }}
+              onKeyDown={(e) => e.key === 'Enter' && ready && !busy && void apply()}
+            />
+            {after}
+          </pre>
+          {bad && <div className="build-error">{bad}</div>}
+          <div className="flex flex-wrap items-center gap-2">
+            <button className="btn btn-primary" disabled={!ready || busy} onClick={() => void apply()} data-testid="clean-apply-P5">
+              {busy ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />} Apply and check
+            </button>
+            <span className="build-muted">The step takes the place of the failing one; the format can be changed and applied again.</span>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+/** P6: says what the preview says, in words, once Change type has been pressed on the numbers. */
+function NumberNote({ work, errs }: { work: BuildWork; errs: Record<ErrorColumn, number> | null }) {
+  const typed = (c: string) => work.steps.sales.some((s) => typedColumn(s) === c)
+  if (!typed('revenue') && !typed('units')) return <p className="build-muted" style={{ margin: 0 }}>Use the Change type buttons under the sales list below: revenue to Decimal, units to Whole number.</p>
+  const parts = [typed('revenue') && errs && errs.revenue > 0 && `${fmtN(errs.revenue)} revenues`, typed('units') && errs && errs.units > 0 && `${fmtN(errs.units)} units`].filter(Boolean)
+  if (parts.length === 0) return null
+  return (
+    <div className="build-error" role="alert" data-testid="clean-p6-failed">
+      The step is added, but it fails: <b>{parts.join(' and ')} [Error]</b>. Show the error rows below and read one: how is the number written?
     </div>
   )
 }

@@ -86,6 +86,11 @@ export const LINK_TEXT = {
   oldStar: 'New: link the tables yourself.',
   removeStar: 'This removes the star too. The dashboard keeps the star you built last.',
   peekTitle: 'Revenue of January to June 2026 by chain, with this link:',
+  p4: {
+    title: 'Names that find no customer',
+    text: 'Some store names in the sales find no customer: spaces at the edges, and one chain written two ways. Make the names match to the character, then link again.',
+    hints: ['Group the sales by customer_name and look at the ones that start or end with a space, and at Itiba against Ichiba.', 'Trim on customer_name, then Replace values: Itiba with Ichiba.'],
+  },
   p7: {
     title: 'Region ids as numbers',
     text: 'region_id is written R-01 … R-16 here and 1 … 16 in customers. Make it a number so the two can be linked.',

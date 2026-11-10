@@ -3,7 +3,8 @@ import type { ReactNode } from 'react'
 import type { ResultData } from '../../core/check'
 
 /** A few rows as a plain table; `types` (column → short type) is drawn under the names. */
-export function BuildTable({ data, types, caption, tone }: { data: ResultData | null; types?: Record<string, string>; caption?: string; tone?: 'warn' | 'ok' }) {
+/** `errors` (same shape as the rows) marks the cells that are [Error]: NULL where the file had a value (spec 3.6). */
+export function BuildTable({ data, types, caption, tone, errors }: { data: ResultData | null; types?: Record<string, string>; caption?: string; tone?: 'warn' | 'ok'; errors?: boolean[][] }) {
   if (!data) return <div className="build-muted">Loading…</div>
   return (
     <div className="build-table-wrap" tabIndex={0} role="region" aria-label={caption ?? 'Rows'}>
@@ -22,8 +23,8 @@ export function BuildTable({ data, types, caption, tone }: { data: ResultData | 
           {data.rows.map((r, i) => (
             <tr key={i}>
               {r.map((c, j) => (
-                <td key={j} className={c === null ? 'is-null' : undefined}>
-                  {c === null ? 'null' : String(c)}
+                <td key={j} className={errors?.[i]?.[j] ? 'is-error' : c === null ? 'is-null' : undefined} data-error={errors?.[i]?.[j] ? 'true' : undefined}>
+                  {errors?.[i]?.[j] ? '[Error]' : c === null ? 'null' : String(c)}
                 </td>
               ))}
             </tr>

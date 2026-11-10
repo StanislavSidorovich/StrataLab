@@ -4,10 +4,10 @@ import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
 import { beforeAll, describe, expect, it } from 'vitest'
 import type { ResultData } from '../src/core/check'
-import { CLEAN_COLUMNS, addSpec, chainSql, countsSql, dedupSql, emptyWork, latestSql, makeStep, readWork, removeSpec, rowsChange, shownSql, stepsOf, trimSql, upperSql, type StepSpec } from '../src/core/buildSteps'
+import { GIVEN_FULL_SPEC, CLEAN_COLUMNS, addSpec, chainSql, countsSql, dedupSql, emptyWork, latestSql, makeStep, readWork, removeSpec, rowsChange, shownSql, stepsOf, trimSql, upperSql, type StepSpec } from '../src/core/buildSteps'
 import { readBuild } from '../src/core/build'
 import { resultRows } from '../src/db/export'
-import { affectedRows, applySteps, checkP1, checkP2, checkP3, connect, prepare, quickLook, restore, stepCounts } from '../src/db/buildRun'
+import { describeTable, affectedRows, applySteps, checkP1, checkP2, checkP3, connect, prepare, quickLook, restore, stepCounts } from '../src/db/buildRun'
 import type { SqlPort } from '../src/db/pipelineRun'
 import { DIAGNOSIS_TEXT } from '../src/data/pipelines/kaiyoSellout'
 import { BUILD_DIAGNOSIS, BUILD_SOURCES, WATCH_STEPS } from '../src/data/build/kaiyoSales'
@@ -112,9 +112,10 @@ describe('state repair', () => {
       blank: 'x'.repeat(500),
       passed: ['W', 'P2'],
     })
+    // saved before v0.33.0 with sales connected: the first given step comes back (spec 3.6)
     expect(w.connected).toEqual(['sales', 'regions'])
     expect(w.steps.products.map((s) => s.id)).toEqual(['s1', 's4'])
-    expect(w.steps.sales).toEqual([])
+    expect(w.steps.sales).toEqual([GIVEN_FULL_SPEC])
     expect(w.blank).toHaveLength(200)
     expect(w.passed).toEqual(['W'])
   })
@@ -131,9 +132,11 @@ describe('state repair', () => {
 // ---------------------------------------------------------------- the engine
 
 describe('Connect and Quick look', () => {
-  it('gives sales the given step: 3,110 rows, real types', async () => {
+  it('gives sales the given step: 3,110 rows, raw_id a number, dates and numbers still text', async () => {
     expect(await applySteps(port, 'sales', [])).toBe(3110)
-    expect(await n('SELECT count(*) FROM build_kaiyo.clean_sales WHERE sale_date IS NULL')).toBe(0)
+    const types = Object.fromEntries((await describeTable(port, 'clean_sales')).map((c) => [c.name, c.type]))
+    expect(types).toEqual({ raw_id: 'INTEGER', source_file: 'VARCHAR', sale_date: 'VARCHAR', customer_name: 'VARCHAR', sku_code: 'VARCHAR', units: 'VARCHAR', revenue: 'VARCHAR' })
+    expect(await n('SELECT count(*) FROM build_kaiyo.clean_sales WHERE sku_code <> upper(trim(sku_code))')).toBe(0)
   })
   it('shows the dirty numbers of spec sections 7 and 11', async () => {
     const q = await quickLook(port)
@@ -224,9 +227,10 @@ describe('P2: sales sent twice (3.4)', () => {
   const rows: [string, number, number, number][] = [
     ['sale_date, customer_name, sku_code', 3000, 0, 0],
     ['raw_id', 3110, 110, 110],
-    ['customer_name, sku_code', 660, 0, 2340],
-    ['sale_date, sku_code', 2049, 0, 951],
-    ['sale_date, customer_name', 2350, 0, 650],
+    // on the names as they came (P4 is not done yet): the spec's 660, 2049 and 2350 hold once the names are clean, see below
+    ['customer_name, sku_code', 1222, 0, 1778],
+    ['sale_date, sku_code', 2687, 0, 313],
+    ['sale_date, customer_name', 2882, 0, 118],
   ]
   it('(step not added): 3,110 rows, check 110, diff 110', async () => {
     await applySteps(port, 'sales', [])
@@ -254,7 +258,7 @@ describe('P2: sales sent twice (3.4)', () => {
     await applySteps(port, 'sales', DEDUP('raw_id'))
     expect((await checkP2(port, 'raw_id')).line).toBe(DIAGNOSIS_TEXT.rawId)
     await applySteps(port, 'sales', DEDUP('customer_name, sku_code'))
-    expect((await checkP2(port, 'customer_name, sku_code')).line).toContain('silver kept 660 of 3,000')
+    expect((await checkP2(port, 'customer_name, sku_code')).line).toContain('silver kept 1,222 of 3,000')
     const err = await applySteps(port, 'sales', DEDUP('no_such_column')).catch((e: Error) => e.message)
     expect(typeof err).toBe('string')
     await applySteps(port, 'sales', [])

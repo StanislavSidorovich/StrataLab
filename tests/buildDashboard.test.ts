@@ -7,6 +7,7 @@ import type { ResultData } from '../src/core/check'
 import { checkAnswer, dashboardDone, answersDone, diagnoseKpi, diagnoseLine, emptyDash, parseAnswerNumber, readDash, tileBlankProblem, tileRunSql, tileSql } from '../src/core/buildDashboard'
 import { emptyWork, readWork, type StepSpec } from '../src/core/buildSteps'
 import { ANSWERS, BUILD_SOURCES, GOLD_SQL, TILE_IDS, TILE_SQL } from '../src/data/build/kaiyoSales'
+import { RIGHT_SALES, SOLVED_SALES } from './buildSolved'
 import { applySteps, buildStar, connect, prepare, restore, runTile } from '../src/db/buildRun'
 import { resultRows } from '../src/db/export'
 import type { SqlPort } from '../src/db/pipelineRun'
@@ -32,8 +33,7 @@ beforeAll(async () => {
 }, 180_000)
 
 const sp = (kind: StepSpec['kind'], params: Record<string, string> = {}, id = 's1'): StepSpec => ({ id, kind, params })
-const KEY = 'sale_date, customer_name, sku_code'
-const SALES = [sp('dedup', { blank: KEY })]
+const SALES = RIGHT_SALES
 const PRODUCTS = [sp('trim', { column: 'sku_code' }, 's1'), sp('upper', { column: 'sku_code' }, 's2')]
 const CUSTOMERS = [sp('latest', { key: 'customer_id', order: 'updated_at', direction: 'newest' })]
 
@@ -78,16 +78,16 @@ describe('whole cases (7)', () => {
   // name, state, clean sales, clean customers, fact, without product, KPI, sales H1, top of the chain table
   const cases: [string, State, number, number, number, number, number, number, [string, number][]][] = [
     ['Right', RIGHT, 3000, 144, 3000, 0, 314906.13, 595, [['Minori', 90829.5], ['Nagisa', 87647.48], ['Ichiba', 55108.64]]],
-    ['P2 not done', { ...RIGHT, sales: [] }, 3110, 144, 3110, 0, 331604.58, 618, [['Nagisa', 95406.98], ['Minori', 91942.74], ['Ichiba', 62324.9]]],
-    ['P2 key raw_id', { ...RIGHT, sales: [sp('dedup', { blank: 'raw_id' })] }, 3110, 144, 3110, 0, 331604.58, 618, [['Nagisa', 95406.98], ['Minori', 91942.74], ['Ichiba', 62324.9]]],
-    ['P2 key customer_name, sku_code', { ...RIGHT, sales: [sp('dedup', { blank: 'customer_name, sku_code' })] }, 660, 144, 660, 0, 3057.72, 6, [['Minori', 1751.29], ['Nagisa', 1085.17], ['Prima', 221.26]]],
+    ['P2 not done', { ...RIGHT, sales: SOLVED_SALES }, 3110, 144, 3110, 0, 331604.58, 618, [['Nagisa', 95406.98], ['Minori', 91942.74], ['Ichiba', 62324.9]]],
+    ['P2 key raw_id', { ...RIGHT, sales: [sp('dedup', { blank: 'raw_id' }), ...SOLVED_SALES] }, 3110, 144, 3110, 0, 331604.58, 618, [['Nagisa', 95406.98], ['Minori', 91942.74], ['Ichiba', 62324.9]]],
+    ['P2 key customer_name, sku_code', { ...RIGHT, sales: [...SOLVED_SALES, sp('dedup', { blank: 'customer_name, sku_code' })] }, 660, 144, 660, 0, 3057.72, 6, [['Minori', 1751.29], ['Nagisa', 1085.17], ['Prima', 221.26]]],
     ['P3 not done', { ...RIGHT, customers: [] }, 3000, 148, 3385, 0, 371314.73, 677, [['Nagisa', 181702.88], ['Kaigan', 103939.96], ['Minori', 90829.5]]],
     ['P3 Remove duplicates', { ...RIGHT, customers: [sp('distinct')] }, 3000, 148, 3385, 0, 371314.73, 677, [['Nagisa', 181702.88], ['Kaigan', 103939.96], ['Minori', 90829.5]]],
     ['P3 kept oldest', { ...RIGHT, customers: [sp('latest', { key: 'customer_id', order: 'updated_at', direction: 'oldest' })] }, 3000, 144, 3000, 0, 314906.13, 595, [['Minori', 90829.5], ['Nagisa', 87647.48], ['Ichiba', 55108.64]]],
     ['P1 not done', { ...RIGHT, products: [] }, 3000, 144, 3000, 714, 314906.13, 595, [['Minori', 90829.5], ['Nagisa', 87647.48], ['Ichiba', 55108.64]]],
     ['P1 Trim only', { ...RIGHT, products: [PRODUCTS[0]] }, 3000, 144, 3000, 368, 314906.13, 595, [['Minori', 90829.5]]],
     ['P1 Uppercase only', { ...RIGHT, products: [sp('upper', { column: 'sku_code' })] }, 3000, 144, 3000, 458, 314906.13, 595, [['Minori', 90829.5]]],
-    ['Nothing done', {}, 3110, 148, 3511, 843, 391037.9, 705, [['Nagisa', 196708.19], ['Kaigan', 106377.76], ['Minori', 91942.74]]],
+    ['Nothing done', { sales: SOLVED_SALES }, 3110, 148, 3511, 843, 391037.9, 705, [['Nagisa', 196708.19], ['Kaigan', 106377.76], ['Minori', 91942.74]]],
   ]
   for (const [name, state, sales, customers, fact, noProduct, kpiV, salesH1, chains] of cases) {
     it(name, async () => {
@@ -218,9 +218,10 @@ describe('restore builds the star when Clean is done', () => {
   it('has the gold tables after a reload', async () => {
     await port.query('DROP TABLE IF EXISTS build_kaiyo.gold_fact_sales')
     const w = readWork({
+      v: 2,
       connected: ['sales', 'customers', 'products', 'regions'],
       steps: { sales: SALES, customers: CUSTOMERS, products: PRODUCTS, regions: [sp('distinct')] },
-      passed: ['W', 'P1', 'P2', 'P3'],
+      passed: ['W', 'P1', 'P2', 'P3', 'P5', 'P6'],
     })
     await restore(port, w)
     expect(await n('SELECT count(*) FROM build_kaiyo.gold_fact_sales')).toBe(3000)

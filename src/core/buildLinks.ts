@@ -93,7 +93,7 @@ export interface LinkChip {
 
 export type DiagKey = 'sameTable' | 'typeMismatch' | 'noMatch' | 'wrongWay' | 'notUnique' | 'unmatched' | 'notExpected' | 'sameByChance' | 'pass'
 
-export type Fix = { kind: 'swap' } | { kind: 'region' } | { kind: 'clean'; source: BuildSourceId }
+export type Fix = { kind: 'swap' } | { kind: 'region' } | { kind: 'names' } | { kind: 'clean'; source: BuildSourceId }
 
 export interface LinkDiagnosis {
   key: DiagKey
@@ -200,7 +200,10 @@ export function diagnoseLink(facts: LinkFacts, pass: Pass, taken = false): LinkD
       nounO,
     )
     const source = sourceOf(one.slot.table)
-    return { ...base, key: 'unmatched', ok: false, line, fix: source ? { kind: 'clean', source } : null, badLabel: `${fmt(f.unmatchedRows)} not found` }
+    // names of the sales that find no customer: the way out is P4 (names in the sales), not the customers table
+    const names = many.slot.table === 'clean_sales' && many.slot.column === 'customer_name' && one.slot.table === 'clean_customers'
+    const fix: Fix | null = names ? { kind: 'names' } : source ? { kind: 'clean', source } : null
+    return { ...base, key: 'unmatched', ok: false, line, fix, badLabel: `${fmt(f.unmatchedRows)} not found` }
   }
   if (!expected) {
     const ids = bothIds

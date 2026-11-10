@@ -32,6 +32,7 @@ interface Props {
   onTryIt: () => void
   onContinue: () => void
   onFixRegions: () => void
+  onFixNames: () => void
   onBackToClean: (source: BuildSourceId) => void
 }
 
@@ -168,6 +169,7 @@ export function ModelScreen(p: Props) {
   const fix = (f: Fix) => {
     if (f.kind === 'swap') return doSwap()
     if (f.kind === 'region') return p.onFixRegions()
+    if (f.kind === 'names') return p.onFixNames()
     p.onBackToClean(f.source)
   }
   const remove = (id: Link['id']) => {

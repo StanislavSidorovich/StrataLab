@@ -3,12 +3,13 @@
 import { useEffect, useState } from 'react'
 import { ExternalLink, Loader2, X } from 'lucide-react'
 import type { ResultData } from '../../core/check'
-import { CLEAN_COLUMNS, addSpec, chainSql, removeSpec, rowsChange, shownSql, stepsOf, type BuildWork, type StepSpec } from '../../core/buildSteps'
+import { CLEAN_COLUMNS, TYPE_WORD, addSpec, chainSql, removeSpec, rowsChange, shownSql, stepsOf, type BuildWork, type StepSpec, type TypeTo } from '../../core/buildSteps'
 import { BUILD_SOURCES, sourceById, type BuildSourceId } from '../../data/build/kaiyoSales'
-import { previewTable, stepCounts } from '../../db/buildRun'
+import { previewSales, previewTable, salesErrors, stepCounts, stepErrors, type ErrorColumn, type SalesPreview } from '../../db/buildRun'
 import { enginePort } from '../../db/pipelinePort'
 import { addTab } from '../store'
 import { BuildTable, FoldedSql, fmtN } from './BuildTable'
+import './errors.css'
 
 export interface PanelProps {
   source: BuildSourceId
@@ -33,18 +34,30 @@ export function StepsPanel({ source, work, ready, rev, onChange, onSource }: Pan
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
-  const [col, setCol] = useState(cols.includes('sku_code') ? 'sku_code' : cols[0])
+  const [col, setCol] = useState(source === 'sales' ? 'customer_name' : cols.includes('sku_code') ? 'sku_code' : cols[0])
   const [key, setKey] = useState(cols.includes('customer_id') ? 'customer_id' : cols[0])
   const [order, setOrder] = useState(cols.includes('updated_at') ? 'updated_at' : cols[cols.length - 1])
   const [dir, setDir] = useState<'newest' | 'oldest'>('newest')
+  // Change type (sales): the column, the type, the decimal separator; Replace values: find and with
+  const [tcol, setTcol] = useState('sale_date')
+  const [tto, setTto] = useState<TypeTo>('date')
+  const [tsep, setTsep] = useState<'point' | 'comma'>('point')
+  const [find, setFind] = useState('')
+  const [withText, setWithText] = useState('')
+  // [Error] cells (sales): the preview with its mask, rows that have one, per step, per column
+  const [errOnly, setErrOnly] = useState(false)
+  const [sp, setSp] = useState<SalesPreview | null>(null)
+  const [stepErr, setStepErr] = useState<number[] | null>(null)
+  const [colErr, setColErr] = useState<Record<ErrorColumn, number> | null>(null)
 
   useEffect(() => {
     const c = CLEAN_COLUMNS[source]
-    setCol(c.includes('sku_code') ? 'sku_code' : c[0])
+    setCol(source === 'sales' ? 'customer_name' : c.includes('sku_code') ? 'sku_code' : c[0])
     setKey(c.includes('customer_id') ? 'customer_id' : c[0])
     setOrder(c.includes('updated_at') ? 'updated_at' : c[c.length - 1])
     setError(null)
     setNote(null)
+    setErrOnly(false)
   }, [source])
 
   useEffect(() => {
@@ -56,8 +69,19 @@ export function StepsPanel({ source, work, ready, rev, onChange, onSource }: Pan
     const clean = sourceById(source).clean
     void (async () => {
       try {
-        const [d, n, c] = await Promise.all([previewTable(enginePort, clean), enginePort.query(`SELECT count(*) FROM build_kaiyo.${clean}`), stepCounts(enginePort, source, work.steps[source])])
+        const sales = source === 'sales'
+        const [d, n, c, prev, se, ce] = await Promise.all([
+          previewTable(enginePort, clean),
+          enginePort.query(`SELECT count(*) FROM build_kaiyo.${clean}`),
+          stepCounts(enginePort, source, work.steps[source]),
+          sales ? previewSales(enginePort, errOnly) : Promise.resolve(null),
+          sales ? stepErrors(enginePort, work.steps.sales) : Promise.resolve(null),
+          sales ? salesErrors(enginePort) : Promise.resolve(null),
+        ])
         if (alive) {
+          setSp(prev)
+          setStepErr(se)
+          setColErr(ce)
           setData(d)
           setRows(Number(n.rows[0][0]))
           setCounts(c)
@@ -69,7 +93,7 @@ export function StepsPanel({ source, work, ready, rev, onChange, onSource }: Pan
     return () => {
       alive = false
     }
-  }, [ready, connected, source, rev])
+  }, [ready, connected, source, rev, errOnly])
 
   const apply = async (next: StepSpec[]) => {
     setBusy(true)
@@ -91,6 +115,13 @@ export function StepsPanel({ source, work, ready, rev, onChange, onSource }: Pan
       ))}
     </select>
   )
+
+  const pickTypeColumn = (c: string) => {
+    setTcol(c)
+    // the usual type of the column, as a start; the learner can change it
+    setTto(c === 'revenue' ? 'decimal' : c === 'units' ? 'whole' : c === 'sale_date' ? 'date' : tto)
+  }
+  const errCells = colErr ? Object.values(colErr).reduce((a, b) => a + b, 0) : 0
 
   const fullSql = connected ? chainSql(source, steps) : ''
   return (
@@ -117,7 +148,23 @@ export function StepsPanel({ source, work, ready, rev, onChange, onSource }: Pan
               </>
             )}
           </div>
-          <BuildTable data={data} caption={`${sourceById(source).clean}, first rows`} />
+          {source === 'sales' && colErr && (
+            <div className="build-errbar" data-testid="build-errbar">
+              {errCells > 0 ? (
+                <>
+                  <span className="build-errchip" data-testid="build-errors">
+                    Errors: {(Object.entries(colErr) as [ErrorColumn, number][]).filter(([, n]) => n > 0).map(([c, n]) => `${c} ${fmtN(n)}`).join(' · ')}
+                  </span>
+                  <button className="btn" onClick={() => setErrOnly((v) => !v)} data-testid="build-show-errors" aria-pressed={errOnly}>
+                    {errOnly ? 'Show all rows' : 'Show error rows'}
+                  </button>
+                </>
+              ) : (
+                <span className="build-errchip is-clear" data-testid="build-errors">No errors</span>
+              )}
+            </div>
+          )}
+          <BuildTable data={source === 'sales' && sp ? sp.data : data} errors={source === 'sales' && sp ? sp.errors : undefined} caption={`${sourceById(source).clean}, ${source === 'sales' && errOnly ? 'rows with an error' : 'first rows'}`} />
           <div className="build-toolbar" role="group" aria-label="Buttons">
             <div className="build-tool">
               <button className="btn" disabled={off} onClick={() => add('distinct')}>Remove duplicates</button>
@@ -137,6 +184,38 @@ export function StepsPanel({ source, work, ready, rev, onChange, onSource }: Pan
                 <option value="oldest">Oldest</option>
               </select>
             </div>
+            <div className="build-tool">
+              <button className="btn" disabled={off || !find} onClick={() => add('replace', { column: col, find, with: withText })} title="Replace a piece of text in the column chosen next to Trim" data-testid="build-replace">Replace values</button>
+              <label className="build-set">
+                find <input className="build-input" value={find} onChange={(e) => setFind(e.target.value)} aria-label="Find" spellCheck={false} disabled={off} />
+              </label>
+              <label className="build-set">
+                with <input className="build-input" value={withText} onChange={(e) => setWithText(e.target.value)} aria-label="Replace with" spellCheck={false} disabled={off} />
+              </label>
+            </div>
+            {source === 'sales' && (
+              <div className="build-tool">
+                <button className="btn" disabled={off} onClick={() => add('type', { column: tcol, to: tto, sep: tto === 'date' ? 'point' : tsep })} data-testid="build-change-type">Change type</button>
+                <label className="build-set">column {select(tcol, pickTypeColumn, 'Column to change the type of')}</label>
+                <label className="build-set">
+                  to
+                  <select className="build-select" value={tto} onChange={(e) => setTto(e.target.value as TypeTo)} aria-label="Type" disabled={off}>
+                    {(Object.keys(TYPE_WORD) as TypeTo[]).map((t) => (
+                      <option key={t} value={t}>{TYPE_WORD[t]}</option>
+                    ))}
+                  </select>
+                </label>
+                {tto !== 'date' && (
+                  <label className="build-set">
+                    decimal separator
+                    <select className="build-select" value={tsep} onChange={(e) => setTsep(e.target.value as 'point' | 'comma')} aria-label="Decimal separator" disabled={off}>
+                      <option value="point">point (3.5)</option>
+                      <option value="comma">comma (3,5)</option>
+                    </select>
+                  </label>
+                )}
+              </div>
+            )}
             {busy && <Loader2 size={14} className="animate-spin" />}
           </div>
           {error && <div className="build-error" role="alert">{error}</div>}
@@ -148,12 +227,17 @@ export function StepsPanel({ source, work, ready, rev, onChange, onSource }: Pan
                 {counts && <span className="build-count">{fmtN(counts[0])} rows</span>}
               </li>
               {steps.map((st, i) => (
-                <li key={st.id} className="build-step" data-testid="build-step">
+                <li key={st.id} className={`build-step${stepErr && stepErr[i] > 0 ? ' is-failing' : ''}`} data-testid="build-step">
                   <div className="build-step-row">
                     <span className="build-step-label">{st.label}</span>
                     {counts && counts.length > i + 1 && (
                       <span className="build-count" data-testid="build-step-rows">
                         {rowsChange(counts[i], counts[i + 1])}
+                      </span>
+                    )}
+                    {stepErr && stepErr[i] > 0 && (
+                      <span className="build-err-badge" data-testid="build-step-errors">
+                        {fmtN(stepErr[i])} rows [Error]
                       </span>
                     )}
                     {st.given ? (

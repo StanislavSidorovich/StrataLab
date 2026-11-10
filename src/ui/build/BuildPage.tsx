@@ -3,12 +3,12 @@
 // page is the "Open on a laptop" screen, as on the pipeline page.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowRight, Check, Copy, Hammer, Laptop, Lock, Share2, X } from 'lucide-react'
-import { BUILD_ID, MORE_STEP, STEP_IDS, STEP_LABEL, STRIP_IDS, goNext, loadBuild, markDone, modelDone, nextStep, openStep, saveBuild, statusOf } from '../../core/build'
+import { BUILD_ID, MORE_STEP, STEP_IDS, STEP_LABEL, STRIP_IDS, goNext, isUnlocked, loadBuild, markDone, modelDone, nextStep, openStep, saveBuild, statusOf } from '../../core/build'
 import type { Link } from '../../core/buildLinks'
 import { answersDone, dashboardDone } from '../../core/buildDashboard'
 import { cleanDone, type BuildWork, type StepSpec } from '../../core/buildSteps'
 import { BUILD_RETURN_URL, BUILD_SOURCES, type BuildSourceId } from '../../data/build/kaiyoSales'
-import { applySteps, restore } from '../../db/buildRun'
+import { applySteps, restore, salesLock } from '../../db/buildRun'
 import { checkpoint } from '../../db/engine'
 import { enginePort } from '../../db/pipelinePort'
 import { openBuild, refreshCatalog, useLab } from '../store'
@@ -101,6 +101,16 @@ function Shell() {
   const stateRef = useRef(state)
   stateRef.current = state
 
+  /** [Error] cells in the clean sales (spec 3.6): the Dashboard stays locked while there are any, and a step bar already on it goes back to Clean */
+  const refreshErrors = useCallback(async () => {
+    const connected = stateRef.current.work.connected.includes('sales')
+    const n = connected ? await salesLock(enginePort) : 0
+    setState((s) => {
+      const next = { ...s, errors: n }
+      return n > 0 && !isUnlocked(next, s.open) ? { ...next, open: 'clean' } : next
+    })
+  }, [])
+
   // the engine: prepare once, then connect again what was connected and rebuild the clean tables from the saved steps
   const [engine, setEngine] = useState<'loading' | 'ready' | string>('loading')
   const [rev, setRev] = useState(0)
@@ -114,6 +124,7 @@ function Shell() {
       .then(async () => {
         await checkpoint()
         await refreshCatalog()
+        if (alive) await refreshErrors().catch(() => undefined)
         if (alive) {
           setEngine('ready')
           setRev((n) => n + 1)
@@ -131,9 +142,10 @@ function Shell() {
   const setLinks = useCallback((links: Link[], star: boolean) => setState((s) => ({ ...s, links, star })), [])
   const markStar = useCallback(() => setState((s) => ({ ...s, star: true, v1: false })), [])
   const tryIt = useCallback(() => setState((s) => ({ ...s, links: [], star: false, v1: false })), [])
-  const toClean = useCallback((source: BuildSourceId, asked: boolean) => {
+  /** `ask`: the Model step asks for an extra card (P7 region ids, P4 names of the sales) */
+  const toClean = useCallback((source: BuildSourceId, ask: 'p7' | 'p4' | null) => {
     setCleanFocus(source)
-    setState((s) => openStep({ ...s, work: asked && !s.work.p7 ? { ...s.work, p7: 'asked' } : s.work }, 'clean'))
+    setState((s) => openStep({ ...s, work: ask && !s.work[ask] ? { ...s.work, [ask]: 'asked' } : s.work }, 'clean'))
   }, [])
   const backToModel = useCallback(() => setState((s) => openStep(s, 'model')), [])
 
@@ -151,9 +163,10 @@ function Shell() {
     setState((s) => ({ ...s, work: { ...s.work, steps: { ...s.work.steps, [source]: specs } } }))
     await checkpoint()
     await refreshCatalog()
+    if (source === 'sales') await refreshErrors().catch(() => undefined)
     setRev((n) => n + 1)
     return null
-  }, [])
+  }, [refreshErrors])
 
   // Connect is done when the four sources are in; Clean when its four cards have passed
   const work = state.work
@@ -236,8 +249,9 @@ function Shell() {
                   onStar={markStar}
                   onTryIt={tryIt}
                   onContinue={() => setState((x) => (modelDone(x) ? goNext(markDone(x, 'model')) : x))}
-                  onFixRegions={() => toClean('regions', true)}
-                  onBackToClean={(source) => toClean(source, false)}
+                  onFixRegions={() => toClean('regions', 'p7')}
+                  onFixNames={() => toClean('sales', 'p4')}
+                  onBackToClean={(source) => toClean(source, null)}
                 />
               ) : open === 'dashboard' ? (
                 <DashboardScreen work={work} setWork={setWork} ready={ready} />

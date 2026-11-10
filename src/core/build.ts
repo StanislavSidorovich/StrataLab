@@ -63,9 +63,11 @@ export interface BuildState {
   star: boolean
   /** saved by the first version of the Model step (no links): Model stays done, shown read-only with Try it */
   v1: boolean
+  /** cells of the clean sales that are [Error] now (spec 3.6); the Dashboard stays locked while there are any. Set by the page, not saved */
+  errors: number
 }
 
-export const emptyBuild = (): BuildState => ({ done: [], open: 'connect', work: emptyWork(), links: [], star: false, v1: false })
+export const emptyBuild = (): BuildState => ({ done: [], open: 'connect', work: emptyWork(), links: [], star: false, v1: false, errors: 0 })
 
 /** The Model step can be marked done: F1 and F2 are made. */
 export const modelDone = (state: BuildState) => modelLinked(state.links)
@@ -92,6 +94,7 @@ export function currentStep(state: BuildState): StepId {
 export function isUnlocked(state: BuildState, step: StripId): boolean {
   if (step === MORE_STEP) return state.done.includes('answer')
   const i = STEP_IDS.indexOf(step)
+  if (step === 'dashboard' && state.errors > 0) return false
   return i === 0 || state.done.includes(STEP_IDS[i - 1])
 }
 
@@ -147,6 +150,7 @@ export function readBuild(raw: string | null): BuildState {
       links: readLinks(p.links, star),
       star,
       v1: done.includes('model') && !('links' in p),
+      errors: 0,
     }
     return isStrip(p.open) ? openStep(state, p.open) : state
   } catch {
@@ -164,7 +168,8 @@ export function loadBuild(): BuildState {
 
 export function saveBuild(state: BuildState) {
   try {
-    localStorage.setItem(BUILD_KEY, JSON.stringify(state))
+    const { errors: _errors, ...kept } = state
+    localStorage.setItem(BUILD_KEY, JSON.stringify(kept))
   } catch {
     /* not kept: the steps start again next time */
   }

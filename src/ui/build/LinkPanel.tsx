@@ -106,7 +106,7 @@ export function LinkPanel({ pass, tables, many, one, onSlot, onSwap, run, diag, 
   const full = !!(many.column && one.column)
   const chipState = (id: string) => diag?.chips.find((c) => c.id === id)
   const sql = many.table && many.column && one.table && one.column ? checkSqlText({ table: many.table, column: many.column }, { table: one.table, column: one.column }) : ''
-  const fixLabel = (f: Fix) => (f.kind === 'swap' ? 'Swap' : f.kind === 'region' ? 'Fix region_id in Clean' : 'Back to Clean')
+  const fixLabel = (f: Fix) => (f.kind === 'swap' ? 'Swap' : f.kind === 'region' ? 'Fix region_id in Clean' : f.kind === 'names' ? 'Fix the names in Clean' : 'Back to Clean')
   return (
     <aside className="lk-panel" data-testid="link-panel" aria-label="New link">
       <h3>New link</h3>

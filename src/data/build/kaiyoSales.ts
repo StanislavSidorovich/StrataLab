@@ -114,8 +114,26 @@ SELECT * FROM read_csv([${quoteName(source.file)}], delim = '${source.delim}', h
 
 // ---------------------------------------------------------------- the given step (3.1) and Quick look
 
-/** The sales of the given step "Changed type" (3.1), as the SQL that makes them, with `{prev}` for the table before it. */
+/**
+ * The given step on sales (spec 3.1, v0.33.0): only what a loader would do, raw_id and source_file. Dates, numbers and
+ * names arrive as text; P5, P6 and P4 are the learner's. The SKU codes are tidied here, because the products' P1 compares
+ * with them and the sales are not where the learner fixes SKUs. `{prev}` stands for the table before it.
+ */
 export const GIVEN_SQL = `SELECT
+    CAST(raw_id AS INTEGER) AS raw_id,
+    source_file,
+    sale_date,
+    customer_name,
+    upper(trim(sku_code)) AS sku_code,   -- nett005 and NETT005 are one SKU
+    units,
+    revenue
+FROM {prev}`
+
+/**
+ * The first version's given step (v0.32.0 and before): it also did dates, decimal commas and names. Saved work that
+ * has it keeps it (P4 to P6 count as done), and the Quick look still reads the sales through it.
+ */
+export const GIVEN_FULL_SQL = `SELECT
     CAST(raw_id AS INTEGER) AS raw_id,
     source_file,
     CAST(CASE
@@ -135,14 +153,14 @@ FROM {prev}`
  */
 export const QUICK_LOOK_SQL = {
   kpi: `WITH sales AS (
-${GIVEN_SQL.replace('{prev}', T('bronze_sales'))}
+${GIVEN_FULL_SQL.replace('{prev}', T('bronze_sales'))}
 )
 SELECT SUM(s.revenue) AS revenue
 FROM sales s
 LEFT JOIN ${T('bronze_customers')} c ON c.customer_name = s.customer_name
 WHERE s.sale_date >= DATE '2026-01-01' AND s.sale_date < DATE '2026-07-01'`,
   chain: `WITH sales AS (
-${GIVEN_SQL.replace('{prev}', T('bronze_sales'))}
+${GIVEN_FULL_SQL.replace('{prev}', T('bronze_sales'))}
 ),
 fact AS (
   SELECT s.sale_date, c.customer_id, s.revenue
@@ -168,8 +186,8 @@ export const QUICK_LOOK_TEXT = {
 
 // ---------------------------------------------------------------- Clean: cards, hints, Watch (3.2 to 3.5)
 
-export type CleanId = 'W' | 'P1' | 'P2' | 'P3'
-export const CLEAN_IDS: readonly CleanId[] = ['W', 'P1', 'P2', 'P3']
+export type CleanId = 'W' | 'P1' | 'P2' | 'P3' | 'P5' | 'P6'
+export const CLEAN_IDS: readonly CleanId[] = ['W', 'P1', 'P2', 'P3', 'P5', 'P6']
 
 export interface CleanCard {
   id: CleanId
@@ -208,6 +226,26 @@ export const CLEAN_CARDS: readonly CleanCard[] = [
       'Keep latest row per key: key customer_id, order by updated_at, newest.',
     ],
   },
+  {
+    id: 'P5',
+    source: 'sales',
+    title: 'Dates in the sales',
+    text: 'sale_date came as text. Turn it into a date: press Change type with Date on sale_date in the sales list below, and see what happens.',
+    hints: [
+      'Look at the rows in error. A plain Change type reads 2024-01-05 only; the exports also write 19.02.2024 and 19/02/2024.',
+      "Write the format of the slash dates. Kaiyo's distributors put the day first: %d/%m/%Y.",
+    ],
+  },
+  {
+    id: 'P6',
+    source: 'sales',
+    title: 'Numbers with a decimal comma',
+    text: 'revenue and units are text too. Press Change type on each: Decimal for revenue, Whole number for units. Then see what the preview says.',
+    hints: [
+      'Look at the rows in error: 381,99 is written with a comma, and a number with a comma is not a number to the computer.',
+      'Change type again, with Decimal separator set to comma, on revenue and on units.',
+    ],
+  },
 ]
 
 export const cleanCard = (id: CleanId) => CLEAN_CARDS.find((c) => c.id === id)!
@@ -215,7 +253,7 @@ export const cleanCard = (id: CleanId) => CLEAN_CARDS.find((c) => c.id === id)!
 /** The six SKUs of P1 as they are in the file, spaces drawn as a visible mark. */
 export const P1_SKUS = ['aqua002', 'FRUV002␣', '␣KROS001', 'nett002', 'MILV001␣␣', '␣milv004']
 
-export const GIVEN_NOTE = 'Lab did the routine part. Open it to see what it fixed; the problems below are yours.'
+export const GIVEN_NOTE = 'Lab only typed raw_id and tidied the SKU codes. Dates, numbers and names are as the distributors sent them: they are yours.'
 export const P3_NOTE = 'This is the pattern you wrote in sales by hand. Here the order decides which copy stays.'
 
 export interface WatchStep {
@@ -280,6 +318,20 @@ export const BUILD_DIAGNOSIS = {
     `You kept the older row: ${name} is in ${oldCity} in your table, but its latest row (${date}) says ${city}.`,
   keyTooWide: (col: string, n: number) => `One row per ${col} left ${n} of 144 customers. The key is what names one customer: customer_id.`,
   stillTwice: (n: number) => `${n} customers are still in twice.`,
+  dateText: 'sale_date is still text. Press Change type with Date on sale_date in the sales list below.',
+  datePlain: (n: string, samples: string[]) =>
+    `The step is there, but ${n} dates are [Error]: a plain Change type reads 2024-01-05 and nothing else. These are written another way: ${samples.map((x) => `'${x}'`).join(', ')}.`,
+  dateMonthFirst: (n: string) => `${n} dates are still [Error]. A format with the month first can't read 19/02/2024: there is no month 19. In these files the day comes first.`,
+  dateStill: (n: string, samples: string[]) => `${n} dates are still [Error], like ${samples.map((x) => `'${x}'`).join(', ')}. Compare how they are written with the format in the blank.`,
+  dateWrongDay: (n: string) => `No errors, but ${n} dates are not the ones in the expected table: day and month are swapped on some. Day comes first in these files.`,
+  numberText: (cols: string[]) => `${cols.join(' and ')} ${cols.length === 1 ? 'is' : 'are'} still text. Press Change type on ${cols.length === 1 ? 'it' : 'each'} in the sales list below.`,
+  numberComma: (parts: string[]) => `${parts.join(' and ')} are [Error]: the numbers are written with a comma, like 381,99. Change type again with Decimal separator set to comma.`,
+  numberOne: (col: string, n: string) => `${col} is fine now, but ${n} values in ${col} are still [Error]. Same fix there: Decimal separator comma.`,
+  numberOff: (n: string) => `No errors, but ${n} values are not the ones in the expected table. Whole number for units, Decimal for revenue.`,
+  namesSpaces: (n: string) => `${n} names still have spaces at the edges. A name has to match to the character: Trim customer_name.`,
+  namesItiba: (n: string, sample: string) => `Spaces are gone, but ${n} sales still find no customer, like '${sample}': sales write the chain as Itiba and customers as Ichiba. Replace values: Itiba with Ichiba.`,
+  namesWrongColumn: (col: string) => `The step changed ${col}. The column that has to match the customers is customer_name.`,
+  namesLeft: (n: string, sample: string) => `${n} sales still find no customer, like '${sample}'. Compare it with the names in customers.`,
   regionText: 'region_id is still text. Make it a number: R-03 is region 3. Then customers and regions can be linked.',
   generic: "The table doesn't match the expected one yet. Compare it with the rows in the preview.",
 } as const

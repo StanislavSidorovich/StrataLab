@@ -9,6 +9,7 @@ import { emptyWork, readWork, type StepSpec } from '../src/core/buildSteps'
 import type { ResultData } from '../src/core/check'
 import { BUILD_SOURCES, MORE_IDS, MORE_QUESTIONS, moreQuestion } from '../src/data/build/kaiyoSales'
 import { EXPECTED_LINKS } from '../src/data/build/linkData'
+import { RIGHT_SALES, SOLVED_SALES } from './buildSolved'
 import { applySteps, buildStar, connect, prepare } from '../src/db/buildRun'
 import { resultRows } from '../src/db/export'
 import type { SqlPort } from '../src/db/pipelineRun'
@@ -183,7 +184,7 @@ describe('the questions on the real star', () => {
     }
     await prepare(port)
     for (const s of BUILD_SOURCES) await connect(port, s.id)
-    await applySteps(port, 'sales', [sp('dedup', { blank: 'sale_date, customer_name, sku_code' })])
+    await applySteps(port, 'sales', RIGHT_SALES)
     await applySteps(port, 'customers', [sp('latest', { key: 'customer_id', order: 'updated_at', direction: 'newest' })])
     await applySteps(port, 'products', [sp('trim', { column: 'sku_code' }, 's1'), sp('upper', { column: 'sku_code' }, 's2')])
     await applySteps(port, 'regions', [sp('distinct', {}, 's1'), sp('extract', { column: 'region_id' }, 's2')])
@@ -234,7 +235,7 @@ describe('the questions on the real star', () => {
     expect(moreQuestion('K5').options!.map((o) => o.value)).toEqual(stores)
   })
   it('K1 on a star with P2 not done gives 618, the wrong answer worth a line', async () => {
-    await applySteps(port, 'sales', [])
+    await applySteps(port, 'sales', SOLVED_SALES)
     await buildStar(port, EXPECTED_LINKS.filter((e) => e.pass === 1).map((e) => ({ id: e.id, many: { ...e.many }, one: { ...e.one } })) as never)
     expect(Number((await first('K1'))[0])).toBe(618)
   })

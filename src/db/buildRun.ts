@@ -2,12 +2,12 @@
 // connects a source, drops the work tables. Same port as the pipeline, so the page and the tests run the same code.
 import { chainsKeyOff, diagnoseKpi, diagnoseLine, tileBlankProblem, tileRunSql, type TileDiagnosis } from '../core/buildDashboard'
 import { compareResults, type ResultData } from '../core/check'
-import { CLEAN_COLUMNS, chainSql, cleanDone, countsSql, diagnoseP1, diagnoseP2, diagnoseP3, diagnoseP7, stepsOf, type BuildWork, type Diagnosis, type P1Facts, type P2Facts, type P3Facts, type P7Facts, type Peek, type StepSpec } from '../core/buildSteps'
+import { CLEAN_COLUMNS, chainSql, cleanDone, countsSql, diagnoseP1, diagnoseP2, diagnoseP3, diagnoseP4, diagnoseP5, diagnoseP6, diagnoseP7, stepErrorsSql, stepsOf, typedColumn, type BuildWork, type Diagnosis, type P1Facts, type P2Facts, type P3Facts, type P4Facts, type P5Facts, type P6Facts, type P7Facts, type Peek, type StepSpec } from '../core/buildSteps'
 import { starStatements, typeFamily, type FoundFacts, type Link, type LinkFacts, type SideFacts, type Slot } from '../core/buildLinks'
 import { readableError } from '../core/sqlPractice'
 import { csvText } from '../core/csvText'
 import { exportText, type SqlPort } from './pipelineRun'
-import { BUILD_DASH_DIAGNOSIS, BUILD_SOURCES, CHECK_SQL, GIVEN_SQL, GOLD_SQL, REF_TILE_SQL, TILE_TABLE, type TileId, CONNECT_SQL, QUICK_LOOK_SQL, FILE_SQL, REF_SQL, SCHEMA, SOURCE_FOLDER, SOURCE_TABLES, T, WORK_TABLES, sourceById, type BuildSourceId } from '../data/build/kaiyoSales'
+import { BUILD_DASH_DIAGNOSIS, BUILD_SOURCES, CHECK_SQL, GIVEN_FULL_SQL, GIVEN_SQL, GOLD_SQL, REF_TILE_SQL, TILE_TABLE, type TileId, CONNECT_SQL, QUICK_LOOK_SQL, FILE_SQL, REF_SQL, SCHEMA, SOURCE_FOLDER, SOURCE_TABLES, T, WORK_TABLES, sourceById, type BuildSourceId } from '../data/build/kaiyoSales'
 
 /** One preparation per port, shared by callers that arrive while it runs. */
 const preparing = new WeakMap<SqlPort, Promise<string[]>>()
@@ -184,9 +184,20 @@ export async function checkP1(port: SqlPort, specs: readonly StepSpec[]): Promis
   return { ...diagnoseP1(f), chips, facts: f }
 }
 
+/**
+ * Which sales stay: raw_ids of the clean sales not in the expected table, plus the expected ones missing. P2 is judged
+ * on this, not on the values, because the dates and numbers are still text when P2 is done (they are P5 and P6).
+ */
+export async function diffSalesIds(port: SqlPort): Promise<number> {
+  const clean = T('clean_sales')
+  const ref = T('ref_sales')
+  const extra = await num(port, `SELECT count(*) FROM (SELECT raw_id FROM ${clean} EXCEPT ALL SELECT raw_id FROM ${ref})`)
+  const missing = await num(port, `SELECT count(*) FROM (SELECT raw_id FROM ${ref} EXCEPT ALL SELECT raw_id FROM ${clean})`)
+  return extra + missing
+}
+
 export async function factsP2(port: SqlPort, blank: string, error: string | null): Promise<P2Facts> {
-  const d = await diffAgainstRef(port, 'sales', 'ref_sales')
-  return { rows: await num(port, `SELECT count(*) FROM ${T('clean_sales')}`), twice: await num(port, CHECK_SQL.p2), diff: d.extra + d.missing, blank, error }
+  return { rows: await num(port, `SELECT count(*) FROM ${T('clean_sales')}`), twice: await num(port, CHECK_SQL.p2), diff: await diffSalesIds(port), blank, error }
 }
 
 export async function checkP2(port: SqlPort, blank: string, error: string | null = null): Promise<CheckReport & { facts: P2Facts }> {
@@ -224,6 +235,134 @@ export async function checkP3(port: SqlPort, specs: readonly StepSpec[]): Promis
     { label: 'Expected rows missing', value: f.refMissing, ok: f.refMissing === 0 },
   ]
   return { ...diagnoseP3(f), chips, facts: f }
+}
+
+// ---------------------------------------------------------------- [Error] cells, P5, P6, P4 (spec 3.6)
+
+/** The columns Change type can leave NULL on a value that was there: the three that arrive as text. */
+export const ERROR_COLUMNS = ['sale_date', 'units', 'revenue'] as const
+export type ErrorColumn = (typeof ERROR_COLUMNS)[number]
+
+const BRONZE_JOIN = `${T('clean_sales')} c JOIN ${T('bronze_sales')} b ON CAST(b.raw_id AS INTEGER) = c.raw_id`
+
+/** Per column: cells that are [Error], NULL now and there in the file. The clean table must exist. */
+export async function salesErrors(port: SqlPort): Promise<Record<ErrorColumn, number>> {
+  const r = (await port.query(`SELECT ${ERROR_COLUMNS.map((c) => `count(*) FILTER (WHERE c.${c} IS NULL AND b.${c} IS NOT NULL)`).join(', ')} FROM ${BRONZE_JOIN}`)).rows[0]
+  return { sale_date: Number(r[0]), units: Number(r[1]), revenue: Number(r[2]) }
+}
+
+/**
+ * What keeps the Dashboard locked (spec 3.6): [Error] cells, plus a column that is still text (a Change type step removed after Clean was done).
+ * 0 when the sales are typed and clean.
+ */
+export async function salesLock(port: SqlPort): Promise<number> {
+  const errs = Object.values(await salesErrors(port)).reduce((a, b) => a + b, 0)
+  const cols = await describeTable(port, 'clean_sales')
+  const family = (c: string) => typeFamily(cols.find((x) => x.name === c)?.type ?? '')
+  const untyped = [family('sale_date') !== 'date', family('units') !== 'number', family('revenue') !== 'number'].filter(Boolean).length
+  return errs + untyped
+}
+
+/** Rows with at least one [Error] cell. */
+export const errorRows = async (port: SqlPort): Promise<number> =>
+  num(port, `SELECT count(*) FROM ${BRONZE_JOIN} WHERE ${ERROR_COLUMNS.map((c) => `(c.${c} IS NULL AND b.${c} IS NOT NULL)`).join(' OR ')}`)
+
+/** How many rows each step of the list turned into [Error] (0 for a step that cannot). */
+export async function stepErrors(port: SqlPort, specs: readonly StepSpec[]): Promise<number[]> {
+  const steps = stepsOf('sales', specs)
+  if (!steps.some((s) => typedColumn(s))) return steps.map(() => 0)
+  return (await port.query(stepErrorsSql(steps))).rows[0].map(Number)
+}
+
+export interface SalesPreview {
+  data: ResultData
+  /** the same shape as the rows: true where the cell is [Error] */
+  errors: boolean[][]
+  /** rows with an [Error] cell in the whole table */
+  errorRows: number
+}
+
+/** The first rows of clean sales with the error mask; `onlyErrors` shows the rows that have one (Show error rows). */
+export async function previewSales(port: SqlPort, onlyErrors: boolean, limit = 10): Promise<SalesPreview> {
+  const cols = CLEAN_COLUMNS.sales
+  const bad = ERROR_COLUMNS.map((c) => `(c.${c} IS NULL AND b.${c} IS NOT NULL)`)
+  const r = await port.query(
+    `SELECT ${cols.map((c) => `c.${c}`).join(', ')}, ${bad.map((b) => `CAST(${b} AS INTEGER)`).join(', ')} FROM ${BRONZE_JOIN} ${onlyErrors ? `WHERE ${bad.join(' OR ')}` : ''} ORDER BY c.raw_id LIMIT ${limit}`,
+  )
+  const idx = ERROR_COLUMNS.map((c) => cols.indexOf(c))
+  const errors = r.rows.map((row) => cols.map((_, j) => { const k = idx.indexOf(j); return k >= 0 && Number(row[cols.length + k]) === 1 }))
+  return { data: { ...r, header: [...cols], rows: r.rows.map((row) => row.slice(0, cols.length)) } as ResultData, errors, errorRows: await errorRows(port) }
+}
+
+const columnType = async (port: SqlPort, table: string, col: string) => (await describeTable(port, table)).find((c) => c.name === col)?.type ?? ''
+
+/** Rows both the clean table and the expected one have, with another value in `col` (raw_id is the key). */
+const valueDiff = (port: SqlPort, col: string) =>
+  num(port, `SELECT count(*) FROM ${T('clean_sales')} c JOIN ${T('ref_sales')} r USING (raw_id) WHERE c.${col} IS DISTINCT FROM r.${col}`)
+
+export async function checkP5(port: SqlPort, specs: readonly StepSpec[]): Promise<CheckReport & { facts: P5Facts }> {
+  const isDate = typeFamily(await columnType(port, 'clean_sales', 'sale_date')) === 'date'
+  const errors = isDate ? (await salesErrors(port)).sale_date : 0
+  const samples = errors > 0 ? await strings(port, `SELECT DISTINCT b.sale_date FROM ${BRONZE_JOIN} WHERE c.sale_date IS NULL AND b.sale_date IS NOT NULL ORDER BY 1 LIMIT 3`) : []
+  const diff = isDate ? await valueDiff(port, 'sale_date') : 0
+  const dates = specs.find((s) => s.kind === 'dates')
+  const f: P5Facts = { isDate, errors, samples, diff, format: dates ? (dates.params.format ?? '').trim() : null }
+  const chips: CheckChip[] = [
+    { label: 'sale_date is a date', value: isDate ? 'yes' : 'no', ok: isDate },
+    { label: 'Errors', value: errors, ok: isDate && errors === 0 },
+    { label: 'Dates different from the expected table', value: diff, ok: isDate && diff === 0 },
+  ]
+  if (isDate) {
+    // the three spellings of the files, each counted as read
+    const fam = (await port.query(
+      `SELECT CASE WHEN b.sale_date LIKE '%.%' THEN 'dotted' WHEN b.sale_date LIKE '%/%' THEN 'slash' ELSE 'ISO' END AS f, count(*) AS n, count(c.sale_date) AS read FROM ${BRONZE_JOIN} GROUP BY 1 ORDER BY 1`,
+    )).rows
+    const read = fam.filter((x) => Number(x[1]) === Number(x[2])).length
+    chips.push({ label: 'Spellings read', value: `${read} of ${fam.length}`, ok: read === fam.length })
+  }
+  return { ...diagnoseP5(f), chips, facts: f }
+}
+
+export async function checkP6(port: SqlPort): Promise<CheckReport & { facts: P6Facts }> {
+  const [ut, rt] = await Promise.all([columnType(port, 'clean_sales', 'units'), columnType(port, 'clean_sales', 'revenue')])
+  const unitsText = typeFamily(ut) !== 'number'
+  const revenueText = typeFamily(rt) !== 'number'
+  const err = await salesErrors(port)
+  const diff = unitsText || revenueText ? 0 : (await valueDiff(port, 'units')) + (await valueDiff(port, 'revenue'))
+  const f: P6Facts = { unitsText, revenueText, unitsErrors: unitsText ? 0 : err.units, revenueErrors: revenueText ? 0 : err.revenue, diff }
+  const total = !revenueText && !unitsText ? await str(port, `SELECT CAST(sum(revenue) AS VARCHAR) FROM ${T('clean_sales')}`) : null
+  const refTotal = await str(port, `SELECT CAST(sum(revenue) AS VARCHAR) FROM ${T('ref_sales')}`)
+  const chips: CheckChip[] = [
+    { label: 'revenue and units are numbers', value: unitsText || revenueText ? 'no' : 'yes', ok: !unitsText && !revenueText },
+    { label: 'Errors in revenue', value: revenueText ? 0 : err.revenue, ok: !revenueText && err.revenue === 0 },
+    { label: 'Errors in units', value: unitsText ? 0 : err.units, ok: !unitsText && err.units === 0 },
+    { label: 'Revenue total matches the expected', value: total === null ? '–' : total === refTotal ? 'yes' : 'no', ok: total !== null && total === refTotal },
+  ]
+  return { ...diagnoseP6(f), chips, facts: f }
+}
+
+const str = async (port: SqlPort, sql: string): Promise<string | null> => {
+  const v = (await port.query(sql)).rows[0][0]
+  return v == null ? null : String(v)
+}
+
+export async function checkP4(port: SqlPort, specs: readonly StepSpec[]): Promise<CheckReport & { facts: P4Facts }> {
+  const miss = `FROM ${T('clean_sales')} s WHERE NOT EXISTS (SELECT 1 FROM ${T('clean_customers')} c WHERE c.customer_name = s.customer_name)`
+  const unmatched = await num(port, `SELECT count(*) ${miss}`)
+  const f: P4Facts = {
+    unmatched,
+    sample: unmatched > 0 ? (await strings(port, `SELECT DISTINCT s.customer_name ${miss} ORDER BY 1 LIMIT 1`))[0] : null,
+    spaces: await num(port, `SELECT count(*) FROM ${T('clean_sales')} WHERE customer_name <> trim(customer_name)`),
+    itiba: await num(port, `SELECT count(*) FROM ${T('clean_sales')} WHERE customer_name LIKE '%Itiba%'`),
+    diff: await valueDiff(port, 'customer_name'),
+    otherColumns: specs.filter((s) => (s.kind === 'trim' || s.kind === 'replace') && s.params.column !== 'customer_name').map((s) => s.params.column),
+  }
+  const chips: CheckChip[] = [
+    { label: 'Sales whose name finds no customer', value: f.unmatched, ok: f.unmatched === 0 },
+    { label: 'Names with spaces at the edges', value: f.spaces, ok: f.spaces === 0 },
+    { label: 'Names different from the expected table', value: f.diff, ok: f.diff === 0 },
+  ]
+  return { ...diagnoseP4(f), chips, facts: f }
 }
 
 // ---------------------------------------------------------------- Model v1 (4.1)
@@ -418,7 +557,9 @@ export async function affectedRows(port: SqlPort, card: 'P2' | 'P3'): Promise<Af
     const rows = (table: string) => port.query(`SELECT * FROM ${T(table)} WHERE customer_id IN (${dup}) ORDER BY customer_id, updated_at`)
     return { file: await rows('bronze_customers'), now: await rows('clean_customers'), groups: await num(port, `SELECT count(*) FROM (${dup})`) }
   }
-  const given = GIVEN_SQL.replace('{prev}', T('bronze_sales'))
+  // the rows "as they came": through the given step the clean table has (the first version's also typed the dates)
+  const typed = (await describeTable(port, 'clean_sales')).find((c) => c.name === 'sale_date')?.type === 'DATE'
+  const given = (typed ? GIVEN_FULL_SQL : GIVEN_SQL).replace('{prev}', T('bronze_sales'))
   const dup = `SELECT ${SALE_KEY} FROM g GROUP BY ${SALE_KEY} HAVING count(*) > 1`
   const rows = (from: string) =>
     port.query(

@@ -1,0 +1,10 @@
+/* [Error] cells and failing steps in Clean (spec 3.6), like the error cells of Fabric's Dataflow. Colours come from the app's variables. */
+.build-table td.is-error { background: var(--warn-soft); color: var(--danger); font-weight: 600; font-style: normal; }
+.build-errbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.build-errchip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px; border-radius: 999px; font-size: 12px; border: 1px solid var(--danger); color: var(--danger); background: var(--warn-soft); }
+.build-errchip.is-clear { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.build-step.is-failing { border-color: var(--danger); }
+.build-step.is-failing .build-step-label::before { content: '●'; color: var(--danger); margin-right: 6px; }
+.build-err-badge { font-size: 11px; padding: 1px 8px; border-radius: 999px; background: var(--warn-soft); color: var(--danger); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.build-fixbox { display: flex; flex-direction: column; gap: 8px; }
+.build-input { font: inherit; font-size: 13px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); width: 9em; }

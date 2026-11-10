@@ -218,17 +218,35 @@ Ordered as shown. "Mode" is the way the card offers first; the check is by resul
 | P1 | products | 6 SKUs lower case or with edge spaces; 6 sold SKUs not found, 714 of 3,000 sales without a product | buttons (Trim, Uppercase) | First own fix: two clicks, effect visible at once; teaches that a key must match to the character | **v1** |
 | P2 | sales | 110 sales sent twice (3,110 → 3,000) | SQL with one blank (`PARTITION BY ____`) | The decision is the key of a sale: a choice to think through, not a click. Same blank as the pipeline, so a learner coming from there meets it again | **v1** |
 | P3 | customers | 4 stores twice, old and current row (148 → 144) | button with settings (Keep latest row per key) | Comes right after P2: the button writes the same `ROW_NUMBER` the learner just wrote by hand ("you wrote this in P2"). Remove duplicates (from W) fails here, which is the lesson: rows that differ are not duplicates, someone has to pick the current one | **v1** |
-| P4 | sales | 919 names with edge spaces; `Itiba` for `Ichiba` (261 rows). Raw names find no customer in 1,102 rows; trimmed, still 261 | buttons (Trim, Replace values) | Found by the Model coverage check or by grouping names | later |
-| P5 | sales | dates in six spellings; 1,567 do not cast to DATE; slash dates are day first | button first (Change type fails on 1,567), then SQL with a blank (the slash format) | The button failing on real rows is the point; the format needs a decision | later |
-| P6 | sales | decimal commas: 1,465 revenues, 113 units | buttons (Change type with "decimal comma") | Mechanical once seen | later |
+| P4 | sales | 919 names with edge spaces; `Itiba` for `Ichiba` (261 rows). Raw names find no customer in 1,102 rows; trimmed, still 261 (on the 3,000 rows after P2: 889 spaces, 1,062 unmatched, 248 after Trim) | buttons (Trim, Replace values) | Found by the Model coverage check, which sends the learner here | **v0.33.0**, section 3.6 |
+| P5 | sales | dates in six spellings; 1,567 do not cast to DATE (1,510 of the 3,000 rows after P2); slash dates are day first | button first (Change type fails, the rows are [Error]), then SQL with a blank (the slash format) | The button failing on real rows is the point; the format needs a decision | **v0.33.0**, section 3.6 |
+| P6 | sales | decimal commas: 1,465 revenues, 113 units (1,412 and 112 after P2) | button first (Change type fails), then the same button with Decimal separator: comma | Mechanical once seen; the error shows what to set | **v0.33.0**, section 3.6 |
 | P7 | regions | `region_id` is text `R-03`, integer in customers | button (Extract number) | Shows up only when linking (4.2): the type check fails there and sends the learner back | later (with the linking screen) |
 | P8 | sales | 174 sales without revenue, 82 without units, 106 negative units (returns) in clean sales | info card, nothing to fix | "Not every odd value is an error": leave NULL, keep returns | later |
 
-In v1, P4 to P6 are done by the given step **Changed type** (3.1): its SQL is the MVP's `typed` CTE and is shown, with one comment per fix. Later versions take its lines out one by one and turn them into P4 to P6; the files do not change, so the numbers of this spec stay. ✱
+In v1 (up to v0.32.0) P4 to P6 were done by the given step **Changed type** (3.1): its SQL was the MVP's `typed` CTE, shown with one comment per fix. Since v0.33.0 the given step only types `raw_id` and the learner does P5, P6 and P4 (section 3.6); the files did not change, so the numbers of this spec stay. ✱ Work saved by v0.32.0 keeps the first given step and counts P4 to P6 as done (3.6).
 
-Clean is done when W, P1, P2 and P3 all pass. The cards open one after the other (the next card unlocks when the previous passes), but every source's preview and toolbar stay usable.
+Clean is done when W, P1, P2, P3, P5 and P6 all pass; P4 and P7 are extra cards the Model step asks for. The cards open one after the other (the next card unlocks when the previous passes), but every source's preview and toolbar stay usable.
 
 ### 3.1 The given step on sales: Changed type
+
+Since v0.33.0 (what a loader does, nothing more):
+
+```sql
+SELECT
+    CAST(raw_id AS INTEGER) AS raw_id,
+    source_file,
+    sale_date,
+    customer_name,
+    upper(trim(sku_code)) AS sku_code,   -- nett005 and NETT005 are one SKU
+    units,
+    revenue
+FROM {prev}
+```
+
+Label: "Changed type (given): raw_id and source_file". 3,110 rows; `sale_date`, `customer_name`, `units`, `revenue` arrive as text. One line above it: "Lab only typed raw_id and tidied the SKU codes. Dates, numbers and names are as the distributors sent them: they are yours." ✱ The SKU codes are tidied here although the hub's text said raw_id and source_file only: 1,091 raw SKUs of the sales have case or edge spaces, and P1 (products) can only pass if the sales side is already clean; sales SKUs are not a problem of the learner.
+
+The first version's step (**v0.32.0 and before**, `GIVEN_FULL_SQL`) did everything:
 
 ```sql
 SELECT
@@ -246,7 +264,7 @@ SELECT
 FROM {prev}
 ```
 
-Label: "Changed type (given): dates, numbers, names". 3,110 rows. One line above it: "Lab did the routine part. Open it to see what it fixed; the problems below are yours."
+Label "Changed type (given): dates, numbers, names". The Quick look after Connect still reads the sales through it (the "Nothing done" numbers of section 7 are unchanged), and saved work that has it keeps it (3.6, last part).
 
 ### 3.2 W, watched: Osaka twice in regions
 
@@ -342,6 +360,8 @@ SELECT count(*) - count(DISTINCT (sale_date, customer_name, sku_code)) FROM buil
 
 The check alone passes the too-short keys: the card needs both the check and the reference. ✱
 
+*Since v0.33.0 P2 is done on the names, dates and numbers as they came (they are text until P4 to P6), and is judged by the `raw_id`s that stay, not by the values: `clean_sales` and `ref_sales` agree on the set of `raw_id` (extra + missing = the "diff" column). The rows of the too-short keys then differ from the table above, because raw names with spaces split groups the clean names would merge: `customer_name, sku_code` 1,222 rows (diff 1,778), `sale_date, sku_code` 2,687 (diff 313), `sale_date, customer_name` 2,882 (diff 118). The table above holds when P4 to P6 come first (`tests/buildErrors.test.ts`). The right key gives the same 3,000 rows, check 0, diff 0.*
+
 **Diagnoses:** reuse the pipeline's texts where they fit (import, don't copy):
 
 ```ts
@@ -394,6 +414,70 @@ stillTwice: (n: number) => `${n} customers are still in twice.`,
 For `keptOldest` the CLI values for the first stale store by id: Kaigan #1017, Shizuoka, Nagoya, 2026-03-27.
 
 ---
+
+### 3.6 P4, P5, P6: the typing problems (v0.33.0)
+
+Hub decisions (2026-11-10): the typing of sales is the learner's, and a step that does not fit fails visibly, as `[Error]` cells do in Microsoft Fabric's Dataflow (`docs/build-linking-screen.md` 12.8).
+
+**Where they sit.** Clean cards: W, P1, P2, P3, **P5**, **P6** (in this order; Clean is done when all six pass). **P4** and P7 appear below them when the Model step asks (`work.p4`, `work.p7` = `asked` → `done`). All three act on sales, after P2: the learner's steps are in the order they were added, so the numbers below are on the 3,000 rows of P2; with P2 not done they are on 3,110 (the hub's first figures).
+
+**What an error is.** The steps `try_cast` / `try_strptime`: a value that does not fit becomes NULL instead of stopping the query. A cell is an **[Error]** when the clean table has NULL where the file had a value (compared by `raw_id` with `bronze_sales`; a value empty in the file stays a plain `null`, 174 revenues and 82 units are like that, P8). So:
+
+- the preview of clean sales draws such cells as red `[Error]`; a chip above it reads "Errors: sale_date 1,510" (per column) and **Show error rows** keeps only the rows that have one;
+- the applied step that produced the NULLs shows a red mark and "1,510 rows [Error]" (counted step by step: rows where the value before was there and the value after is NULL). Later steps still run on what is valid;
+- **the Dashboard stays locked while the clean sales have any [Error] cell, or a column of `sale_date`, `units`, `revenue` that is still text** (a typing step removed after Clean was done); `BuildState.errors` counts both (`salesLock`), is not saved, and the step bar falls back to Clean if the Dashboard was open.
+
+**Buttons added** (sales): *Change type* (column, to Date / Whole number / Decimal, Decimal separator point or comma for the numbers) and *Replace values* (column, find, with). A second Change type on the same column, or P5's SQL on `sale_date`, **takes the place of the failing step in the same position**: the fix replaces, it does not pile on. ✱
+
+```sql
+-- Change type to Date                try_cast(sale_date AS DATE)
+-- Decimal, separator comma           try_cast(replace(revenue, ',', '.') AS DECIMAL(12, 2))
+-- Whole number, separator comma      try_cast(try_cast(replace(units, ',', '.') AS DOUBLE) AS INTEGER)
+-- Replace values                     replace(customer_name, 'Itiba', 'Ichiba')
+```
+
+#### P5, dates (first, the main one)
+
+**Card:** "sale_date came as text. Turn it into a date: press Change type with Date on sale_date in the sales list below, and see what happens." Nothing else until the learner does. Then the step is added and **fails: 1,567 rows [Error]** (1,510 after P2): a plain cast reads `2024-01-05` only (1,543 of the 3,110 rows); 803 are written `19.02.2024`, 764 `19/02/2024`. The card says so ("The step is added, but it fails: N rows [Error] in the preview … write the step yourself") and shows the SQL with a blank, **Apply and check**:
+
+```sql
+SELECT raw_id, source_file,
+       CAST(CASE
+         WHEN sale_date LIKE '%.%' THEN try_strptime(sale_date, '%d.%m.%Y')
+         WHEN sale_date LIKE '%/%' THEN try_strptime(sale_date, '____')   -- 19/02/2024
+         ELSE try_strptime(sale_date, '%Y-%m-%d')
+       END AS DATE) AS sale_date,
+       customer_name, sku_code, units, revenue
+FROM {prev}
+```
+
+The blank is the format of the slash dates: letters after `%`, `/ . - :` and spaces, 30 characters, no quote (`checkFormat`). Right: `%d/%m/%Y`. The step replaces the failing one. Hints: 1. "Look at the rows in error. A plain Change type reads 2024-01-05 only; the exports also write 19.02.2024 and 19/02/2024." 2. "Write the format of the slash dates. Kaiyo's distributors put the day first: %d/%m/%Y."
+
+**Check:** `sale_date` is a DATE, 0 errors, the dates equal the expected table (rows both have, joined on `raw_id`), and the three spellings are read (chips: "Spellings read 3 of 3").
+
+| State | errors | line |
+|---|---|---|
+| sale_date still text | – | "sale_date is still text. Press Change type with Date on sale_date in the sales list below." |
+| Change type, Date | 1,510 | datePlain: "The step is there, but 1,510 dates are [Error]: a plain Change type reads 2024-01-05 and nothing else. These are written another way: '01.01.2024', …" |
+| SQL with `%m/%d/%Y` | 417 (282 more are read as another day) | dateMonthFirst: "… A format with the month first can't read 19/02/2024: there is no month 19. In these files the day comes first." |
+| SQL with a format that reads no slash date (`%d/%m/%y`) | all slash dates left | dateStill: "N dates are still [Error], like '19/02/2024'. Compare how they are written with the format in the blank." |
+| SQL with `%d/%m/%Y` | 0 | passes |
+
+#### P6, decimal commas
+
+**Card:** "revenue and units are text too. Press Change type on each: Decimal for revenue, Whole number for units." With the separator on point the steps **fail: 1,465 revenues and 113 units [Error]** (1,412 and 112 after P2; the values are written `381,99` and `3,0`). The card says "The step is added, but it fails: N revenues and M units [Error]. Show the error rows below and read one: how is the number written?" **Fix:** Change type again with **Decimal separator: comma** (the same as Replace values `,` → `.` and then the cast). Hints: 1. "Look at the rows in error: 381,99 is written with a comma, and a number with a comma is not a number to the computer." 2. "Change type again, with Decimal separator set to comma, on revenue and on units."
+
+**Check:** both columns are numbers, 0 errors in each, values equal the expected table, the revenue total equals the reference (1,473,843.82 on the 3,000 rows). Lines: still text (`numberText`), both failing (`numberComma`: "1,412 revenues and 112 units are [Error] …"), one left (`numberOne`: "units is fine now …"). Decimal for units is accepted too (the values are the same).
+
+#### P4, names (asked for by the Model step)
+
+Found where the Model step looks: the coverage check of link L1 (sales names that find no customer). With the raw names it reports **1,062 sales** (1,102 on 3,110 rows); the diagnosis now carries the fix **"Fix the names in Clean"** (`Fix` kind `names`, as `region` is for P7), which opens Clean on the sales tab with the card P4 added below (`work.p4 = 'asked'`). Card: "Some store names in the sales find no customer: spaces at the edges, and one chain written two ways. Make the names match to the character, then link again." Buttons: **Trim** on `customer_name` (889 names with edge spaces; **248** sales still find no customer, all `Itiba #…`: 261 on 3,110 rows), then **Replace values** `Itiba` → `Ichiba`. Hints: 1. "Group the sales by customer_name and look at the ones that start or end with a space, and at Itiba against Ichiba." 2. "Trim on customer_name, then Replace values: Itiba with Ichiba."
+
+**Check:** 0 sales whose name finds no customer in `clean_customers`, 0 names with edge spaces, names equal the expected table (joined on `raw_id`). Lines, first match wins: a step on another column (`namesWrongColumn`), spaces left (`namesSpaces`), Itiba left (`namesItiba`, with an unmatched name as the example), anything else unmatched (`namesLeft`). Button **Back to Model**.
+
+#### Saved work from v0.32.0
+
+Work saved without `work.v = 2` that has sales connected had the first given step (3.1), which did all of this. `readWork` puts that step back (a `given` spec with `full: '1'`, kept when saved again), counts P5 and P6 as passed when P3 is, and `passCard` adds P5 and P6 together with P3 for work still in Clean. P4 never appears for it (names already match). Test: `tests/buildErrors.test.ts`, "work saved by v0.32.0".
 
 ## 4. Model
 
@@ -629,7 +713,7 @@ Not specified in detail; numbers for the hub. H1 2026 by brand, right state: Fru
 
 ## 7. Reference numbers: whole cases
 
-Gold built with 4.1 from the clean tables in each state; tiles as in section 5 (right blanks). "Given" = the Changed type step only.
+Gold built with 4.1 from the clean tables in each state; tiles as in section 5 (right blanks). Since v0.33.0 "Given" = the first given step (3.1, dates, numbers and names typed), which in the tests is the steps of P5, P6 and P4 (`tests/buildSolved.ts`) on the new given step; every row holds, with the dedup before or after them. "Right" is then W, P1, P2, P3, P5, P6 and the names of P4.
 
 | Case | clean sales | clean customers | clean products | fact | fact rows without product | KPI H1 2026 | sales H1 2026 | Chain table (top three) |
 |---|---|---|---|---|---|---|---|---|
@@ -719,7 +803,8 @@ Not in these slices: P4 to P8, the linking screen (Б5), the filter, `#lab-done=
 - ✱ Sales are one source of 30 files, read as text; the three reference files are single files with `,` and detected types.
 - ✱ Stale customers have the same `is_active`, so only `updated_at` decides; four stores chosen so the leader flips (two Nagisa) and three chains move.
 - ✱ Applied steps rebuild the clean table from bronze each time (Power Query semantics); buttons write explicit column lists.
-- ✱ In v1 a given "Changed type" step does dates, decimals, name spaces and Itiba; later versions peel P4 to P6 out of it without changing the files.
+- ✱ Up to v0.32.0 a given "Changed type" step did dates, decimals, name spaces and Itiba; since v0.33.0 it types `raw_id` and tidies the SKU codes, and P4 to P6 are the learner's (3.6) without changing the files.
+- ✱ A failing Change type is a step that makes NULLs, drawn as [Error]; the fix replaces the failing step in place; the Dashboard stays locked while any [Error] cell is left (3.6).
 - ✱ P3 is a button with settings, not a blank: it shows the P2 pattern written by a tool, and lets Remove duplicates fail on it.
 - ✱ P2 passes by the reference, not by the check alone (the check passes too-short keys).
 - ✱ Answer numbers pass within ±0.5 with a lenient parser.

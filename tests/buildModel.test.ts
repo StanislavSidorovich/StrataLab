@@ -8,6 +8,7 @@ import { diagnoseLink, type DiagKey, type LinkDiagnosis, type LinkFacts, type Sl
 import type { StepSpec } from '../src/core/buildSteps'
 import { EXPECTED_LINKS, type Pass } from '../src/data/build/linkData'
 import { BUILD_SOURCES } from '../src/data/build/kaiyoSales'
+import { RIGHT_SALES } from './buildSolved'
 import { applySteps, buildStar, checkP7, connect, linkFacts, linkPeek, prepare, runTile } from '../src/db/buildRun'
 import { resultRows } from '../src/db/export'
 import type { SqlPort } from '../src/db/pipelineRun'
@@ -40,7 +41,7 @@ interface State {
   regions: StepSpec[]
 }
 const RIGHT: State = {
-  sales: [sp('dedup', { blank: 'sale_date, customer_name, sku_code' })],
+  sales: RIGHT_SALES,
   customers: [sp('latest', { key: 'customer_id', order: 'updated_at', direction: 'newest' })],
   products: [sp('trim', { column: 'sku_code' }, 's1'), sp('upper', { column: 'sku_code' }, 's2')],
   regions: [sp('distinct', {}, 's1'), sp('extract', { column: 'region_id' }, 's2')],
@@ -151,6 +152,24 @@ describe('spoiled states (4.3)', () => {
     const peek = (await linkPeek(port, cs('customer_name'), cc('customer_name')))!
     expect(peek.rows).toBe(3385)
     expect(peek.top[0][0]).toBe('Nagisa')
+  })
+  it('L1 with the names as they came: the way out is P4 (names in the sales), not the customers', async () => {
+    const dates = RIGHT_SALES.filter((x) => x.kind !== 'trim' && x.kind !== 'replace')
+    await setUp({ ...RIGHT, sales: dates })
+    let { f, d } = await check(cs('customer_name'), cc('customer_name'))
+    expect(d.key).toBe('unmatched')
+    expect(d.fix).toEqual({ kind: 'names' })
+    const raw = f.found!.unmatchedRows
+    expect(raw).toBeGreaterThan(900)
+    expect(d.line).toMatch(new RegExp(`^${raw.toLocaleString('en-US')} sales found no customer`))
+    await setUp({ ...RIGHT, sales: [...dates, RIGHT_SALES.find((x) => x.kind === 'trim')!] })
+    ;({ f, d } = await check(cs('customer_name'), cc('customer_name')))
+    expect(d.fix).toEqual({ kind: 'names' })
+    expect(f.found!.unmatchedRows).toBeGreaterThan(200)
+    expect(f.found!.unmatchedRows).toBeLessThan(raw)
+    expect(f.found!.unmatchedSamples[0]).toMatch(/^'?Itiba/)
+    await setUp(RIGHT)
+    expect((await check(cs('customer_name'), cc('customer_name'))).d.ok).toBe(true)
   })
   it('L2 before P1: 714 sales (6 SKUs) find no product, 392,540.33 left out', async () => {
     await setUp({ ...RIGHT, products: [] })

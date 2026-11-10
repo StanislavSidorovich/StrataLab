@@ -1,13 +1,18 @@
 // Applied steps of the build page (spec docs/build-kaiyo-sales-spec.md, 2.6 and 3.3 to 3.5): a step is a SELECT that reads
 // `{prev}`; the clean table of a source is rebuilt from bronze through the whole list. Pure: the engine part is
 // src/db/buildRun.ts. What is kept in localStorage is only {id, kind, params}; the SQL is written again on reading.
-import { BUILD_DIAGNOSIS, CLEAN_IDS, GIVEN_SQL, SCHEMA, sourceById, type BuildSourceId, type CleanId } from '../data/build/kaiyoSales'
+import { BUILD_DIAGNOSIS, CLEAN_IDS, GIVEN_FULL_SQL, GIVEN_SQL, SCHEMA, sourceById, type BuildSourceId, type CleanId } from '../data/build/kaiyoSales'
 import { DIAGNOSIS_TEXT } from '../data/pipelines/kaiyoSellout'
 import { emptyDash, readDash, type DashWork } from './buildDashboard'
 import { emptyMore, readMore, type MoreWork } from './buildMore'
 import { checkBlank } from './pipeline'
+import { quoteString } from './sql'
 
-export type StepKind = 'given' | 'distinct' | 'latest' | 'trim' | 'upper' | 'dedup' | 'extract'
+export type StepKind = 'given' | 'distinct' | 'latest' | 'trim' | 'upper' | 'dedup' | 'extract' | 'type' | 'dates' | 'replace'
+
+/** What Change type turns a column into. */
+export type TypeTo = 'date' | 'whole' | 'decimal'
+export const TYPE_WORD: Record<TypeTo, string> = { date: 'Date', whole: 'Whole number', decimal: 'Decimal' }
 
 /** What is kept of a step. */
 export interface StepSpec {
@@ -35,6 +40,8 @@ export const CLEAN_COLUMNS: Record<BuildSourceId, readonly string[]> = {
 }
 
 export const GIVEN_SPEC: StepSpec = { id: 'given', kind: 'given', params: {} }
+/** Work saved by v0.32.0 or before: its given step also did dates, decimal commas and names (P4 to P6 count as done). */
+export const GIVEN_FULL_SPEC: StepSpec = { id: 'given', kind: 'given', params: { full: '1' } }
 
 // ---------------------------------------------------------------- the generators
 
@@ -48,6 +55,40 @@ export const trimSql = (cols: readonly string[], col: string) => replaceColumn(c
 export const upperSql = (cols: readonly string[], col: string) => replaceColumn(cols, col, `upper(${col})`)
 /** Extract number (spec 2.6, P7): the digits inside a text, as a whole number. R-03 gives 3. */
 export const extractSql = (cols: readonly string[], col: string) => replaceColumn(cols, col, `CAST(regexp_extract(${col}, '[0-9]+') AS INTEGER)`)
+
+/** Replace values (spec 3.6): every `find` in the column becomes `with`. */
+export const replaceSql = (cols: readonly string[], col: string, find: string, withText: string) => replaceColumn(cols, col, `replace(${col}, ${quoteString(find)}, ${quoteString(withText)})`)
+
+/** The cast Change type writes; a value that does not fit becomes NULL, and the page shows that as [Error] (spec 3.6). */
+export function typeExpr(col: string, to: TypeTo, comma: boolean): string {
+  const text = comma ? `replace(${col}, ',', '.')` : col
+  if (to === 'date') return `try_cast(${col} AS DATE)`
+  if (to === 'whole') return comma ? `try_cast(try_cast(${text} AS DOUBLE) AS INTEGER)` : `try_cast(${col} AS INTEGER)`
+  return `try_cast(${text} AS DECIMAL(12, 2))`
+}
+export const typeSql = (cols: readonly string[], col: string, to: TypeTo, comma: boolean) => replaceColumn(cols, col, typeExpr(col, to, comma))
+
+/** The format of the slash dates the blank of P5 takes: strptime letters, slashes, dots, dashes and spaces only. */
+export function checkFormat(format: string): string | null {
+  const f = format.trim()
+  if (!f) return 'Write the format of the slash dates, like %Y-%m-%d.'
+  if (f.length > 30) return 'A date format is short: 30 characters at most.'
+  if (!/^[%A-Za-z0-9/.: -]+$/.test(f)) return 'A date format has only the letters after %, and / . - between them.'
+  return null
+}
+
+/** P5's step: the three spellings in a CASE; the learner fills the format of the slash dates. try_strptime: a date that does not fit is an error to see, not a crash. */
+export function datesSql(cols: readonly string[], format: string): string {
+  return replaceColumn(
+    cols,
+    'sale_date',
+    `CAST(CASE
+         WHEN sale_date LIKE '%.%' THEN try_strptime(sale_date, '%d.%m.%Y')
+         WHEN sale_date LIKE '%/%' THEN try_strptime(sale_date, '${format}')   -- 19/02/2024
+         ELSE try_strptime(sale_date, '%Y-%m-%d')
+       END AS DATE)`,
+  )
+}
 
 export function latestSql(cols: readonly string[], key: string, order: string, newest: boolean): string {
   return `SELECT ${cols.join(', ')}
@@ -75,7 +116,10 @@ export function makeStep(source: BuildSourceId, spec: StepSpec): Step | null {
   const base = { id: spec.id, kind: spec.kind, params: spec.params }
   switch (spec.kind) {
     case 'given':
-      return source === 'sales' ? { ...base, label: 'Changed type (given): dates, numbers, names', sql: GIVEN_SQL, given: true } : null
+      if (source !== 'sales') return null
+      return spec.params.full === '1'
+        ? { ...base, label: 'Changed type (given): dates, numbers, names', sql: GIVEN_FULL_SQL, given: true }
+        : { ...base, label: 'Changed type (given): raw_id and source_file', sql: GIVEN_SQL, given: true }
     case 'distinct':
       return { ...base, label: 'Removed duplicates', sql: distinctSql(), given: false }
     case 'trim': {
@@ -96,6 +140,25 @@ export function makeStep(source: BuildSourceId, spec: StepSpec): Step | null {
       const newest = spec.params.direction !== 'oldest'
       return key && order ? { ...base, label: `Kept the ${newest ? 'newest' : 'oldest'} row per ${key} (by ${order})`, sql: latestSql(cols, key, order, newest), given: false } : null
     }
+    case 'type': {
+      const c = col('column')
+      const to = spec.params.to as TypeTo
+      if (source !== 'sales' || !c || !(to in TYPE_WORD)) return null
+      const comma = to !== 'date' && spec.params.sep === 'comma'
+      return { ...base, label: `Changed type of ${c} to ${TYPE_WORD[to]}${comma ? ' (decimal separator: comma)' : ''}`, sql: typeSql(cols, c, to, comma), given: false }
+    }
+    case 'dates': {
+      const format = (spec.params.format ?? '').trim()
+      if (source !== 'sales' || checkFormat(format)) return null
+      return { ...base, label: 'Converted sale_date to a date (SQL)', sql: datesSql(cols, format), given: false }
+    }
+    case 'replace': {
+      const c = col('column')
+      const find = spec.params.find ?? ''
+      const withText = spec.params.with ?? ''
+      if (!c || !find || find.length > 60 || withText.length > 60) return null
+      return { ...base, label: `Replaced ${find} with ${withText} in ${c}`, sql: replaceSql(cols, c, find, withText), given: false }
+    }
     case 'dedup': {
       const blank = (spec.params.blank ?? '').trim()
       if (source !== 'sales' || checkBlank(blank)) return null
@@ -106,7 +169,8 @@ export function makeStep(source: BuildSourceId, spec: StepSpec): Step | null {
 
 /** The whole list of a source: the given step first (sales), then the learner's. Specs that do not fit are left out. */
 export function stepsOf(source: BuildSourceId, specs: readonly StepSpec[]): Step[] {
-  const all = source === 'sales' ? [GIVEN_SPEC, ...specs.filter((s) => s.kind !== 'given')] : specs.filter((s) => s.kind !== 'given')
+  const given = specs.find((s) => s.kind === 'given' && s.params.full === '1') ?? GIVEN_SPEC
+  const all = source === 'sales' ? [given, ...specs.filter((s) => s.kind !== 'given')] : specs.filter((s) => s.kind !== 'given')
   return all.map((s) => makeStep(source, s)).filter((s): s is Step => !!s)
 }
 
@@ -136,6 +200,20 @@ export function countsSql(source: BuildSourceId, steps: readonly Step[]): string
 SELECT ${names.map((n) => `(SELECT count(*) FROM ${n})`).join(', ')}`
 }
 
+/**
+ * One row: for each step of the list, how many rows it turned into [Error] (spec 3.6): rows where the value before was
+ * there and the value after is NULL. Only Change type and P5's SQL can; every other step counts 0. Sales only (raw_id is the key).
+ */
+export function stepErrorsSql(steps: readonly Step[]): string {
+  const names = ['bronze', ...steps.map((_, i) => `step${i + 1}`)]
+  const cells = steps.map((st, i) => {
+    const col = typedColumn(st)
+    return col && i > 0 ? `(SELECT count(*) FROM ${names[i + 1]} a JOIN ${names[i]} p USING (raw_id) WHERE a.${col} IS NULL AND p.${col} IS NOT NULL)` : '0'
+  })
+  return `${chainCtes('sales', steps)}
+SELECT ${cells.length ? cells.join(', ') : '0'}`
+}
+
 /** "3,110 rows → 3,000 rows"; one number when nothing changed. */
 export function rowsChange(before: number, after: number): string {
   const n = (x: number) => `${x.toLocaleString('en-US')} ${x === 1 ? 'row' : 'rows'}`
@@ -152,8 +230,17 @@ export function nextId(specs: readonly StepSpec[]): string {
 /** Adds a step at the end; P2's step replaces the one that is there. */
 export function addSpec(specs: readonly StepSpec[], kind: StepKind, params: Record<string, string> = {}): StepSpec[] {
   const base = kind === 'dedup' ? specs.filter((s) => s.kind !== 'dedup') : specs
+  // a second Change type (or the SQL of P5) on the same column takes the place of the first, in the same position: the failing step is fixed, not piled on
+  const col = kind === 'dates' ? 'sale_date' : kind === 'type' ? params.column : null
+  if (col) {
+    const at = specs.findIndex((s) => typedColumn(s) === col)
+    if (at >= 0) return specs.map((s, i) => (i === at ? { id: s.id, kind, params } : s))
+  }
   return [...base, { id: nextId(specs), kind, params }]
 }
+
+/** The column a Change type or the date SQL turns into another type (null for any other step). */
+export const typedColumn = (s: Pick<StepSpec, 'kind' | 'params'>): string | null => (s.kind === 'dates' ? 'sale_date' : s.kind === 'type' ? s.params.column ?? null : null)
 
 export const removeSpec = (specs: readonly StepSpec[], id: string): StepSpec[] => specs.filter((s) => s.id !== id)
 
@@ -166,12 +253,16 @@ export interface Peek {
 }
 
 export interface BuildWork {
+  /** see WORK_VERSION */
+  v: number
   /** sources whose Connect was done (rebuilt when the page opens) */
   connected: BuildSourceId[]
   /** the learner's steps per source (not the given one) */
   steps: Record<BuildSourceId, StepSpec[]>
   /** the blank of P2 */
   blank: string
+  /** the blank of P5: the format of the slash dates */
+  format: string
   /** Clean cards passed, in order */
   passed: CleanId[]
   /** the Quick look numbers, kept to be shown again */
@@ -180,13 +271,18 @@ export interface BuildWork {
   dash: DashWork
   /** the extra Clean card P7 (region ids as numbers): shown once the Model step asked for it, then done */
   p7: 'asked' | 'done' | null
+  /** the extra Clean card P4 (names of the stores in the sales): asked for by the Model step when names find no customer */
+  p4: 'asked' | 'done' | null
   /** the optional step More: the SQL and answers of the five questions, the pins (src/core/buildMore.ts) */
   more: MoreWork
 }
 
-export const emptyWork = (): BuildWork => ({ connected: [], steps: { sales: [], customers: [], products: [], regions: [] }, blank: '', passed: [], peek: null, dash: emptyDash(), p7: null, more: emptyMore() })
+/** The saved work's version: 2 since v0.33.0 (P4 to P6 are the learner's). Work saved without it has the first given step. */
+export const WORK_VERSION = 2
 
-const KINDS: readonly StepKind[] = ['distinct', 'latest', 'trim', 'upper', 'dedup', 'extract']
+export const emptyWork = (): BuildWork => ({ v: WORK_VERSION, connected: [], steps: { sales: [], customers: [], products: [], regions: [] }, blank: '', format: '', passed: [], peek: null, dash: emptyDash(), p7: null, p4: null, more: emptyMore() })
+
+const KINDS: readonly StepKind[] = ['distinct', 'latest', 'trim', 'upper', 'dedup', 'extract', 'type', 'dates', 'replace']
 
 /** Anything unreadable is dropped; a step that does not fit its source is dropped with it. */
 export function readWork(raw: unknown): BuildWork {
@@ -200,6 +296,7 @@ export function readWork(raw: unknown): BuildWork {
     const seen = new Set<string>()
     for (const item of list) {
       const s = item as Partial<StepSpec> | null
+      if (s && s.kind === 'given') continue
       if (!s || typeof s.id !== 'string' || !s.id || seen.has(s.id) || !(KINDS as readonly string[]).includes(s.kind as string)) continue
       const params: Record<string, string> = {}
       if (s.params && typeof s.params === 'object') for (const [k, v] of Object.entries(s.params)) if (typeof v === 'string') params[k] = v
@@ -210,12 +307,21 @@ export function readWork(raw: unknown): BuildWork {
     }
   }
   if (typeof r.blank === 'string') w.blank = r.blank.slice(0, 200)
+  if (typeof r.format === 'string') w.format = r.format.slice(0, 30)
   if (Array.isArray(r.passed)) w.passed = passedInOrder(r.passed as unknown[])
   const p = r.peek as Partial<Peek> | null | undefined
   if (p && typeof p.kpi === 'string' && typeof p.chain === 'string' && typeof p.chainRevenue === 'string') w.peek = { kpi: p.kpi, chain: p.chain, chainRevenue: p.chainRevenue }
   w.dash = readDash(r.dash)
   w.more = readMore(r.more)
   if (r.p7 === 'asked' || r.p7 === 'done') w.p7 = r.p7
+  if (r.p4 === 'asked' || r.p4 === 'done') w.p4 = r.p4
+  // saved by v0.32.0 or before: sales were connected with the first given step, which typed dates, numbers and names. Keep that step, and P4 to P6 count as done.
+  const saved = Array.isArray(steps.sales) ? (steps.sales as Partial<StepSpec>[]) : []
+  const hadFull = saved.some((x) => x?.kind === 'given' && x.params?.full === '1')
+  if (hadFull || (w.connected.includes('sales') && r.v !== WORK_VERSION)) {
+    w.steps.sales.unshift(GIVEN_FULL_SPEC)
+    if (w.passed.includes('P3')) w.passed = passedInOrder([...w.passed, 'P5', 'P6'])
+  }
   return w
 }
 
@@ -328,5 +434,86 @@ export interface P7Facts {
 export function diagnoseP7(f: P7Facts): Diagnosis {
   if (!f.isNumber) return { ok: false, line: BUILD_DIAGNOSIS.regionText }
   if (f.rows === 16 && f.diff === 0) return { ok: true, line: null }
+  return { ok: false, line: BUILD_DIAGNOSIS.generic }
+}
+
+// ---------------------------------------------------------------- P5, P6, P4 (spec 3.6)
+
+/** Sales that have the first given step (saved work from v0.32.0): P5 and P6 pass on their own after P3. */
+export const hasFullGiven = (work: Pick<BuildWork, 'steps'>) => work.steps.sales.some((s) => s.kind === 'given' && s.params.full === '1')
+
+/** The passed cards after `id` passed; work with the first given step has nothing to do in P5 and P6, so P3 takes them along. */
+export function passCard(work: Pick<BuildWork, 'passed' | 'steps'>, id: CleanId): CleanId[] {
+  const next: CleanId[] = [...work.passed, id]
+  if (id === 'P3' && hasFullGiven(work)) next.push('P5', 'P6')
+  return passedInOrder(next)
+}
+
+export interface P5Facts {
+  /** sale_date is a date now */
+  isDate: boolean
+  /** dates that are [Error]: there in the file, NULL now */
+  errors: number
+  /** three of them as they are in the file */
+  samples: string[]
+  /** dates different from the expected table (rows both have) */
+  diff: number
+  /** the P5 SQL is in the list, with this format; null when the plain Change type (or nothing) is */
+  format: string | null
+}
+
+export function diagnoseP5(f: P5Facts): Diagnosis {
+  if (!f.isDate) return { ok: false, line: BUILD_DIAGNOSIS.dateText }
+  const n = f.errors.toLocaleString('en-US')
+  if (f.errors > 0) {
+    if (f.format === null) return { ok: false, line: BUILD_DIAGNOSIS.datePlain(n, f.samples) }
+    if (/%m\s*\/\s*%d/.test(f.format)) return { ok: false, line: BUILD_DIAGNOSIS.dateMonthFirst(n) }
+    return { ok: false, line: BUILD_DIAGNOSIS.dateStill(n, f.samples) }
+  }
+  if (f.diff > 0) return { ok: false, line: BUILD_DIAGNOSIS.dateWrongDay(f.diff.toLocaleString('en-US')) }
+  return { ok: true, line: null }
+}
+
+export interface P6Facts {
+  /** the column is still text */
+  revenueText: boolean
+  unitsText: boolean
+  revenueErrors: number
+  unitsErrors: number
+  /** values different from the expected table (rows both have) */
+  diff: number
+}
+
+export function diagnoseP6(f: P6Facts): Diagnosis {
+  const text = [f.revenueText && 'revenue', f.unitsText && 'units'].filter((c): c is string => !!c)
+  if (text.length) return { ok: false, line: BUILD_DIAGNOSIS.numberText(text) }
+  const n = (x: number) => x.toLocaleString('en-US')
+  if (f.revenueErrors > 0 && f.unitsErrors > 0) return { ok: false, line: BUILD_DIAGNOSIS.numberComma([`${n(f.revenueErrors)} revenues`, `${n(f.unitsErrors)} units`]) }
+  if (f.revenueErrors > 0) return { ok: false, line: BUILD_DIAGNOSIS.numberOne('revenue', n(f.revenueErrors)) }
+  if (f.unitsErrors > 0) return { ok: false, line: BUILD_DIAGNOSIS.numberOne('units', n(f.unitsErrors)) }
+  if (f.diff > 0) return { ok: false, line: BUILD_DIAGNOSIS.numberOff(n(f.diff)) }
+  return { ok: true, line: null }
+}
+
+export interface P4Facts {
+  /** sales whose name finds no customer, and one of those names */
+  unmatched: number
+  sample: string | null
+  /** names with spaces at the edges, names with Itiba */
+  spaces: number
+  itiba: number
+  /** names different from the expected table (rows both have) */
+  diff: number
+  /** columns other than customer_name that a Trim or Replace values step was put on */
+  otherColumns: string[]
+}
+
+export function diagnoseP4(f: P4Facts): Diagnosis {
+  if (f.unmatched === 0 && f.diff === 0) return { ok: true, line: null }
+  const n = (x: number) => x.toLocaleString('en-US')
+  if (f.otherColumns.length > 0 && (f.unmatched > 0 || f.spaces > 0)) return { ok: false, line: BUILD_DIAGNOSIS.namesWrongColumn(f.otherColumns[0]) }
+  if (f.spaces > 0) return { ok: false, line: BUILD_DIAGNOSIS.namesSpaces(n(f.spaces)) }
+  if (f.itiba > 0) return { ok: false, line: BUILD_DIAGNOSIS.namesItiba(n(f.unmatched || f.itiba), f.sample ?? 'Itiba #…') }
+  if (f.unmatched > 0) return { ok: false, line: BUILD_DIAGNOSIS.namesLeft(n(f.unmatched), f.sample ?? '?') }
   return { ok: false, line: BUILD_DIAGNOSIS.generic }
 }
