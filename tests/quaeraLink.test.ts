@@ -18,7 +18,7 @@ describe('followQuaeraLink', () => {
     const e = click()
     expect(followQuaeraLink(e, url, env({ calls }))).toBe(true)
     expect(calls).toEqual([[url, QUAERA_WINDOW]])
-    expect(QUAERA_WINDOW).toBe('quaera')
+    expect(QUAERA_WINDOW).toBe('quaera-quaera')
     expect(e.prevented).toBe(true)
   })
   it('lets the plain link go in an installed app', () => {

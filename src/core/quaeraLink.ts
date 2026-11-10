@@ -1,11 +1,11 @@
-// Links back to Quaera (quaera.app) that reuse one window. A click opens the address in the window named `quaera`, so a
+// Links back to Quaera (quaera.app) that reuse one window. A click opens the address in the window named `quaera-quaera`, so a
 // second "Count it in Quaera" brings the same tab up instead of piling up new ones. The trainer names its window the same
-// (`window.name = 'quaera'`). Where the trick must not run, the plain link does its work:
+// (`window.name = 'quaera-quaera'`, the name the family switcher gives it too). Where the trick must not run, the plain link does its work:
 //  - an installed app window (display-mode: standalone): `window.open` by name from there goes to a tab of the browser,
 //    while a plain link is taken by the installed Quaera (launch_handler navigate-existing in its manifest), like the
 //    trainer's own links to Lab and Model (quaera `src/labLink.ts`);
 //  - a blocked pop-up (`window.open` gives null): the link opens as it always did.
-export const QUAERA_WINDOW = 'quaera'
+export const QUAERA_WINDOW = 'quaera-quaera'
 
 export interface QuaeraEnv {
   standalone: () => boolean
