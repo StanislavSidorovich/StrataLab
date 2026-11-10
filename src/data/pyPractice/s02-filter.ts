@@ -218,7 +218,9 @@ sellout[sellout["units"] > 100].head()`,
     {
       kind: 'note',
       topic: 'rows that have a value',
-      text: 'A gap in a column is missing, shown as NaN or as <NA>. `notna` is True where a value is there, and `isna` is the opposite.',
+      text: 'A gap is a cell with no value: a sale with no promotion has no `promo_id`, and pandas shows that as NaN or <NA>. `.notna()` gives True or False for every row, True where a value is there, and `isna` is its mirror. Put that True and False column inside `df[...]` and the table keeps the True rows.',
+      syntax: `promo_id:  12      <NA>    7
+.notna():  True    False   True      (rows 1 and 3 are kept)`,
     },
     {
       kind: 'example',
@@ -271,6 +273,40 @@ sellout[sellout["units"] > 100].head()`,
       title: 'Big weeks with loc',
       code: `sellout.loc[sellout["units"] > 100, ["week_start", "customer_id", "units"]].head()`,
       sees: 'The same table as with two pairs of brackets: rows over 100 units, three columns.',
+    },
+    {
+      kind: 'note',
+      topic: 'how to write a long query',
+      text: 'Do not write it in one go: name each condition, look at it, and join them last. Square brackets pick (a column, the rows, `.loc[rows, columns]`, a list of names), and round brackets call (`.notna()`, `.head(5)`) or group (each condition in `( )` around `&` and `|`, because `&` binds tighter than `==`). Python may break a line inside open brackets, so wrap the whole chain in `( )` and start each line with `.method`.',
+      syntax: `on_promo = sellout["promo_id"].notna()
+in_year = sellout["week_start"].dt.year == 2026
+sellout.loc[on_promo & in_year, cols]      # then sort, then head
+
+(sellout
+    .loc[on_promo & in_year, cols]
+    .sort_values("units")
+    .head(5))`,
+      trap: 'A line break outside any bracket ends the statement: `sellout.loc[rows, cols]` newline `.head(5)` is a SyntaxError until the whole chain sits inside `( )`.',
+    },
+    {
+      kind: 'example',
+      id: 'py-filter-long-query',
+      title: 'The same query in pieces and in one expression',
+      code: `cols = ["week_start", "customer_id", "product_id", "units"]
+on_promo = sellout["promo_id"].notna()
+in_2026 = sellout["week_start"].dt.year == 2026
+step = sellout.loc[on_promo & in_2026, cols]
+step = step.sort_values(["units", "week_start", "customer_id", "product_id"], ascending=[False, True, True, True])
+step = step.head(5)
+
+one = (
+    sellout
+    .loc[sellout["promo_id"].notna() & (sellout["week_start"].dt.year == 2026), cols]
+    .sort_values(["units", "week_start", "customer_id", "product_id"], ascending=[False, True, True, True])
+    .head(5)
+)
+one`,
+      sees: 'Five promotional rows of 2026 with the most units. `step` holds exactly the same table: check each piece on its own first, then fold them into one wrapped expression.',
     },
     {
       kind: 'task',
