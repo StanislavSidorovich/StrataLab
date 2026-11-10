@@ -5,7 +5,8 @@
 .build-ok { display: inline-flex; align-items: center; gap: 6px; color: var(--accent); font-size: 13px; }
 .build-big { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
 
-.build-sources { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; }
+.build-sources { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 800px) { .build-sources { grid-template-columns: minmax(0, 1fr); } }
 .build-source { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
 .build-source.is-on { border-color: var(--accent); }
 .build-source-head { display: flex; align-items: center; gap: 8px; }
@@ -21,7 +22,7 @@
 
 .build-sql summary { cursor: pointer; color: var(--muted); font-size: 12.5px; }
 .build-sql { min-width: 0; max-width: 100%; align-self: stretch; }
-.build-sql .pl-code { margin-top: 6px; white-space: pre; overflow-x: auto; max-width: 100%; box-sizing: border-box; }
+.build-sql .pl-code { margin-top: 6px; white-space: pre-wrap; overflow-wrap: anywhere; overflow-x: hidden; max-height: 220px; overflow-y: auto; max-width: 100%; box-sizing: border-box; }
 
 .build-quick { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border: 1px solid var(--accent); border-radius: 12px; background: var(--accent-soft); }
 .build-quick-title { margin: 0; font-size: 16px; font-weight: 600; }
