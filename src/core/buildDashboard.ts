@@ -1,7 +1,7 @@
 // Model v1, Dashboard and Answer of the build page (spec docs/build-kaiyo-sales-spec.md, sections 4.1, 5.1 to 5.4). Pure:
 // the blanks of the two tiles, the lines said about a wrong result, the answer parser and checker, and the part of the
 // saved state that belongs to these steps. The engine part is src/db/buildRun.ts.
-import { ANSWERS, BUILD_DASH_DIAGNOSIS, TILE_IDS, TILE_SQL, TILE_TABLE, T, type AnswerId, type TileId } from '../data/build/kaiyoSales'
+import { ANSWERS, BUILD_DASH_DIAGNOSIS, TILE_IDS, TILE_SQL, TILE_TABLE, T, type AnswerId, type AnswerQuestion, type TileId } from '../data/build/kaiyoSales'
 import { checkBlank } from './pipeline'
 
 export type { AnswerId, TileId }
@@ -117,24 +117,30 @@ export interface AnswerResult {
   line: string | null
 }
 
-export function checkAnswer(id: AnswerId, input: AnswerInput): AnswerResult {
-  const a = ANSWERS.find((q) => q.id === id)!
+/** The shape both the Answer questions and the More questions have: what is judged. */
+export type Judged = Pick<AnswerQuestion, 'options' | 'pickLabel' | 'right' | 'where' | 'wrong'>
+
+/** Judges a typed answer against a question: the right one passes, a known wrong one gets its line, the rest a general line. */
+export function judgeAnswer(a: Judged, input: AnswerInput): AnswerResult {
   const wrong = (line: string): AnswerResult => ({ ok: false, line })
   const n = parseAnswerNumber(input.number)
   if (a.options && !input.pick) return wrong(BUILD_DASH_DIAGNOSIS.pickFirst(a.pickLabel!))
   if (n === null) return wrong(BUILD_DASH_DIAGNOSIS.typeNumber)
+  const v = a.right.unsigned ? Math.abs(n) : n
   const pickOk = !a.options || input.pick === a.right.pick
-  const numOk = close(n, a.right.value)
+  const numOk = close(v, a.right.value)
   if (pickOk && numOk) return { ok: true, line: null }
   for (const w of a.wrong) {
     if (w.pick !== undefined && w.pick !== input.pick) continue
-    if (w.value !== undefined && !close(n, w.value)) continue
+    if (w.value !== undefined && !close(v, w.value)) continue
     return wrong(w.line)
   }
   if (a.options && pickOk) return wrong(BUILD_DASH_DIAGNOSIS.numberOff(a.right.pickText!))
   if (a.options && numOk) return wrong(BUILD_DASH_DIAGNOSIS.pickOff)
   return wrong(BUILD_DASH_DIAGNOSIS.answerOff(a.where))
 }
+
+export const checkAnswer = (id: AnswerId, input: AnswerInput): AnswerResult => judgeAnswer(ANSWERS.find((q) => q.id === id)!, input)
 
 // ---------------------------------------------------------------- what is kept
 

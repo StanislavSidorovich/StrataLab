@@ -584,6 +584,41 @@ Three questions, one or two fields each. Numbers are parsed leniently: spaces dr
 
 When all three pass: the build is solved (frame: Answer done). The return link is Б7 (section 9, open question 2).
 
+### 5.5 Keep going (hub design 2026-11-10; code Sonnet)
+
+Why: after Answer the learner asked "and where now?". The owner's frame: a loop, "stay here and practise, or go back to Quaera"; no separate dashboard page; filters and slicers come later on the same dashboard.
+
+**Where.** Under the "You built it" block on the Answer step, two cards side by side (stacked on narrow):
+
+1. **Keep going here: five more questions from the Head of Sales.** Opens a sixth, optional step **More** in the step bar (after Answer, marked "optional", unlocked when Answer is done; the build stays "5 of 5" without it).
+2. **Back to Quaera.** The existing "Count it in Quaera" link, plus one line: "Next there: the SQL track on GROUP BY and JOIN, the same moves you just made." (no new link format).
+
+**The More step.** One question at a time, a list of five on the left (done marks), the work on the right:
+
+- the question and what to type (a number, sometimes a pick);
+- a free SQL editor (the Lab editor component, not a blank in given SQL), pre-filled with a comment and `SELECT … FROM gold_fact_sales` skeleton only for K1; empty with a one-line comment for K2–K5;
+- the "Your star" panel from the Dashboard step, same component, open by default here;
+- Run → result table; a 2-column result (label, number) can be **Pinned to the dashboard** as bars or a line (auto: a date column → line, else bars). Pinned tiles appear on the Dashboard step under the three, as "Your tiles", with a remove ×, and in the Answer copy. Kept in the build's saved state (SQL text only, re-run on open).
+- the answer field + Check, with the lenient parser of 5.4; two hints one at a time, then "Show a solution" (shows SQL, the question still counts as done, but marked "with solution").
+
+**The five questions** (numbers: compute in DuckDB on the right state and put them here and in tests; the hub's values from section 6 where given):
+
+| # | Question | What it practises | Answer |
+|---|---|---|---|
+| K1 | "How many sales did we have from January to June 2026?" | COUNT, the date filter from the KPI tile | **595** (`count(revenue)` gives 570) |
+| K2 | "Which brand sold the most from January to June 2026, and how much?" (pick of the 9 brands) | JOIN to `gold_dim_product`, GROUP BY, ORDER BY | **Fruvia, 100,004.67** (Aqualis 80,977.09, Krosti 67,550.59, Milvara 51,896.20, Nettora 14,477.58) |
+| K3 | "How many units came back as returns in 2025?" | WHERE on negative units, SUM | **217** units on 43 lines (typed as 217 or -217) |
+| K4 | "Which prefecture sold the most from January to June 2026?" (pick of the 16) | JOIN fact → `gold_dim_customer`, GROUP BY `region_name` | **Okinawa, 44,845.38** (Aichi 35,819.43, Hyogo 34,602.95) |
+| K5 | "Which single Minori store sold the most in 2025, and how much?" (pick of the 12 stores) | JOIN + two filters + LIMIT 1 | **Minori #1015, 22,383.37** (#1027 19,893.72, #1033 17,083.68) |
+
+K4 needs **one** join, not two: after "Build the star" `gold_dim_customer` already carries `region_name` and `macro_region` (v0.31 star). Only a star built by the first version of the Model step has no region column; then Your star also lists `clean_regions` and a note says to join it on `region_id` (the same answer, checked in `tests/buildMore.test.ts`). In the editor tables are written with the schema, `build_kaiyo.gold_fact_sales`, as in the tiles; only a SELECT runs (`moreSqlProblem`). The wrong 2025 numbers for K3: 43 (return lines), 6,497 (all units of 2025, net of returns), 6,714 (units sold, positives only).
+
+Wrong answers with a line (all in `MORE_QUESTIONS`): K1 618 (sales sent twice), 570 (count of revenue), 314,906.13 (the revenue); K2 Aqualis / 80,977.09; K3 43, 6,497, 6,714; K4 Aichi / 35,819.43; K5 Minori #1027 / 19,893.72.
+
+**Done.** All five: a short block "Five more, all yours." with the same two ways out. No `#lab-done=` for More in this version (the hub decides later whether the trainer counts it).
+
+**Not now:** filter/slicer (section 6, next hub design), learner-chosen chart types, saving queries as files.
+
 ---
 
 ## 6. Later: filter and brands (not in v1, for the hub's design)

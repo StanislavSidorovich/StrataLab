@@ -5,6 +5,7 @@ import type { Table } from 'apache-arrow'
 import { money } from './BuildTable'
 import { BarChart } from './BarChart'
 import { ChartView } from '../Chart'
+import { PinTile, usePinResults } from './PinTiles'
 import type { ResultData } from '../../core/check'
 import type { BuildWork } from '../../core/buildSteps'
 import { TILE_CARDS, TILE_IDS, TILE_TABLE, T, type TileId } from '../../data/build/kaiyoSales'
@@ -23,6 +24,7 @@ export function DashCopy({ work, ready }: { work: BuildWork; ready: boolean }) {
   const [views, setViews] = useState<Views>({ kpi: null, chains: null, line: null })
   const [error, setError] = useState<string | null>(null)
   const blanks = work.dash.blanks
+  const pinResults = usePinResults(work.more.pins, ready)
 
   useEffect(() => {
     if (!ready) return
@@ -70,6 +72,9 @@ export function DashCopy({ work, ready }: { work: BuildWork; ready: boolean }) {
         <div className="bd-tile-title">{title('chains')}</div>
         {views.chains ? <BarChart data={views.chains} label={title('chains')} compact /> : <div className="build-muted">{ready ? 'Loading…' : 'Waiting for the data…'}</div>}
       </section>
+      {work.more.pins.map((p) => (
+        <PinTile key={p.q} pin={p} loaded={pinResults[p.q]} compact />
+      ))}
     </aside>
   )
 }

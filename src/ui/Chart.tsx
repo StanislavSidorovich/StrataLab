@@ -33,12 +33,15 @@ const TYPES: [ChartType, string, typeof BarIcon][] = [
   ['scatter', 'Scatter', ChartScatter],
 ]
 
-function kindOf(field: Field): ColumnKind {
+export function kindOf(field: Field): ColumnKind {
   const t = field.type
   if (DataType.isInt(t) || DataType.isFloat(t) || DataType.isDecimal(t)) return 'number'
   if (DataType.isDate(t) || DataType.isTimestamp(t)) return 'date'
   return 'text'
 }
+
+/** The column is a date or a timestamp. */
+export const isDateColumn = (table: Table, i: number): boolean => kindOf(table.schema.fields[i]) === 'date'
 
 /** A column's values for the chart: numbers (dates as ms), and the grid's text for labels. */
 function columnValues(table: Table, i: number, kind: ColumnKind) {

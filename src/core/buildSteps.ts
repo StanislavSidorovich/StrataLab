@@ -4,6 +4,7 @@
 import { BUILD_DIAGNOSIS, CLEAN_IDS, GIVEN_SQL, SCHEMA, sourceById, type BuildSourceId, type CleanId } from '../data/build/kaiyoSales'
 import { DIAGNOSIS_TEXT } from '../data/pipelines/kaiyoSellout'
 import { emptyDash, readDash, type DashWork } from './buildDashboard'
+import { emptyMore, readMore, type MoreWork } from './buildMore'
 import { checkBlank } from './pipeline'
 
 export type StepKind = 'given' | 'distinct' | 'latest' | 'trim' | 'upper' | 'dedup' | 'extract'
@@ -179,9 +180,11 @@ export interface BuildWork {
   dash: DashWork
   /** the extra Clean card P7 (region ids as numbers): shown once the Model step asked for it, then done */
   p7: 'asked' | 'done' | null
+  /** the optional step More: the SQL and answers of the five questions, the pins (src/core/buildMore.ts) */
+  more: MoreWork
 }
 
-export const emptyWork = (): BuildWork => ({ connected: [], steps: { sales: [], customers: [], products: [], regions: [] }, blank: '', passed: [], peek: null, dash: emptyDash(), p7: null })
+export const emptyWork = (): BuildWork => ({ connected: [], steps: { sales: [], customers: [], products: [], regions: [] }, blank: '', passed: [], peek: null, dash: emptyDash(), p7: null, more: emptyMore() })
 
 const KINDS: readonly StepKind[] = ['distinct', 'latest', 'trim', 'upper', 'dedup', 'extract']
 
@@ -211,6 +214,7 @@ export function readWork(raw: unknown): BuildWork {
   const p = r.peek as Partial<Peek> | null | undefined
   if (p && typeof p.kpi === 'string' && typeof p.chain === 'string' && typeof p.chainRevenue === 'string') w.peek = { kpi: p.kpi, chain: p.chain, chainRevenue: p.chainRevenue }
   w.dash = readDash(r.dash)
+  w.more = readMore(r.more)
   if (r.p7 === 'asked' || r.p7 === 'done') w.p7 = r.p7
   return w
 }

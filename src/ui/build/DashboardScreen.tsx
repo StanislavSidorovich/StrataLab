@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import type { Table } from 'apache-arrow'
 import { Check, CheckCircle2, Lightbulb, Loader2 } from 'lucide-react'
 import { dashboardDone } from '../../core/buildDashboard'
+import { removePin } from '../../core/buildMore'
 import type { BuildWork } from '../../core/buildSteps'
 import { TILE_CARDS, TILE_IDS, TILE_SQL, T, TILE_TABLE, type TileCard, type TileId } from '../../data/build/kaiyoSales'
 import { runTile, type TileRun } from '../../db/buildRun'
@@ -12,6 +13,7 @@ import { enginePort } from '../../db/pipelinePort'
 import { ChartView } from '../Chart'
 import { BarChart } from './BarChart'
 import { BuildTable, money } from './BuildTable'
+import { PinnedGrid } from './PinTiles'
 import { StarPanel } from './StarPanel'
 import './dashboard.css'
 
@@ -94,6 +96,7 @@ export function DashboardScreen({ work, setWork, ready }: Props) {
         {tile('chains')}
         {tile('line', 'bd-wide')}
       </div>
+      <PinnedGrid pins={work.more.pins} ready={ready} onRemove={(q) => setWork((w) => ({ ...w, more: { ...w.more, pins: removePin(w.more.pins, q) } }))} />
       {dashboardDone(dash.tiles) && (
         <div className="build-quick" data-testid="dashboard-done">
           <b>The dashboard is ready.</b> Next, read it and answer the question the Head of Sales asked.

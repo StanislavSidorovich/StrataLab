@@ -435,7 +435,8 @@ export interface AnswerQuestion {
   pickLabel?: string
   options?: readonly { value: string; label: string }[]
   numberLabel: string
-  right: { pick?: string; pickText?: string; value: number }
+  /** `unsigned`: the sign is not asked for, -217 and 217 both pass */
+  right: { pick?: string; pickText?: string; value: number; unsigned?: boolean }
   /** where on the dashboard the answer is */
   where: string
   wrong: readonly AnswerWrong[]
@@ -481,3 +482,120 @@ export const ANSWERS: readonly AnswerQuestion[] = [
 
 /** Where the finish leads back to: the trainer counts the build (quaera.app reads `#lab-done=build:<id>`). */
 export const BUILD_RETURN_URL = 'https://quaera.app/#lab-done=build:kaiyo-sales'
+
+// ---------------------------------------------------------------- More: five more questions (spec 5.5)
+
+export type MoreId = 'K1' | 'K2' | 'K3' | 'K4' | 'K5'
+
+export const BRANDS = ['Aqualis', 'Fruvia', 'Gastrivo', 'Krosti', 'Milvara', 'Nettora', 'Pyrexan', 'Rhinolar', 'Vitanor'] as const
+export const PREFECTURES = ['Aichi', 'Chiba', 'Fukuoka', 'Hiroshima', 'Hokkaido', 'Hyogo', 'Ibaraki', 'Kanagawa', 'Kyoto', 'Miyagi', 'Niigata', 'Okinawa', 'Osaka', 'Saitama', 'Shizuoka', 'Tokyo'] as const
+export const MINORI_STORES = [1013, 1014, 1015, 1016, 1020, 1021, 1024, 1027, 1033, 1040, 1047, 1054].map((n) => `Minori #${n}`)
+
+export interface MoreQuestion extends Omit<AnswerQuestion, 'id'> {
+  id: MoreId
+  /** a short name for the list and the pinned tile */
+  title: string
+  /** what the question practises (one line under it) */
+  practises: string
+  /** what the editor holds at the start: the skeleton of K1, a one-line comment for the others */
+  start: string
+  hints: readonly [string, string]
+  solution: string
+}
+
+const H1 = `sale_date >= DATE '2026-01-01' AND sale_date < DATE '2026-07-01'`
+const Y2025 = `sale_date >= DATE '2025-01-01' AND sale_date < DATE '2026-01-01'`
+
+export const MORE_QUESTIONS: readonly MoreQuestion[] = [
+  {
+    id: 'K1',
+    title: 'Sales, January to June 2026',
+    question: 'How many sales did we have from January to June 2026?',
+    practises: 'COUNT and the date filter of the number tile',
+    start: `-- How many sales from January to June 2026?\nSELECT ____ AS sales\nFROM ${T('gold_fact_sales')}\nWHERE ${H1}`,
+    numberLabel: 'Sales',
+    right: { value: 595 },
+    where: 'your result',
+    hints: ['A sale is one row of the fact table. Count the rows that pass the date filter.', 'count(*) counts rows. The WHERE of the number tile already limits the dates.'],
+    solution: `SELECT count(*) AS sales\nFROM ${T('gold_fact_sales')}\nWHERE ${H1}`,
+    wrong: [
+      { value: 618, line: 'That count still has the sales sent twice. Is the Clean step done for the sales?' },
+      { value: 570, line: '570 counts only the sales that have a revenue; some have none. count(*) counts every row.' },
+      { value: 314906.13, line: "That's the revenue, not the number of sales." },
+    ],
+  },
+  {
+    id: 'K2',
+    title: 'Revenue by brand, January to June 2026',
+    question: 'Which brand sold the most from January to June 2026, and how much?',
+    practises: 'JOIN to the product dimension, GROUP BY, ORDER BY',
+    start: '-- Revenue per brand, January to June 2026. The brand is in gold_dim_product.\n',
+    pickLabel: 'Brand',
+    options: BRANDS.map((b) => ({ value: b, label: b })),
+    numberLabel: 'Revenue',
+    right: { pick: 'Fruvia', pickText: 'Fruvia', value: 100004.67 },
+    where: 'your result',
+    hints: ['The fact has product_id, the brand is in gold_dim_product. Join them on product_id, then add up the revenue per brand.', 'GROUP BY brand, SUM(revenue), ORDER BY the sum DESC. The first row is the top brand.'],
+    solution: `SELECT p.brand, SUM(f.revenue) AS revenue\nFROM ${T('gold_fact_sales')} f\nJOIN ${T('gold_dim_product')} p ON p.product_id = f.product_id\nWHERE f.${H1}\nGROUP BY p.brand\nORDER BY revenue DESC`,
+    wrong: [
+      { pick: 'Aqualis', line: 'Aqualis is second, 80,977.09. Look at the top row.' },
+      { value: 80977.09, line: 'That is Aqualis, the second brand.' },
+    ],
+  },
+  {
+    id: 'K3',
+    title: 'Units returned in 2025',
+    question: 'How many units came back as returns in 2025?',
+    practises: 'WHERE on negative units, SUM',
+    start: '-- Returns are sales with negative units.\n',
+    numberLabel: 'Units',
+    right: { value: 217, unsigned: true },
+    where: 'your result',
+    hints: ['A return is a row whose units are below zero. Filter on that, and on the year 2025.', 'SUM(units) over those rows is negative; the units that came back are its size. Dates of 2025 run from 2025-01-01 up to, not including, 2026-01-01.'],
+    solution: `SELECT -SUM(units) AS units_returned\nFROM ${T('gold_fact_sales')}\nWHERE units < 0 AND ${Y2025}`,
+    wrong: [
+      { value: 43, line: '43 is how many return lines there are, not how many units came back.' },
+      { value: 6497, line: '6,497 is every unit of 2025 with the returns taken off. The question asks about the returns only.' },
+      { value: 6714, line: '6,714 is the units sold, the positive rows. The returns are the negative ones.' },
+    ],
+  },
+  {
+    id: 'K4',
+    title: 'Revenue by prefecture, January to June 2026',
+    question: 'Which prefecture sold the most from January to June 2026, and how much?',
+    practises: 'JOIN to the customer dimension, GROUP BY region_name',
+    start: '-- Revenue per prefecture, January to June 2026. Where does a sale know its prefecture?\n',
+    pickLabel: 'Prefecture',
+    options: PREFECTURES.map((b) => ({ value: b, label: b })),
+    numberLabel: 'Revenue',
+    right: { pick: 'Okinawa', pickText: 'Okinawa', value: 44845.38 },
+    where: 'your result',
+    hints: ['A sale knows its store through customer_id, and the store knows its prefecture: look at the columns of gold_dim_customer in Your star.', 'Join the fact to gold_dim_customer on customer_id, group by region_name, add up the revenue.'],
+    solution: `SELECT c.region_name, SUM(f.revenue) AS revenue\nFROM ${T('gold_fact_sales')} f\nJOIN ${T('gold_dim_customer')} c ON c.customer_id = f.customer_id\nWHERE f.${H1}\nGROUP BY c.region_name\nORDER BY revenue DESC`,
+    wrong: [
+      { pick: 'Aichi', line: 'Aichi is second, 35,819.43. Look at the top row.' },
+      { value: 35819.43, line: 'That is Aichi, the second prefecture.' },
+    ],
+  },
+  {
+    id: 'K5',
+    title: 'Minori stores, 2025',
+    question: 'Which single Minori store sold the most in 2025, and how much?',
+    practises: 'JOIN, two filters, LIMIT 1',
+    start: '-- One row per Minori store, 2025. The chain is in gold_dim_customer.\n',
+    pickLabel: 'Store',
+    options: MINORI_STORES.map((b) => ({ value: b, label: b })),
+    numberLabel: 'Revenue',
+    right: { pick: 'Minori #1015', pickText: 'Minori #1015', value: 22383.37 },
+    where: 'your result',
+    hints: ['Two filters: the chain is Minori (a column of the customers) and the date is in 2025. Group by the store, not the chain.', 'GROUP BY customer_name, ORDER BY the sum DESC, LIMIT 1 keeps only the top store.'],
+    solution: `SELECT c.customer_name, SUM(f.revenue) AS revenue\nFROM ${T('gold_fact_sales')} f\nJOIN ${T('gold_dim_customer')} c ON c.customer_id = f.customer_id\nWHERE c.chain_name = 'Minori'\n  AND f.${Y2025}\nGROUP BY c.customer_name\nORDER BY revenue DESC\nLIMIT 1`,
+    wrong: [
+      { pick: 'Minori #1027', line: 'Minori #1027 is second, 19,893.72. Look at the top row.' },
+      { value: 19893.72, line: 'That is Minori #1027, the second store.' },
+    ],
+  },
+]
+
+export const moreQuestion = (id: MoreId) => MORE_QUESTIONS.find((q) => q.id === id)!
+export const MORE_IDS: readonly MoreId[] = MORE_QUESTIONS.map((q) => q.id)

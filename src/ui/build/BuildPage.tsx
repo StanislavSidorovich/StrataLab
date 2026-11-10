@@ -3,7 +3,7 @@
 // page is the "Open on a laptop" screen, as on the pipeline page.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowRight, Check, Copy, Hammer, Laptop, Lock, Share2, X } from 'lucide-react'
-import { BUILD_ID, STEP_IDS, STEP_LABEL, goNext, loadBuild, markDone, modelDone, nextStep, openStep, saveBuild, statusOf } from '../../core/build'
+import { BUILD_ID, MORE_STEP, STEP_IDS, STEP_LABEL, STRIP_IDS, goNext, loadBuild, markDone, modelDone, nextStep, openStep, saveBuild, statusOf } from '../../core/build'
 import type { Link } from '../../core/buildLinks'
 import { answersDone, dashboardDone } from '../../core/buildDashboard'
 import { cleanDone, type BuildWork, type StepSpec } from '../../core/buildSteps'
@@ -12,6 +12,7 @@ import { applySteps, restore } from '../../db/buildRun'
 import { checkpoint } from '../../db/engine'
 import { enginePort } from '../../db/pipelinePort'
 import { openBuild, refreshCatalog, useLab } from '../store'
+import { MoreScreen } from './MoreScreen'
 import { CleanScreen } from './CleanScreen'
 import { AnswerScreen } from './AnswerScreen'
 import { ConnectScreen } from './ConnectScreen'
@@ -172,7 +173,7 @@ function Shell() {
 
   const open = state.open
   const next = nextStep(state)
-  const num = STEP_IDS.indexOf(open) + 1
+  const num = open === MORE_STEP ? 0 : STEP_IDS.indexOf(open) + 1
 
   return (
     <div className="build-page absolute inset-0 z-30 flex flex-col min-w-0" data-testid="build">
@@ -191,7 +192,7 @@ function Shell() {
       ) : (
         <>
           <ol className="build-strip shrink-0" aria-label="Steps">
-            {STEP_IDS.map((s, i) => {
+            {STRIP_IDS.map((s, i) => {
               const st = statusOf(state, s)
               return (
                 <li key={s} style={{ display: 'contents' }}>
@@ -200,10 +201,10 @@ function Shell() {
                     disabled={st === 'locked'}
                     aria-current={s === open ? 'step' : undefined}
                     onClick={() => setState(openStep(state, s))}
-                    title={st === 'locked' ? 'Finish the step before it first' : STEP_LABEL[s]}
+                    title={st === 'locked' ? (s === MORE_STEP ? 'Finish Answer first' : 'Finish the step before it first') : s === MORE_STEP ? 'Optional: five more questions' : STEP_LABEL[s]}
                   >
                     <span className="build-chip-n">{st === 'done' ? <Check size={13} /> : st === 'locked' ? <Lock size={12} /> : i + 1}</span>
-                    <span className="build-chip-label">{STEP_LABEL[s]}</span>
+                    <span className="build-chip-label">{STEP_LABEL[s]}{s === MORE_STEP && <span className="build-chip-opt"> optional</span>}</span>
                   </button>
                 </li>
               )
@@ -211,7 +212,7 @@ function Shell() {
           </ol>
           <main className="build-body">
             <section className="build-card" data-testid={`build-step-${open}`}>
-              <div style={{ color: 'var(--muted)', fontSize: 12 }}>Step {num} of {STEP_IDS.length}</div>
+              <div style={{ color: 'var(--muted)', fontSize: 12 }}>{open === MORE_STEP ? 'Optional, after the five steps' : `Step ${num} of ${STEP_IDS.length}`}</div>
               <h2 className="font-semibold" style={{ fontSize: 20, margin: '2px 0 8px' }}>{STEP_LABEL[open]}</h2>
               {engine !== 'loading' && !ready && (
                 <div className="build-error" role="alert">
@@ -240,8 +241,10 @@ function Shell() {
                 />
               ) : open === 'dashboard' ? (
                 <DashboardScreen work={work} setWork={setWork} ready={ready} />
+              ) : open === 'answer' ? (
+                <AnswerScreen work={work} setWork={setWork} ready={ready} onMore={() => setState((s) => openStep(s, MORE_STEP))} />
               ) : (
-                <AnswerScreen work={work} setWork={setWork} ready={ready} />
+                <MoreScreen work={work} setWork={setWork} ready={ready} />
               )}
             </section>
           </main>

@@ -3,6 +3,7 @@
 
 import { emptyWork, readWork, type BuildWork } from './buildSteps'
 import { modelLinked, readLinks, type Link } from './buildLinks'
+import { moreDone } from './buildMore'
 
 // ---------------------------------------------------------------- the address
 
@@ -30,12 +31,19 @@ export function hashWithBuild(hash: string, id: string): string {
 export const STEP_IDS = ['connect', 'clean', 'model', 'dashboard', 'answer'] as const
 export type StepId = (typeof STEP_IDS)[number]
 
-export const STEP_LABEL: Record<StepId, string> = {
+/** The optional sixth step, after Answer: five more questions with the learner's own SQL (spec 5.5). It is not one of the five. */
+export const MORE_STEP = 'more' as const
+export type StripId = StepId | typeof MORE_STEP
+/** The chips of the step bar: the five, then the optional one. */
+export const STRIP_IDS: readonly StripId[] = [...STEP_IDS, MORE_STEP]
+
+export const STEP_LABEL: Record<StripId, string> = {
   connect: 'Connect',
   clean: 'Clean',
   model: 'Model',
   dashboard: 'Dashboard',
   answer: 'Answer',
+  more: 'More',
 }
 
 export type StepStatus = 'done' | 'current' | 'locked'
@@ -46,7 +54,7 @@ export interface BuildState {
   /** steps marked done */
   done: StepId[]
   /** the step on screen */
-  open: StepId
+  open: StripId
   /** what the learner did: sources connected, applied steps, the blank, cards passed (src/core/buildSteps.ts) */
   work: BuildWork
   /** the links the learner made (src/core/buildLinks.ts) */
@@ -63,6 +71,7 @@ export const emptyBuild = (): BuildState => ({ done: [], open: 'connect', work: 
 export const modelDone = (state: BuildState) => modelLinked(state.links)
 
 const isStep = (v: unknown): v is StepId => typeof v === 'string' && (STEP_IDS as readonly string[]).includes(v)
+const isStrip = (v: unknown): v is StripId => isStep(v) || v === MORE_STEP
 
 /** Done steps in order, with no gaps: a step counts only if every step before it is done. */
 function contiguous(done: Iterable<StepId>): StepId[] {
@@ -80,30 +89,33 @@ export function currentStep(state: BuildState): StepId {
   return STEP_IDS.find((s) => !state.done.includes(s)) ?? STEP_IDS[STEP_IDS.length - 1]
 }
 
-export function isUnlocked(state: BuildState, step: StepId): boolean {
+export function isUnlocked(state: BuildState, step: StripId): boolean {
+  if (step === MORE_STEP) return state.done.includes('answer')
   const i = STEP_IDS.indexOf(step)
   return i === 0 || state.done.includes(STEP_IDS[i - 1])
 }
 
-export function statusOf(state: BuildState, step: StepId): StepStatus {
+export function statusOf(state: BuildState, step: StripId): StepStatus {
+  if (step === MORE_STEP) return moreDone(state.work.more) ? 'done' : isUnlocked(state, step) ? 'current' : 'locked'
   if (state.done.includes(step)) return 'done'
   return isUnlocked(state, step) ? 'current' : 'locked'
 }
 
 /** Show a step; a locked one is refused (the state stays as it is). */
-export function openStep(state: BuildState, step: StepId): BuildState {
+export function openStep(state: BuildState, step: StripId): BuildState {
   return isUnlocked(state, step) ? { ...state, open: step } : state
 }
 
 /** Mark a step done (the open one by default), if it can be. Marking it again changes nothing. */
-export function markDone(state: BuildState, step: StepId = state.open): BuildState {
+export function markDone(state: BuildState, step: StripId = state.open): BuildState {
+  if (step === MORE_STEP) return state
   if (!isUnlocked(state, step) || state.done.includes(step)) return state
   return { ...state, done: contiguous([...state.done, step]) }
 }
 
 /** The step after the open one, once the open one is done. */
 export function nextStep(state: BuildState): StepId | null {
-  if (!state.done.includes(state.open)) return null
+  if (state.open === MORE_STEP || !state.done.includes(state.open)) return null
   return STEP_IDS[STEP_IDS.indexOf(state.open) + 1] ?? null
 }
 
@@ -136,7 +148,7 @@ export function readBuild(raw: string | null): BuildState {
       star,
       v1: done.includes('model') && !('links' in p),
     }
-    return isStep(p.open) ? openStep(state, p.open) : state
+    return isStrip(p.open) ? openStep(state, p.open) : state
   } catch {
     return emptyBuild()
   }

@@ -1,0 +1,25 @@
+/* The optional step More: the list of questions, the work area, the editor, pinned tiles. Colours come from the app's variables. */
+.more-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (min-width: 1000px) { .more-layout { grid-template-columns: 250px minmax(0, 1fr); } }
+.more-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.more-item { width: 100%; display: flex; align-items: center; gap: 10px; text-align: left; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--text); cursor: pointer; font: inherit; font-size: 13px; }
+.more-item:hover { background: var(--panel-2); }
+.more-item.is-open { border-color: var(--accent); background: var(--accent-soft); }
+.more-item.is-done .more-item-n { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+.more-item-n { flex: none; width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--line); border-radius: 50%; font-size: 11px; font-weight: 600; }
+.more-item-text { min-width: 0; overflow-wrap: anywhere; }
+.more-mark { color: var(--muted); font-size: 11.5px; }
+.more-work { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); min-width: 0; }
+.more-work.is-done { border-color: var(--accent); }
+.more-q { font-weight: 600; font-size: 15px; }
+.more-editor { border: 1px solid var(--line); border-radius: 6px; background: var(--code-bg); font-size: 13px; }
+.more-answer { display: flex; flex-direction: column; gap: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
+.more-ways { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.pin-q { color: var(--muted); font-weight: 400; font-size: 12px; }
+
+/* the two cards under "You built it" */
+.more-cards { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+@media (min-width: 900px) { .more-cards { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.more-card { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.more-card-title { font-weight: 600; }
+.build-chip-opt { color: var(--muted); font-size: 11px; }
