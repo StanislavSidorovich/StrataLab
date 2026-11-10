@@ -816,3 +816,35 @@ Not in these slices: P4 to P8, the linking screen (Б5), the filter, `#lab-done=
 3. **Linking screen, fact by id.** After L1/L2 (lookups by name and SKU), does the learner link the fact by `customer_id` / `product_id` on a second pass, or does "Build the star" do it? (4.2)
 4. **Customers without sales and products without sales** (99 and 18): shown as a calm note in v1 Model. Enough, or a small question ("why are 18 products never sold?" → pharmacy brands sold through sell-in only)?
 5. **SQL dialect shown.** Like the MVP, the generated SQL is DuckDB (`strptime`, `date_trunc`, `try_cast`). Fine for v1; a T-SQL view of a step would reuse the dialect translator later.
+
+## 12. Progress and demo (v0.34.0)
+
+The owner shows the build to guests, and wants to keep a finished run, start over, and walk someone through in minutes. Three places in localStorage, all in `src/core/buildProgress.ts`:
+
+| Place | Key | What |
+|---|---|---|
+| Own run | `stratalab.build.kaiyo-sales` | the learner's work, as before |
+| My saved run | `stratalab.build.kaiyo-sales.saved` | one slot: `{ at, state }` (state as the own run) |
+| Demo run | `stratalab.build.kaiyo-sales.demo` | its own slot; the own run and the saved run are never written in demo mode |
+
+### 12.1 The Progress menu
+
+One small button **Progress** in the build header (laptop width only), with a menu:
+
+1. **Start over.** Disabled when the own run is empty. Confirms ("Your current run is kept under 'My saved run'"), puts the run in the saved slot, resets the build to step 1 and rebuilds the tables as on a first visit (`resetWork`, then `restore` of the empty run). An empty run never replaces a saved one; a run that already is the saved one keeps its date.
+2. **My saved run.** Shows the date of the snapshot; disabled when there is none. Restoring replaces the work on the page; it asks first only when that work is not empty and is not the saved run itself (`restoreNeedsConfirm`, compared by `runKey`: the run without which step is open).
+3. **Demo mode.** Opens an empty demo run. In demo mode this item reads **Exit demo**; Start over and My saved run are disabled ("Not in demo mode").
+
+Every switch (Start over, restore, demo in and out) sets the state and rebuilds the tables from it (`resetWork` + `restore`), so a run never meets the tables of another. Old saves load as before (`readBuild`); no saved run or demo is invented.
+
+### 12.2 Demo mode
+
+- A thin banner "Demo: nothing here counts" with **Restart demo** and **Exit**. Exit returns the own run exactly as it was left (half done stays half done).
+- `#build=kaiyo-sales&demo=1` opens straight in demo mode (the demo slot, so a reload keeps the demo's progress; the menu always starts an empty one). The `demo=1` part is added and removed with the mode and dropped when the build is closed; a hashchange to such a link in the open page switches mode.
+- **Fill this step** on every open Clean card (W, P1 to P6, and the extra P4 and P7), the Model step, every Dashboard tile and every Answer and More question that is not done. **Fill to here** on every step tab but Connect: fills every step before it and opens it. A step is filled by changing the saved state (`src/core/buildFill.ts`, pure) and, when it touches the tables, rebuilding them from it, the same road as opening the page again.
+- What a unit puts in: W regions `Removed duplicates`; P1 products Trim and Uppercase on `sku_code`; P2 the blank `sale_date, customer_name, sku_code`; P3 customers Keep latest per `customer_id` by `updated_at`, newest; P5 `%d/%m/%Y`; P6 Decimal and Whole number with the comma; Model: P4 (Trim and Replace `Itiba` with `Ichiba` on `customer_name`) and P7 (Extract number on `region_id`) with it, links L1 to L3 and F1, F2, the star built; tiles `SUM(revenue)`, `date_trunc('month', sale_date)`, `customer_id`; answers and More questions their right answer (More also gets its solution SQL in the editor; it is not marked "with solution"). The sales steps are the same as `tests/buildSolved.ts` (now `src/core/buildSolved.ts`, which the test file re-exports). A learner's own try on the same problem is replaced, not piled up.
+- "Count it in Quaera" is hidden everywhere (Answer, More): nothing counts.
+
+### 12.3 Tests
+
+`tests/buildProgress.test.ts`: Start over and the saved run (round trip, empty page, same run, confirm rule), the demo slot never touching the own run or the saved run (both ways), the demo hash, every unit of Fill (one card, no piling up, replacing a try, tile, answer, More, Fill to here), old saved states (before Progress, v0.32.0 with the first given step, garbage), and on the real engine: a filled state restores to the right star and every tile passes; an empty run after `resetWork` leaves no `clean_` or `gold_` table.

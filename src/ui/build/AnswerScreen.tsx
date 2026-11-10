@@ -8,6 +8,7 @@ import { followQuaeraLink } from '../../core/quaeraLink'
 import type { BuildWork } from '../../core/buildSteps'
 import { ANSWERS, BUILD_RETURN_URL, type AnswerId, type AnswerQuestion } from '../../data/build/kaiyoSales'
 import { DashCopy } from './DashCopy'
+import { FillButton, useDemo } from './DemoContext'
 import './dashboard.css'
 import './more.css'
 
@@ -22,6 +23,7 @@ interface Props {
 export function AnswerScreen({ work, setWork, ready, onMore }: Props) {
   const [results, setResults] = useState<Partial<Record<AnswerId, AnswerResult>>>({})
   const { answers, answered } = work.dash
+  const { demo } = useDemo()
 
   const edit = (id: AnswerId, patch: Partial<{ pick: string; number: string }>) =>
     setWork((w) => ({ ...w, dash: { ...w.dash, answers: { ...w.dash.answers, [id]: { ...w.dash.answers[id], ...patch } } } }))
@@ -53,13 +55,13 @@ export function AnswerScreen({ work, setWork, ready, onMore }: Props) {
                 {moreCount(work.more) > 0 ? 'Continue' : 'Start'} <ArrowRight size={14} />
               </button>
             </div>
-            <div className="more-card" data-testid="answer-card-quaera">
+            {!demo && <div className="more-card" data-testid="answer-card-quaera">
               <div className="more-card-title">Back to Quaera</div>
               <div className="build-muted">Next there: the SQL track on GROUP BY and JOIN, the same moves you just made.</div>
               <a className="btn" href={BUILD_RETURN_URL} target="_blank" rel="noopener" onClick={(e) => followQuaeraLink(e, BUILD_RETURN_URL)} data-testid="answer-count">
                 Count it in Quaera <ExternalLink size={14} />
               </a>
-            </div>
+            </div>}
           </div>
         </div>
       )}
@@ -109,6 +111,7 @@ function Question({ q, passed, value, result, onEdit, onCheck }: {
         <button className="btn btn-primary" onClick={onCheck} data-testid={`answer-check-${q.id}`}>
           <CheckCircle2 size={14} /> Check
         </button>
+        <FillButton unit={{ step: 'answer', q: q.id }} hidden={passed} />
         {passed && (
           <span className="build-ok">
             <Check size={14} /> Right

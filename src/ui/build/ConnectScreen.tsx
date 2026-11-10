@@ -10,6 +10,7 @@ import { checkpoint } from '../../db/engine'
 import { enginePort } from '../../db/pipelinePort'
 import { refreshCatalog } from '../store'
 import { BuildTable, FoldedSql, fmtN, money, shortType } from './BuildTable'
+import { FillButton } from './DemoContext'
 
 type Props = { work: BuildWork; setWork: (f: (w: BuildWork) => BuildWork) => void; ready: boolean }
 
@@ -76,6 +77,7 @@ export function ConnectScreen({ work, setWork, ready }: Props) {
         Four sources are on the desk. Connect each one: Lab reads the file into a table of its own, as it came, nothing changed. This is the bronze layer.
       </p>
       {!ready && <div className="build-muted" role="status">Preparing the data…</div>}
+      <FillButton unit={{ step: 'connect' }} hidden={work.connected.length === BUILD_SOURCES.length} />
       {error && <div className="build-error" role="alert">{error}</div>}
       <div className="build-sources">
         {BUILD_SOURCES.map((s) => {

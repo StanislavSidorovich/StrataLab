@@ -14,6 +14,7 @@ import { addTab, refreshCatalog } from '../store'
 import { fmtN } from './BuildTable'
 import { LinkCanvas, type PendingLine, type TableView } from './LinkCanvas'
 import { LinkPanel, type Run, type SlotState } from './LinkPanel'
+import { FillButton } from './DemoContext'
 import './dashboard.css'
 import './linking.css'
 
@@ -43,6 +44,10 @@ export function ModelScreen(p: Props) {
   const { ready, rev, done, links, star, v1 } = p
   const legacy = v1 && done && !star && links.length === 0
   const [view, setView] = useState<Pass>(star || legacy ? 2 : 1)
+  // the star made from outside (the demo's Fill) opens its pass
+  useEffect(() => {
+    if (star) setView(2)
+  }, [star])
   const pass: Pass = star || legacy ? view : 1
   const working: Pass = star ? 2 : 1
   const live = !legacy && pass === working
@@ -205,6 +210,7 @@ export function ModelScreen(p: Props) {
   return (
     <div className="lk" data-testid="build-model" onKeyDown={(e) => e.key === 'Escape' && (setMany(EMPTY), setOne(EMPTY))}>
       <p className="build-lead">{legacy ? 'The cleaned tables are linked into a star: sales in the middle, customers and products around them.' : pass === 1 ? LINK_TEXT.lead1 : LINK_TEXT.lead2}</p>
+      <FillButton unit={{ step: 'model' }} hidden={done} />
       {error && <div className="build-error" role="alert">{error}</div>}
       {legacy && (
         <div className="lk-bridge" data-testid="model-old">

@@ -2,13 +2,15 @@
 // the Dashboard and the Answer are Б6. The rules are in src/core/build.ts. Under 768 px the whole
 // page is the "Open on a laptop" screen, as on the pipeline page.
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowRight, Check, Copy, Hammer, Laptop, Lock, Share2, X } from 'lucide-react'
-import { BUILD_ID, MORE_STEP, STEP_IDS, STEP_LABEL, STRIP_IDS, goNext, isUnlocked, loadBuild, markDone, modelDone, nextStep, openStep, saveBuild, statusOf } from '../../core/build'
+import { ArrowRight, Check, Copy, Hammer, Laptop, Lock, RotateCcw, Share2, Wand2, X } from 'lucide-react'
+import { BUILD_ID, BUILD_KEY, MORE_STEP, STEP_IDS, STEP_LABEL, STRIP_IDS, demoFromHash, emptyBuild, goNext, hashWithDemo, isUnlocked, markDone, modelDone, nextStep, openStep, saveBuild, statusOf } from '../../core/build'
+import { canFillBefore, fillBefore, fillBeforeTouchesTables, fillUnit, touchesTables, type FillUnit } from '../../core/buildFill'
+import { DEMO_KEY, isEmptyRun, loadSaved, loadSlot, restoreNeedsConfirm, restoreSaved, startOver, writeSaved, type Saved } from '../../core/buildProgress'
 import type { Link } from '../../core/buildLinks'
 import { answersDone, dashboardDone } from '../../core/buildDashboard'
 import { cleanDone, type BuildWork, type StepSpec } from '../../core/buildSteps'
 import { BUILD_RETURN_URL, BUILD_SOURCES, type BuildSourceId } from '../../data/build/kaiyoSales'
-import { applySteps, restore, salesLock } from '../../db/buildRun'
+import { applySteps, prepare, resetWork, restore, salesLock } from '../../db/buildRun'
 import { checkpoint } from '../../db/engine'
 import { enginePort } from '../../db/pipelinePort'
 import { openBuild, refreshCatalog, useLab } from '../store'
@@ -20,6 +22,9 @@ import { DashboardScreen } from './DashboardScreen'
 import { ModelScreen } from './ModelScreen'
 import './build.css'
 import './clean.css'
+import './progress.css'
+import { DemoContext } from './DemoContext'
+import { ProgressMenu } from './ProgressMenu'
 
 /** Where the finish will lead back to. The trainer does not read this format yet, so nothing links here. */
 export const RETURN_URL = BUILD_RETURN_URL
@@ -96,10 +101,15 @@ function Shell() {
     document.documentElement.classList.add('build-open')
     return () => document.documentElement.classList.remove('build-open')
   }, [])
-  const [state, setState] = useState(loadBuild)
-  useEffect(() => saveBuild(state), [state])
+  // two places for the work: the learner's own run and the demo run; the page shows one of them and writes only to that one
+  const [demo, setDemo] = useState(() => demoFromHash(location.hash))
+  const [state, setState] = useState(() => loadSlot(demoFromHash(location.hash) ? DEMO_KEY : BUILD_KEY))
+  useEffect(() => saveBuild(state, demo ? DEMO_KEY : BUILD_KEY), [state, demo])
   const stateRef = useRef(state)
   stateRef.current = state
+  const demoRef = useRef(demo)
+  demoRef.current = demo
+  const [saved, setSaved] = useState<Saved | null>(loadSaved)
 
   /** [Error] cells in the clean sales (spec 3.6): the Dashboard stays locked while there are any, and a step bar already on it goes back to Clean */
   const refreshErrors = useCallback(async () => {
@@ -120,7 +130,10 @@ function Shell() {
     let alive = true
     setEngine('loading')
     const now = stateRef.current
-    restore(enginePort, now.work, { links: now.links, star: now.star, done: now.done.includes('model') })
+    // the tables are made again from the state on the page, so a run put in (or a start over) never meets the tables of another
+    prepare(enginePort)
+      .then(() => resetWork(enginePort))
+      .then(() => restore(enginePort, now.work, { links: now.links, star: now.star, done: now.done.includes('model') }))
       .then(async () => {
         await checkpoint()
         await refreshCatalog()
@@ -136,6 +149,51 @@ function Shell() {
     }
   }, [wide, tries])
   const ready = engine === 'ready'
+
+  // Progress: Start over, My saved run, Demo mode, and the Fill buttons of demo mode (src/core/buildProgress.ts, buildFill.ts)
+  const reload = useCallback(() => {
+    setCleanFocus(undefined)
+    // not ready in the same render that brings the new state: a screen must not read tables that are being made again
+    setEngine('loading')
+    setTries((n) => n + 1)
+  }, [])
+  const startAgain = () => {
+    const r = startOver(stateRef.current, saved, Date.now())
+    if (r.saved && r.saved !== saved) {
+      writeSaved(r.saved)
+      setSaved(r.saved)
+    }
+    setState(r.state)
+    reload()
+  }
+  const restoreRun = () => {
+    if (!saved) return
+    setState(restoreSaved(saved))
+    reload()
+  }
+  const goDemo = useCallback((on: boolean) => {
+    if (on === demoRef.current) return
+    history.replaceState(null, '', location.pathname + location.search + hashWithDemo(location.hash, on))
+    setDemo(on)
+    setState(on ? emptyBuild() : loadSlot(BUILD_KEY))
+    setEngine('loading')
+    setTries((n) => n + 1)
+    setCleanFocus(undefined)
+  }, [])
+  // a link to #build=kaiyo-sales&demo=1 followed in the open page
+  useEffect(() => {
+    const on = () => goDemo(demoFromHash(location.hash))
+    window.addEventListener('hashchange', on)
+    return () => window.removeEventListener('hashchange', on)
+  }, [goDemo])
+  const fill = useCallback((unit: FillUnit) => {
+    setState((s) => fillUnit(s, unit))
+    if (touchesTables(unit)) reload()
+  }, [reload])
+  const fillTo = (step: (typeof STRIP_IDS)[number]) => {
+    setState((s) => fillBefore(s, step))
+    if (fillBeforeTouchesTables(step)) reload()
+  }
 
   // Model: the links, Build the star, Try it, and the trips to Clean and back
   const [cleanFocus, setCleanFocus] = useState<BuildSourceId | undefined>(undefined)
@@ -189,6 +247,7 @@ function Shell() {
   const num = open === MORE_STEP ? 0 : STEP_IDS.indexOf(open) + 1
 
   return (
+    <DemoContext.Provider value={{ demo, ready: ready && engine === 'ready', fill }}>
     <div className="build-page absolute inset-0 z-30 flex flex-col min-w-0" data-testid="build">
       <header className="build-head shrink-0 flex items-center gap-3 px-4 py-2">
         <Hammer size={18} style={{ color: 'var(--accent)' }} />
@@ -196,10 +255,31 @@ function Shell() {
           <div className="font-semibold">Build it by hand: Kaiyo Trading sales</div>
           <div style={{ color: 'var(--muted)', fontSize: 12 }}>From the file to a decision, in five steps</div>
         </div>
+        {wide && (
+          <ProgressMenu
+            demo={demo}
+            saved={saved}
+            empty={!demo && isEmptyRun(state)}
+            restoreAsks={!!saved && restoreNeedsConfirm(state, saved)}
+            onStartOver={startAgain}
+            onRestore={restoreRun}
+            onDemo={() => goDemo(true)}
+            onExitDemo={() => goDemo(false)}
+          />
+        )}
         <button className="btn btn-ghost" onClick={() => openBuild(null)} aria-label="Close the build" title="Back to the workbench">
           <X size={16} />
         </button>
       </header>
+      {demo && wide && (
+        <div className="demo-banner" role="status" data-testid="demo-banner">
+          <Wand2 size={14} style={{ color: 'var(--accent)' }} />
+          <span><b>Demo:</b> nothing here counts. Your own run is kept as it was.</span>
+          <span style={{ flex: 1 }} />
+          <button className="btn" onClick={() => { setState(emptyBuild()); reload() }} data-testid="demo-restart"><RotateCcw size={12} /> Restart demo</button>
+          <button className="btn" onClick={() => goDemo(false)} data-testid="demo-exit">Exit</button>
+        </div>
+      )}
       {!wide ? (
         <PhoneNotice />
       ) : (
@@ -208,7 +288,7 @@ function Shell() {
             {STRIP_IDS.map((s, i) => {
               const st = statusOf(state, s)
               return (
-                <li key={s} style={{ display: 'contents' }}>
+                <li key={s} className={demo ? 'build-chip-wrap' : undefined} style={demo ? undefined : { display: 'contents' }}>
                   <button
                     className={`build-chip is-${st}${s === open ? ' is-open' : ''}`}
                     disabled={st === 'locked'}
@@ -219,6 +299,11 @@ function Shell() {
                     <span className="build-chip-n">{st === 'done' ? <Check size={13} /> : st === 'locked' ? <Lock size={12} /> : i + 1}</span>
                     <span className="build-chip-label">{STEP_LABEL[s]}{s === MORE_STEP && <span className="build-chip-opt"> optional</span>}</span>
                   </button>
+                  {demo && canFillBefore(s) && (
+                    <button className="demo-fill-to" disabled={!ready} onClick={() => fillTo(s)} title="Demo: fill every step before this one and open it" data-testid={`fill-to-${s}`}>
+                      <Wand2 size={11} /> <span>Fill to here</span>
+                    </button>
+                  )}
                 </li>
               )
             })}
@@ -271,5 +356,6 @@ function Shell() {
         </>
       )}
     </div>
+    </DemoContext.Provider>
   )
 }

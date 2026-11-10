@@ -1,0 +1,16 @@
+/* The Progress menu, its confirm box, the demo banner and the Fill buttons of the build page. Colours come from the app's variables. */
+.pm-wrap { position: relative; }
+.pm-confirm-back { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.35); }
+.pm-confirm { width: min(440px, calc(100vw - 32px)); padding: 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--text); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25); }
+.pm-confirm h3 { margin: 0 0 6px; font-size: 16px; }
+.pm-confirm p { margin: 0 0 14px; color: var(--muted); font-size: 13.5px; }
+.pm-confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.demo-banner { display: flex; align-items: center; gap: 10px; padding: 4px 16px; background: var(--accent-soft); color: var(--text); border-bottom: 1px solid var(--accent); font-size: 12.5px; }
+.demo-banner b { color: var(--accent); }
+.demo-banner .btn { padding: 2px 8px; font-size: 12px; }
+.demo-fill { align-self: flex-start; border-style: dashed; border-color: var(--accent); color: var(--accent); }
+.build-chip-wrap { flex: 1 1 0; min-width: 0; display: flex; align-items: stretch; gap: 2px; }
+.build-chip-wrap .build-chip { flex: 1 1 0; }
+.demo-fill-to { flex: none; display: inline-flex; align-items: center; gap: 3px; padding: 0 6px; border: 1px dashed var(--accent); border-radius: 8px; background: var(--bg); color: var(--accent); font: inherit; font-size: 11px; cursor: pointer; }
+.demo-fill-to:disabled { opacity: 0.5; cursor: not-allowed; }
+@media (max-width: 1100px) { .demo-fill-to span { display: none; } }

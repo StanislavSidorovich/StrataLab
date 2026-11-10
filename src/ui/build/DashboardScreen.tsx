@@ -13,6 +13,7 @@ import { enginePort } from '../../db/pipelinePort'
 import { ChartView } from '../Chart'
 import { BarChart } from './BarChart'
 import { BuildTable, money } from './BuildTable'
+import { FillButton } from './DemoContext'
 import { PinnedGrid } from './PinTiles'
 import { StarPanel } from './StarPanel'
 import './dashboard.css'
@@ -150,6 +151,7 @@ function Tile({ card, className, blank, onBlank, passed, result, busy, ready, on
         <button className="btn btn-primary" disabled={!ready} onClick={onRun} data-testid={`tile-run-${card.id}`}>
           {busy ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />} Run and check
         </button>
+        <FillButton unit={{ step: 'dashboard', tile: card.id }} hidden={passed} />
         {card.hints.length > 0 && hints < card.hints.length && (
           <button className="btn" onClick={() => setHints(hints + 1)}>
             <Lightbulb size={14} /> {hints === 0 ? 'Hint' : 'Another hint'}

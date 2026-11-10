@@ -13,6 +13,7 @@ import { AffectedRows } from './AffectedRows'
 import { fmtN } from './BuildTable'
 import { StepsPanel } from './StepsPanel'
 import { WatchRegions } from './WatchRegions'
+import { FillButton } from './DemoContext'
 import './clean.css'
 import './errors.css'
 
@@ -87,6 +88,7 @@ export function CleanScreen({ work, setWork, ready, rebuild, rev, focus, onBackT
                   onDone={() => pass('W')}
                 />
               )}
+              {open && c.id === 'W' && <FillButton unit={{ step: 'clean', card: 'W' }} />}
               {open && c.id !== 'W' && (
                 <>
                   <p style={{ margin: 0 }}>{c.text}</p>
@@ -103,6 +105,7 @@ export function CleanScreen({ work, setWork, ready, rebuild, rev, focus, onBackT
                   {c.id === 'P5' && <DateStep work={work} setWork={setWork} ready={ready} rebuild={rebuild} errs={errs} onReport={(r) => setReport((x) => ({ ...x, P5: r }))} />}
                   {c.id === 'P6' && <NumberNote work={work} errs={errs} />}
                   <Hints card={c} level={level} onMore={() => setHints((h) => ({ ...h, [c.id]: level + 1 }))} />
+                  <FillButton unit={{ step: 'clean', card: c.id }} />
                   {c.id !== 'P2' && <CheckBar card={c} work={work} ready={ready} report={last} onReport={(r) => setReport((x) => ({ ...x, [c.id]: r }))} />}
                   {last && <Verdict report={last} />}
                   {last?.ok && (
@@ -307,6 +310,7 @@ function ExtraCard({ id, work, setWork, ready, onFocus, onBack, text, where, che
           {busy ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />} Check
         </button>
       </div>
+      <FillButton unit={{ step: 'clean', card: id }} hidden={passed} />
       {report && <Verdict report={report} />}
       {(passed || report?.ok) && (
         <button className="btn btn-primary" onClick={onBack} data-testid="clean-back-model">

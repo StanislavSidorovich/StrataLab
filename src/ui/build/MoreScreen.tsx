@@ -1,7 +1,7 @@
 // The optional step More (spec 5.5): five more questions from the Head of Sales, each answered with the learner's own SQL
 // over the star. A list of the five on the left; the question, a free editor, Run, the result, Pin to the dashboard, the
 // answer field and the two hints on the right. "Show a solution" counts the question as done, marked "with solution".
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Table } from 'apache-arrow'
 import { Check, CheckCircle2, ExternalLink, Lightbulb, Loader2, Pin, Play } from 'lucide-react'
 import { checkMoreAnswer, moreDone, moreSqlProblem, pinnable, removePin, setPin, type MoreWork } from '../../core/buildMore'
@@ -15,6 +15,7 @@ import { readableError } from '../../core/sqlPractice'
 import { kindOf } from '../Chart'
 import { BuildTable } from './BuildTable'
 import { MoreEditor } from './MoreEditor'
+import { FillButton, useDemo } from './DemoContext'
 import { StarPanel } from './StarPanel'
 import './dashboard.css'
 import './more.css'
@@ -32,6 +33,13 @@ export function MoreScreen({ work, setWork, ready }: Props) {
   const more = work.more
   const [sel, setSel] = useState<MoreId>(() => MORE_IDS.find((id) => !more.done.includes(id)) ?? 'K1')
   const setMore = (f: (m: MoreWork) => MoreWork) => setWork((w) => ({ ...w, more: f(w.more) }))
+  // in demo mode a question filled in moves on to the next one that is open
+  const { demo } = useDemo()
+  useEffect(() => {
+    const next = MORE_IDS.find((id) => !more.done.includes(id))
+    if (demo && next && more.done.includes(sel)) setSel(next)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [more.done.join(',')])
   const [noRegion, setNoRegion] = useState(false)
   const onTables = (t: GoldTable[]) => setNoRegion(t.length > 0 && !t.find((x) => x.table === 'gold_dim_customer')?.columns.some((c) => c.name === 'region_name'))
 
@@ -72,6 +80,8 @@ export function MoreScreen({ work, setWork, ready }: Props) {
 
 /** The two ways out of the build, as under "You built it". */
 export function WaysOut() {
+  const { demo } = useDemo()
+  if (demo) return null
   return (
     <div className="more-ways">
       <a className="btn btn-primary" href={BUILD_RETURN_URL} target="_blank" rel="noopener" onClick={(e) => followQuaeraLink(e, BUILD_RETURN_URL)} data-testid="more-count">
@@ -194,6 +204,7 @@ function Work({ id, work, ready, setMore, noRegion }: { id: MoreId; work: BuildW
           <button className="btn btn-primary" onClick={doCheck} data-testid="more-check">
             <CheckCircle2 size={14} /> Check
           </button>
+          <FillButton unit={{ step: 'more', q: id }} hidden={done} />
           {done && (
             <span className="build-ok" data-testid="more-right">
               <Check size={14} /> {more.solved.includes(id) ? 'Done, with solution' : 'Right'}

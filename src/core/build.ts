@@ -16,8 +16,17 @@ export function buildFromHash(hash: string): string | null {
   return id && KNOWN.includes(id) ? id : null
 }
 
+/** `#build=kaiyo-sales&demo=1` opens the build in demo mode (docs spec, "Progress and demo"). */
+export const demoFromHash = (hash: string): boolean => !!buildFromHash(hash) && /(?:^#|&)demo=1(?:&|$)/i.test(hash)
+
+export function hashWithDemo(hash: string, on: boolean): string {
+  const rest = hash.replace(/^#/, '').split('&').filter((p) => p && !/^demo=/i.test(p))
+  if (on) rest.push('demo=1')
+  return rest.length ? '#' + rest.join('&') : ''
+}
+
 export function hashWithoutBuild(hash: string): string {
-  const rest = hash.replace(/^#/, '').split('&').filter((p) => p && !/^build=/i.test(p))
+  const rest = hash.replace(/^#/, '').split('&').filter((p) => p && !/^build=/i.test(p) && !/^demo=/i.test(p))
   return rest.length ? '#' + rest.join('&') : ''
 }
 
@@ -166,10 +175,10 @@ export function loadBuild(): BuildState {
   }
 }
 
-export function saveBuild(state: BuildState) {
+export function saveBuild(state: BuildState, key: string = BUILD_KEY) {
   try {
     const { errors: _errors, ...kept } = state
-    localStorage.setItem(BUILD_KEY, JSON.stringify(kept))
+    localStorage.setItem(key, JSON.stringify(kept))
   } catch {
     /* not kept: the steps start again next time */
   }
