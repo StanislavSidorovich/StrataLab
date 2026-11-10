@@ -22,19 +22,20 @@ describe('followQuaeraLink', () => {
     expect(QUAERA_WINDOW).toBe('quaera-quaera')
     expect(e.prevented).toBe(true)
   })
-  it('sends the Quaera tab that opened Lab to the address, without a new window', () => {
+  it('sends the address to the Quaera tab that opened Lab, without a new window', () => {
     const calls: [string, string][] = []
-    const opener = { location: { href: 'https://quaera.app/?roles=map' }, focused: false, focus() { this.focused = true } }
+    const posted: [unknown, string][] = []
+    const opener = { focused: false, postMessage(m: unknown, o: string) { posted.push([m, o]) }, focus() { this.focused = true } }
     const e = click()
     expect(followQuaeraLink(e, url, env({ calls, quaeraOpener: () => opener }))).toBe(true)
-    expect(opener.location.href).toBe(url)
+    expect(posted).toEqual([[{ type: 'quaera:go', url }, 'https://quaera.app']])
     expect(opener.focused).toBe(true)
     expect(calls).toEqual([])
     expect(e.prevented).toBe(true)
   })
-  it('falls back to the named window when the opener cannot be navigated', () => {
+  it('falls back to the named window when the opener cannot take the message', () => {
     const calls: [string, string][] = []
-    const opener = { get location(): { href: string } { throw new Error('gone') }, focus() {} }
+    const opener = { postMessage() { throw new Error('gone') }, focus() {} }
     const e = click()
     expect(followQuaeraLink(e, url, env({ calls, quaeraOpener: () => opener }))).toBe(true)
     expect(calls).toEqual([[url, QUAERA_WINDOW]])
