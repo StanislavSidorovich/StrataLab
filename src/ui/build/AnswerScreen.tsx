@@ -1,12 +1,12 @@
 // Step 5 of the build page: the Answer (spec 5.4). Three questions from the Head of Sales; the learner reads the numbers
 // off the dashboard and types them. The step is done when all three are right.
 import { useState } from 'react'
-import { ArrowRight, Check, CheckCircle2, ExternalLink } from 'lucide-react'
+import { ArrowRight, Check, CheckCircle2 } from 'lucide-react'
 import { answersDone, checkAnswer, type AnswerResult } from '../../core/buildDashboard'
 import { moreCount } from '../../core/buildMore'
-import { followQuaeraLink } from '../../core/quaeraLink'
 import type { BuildWork } from '../../core/buildSteps'
 import { ANSWERS, BUILD_RETURN_URL, MORE_IDS, type AnswerId, type AnswerQuestion } from '../../data/build/kaiyoSales'
+import { CountInQuaera } from './CountInQuaera'
 import { DashCopy } from './DashCopy'
 import { FillButton, useDemo } from './DemoContext'
 import './dashboard.css'
@@ -48,20 +48,19 @@ export function AnswerScreen({ work, setWork, ready, onMore }: Props) {
         <div className="build-quick" data-testid="answer-done">
           <b>You built it.</b> From four raw files to a number, a month and a chain, with every step yours: connected, cleaned, modelled, shown. Minori carries the first half of 2026.
           <div className="more-cards">
-            <div className="more-card" data-testid="answer-card-more">
-              <div className="more-card-title">Keep going here: six more questions from the Head of Sales</div>
-              <div className="build-muted">Answer them with SQL you write yourself (the last one with the slicers), and pin the results to your dashboard. {moreCount(work.more)} of {MORE_IDS.length} done.</div>
-              <button className="btn btn-primary" onClick={onMore} data-testid="answer-more">
-                {moreCount(work.more) > 0 ? 'Continue' : 'Start'} <ArrowRight size={14} />
-              </button>
-            </div>
             {!demo && <div className="more-card" data-testid="answer-card-quaera">
               <div className="more-card-title">Back to Quaera</div>
               <div className="build-muted">Next there: the SQL track on GROUP BY and JOIN, the same moves you just made.</div>
-              <a className="btn" href={BUILD_RETURN_URL} target="_blank" rel="noopener" onClick={(e) => followQuaeraLink(e, BUILD_RETURN_URL)} data-testid="answer-count">
-                Count it in Quaera <ExternalLink size={14} />
-              </a>
+              <CountInQuaera url={BUILD_RETURN_URL} primary testid="answer-count" />
             </div>}
+            <div className="more-card" data-testid="answer-card-more">
+              <div className="more-card-title">Keep going here: six more questions from the Head of Sales</div>
+              <div className="build-muted">Answer them with SQL you write yourself (the last one with the slicers), and pin the results to your dashboard. {moreCount(work.more)} of {MORE_IDS.length} done.</div>
+              <div className="build-muted">Needs JOIN and GROUP BY; the Quaera SQL track teaches them.</div>
+              <button className={`btn${demo ? ' btn-primary' : ''}`} onClick={onMore} data-testid="answer-more">
+                {moreCount(work.more) > 0 ? 'Continue' : 'Start'} <ArrowRight size={14} />
+              </button>
+            </div>
           </div>
         </div>
       )}

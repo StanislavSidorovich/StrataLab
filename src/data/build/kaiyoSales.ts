@@ -539,6 +539,10 @@ export const ANSWERS: readonly AnswerQuestion[] = [
 
 /** Where the finish leads back to: the trainer counts the build (quaera.app reads `#lab-done=build:<id>`). */
 export const BUILD_RETURN_URL = 'https://quaera.app/#lab-done=build:kaiyo-sales'
+/** Every question of More (K1-K6) is right: its own key. */
+export const MORE_RETURN_URL = 'https://quaera.app/#lab-done=build:kaiyo-sales-more'
+/** A green Refresh run and R1 right: its own key. */
+export const REFRESH_RETURN_URL = 'https://quaera.app/#lab-done=build:kaiyo-sales-refresh'
 
 // ---------------------------------------------------------------- More: six more questions (spec 5.5, 5.6)
 

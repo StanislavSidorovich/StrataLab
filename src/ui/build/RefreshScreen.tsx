@@ -6,13 +6,15 @@ import { ArrowRight, Check, CheckCircle2, FolderOpen, Lightbulb, Loader2, Play }
 import { checkR1, nextRunNumber, pushRun, runGreen, runLine, statusText, STAGE_LABEL, type JournalRow } from '../../core/buildRefresh'
 import { CLEAN_COLUMNS, checkFormat, datesSql, type BuildWork } from '../../core/buildSteps'
 import type { ResultData } from '../../core/check'
-import { CONNECT_SQL, SALES_PATTERN, sourceById, type SalesMode } from '../../data/build/kaiyoSales'
+import { CONNECT_SQL, REFRESH_RETURN_URL, SALES_PATTERN, sourceById, type SalesMode } from '../../data/build/kaiyoSales'
 import { JULY_FILE, REFRESH_TEXT } from '../../data/build/refreshData'
 import { runRefresh, type RefreshModel } from '../../db/buildRefresh'
 import { enginePort } from '../../db/pipelinePort'
 import { R1_QUESTION } from '../../data/build/refreshData'
 import { BuildTable, fmtN } from './BuildTable'
-import { FillButton } from './DemoContext'
+import { CountInQuaera } from './CountInQuaera'
+import { FillButton, useDemo } from './DemoContext'
+import './more.css'
 import './refresh.css'
 
 interface Props {
@@ -35,6 +37,7 @@ function listSql(): string {
 
 export function RefreshScreen({ work, setWork, ready, model, onRan, onOpen, onDashboard }: Props) {
   const r = work.refresh
+  const { demo } = useDemo()
   const [running, setRunning] = useState(false)
   const [live, setLive] = useState<JournalRow[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -242,6 +245,11 @@ export function RefreshScreen({ work, setWork, ready, model, onRan, onOpen, onDa
       {r.done && (
         <div className="build-quick" data-testid="refresh-done">
           <b>Refreshed.</b> You wrote the steps once, and they ran on a file you had never seen. When the file brought something new, the journal showed where, and one change fixed it for every month after.
+          {!demo && (
+            <div className="more-ways">
+              <CountInQuaera url={REFRESH_RETURN_URL} primary testid="refresh-count" />
+            </div>
+          )}
         </div>
       )}
     </div>

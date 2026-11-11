@@ -3,17 +3,17 @@
 // answer field and the two hints on the right. "Show a solution" counts the question as done, marked "with solution".
 import { useEffect, useRef, useState } from 'react'
 import type { Table } from 'apache-arrow'
-import { ArrowRight, Check, CheckCircle2, ExternalLink, Lightbulb, Loader2, Pin, Play } from 'lucide-react'
+import { ArrowRight, Check, CheckCircle2, Lightbulb, Loader2, Pin, Play } from 'lucide-react'
 import { checkMoreAnswer, moreDone, moreSqlProblem, pinnable, removePin, setPin, type MoreWork } from '../../core/buildMore'
-import { followQuaeraLink } from '../../core/quaeraLink'
 import type { BuildWork } from '../../core/buildSteps'
 import type { GoldTable } from '../../db/buildRun'
-import { BUILD_RETURN_URL, MORE_IDS, MORE_QUESTIONS, moreQuestion, type MoreId } from '../../data/build/kaiyoSales'
+import { MORE_IDS, MORE_QUESTIONS, MORE_RETURN_URL, moreQuestion, type MoreId } from '../../data/build/kaiyoSales'
 import { query } from '../../db/engine'
 import { resultRows } from '../../db/export'
 import { readableError } from '../../core/sqlPractice'
 import { kindOf } from '../Chart'
 import { BuildTable } from './BuildTable'
+import { CountInQuaera } from './CountInQuaera'
 import { MoreEditor } from './MoreEditor'
 import { FillButton, useDemo } from './DemoContext'
 import { SlicerBar } from './SlicerBar'
@@ -87,10 +87,8 @@ export function WaysOut() {
   if (demo) return null
   return (
     <div className="more-ways">
-      <a className="btn btn-primary" href={BUILD_RETURN_URL} target="_blank" rel="noopener" onClick={(e) => followQuaeraLink(e, BUILD_RETURN_URL)} data-testid="more-count">
-        Count it in Quaera <ExternalLink size={14} />
-      </a>
-      <span className="build-muted">Next there: the SQL track on GROUP BY and JOIN, the same moves you just made.</span>
+      <CountInQuaera url={MORE_RETURN_URL} primary testid="more-count" />
+      <span className="build-muted">Counts the six more questions. Next there: the SQL track on GROUP BY and JOIN, the same moves you just made.</span>
     </div>
   )
 }

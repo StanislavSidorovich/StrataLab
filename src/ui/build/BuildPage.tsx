@@ -30,7 +30,7 @@ import { DemoContext } from './DemoContext'
 import { SliceContext } from './SliceContext'
 import { ProgressMenu } from './ProgressMenu'
 
-/** Where the finish will lead back to. The trainer does not read this format yet, so nothing links here. */
+/** Where the finish leads back to (`#lab-done=build:kaiyo-sales`; More and Refresh have keys of their own). */
 export const RETURN_URL = BUILD_RETURN_URL
 
 export function BuildPage() {
@@ -274,9 +274,9 @@ function Shell() {
         <Hammer size={18} style={{ color: 'var(--accent)' }} />
         <div className="flex-1 min-w-0">
           <div className="font-semibold">Build it by hand: Kaiyo Trading sales</div>
-          <div style={{ color: 'var(--muted)', fontSize: 12 }}>From the file to a decision, in five steps</div>
+          <div style={{ color: 'var(--muted)', fontSize: 12 }}>From the file to a decision: five steps, two optional</div>
         </div>
-        {wide && (
+        {wide && (demo || state.done.includes('connect') || !!saved) && (
           <ProgressMenu
             demo={demo}
             saved={saved}

@@ -678,8 +678,10 @@ Why: after Answer the learner asked "and where now?". The owner's frame: a loop,
 
 **Where.** Under the "You built it" block on the Answer step, two cards side by side (stacked on narrow):
 
-1. **Keep going here: five more questions from the Head of Sales.** Opens a sixth, optional step **More** in the step bar (after Answer, marked "optional", unlocked when Answer is done; the build stays "5 of 5" without it).
-2. **Back to Quaera.** The existing "Count it in Quaera" link, plus one line: "Next there: the SQL track on GROUP BY and JOIN, the same moves you just made." (no new link format).
+1. **Back to Quaera** (v0.37.0: first, the primary button). "Count it in Quaera" (`#lab-done=build:kaiyo-sales`) and the line "Next there: the SQL track on GROUP BY and JOIN, the same moves you just made."
+2. **Keep going here: six more questions from the Head of Sales** (second, a plain button; primary only in demo mode, where card 1 is hidden). Opens the optional step **More** (after Answer, marked "optional", unlocked when Answer is done; the build stays "5 of 5" without it). The card says "Needs JOIN and GROUP BY; the Quaera SQL track teaches them."
+
+**The click (v0.37.0).** With the trainer as opener, "Count it in Quaera" posts `quaera:go` and waits 400 ms for `{ type: 'quaera:done', key }` from the trainer's origin (key = the text after `lab-done=`). On the reply "Counted in Quaera ✓" stands next to the button; on silence the named window `quaera-quaera` is opened, as without the handshake. Accepted origins: `https://quaera.app`, `https://www.quaera.app`, `https://querium.pages.dev`. Without an opener nothing is waited for.
 
 **The More step.** One question at a time, a list of five on the left (done marks), the work on the right:
 
@@ -703,7 +705,7 @@ K4 needs **one** join, not two: after "Build the star" `gold_dim_customer` alrea
 
 Wrong answers with a line (all in `MORE_QUESTIONS`): K1 618 (sales sent twice), 570 (count of revenue), 314,906.13 (the revenue); K2 Aqualis / 80,977.09; K3 43, 6,497, 6,714; K4 Aichi / 35,819.43; K5 Minori #1027 / 19,893.72.
 
-**Done.** All five: a short block "Five more, all yours." with the same two ways out. No `#lab-done=` for More in this version (the hub decides later whether the trainer counts it).
+**Done.** All five: a short block "Five more, all yours." with the same two ways out. **v0.37.0:** when K1 to K6 are all done, this block carries its own "Count it in Quaera" sending `#lab-done=build:kaiyo-sales-more` (not in demo mode).
 
 **Not now:** learner-chosen chart types, saving queries as files.
 
@@ -723,7 +725,7 @@ The chains tile ignores Chain: all bars stay, the picked one is lit, the others 
 
 ### 5.7 Refresh (v0.36.0; hub design 2026-11-11, code Sonnet)
 
-Why: the point of steps written once is that they run on every new file. After Answer a seventh optional chip **Refresh** (after More) puts that to the test: "It is August. The distributor sent `export_2026-07.csv`." Unlocked with Answer, like More; done when R1 is right; the build stays "5 of 5" without it. No `#lab-done=` key.
+Why: the point of steps written once is that they run on every new file. After Answer a seventh optional chip **Refresh** (after More) puts that to the test: "It is August. The distributor sent `export_2026-07.csv`." Unlocked with Answer, like More; done when R1 is right; the build stays "5 of 5" without it. **v0.37.0:** once R1 is right (after a green run) the "Refreshed." block carries its own "Count it in Quaera" sending `#lab-done=build:kaiyo-sales-refresh` (not in demo mode).
 
 **The file.** `src/data/build/julyExport.ts` makes it, deterministically (mulberry32, seed 20260703), from the stores and SKUs of `ref_sales` (45 and 29, sorted) and the list prices of `src_product`; `prepare` registers it as `build_kaiyo/sales/export_2026-07.csv` (the 34th text), written by `exportText` like the other 30; `raw_id` continues at 3,111. 104 true sales on distinct (date, store, SKU), units 1 to 10, revenue = units × list price × 0.85 to 1.00; 8 of them sent twice (the copy right after the line), so **112 lines**, ids 3,111 to 3,222. Dirt the learner's steps already handle: the 8 copies (P2), decimal commas (about 45% of revenues and 30% of units, written `3,0`), the three spellings `2026-07-03`, `03.07.2026`, `03/07/2026`. Odd values (P8): one sale without revenue, one without units, three returns. **The one new thing: dates written `2026/07/03`** (23 lines, 21 after the dedup): the learner's step sends every date with a `/` to its day-first branch, `try_strptime('2026/07/03', '%d/%m/%Y')` is NULL, so the step turns them into [Error].
 
@@ -868,7 +870,7 @@ The owner shows the build to guests, and wants to keep a finished run, start ove
 
 ### 12.1 The Progress menu
 
-One small button **Progress** in the build header (laptop width only), with a menu:
+One small button **Progress** in the build header (laptop width only), with a menu. **v0.37.0:** it is hidden until Connect is done (a first-time visitor sees no controls to learn), except in demo mode and when a saved run exists; `&demo=1` still opens demo mode, and once the menu shows it has Demo mode:
 
 1. **Start over.** Disabled when the own run is empty. Confirms ("Your current run is kept under 'My saved run'"), puts the run in the saved slot, resets the build to step 1 and rebuilds the tables as on a first visit (`resetWork`, then `restore` of the empty run). An empty run never replaces a saved one; a run that already is the saved one keeps its date.
 2. **My saved run.** Shows the date of the snapshot; disabled when there is none. Restoring replaces the work on the page; it asks first only when that work is not empty and is not the saved run itself (`restoreNeedsConfirm`, compared by `runKey`: the run without which step is open).
@@ -882,7 +884,7 @@ Every switch (Start over, restore, demo in and out) sets the state and rebuilds 
 - `#build=kaiyo-sales&demo=1` opens straight in demo mode (the demo slot, so a reload keeps the demo's progress; the menu always starts an empty one). The `demo=1` part is added and removed with the mode and dropped when the build is closed; a hashchange to such a link in the open page switches mode.
 - **Fill this step** on every open Clean card (W, P1 to P6, and the extra P4 and P7), the Model step, every Dashboard tile and every Answer and More question that is not done. **Fill to here** on every step tab but Connect: fills every step before it and opens it. A step is filled by changing the saved state (`src/core/buildFill.ts`, pure) and, when it touches the tables, rebuilding them from it, the same road as opening the page again.
 - What a unit puts in: W regions `Removed duplicates`; P1 products Trim and Uppercase on `sku_code`; P2 the blank `sale_date, customer_name, sku_code`; P3 customers Keep latest per `customer_id` by `updated_at`, newest; P5 `%d/%m/%Y`; P6 Decimal and Whole number with the comma; Model: P4 (Trim and Replace `Itiba` with `Ichiba` on `customer_name`) and P7 (Extract number on `region_id`) with it, links L1 to L3 and F1, F2, the star built; tiles `SUM(revenue)`, `date_trunc('month', sale_date)`, `customer_id`; answers and More questions their right answer (More also gets its solution SQL in the editor; it is not marked "with solution"). The sales steps are the same as `tests/buildSolved.ts` (now `src/core/buildSolved.ts`, which the test file re-exports). A learner's own try on the same problem is replaced, not piled up.
-- "Count it in Quaera" is hidden everywhere (Answer, More): nothing counts.
+- "Count it in Quaera" is hidden everywhere (Answer, More, Refresh): nothing counts.
 
 ### 12.3 Tests
 
