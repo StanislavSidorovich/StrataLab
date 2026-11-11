@@ -7,7 +7,7 @@ import { CLEAN_COLUMNS, activeCard, addSpec, checkFormat, cleanDone, datesSql, h
 import { checkBlank } from '../../core/pipeline'
 import { CLEAN_CARDS, GIVEN_NOTE, P1_SKUS, P3_NOTE, sourceById, type BuildSourceId, type CleanCard, type CleanId } from '../../data/build/kaiyoSales'
 import { LINK_TEXT } from '../../data/build/linkData'
-import { checkP1, checkP2, checkP3, checkP4, checkP5, checkP6, checkP7, salesErrors, type CheckReport, type ErrorColumn } from '../../db/buildRun'
+import { checkP1, checkP2, checkP3, checkP4, checkP5, checkP6, checkP7, oddValues, salesErrors, type OddValues, type CheckReport, type ErrorColumn } from '../../db/buildRun'
 import { enginePort } from '../../db/pipelinePort'
 import { AffectedRows } from './AffectedRows'
 import { fmtN } from './BuildTable'
@@ -133,6 +133,7 @@ export function CleanScreen({ work, setWork, ready, rebuild, rev, focus, onBackT
           The numbers from your Quick look will not come back the same.
         </div>
       )}
+      {cleanDone(work.passed) && <OddCard work={work} setWork={setWork} ready={ready} rev={rev} />}
       {work.p4 && cleanDone(work.passed) && (
         <ExtraCard id="P4" work={work} setWork={setWork} ready={ready} onFocus={() => setSource('sales')} onBack={onBackToModel} text={LINK_TEXT.p4} where="sales · asked for by the Model step" check={() => checkP4(enginePort, work.steps.sales)} />
       )}
@@ -348,8 +349,11 @@ function DateStep({ work, setWork, ready, rebuild, errs, onReport }: { work: Bui
     }
     setBusy(true)
     try {
-      const err = await rebuild('sales', addSpec(work.steps.sales, 'dates', { format: format.trim() }))
-      onReport(await checkP5(enginePort, addSpec(work.steps.sales, 'dates', { format: format.trim() })))
+      // a spelling added later (Refresh) stays when the format of this card is applied again
+      const format2 = work.steps.sales.find((s) => s.kind === 'dates')?.params.format2
+      const params = { format: format.trim(), ...(format2 ? { format2 } : {}) }
+      const err = await rebuild('sales', addSpec(work.steps.sales, 'dates', params))
+      onReport(await checkP5(enginePort, addSpec(work.steps.sales, 'dates', params)))
       if (err) onReport({ ok: false, line: err, chips: [] })
     } catch (e) {
       onReport({ ok: false, line: String(e instanceof Error ? e.message : e), chips: [] })
@@ -409,6 +413,44 @@ function NumberNote({ work, errs }: { work: BuildWork; errs: Record<ErrorColumn,
   return (
     <div className="build-error" role="alert" data-testid="clean-p6-failed">
       The step is added, but it fails: <b>{parts.join(' and ')} [Error]</b>. Show the error rows below and read one: how is the number written?
+    </div>
+  )
+}
+
+/** P8 (spec 3.0): an info card, nothing to fix. Odd values that are not errors: an empty revenue stays NULL, a return stays negative. */
+function OddCard({ work, setWork, ready, rev }: { work: BuildWork; setWork: Props['setWork']; ready: boolean; rev: number }) {
+  const [odd, setOdd] = useState<OddValues | null>(null)
+  useEffect(() => {
+    if (!ready) return
+    let alive = true
+    void oddValues(enginePort)
+      .then((o) => alive && setOdd(o))
+      .catch(() => alive && setOdd(null))
+    return () => {
+      alive = false
+    }
+  }, [ready, rev])
+  if (!odd) return null
+  return (
+    <div className={`build-clean-card is-open${work.p8 ? ' is-passed' : ''}`} data-testid="clean-card-P8">
+      <div className="build-clean-head">
+        <span className="build-chip-n">{work.p8 ? <Check size={13} /> : 'i'}</span>
+        <div>
+          <div className="font-semibold">Not every odd value is an error</div>
+          <div className="build-muted">sales · nothing to fix</div>
+        </div>
+      </div>
+      <p style={{ margin: 0 }} data-testid="clean-p8-numbers">
+        {fmtN(odd.noRevenue)} sales have no revenue, {fmtN(odd.noUnits)} have no units, and {fmtN(odd.returns)} have negative units (returns).
+      </p>
+      <p style={{ margin: 0 }}>Not every odd value is an error: an empty revenue stays NULL, a return stays negative.</p>
+      {!work.p8 && (
+        <div>
+          <button className="btn btn-primary" onClick={() => setWork((w) => ({ ...w, p8: true }))} data-testid="clean-p8-read">
+            <Check size={14} /> Got it
+          </button>
+        </div>
+      )}
     </div>
   )
 }

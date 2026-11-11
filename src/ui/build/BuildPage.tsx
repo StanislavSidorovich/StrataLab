@@ -3,7 +3,7 @@
 // page is the "Open on a laptop" screen, as on the pipeline page.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowRight, Check, Copy, Hammer, Laptop, Lock, RotateCcw, Share2, Wand2, X } from 'lucide-react'
-import { BUILD_ID, BUILD_KEY, MORE_STEP, STEP_IDS, STEP_LABEL, STRIP_IDS, demoFromHash, emptyBuild, goNext, hashWithDemo, isUnlocked, markDone, modelDone, nextStep, openStep, saveBuild, statusOf } from '../../core/build'
+import { BUILD_ID, BUILD_KEY, MORE_STEP, REFRESH_STEP, isOptional, STEP_IDS, STEP_LABEL, STRIP_IDS, demoFromHash, emptyBuild, goNext, hashWithDemo, isUnlocked, markDone, modelDone, nextStep, openStep, saveBuild, statusOf } from '../../core/build'
 import { canFillBefore, fillBefore, fillBeforeTouchesTables, fillUnit, touchesTables, type FillUnit } from '../../core/buildFill'
 import { DEMO_KEY, isEmptyRun, loadSaved, loadSlot, restoreNeedsConfirm, restoreSaved, startOver, writeSaved, type Saved } from '../../core/buildProgress'
 import type { Link } from '../../core/buildLinks'
@@ -16,6 +16,8 @@ import { checkpoint } from '../../db/engine'
 import { enginePort } from '../../db/pipelinePort'
 import { openBuild, refreshCatalog, useLab } from '../store'
 import { MoreScreen } from './MoreScreen'
+import { RefreshScreen } from './RefreshScreen'
+import type { JournalRow } from '../../core/buildRefresh'
 import { CleanScreen } from './CleanScreen'
 import { AnswerScreen } from './AnswerScreen'
 import { ConnectScreen } from './ConnectScreen'
@@ -250,7 +252,19 @@ function Shell() {
 
   const open = state.open
   const next = nextStep(state)
-  const num = open === MORE_STEP ? 0 : STEP_IDS.indexOf(open) + 1
+  const num = isOptional(open) ? 0 : STEP_IDS.indexOf(open) + 1
+  /** a journal line of Refresh was clicked: open the step it is about */
+  const openFromJournal = (row: JournalRow) => {
+    if (row.stage === 'clean' && row.source) setCleanFocus(row.source)
+    setState((s) => openStep(s, row.stage === 'bronze' ? 'connect' : row.stage === 'clean' ? 'clean' : row.stage === 'model' ? 'model' : 'dashboard'))
+  }
+  /** a run changed the tables: save, refresh the tree, measure the [Error] cells, redraw what reads them */
+  const afterRun = useCallback(async () => {
+    await checkpoint()
+    await refreshCatalog()
+    await refreshErrors().catch(() => undefined)
+    setRev((n) => n + 1)
+  }, [refreshErrors])
 
   return (
     <DemoContext.Provider value={{ demo, ready: ready && engine === 'ready', fill }}>
@@ -301,10 +315,10 @@ function Shell() {
                     disabled={st === 'locked'}
                     aria-current={s === open ? 'step' : undefined}
                     onClick={() => setState(openStep(state, s))}
-                    title={st === 'locked' ? (s === MORE_STEP ? 'Finish Answer first' : 'Finish the step before it first') : s === MORE_STEP ? 'Optional: six more questions' : STEP_LABEL[s]}
+                    title={st === 'locked' ? (isOptional(s) ? 'Finish Answer first' : 'Finish the step before it first') : s === MORE_STEP ? 'Optional: six more questions' : s === REFRESH_STEP ? 'Optional: a new file arrives' : STEP_LABEL[s]}
                   >
                     <span className="build-chip-n">{st === 'done' ? <Check size={13} /> : st === 'locked' ? <Lock size={12} /> : i + 1}</span>
-                    <span className="build-chip-label">{STEP_LABEL[s]}{s === MORE_STEP && <span className="build-chip-opt"> optional</span>}</span>
+                    <span className="build-chip-label">{STEP_LABEL[s]}{isOptional(s) && <span className="build-chip-opt"> optional</span>}</span>
                   </button>
                   {demo && canFillBefore(s) && (
                     <button className="demo-fill-to" disabled={!ready} onClick={() => fillTo(s)} title="Demo: fill every step before this one and open it" data-testid={`fill-to-${s}`}>
@@ -317,7 +331,7 @@ function Shell() {
           </ol>
           <main className="build-body">
             <section className="build-card" data-testid={`build-step-${open}`}>
-              <div style={{ color: 'var(--muted)', fontSize: 12 }}>{open === MORE_STEP ? 'Optional, after the five steps' : `Step ${num} of ${STEP_IDS.length}`}</div>
+              <div style={{ color: 'var(--muted)', fontSize: 12 }}>{isOptional(open) ? 'Optional, after the five steps' : `Step ${num} of ${STEP_IDS.length}`}</div>
               <h2 className="font-semibold" style={{ fontSize: 20, margin: '2px 0 8px' }}>{STEP_LABEL[open]}</h2>
               {engine !== 'loading' && !ready && (
                 <div className="build-error" role="alert">
@@ -349,6 +363,8 @@ function Shell() {
                 <DashboardScreen work={work} setWork={setWork} ready={ready} />
               ) : open === 'answer' ? (
                 <AnswerScreen work={work} setWork={setWork} ready={ready} onMore={() => setState((s) => openStep(s, MORE_STEP))} />
+              ) : open === REFRESH_STEP ? (
+                <RefreshScreen work={work} setWork={setWork} ready={ready} model={{ links: state.links, star: state.star }} onRan={afterRun} onOpen={openFromJournal} onDashboard={() => setState((s) => openStep(s, 'dashboard'))} />
               ) : (
                 <MoreScreen work={work} setWork={setWork} ready={ready} onDashboard={() => setState((s) => openStep(s, 'dashboard'))} />
               )}

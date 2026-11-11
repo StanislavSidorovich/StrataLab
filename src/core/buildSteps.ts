@@ -5,6 +5,7 @@ import { BUILD_DIAGNOSIS, CLEAN_IDS, GIVEN_FULL_SQL, GIVEN_SQL, SCHEMA, sourceBy
 import { DIAGNOSIS_TEXT } from '../data/pipelines/kaiyoSellout'
 import { emptyDash, readDash, type DashWork } from './buildDashboard'
 import { emptyMore, readMore, type MoreWork } from './buildMore'
+import { emptyRefresh, readRefresh, type RefreshWork } from './buildRefresh'
 import { checkBlank } from './pipeline'
 import { quoteString } from './sql'
 
@@ -77,12 +78,18 @@ export function checkFormat(format: string): string | null {
   return null
 }
 
-/** P5's step: the three spellings in a CASE; the learner fills the format of the slash dates. try_strptime: a date that does not fit is an error to see, not a crash. */
-export function datesSql(cols: readonly string[], format: string): string {
+/**
+ * P5's step: the three spellings in a CASE; the learner fills the format of the slash dates. try_strptime: a date that does not fit
+ * is an error to see, not a crash. With `format2` (the Refresh step, spec 5.7) a fourth branch reads the dates written year first
+ * with slashes; it stands before the slash branch, which would take them first.
+ */
+export function datesSql(cols: readonly string[], format: string, format2?: string): string {
+  const year = format2 ? `
+         WHEN sale_date LIKE '____/%' THEN try_strptime(sale_date, '${format2}')   -- 2026/07/03` : ''
   return replaceColumn(
     cols,
     'sale_date',
-    `CAST(CASE
+    `CAST(CASE${year}
          WHEN sale_date LIKE '%.%' THEN try_strptime(sale_date, '%d.%m.%Y')
          WHEN sale_date LIKE '%/%' THEN try_strptime(sale_date, '${format}')   -- 19/02/2024
          ELSE try_strptime(sale_date, '%Y-%m-%d')
@@ -149,8 +156,9 @@ export function makeStep(source: BuildSourceId, spec: StepSpec): Step | null {
     }
     case 'dates': {
       const format = (spec.params.format ?? '').trim()
-      if (source !== 'sales' || checkFormat(format)) return null
-      return { ...base, label: 'Converted sale_date to a date (SQL)', sql: datesSql(cols, format), given: false }
+      const format2 = (spec.params.format2 ?? '').trim()
+      if (source !== 'sales' || checkFormat(format) || (format2 && checkFormat(format2))) return null
+      return { ...base, label: 'Converted sale_date to a date (SQL)', sql: datesSql(cols, format, format2 || undefined), given: false }
     }
     case 'replace': {
       const c = col('column')
@@ -198,6 +206,13 @@ export function countsSql(source: BuildSourceId, steps: readonly Step[]): string
   const names = ['bronze', ...steps.map((_, i) => `step${i + 1}`)]
   return `${chainCtes(source, steps)}
 SELECT ${names.map((n) => `(SELECT count(*) FROM ${n})`).join(', ')}`
+}
+
+/** The same numbers for the lines of one export file (the sales have `source_file` all the way): the Refresh journal shows what a step did to July. */
+export function fileCountsSql(source: BuildSourceId, steps: readonly Step[], file: string): string {
+  const names = ['bronze', ...steps.map((_, i) => `step${i + 1}`)]
+  return `${chainCtes(source, steps)}
+SELECT ${names.map((n) => `(SELECT count(*) FROM ${n} WHERE source_file = ${quoteString(file)})`).join(', ')}`
 }
 
 /**
@@ -275,12 +290,16 @@ export interface BuildWork {
   p4: 'asked' | 'done' | null
   /** the optional step More: the SQL and answers of the five questions, the pins (src/core/buildMore.ts) */
   more: MoreWork
+  /** the optional step Refresh: how the sales read their folder, the new date format, the journal and the runs (src/core/buildRefresh.ts) */
+  refresh: RefreshWork
+  /** the info card P8 (odd values that are not errors) was read; it locks nothing */
+  p8: boolean
 }
 
 /** The saved work's version: 2 since v0.33.0 (P4 to P6 are the learner's). Work saved without it has the first given step. */
 export const WORK_VERSION = 2
 
-export const emptyWork = (): BuildWork => ({ v: WORK_VERSION, connected: [], steps: { sales: [], customers: [], products: [], regions: [] }, blank: '', format: '', passed: [], peek: null, dash: emptyDash(), p7: null, p4: null, more: emptyMore() })
+export const emptyWork = (): BuildWork => ({ v: WORK_VERSION, connected: [], steps: { sales: [], customers: [], products: [], regions: [] }, blank: '', format: '', passed: [], peek: null, dash: emptyDash(), p7: null, p4: null, more: emptyMore(), refresh: emptyRefresh(), p8: false })
 
 const KINDS: readonly StepKind[] = ['distinct', 'latest', 'trim', 'upper', 'dedup', 'extract', 'type', 'dates', 'replace']
 
@@ -313,6 +332,8 @@ export function readWork(raw: unknown): BuildWork {
   if (p && typeof p.kpi === 'string' && typeof p.chain === 'string' && typeof p.chainRevenue === 'string') w.peek = { kpi: p.kpi, chain: p.chain, chainRevenue: p.chainRevenue }
   w.dash = readDash(r.dash)
   w.more = readMore(r.more)
+  w.refresh = readRefresh(r.refresh)
+  if (r.p8 === true) w.p8 = true
   if (r.p7 === 'asked' || r.p7 === 'done') w.p7 = r.p7
   if (r.p4 === 'asked' || r.p4 === 'done') w.p4 = r.p4
   // saved by v0.32.0 or before: sales were connected with the first given step, which typed dates, numbers and names. Keep that step, and P4 to P6 count as done.

@@ -42,9 +42,13 @@ export type StepId = (typeof STEP_IDS)[number]
 
 /** The optional sixth step, after Answer: five more questions with the learner's own SQL (spec 5.5). It is not one of the five. */
 export const MORE_STEP = 'more' as const
-export type StripId = StepId | typeof MORE_STEP
-/** The chips of the step bar: the five, then the optional one. */
-export const STRIP_IDS: readonly StripId[] = [...STEP_IDS, MORE_STEP]
+/** The optional seventh step, after More: a new file arrives and the whole chain runs again (spec 5.7). Unlocked with Answer, like More. */
+export const REFRESH_STEP = 'refresh' as const
+export type StripId = StepId | typeof MORE_STEP | typeof REFRESH_STEP
+/** The chips of the step bar: the five, then the two optional ones. */
+export const STRIP_IDS: readonly StripId[] = [...STEP_IDS, MORE_STEP, REFRESH_STEP]
+/** An optional step: not one of the five, never "done" by the frame. */
+export const isOptional = (s: StripId): s is typeof MORE_STEP | typeof REFRESH_STEP => s === MORE_STEP || s === REFRESH_STEP
 
 export const STEP_LABEL: Record<StripId, string> = {
   connect: 'Connect',
@@ -53,6 +57,7 @@ export const STEP_LABEL: Record<StripId, string> = {
   dashboard: 'Dashboard',
   answer: 'Answer',
   more: 'More',
+  refresh: 'Refresh',
 }
 
 export type StepStatus = 'done' | 'current' | 'locked'
@@ -82,7 +87,7 @@ export const emptyBuild = (): BuildState => ({ done: [], open: 'connect', work: 
 export const modelDone = (state: BuildState) => modelLinked(state.links)
 
 const isStep = (v: unknown): v is StepId => typeof v === 'string' && (STEP_IDS as readonly string[]).includes(v)
-const isStrip = (v: unknown): v is StripId => isStep(v) || v === MORE_STEP
+const isStrip = (v: unknown): v is StripId => isStep(v) || v === MORE_STEP || v === REFRESH_STEP
 
 /** Done steps in order, with no gaps: a step counts only if every step before it is done. */
 function contiguous(done: Iterable<StepId>): StepId[] {
@@ -101,7 +106,7 @@ export function currentStep(state: BuildState): StepId {
 }
 
 export function isUnlocked(state: BuildState, step: StripId): boolean {
-  if (step === MORE_STEP) return state.done.includes('answer')
+  if (isOptional(step)) return state.done.includes('answer')
   const i = STEP_IDS.indexOf(step)
   if (step === 'dashboard' && state.errors > 0) return false
   return i === 0 || state.done.includes(STEP_IDS[i - 1])
@@ -109,6 +114,7 @@ export function isUnlocked(state: BuildState, step: StripId): boolean {
 
 export function statusOf(state: BuildState, step: StripId): StepStatus {
   if (step === MORE_STEP) return moreDone(state.work.more) ? 'done' : isUnlocked(state, step) ? 'current' : 'locked'
+  if (step === REFRESH_STEP) return state.work.refresh.done ? 'done' : isUnlocked(state, step) ? 'current' : 'locked'
   if (state.done.includes(step)) return 'done'
   return isUnlocked(state, step) ? 'current' : 'locked'
 }
@@ -120,14 +126,14 @@ export function openStep(state: BuildState, step: StripId): BuildState {
 
 /** Mark a step done (the open one by default), if it can be. Marking it again changes nothing. */
 export function markDone(state: BuildState, step: StripId = state.open): BuildState {
-  if (step === MORE_STEP) return state
+  if (isOptional(step)) return state
   if (!isUnlocked(state, step) || state.done.includes(step)) return state
   return { ...state, done: contiguous([...state.done, step]) }
 }
 
 /** The step after the open one, once the open one is done. */
 export function nextStep(state: BuildState): StepId | null {
-  if (state.open === MORE_STEP || !state.done.includes(state.open)) return null
+  if (isOptional(state.open) || !state.done.includes(state.open)) return null
   return STEP_IDS[STEP_IDS.indexOf(state.open) + 1] ?? null
 }
 

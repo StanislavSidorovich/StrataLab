@@ -101,12 +101,17 @@ SELECT * FROM (
 
 const quoteName = (n: string) => `'${n.replace(/'/g, "''")}'`
 
-/** The Connect statement of a source. `names` are the registered sales files (ignored for the other three). */
-export function CONNECT_SQL(source: BuildSource, names: readonly string[]): string {
+/** How the sales source reads its folder (spec 5.7): an explicit list of names, or every file that matches the pattern. */
+export type SalesMode = 'list' | 'pattern'
+export const SALES_PATTERN = `${SCHEMA}/sales/export_*.csv`
+
+/** The Connect statement of a source. `names` are the registered sales files (ignored for the other three); `mode` only matters for sales. */
+export function CONNECT_SQL(source: BuildSource, names: readonly string[], mode: SalesMode = 'list'): string {
   if (source.id === 'sales') {
+    const files = mode === 'pattern' ? quoteName(SALES_PATTERN) : `[${names.map(quoteName).join(', ')}]`
     return `CREATE OR REPLACE TABLE ${T(source.bronze)} AS
 SELECT * EXCLUDE (filename), parse_filename(filename) AS source_file
-FROM read_csv([${names.map(quoteName).join(', ')}], delim = ';', header = true, all_varchar = true, filename = true)`
+FROM read_csv(${files}, delim = ';', header = true, all_varchar = true, filename = true)`
   }
   return `CREATE OR REPLACE TABLE ${T(source.bronze)} AS
 SELECT * FROM read_csv([${quoteName(source.file)}], delim = '${source.delim}', header = true)`

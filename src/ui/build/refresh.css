@@ -1,0 +1,24 @@
+/* The optional step Refresh: the folder, the source setting, the journal of a run, the history. Colours come from the app's variables. */
+.rf-card { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); min-width: 0; }
+.rf-card.is-done { border-color: var(--accent); }
+.rf-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.rf-new { display: inline-block; padding: 0 6px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 11px; font-weight: 600; }
+.rf-modes { display: flex; flex-wrap: wrap; gap: 8px; }
+.rf-mode { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; font-size: 13px; }
+.rf-mode.is-on { border-color: var(--accent); background: var(--accent-soft); }
+.rf-glob { font-family: var(--mono, ui-monospace, monospace); font-size: 12px; }
+.rf-table { width: 100%; }
+.rf-table th, .rf-table td { vertical-align: top; }
+.rf-num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.rf-src { color: var(--muted); }
+.rf-step { all: unset; cursor: pointer; text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
+.rf-step:hover, .rf-step:focus-visible { text-decoration-color: var(--accent); color: var(--accent); }
+.rf-note { color: var(--muted); font-size: 12px; margin-top: 2px; overflow-wrap: anywhere; }
+.rf-status { white-space: nowrap; font-weight: 600; }
+.rf-status.rf-s-ok { color: var(--accent); }
+.rf-status.rf-s-warning { color: var(--warn-text); }
+.rf-status.rf-s-error { color: var(--danger); }
+.rf-status.rf-s-skipped { color: var(--muted); font-weight: 400; }
+.rf-row.is-error td { background: color-mix(in srgb, var(--danger) 10%, transparent); }
+.rf-row.is-warning td { background: color-mix(in srgb, var(--warn-text) 10%, transparent); }
+.rf-history { margin: 4px 0 0; padding-left: 18px; font-size: 13px; font-variant-numeric: tabular-nums; }

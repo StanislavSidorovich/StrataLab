@@ -56,8 +56,8 @@ describe('the step bar', () => {
     for (const id of STEP_IDS) s = markDone({ ...s, done: STEP_IDS.slice(0, STEP_IDS.indexOf(id)) as never }, id)
     return s
   }
-  it('has the five and then the optional one', () => {
-    expect(STRIP_IDS).toEqual([...STEP_IDS, 'more'])
+  it('has the five and then the two optional ones', () => {
+    expect(STRIP_IDS).toEqual([...STEP_IDS, 'more', 'refresh'])
     expect(STEP_IDS).toHaveLength(5)
   })
   it('More is locked until Answer is done, then current, then done with the five questions', () => {

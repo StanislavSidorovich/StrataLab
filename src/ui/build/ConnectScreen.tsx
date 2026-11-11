@@ -58,7 +58,7 @@ export function ConnectScreen({ work, setWork, ready }: Props) {
     setBusy(id)
     setError(null)
     try {
-      await connect(enginePort, id)
+      await connect(enginePort, id, work.refresh.mode)
       await applySteps(enginePort, id, work.steps[id])
       await checkpoint()
       await refreshCatalog()
@@ -88,21 +88,21 @@ export function ConnectScreen({ work, setWork, ready }: Props) {
               <header className="build-source-head">
                 <Database size={16} style={{ color: 'var(--accent)' }} />
                 <div className="build-source-name">{s.label}</div>
-                <div className="build-muted">{s.id === 'sales' ? '30 files · ' : ''}{fmtN(s.fileRows)} rows</div>
+                <div className="build-muted">{s.id === 'sales' ? (work.refresh.mode === 'pattern' ? 'every file in the folder' : '30 files · ') : ''}{s.id === 'sales' && work.refresh.mode === 'pattern' ? '' : `${fmtN(s.fileRows)} rows`}</div>
               </header>
               <p className="build-muted" style={{ margin: 0 }}>{BLURB[s.id]}</p>
               {on ? <BuildTable data={b?.data ?? null} types={b?.types} caption={`${s.bronze}, first rows`} /> : <BuildTable data={previews[s.id] ?? null} caption={`${s.label}, first rows`} />}
               <footer className="build-source-foot">
                 {on ? (
                   <span className="build-ok">
-                    <Check size={14} /> Connected as {s.bronze} · {fmtN(s.fileRows)} rows
+                    <Check size={14} /> Connected as {s.bronze}{s.id === 'sales' && work.refresh.mode === 'pattern' ? '' : ` · ${fmtN(s.fileRows)} rows`}
                   </span>
                 ) : (
                   <button className="btn btn-primary" disabled={!ready || busy !== null} onClick={() => void doConnect(s.id)}>
                     {busy === s.id ? <Loader2 size={14} className="animate-spin" /> : <Plug size={14} />} Connect
                   </button>
                 )}
-                <FoldedSql summary="SQL it runs" sql={CONNECT_SQL(sourceById(s.id), SALES_NAMES)} />
+                <FoldedSql summary="SQL it runs" sql={CONNECT_SQL(sourceById(s.id), SALES_NAMES, work.refresh.mode)} />
               </footer>
             </section>
           )

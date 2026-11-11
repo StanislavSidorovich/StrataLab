@@ -50,14 +50,14 @@ beforeAll(async () => {
 }, 180_000)
 
 describe('build files: prepare', () => {
-  it('registers 33 texts and a second call reuses the first', async () => {
-    expect(calls).toBe(33)
-    expect([...texts.keys()].filter((k) => k.startsWith('build_kaiyo/sales/export_'))).toHaveLength(30)
+  it('registers 34 texts (33 and the July file) and a second call reuses the first', async () => {
+    expect(calls).toBe(34)
+    expect([...texts.keys()].filter((k) => k.startsWith('build_kaiyo/sales/export_'))).toHaveLength(31)
     const a = prepare(port)
     const b = prepare(port)
     expect(a).toBe(b)
     await a
-    expect(calls).toBe(33)
+    expect(calls).toBe(34)
   })
 
   it('has the rows of the files and of the references', async () => {
@@ -68,7 +68,7 @@ describe('build files: prepare', () => {
 
   it('writes the 30 sales texts as the pipeline does', async () => {
     await preparePipeline(port)
-    const mine = [...texts.entries()].filter(([k]) => k.startsWith('build_kaiyo/sales/'))
+    const mine = [...texts.entries()].filter(([k]) => k.startsWith('build_kaiyo/sales/') && !k.endsWith('export_2026-07.csv'))
     expect(mine).toHaveLength(30)
     for (const [k, text] of mine) {
       const theirs = texts.get('pipe_kaiyo/' + k.slice('build_kaiyo/sales/'.length))

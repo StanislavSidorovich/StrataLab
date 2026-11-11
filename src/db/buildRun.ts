@@ -8,7 +8,8 @@ import { sliceDropStatements } from '../core/buildSlice'
 import { readableError } from '../core/sqlPractice'
 import { csvText } from '../core/csvText'
 import { exportText, type SqlPort } from './pipelineRun'
-import { BUILD_DASH_DIAGNOSIS, BUILD_SOURCES, CHECK_SQL, GIVEN_FULL_SQL, GIVEN_SQL, GOLD_SQL, REF_TILE_SQL, TILE_TABLE, type TileId, CONNECT_SQL, QUICK_LOOK_SQL, FILE_SQL, REF_SQL, SCHEMA, SOURCE_FOLDER, SOURCE_TABLES, T, WORK_TABLES, sourceById, type BuildSourceId } from '../data/build/kaiyoSales'
+import { julyFile, JULY_FILE } from '../data/build/julyExport'
+import { BUILD_DASH_DIAGNOSIS, BUILD_SOURCES, CHECK_SQL, GIVEN_FULL_SQL, GIVEN_SQL, GOLD_SQL, REF_TILE_SQL, TILE_TABLE, type TileId, CONNECT_SQL, QUICK_LOOK_SQL, FILE_SQL, type SalesMode, REF_SQL, SCHEMA, SOURCE_FOLDER, SOURCE_TABLES, T, WORK_TABLES, sourceById, type BuildSourceId } from '../data/build/kaiyoSales'
 
 /** One preparation per port, shared by callers that arrive while it runs. */
 const preparing = new WeakMap<SqlPort, Promise<string[]>>()
@@ -47,6 +48,11 @@ async function prepareOnce(port: SqlPort, onStep?: (text: string) => void): Prom
     await port.registerText(name, exportText(rows.rows))
     names.push(name)
   }
+  // the 31st file of the sales folder: sent "in August", on the desk for the Refresh step only (the list of Connect never names it)
+  const first = Number((await port.query(`SELECT max(CAST(raw_id AS INTEGER)) + 1 FROM ${T('src_raw_sellout')}`)).rows[0][0])
+  const customers = (await port.query(`SELECT DISTINCT customer_name FROM ${T('ref_sales')} ORDER BY 1`)).rows.map((r) => String(r[0]))
+  const skus = (await port.query(`SELECT DISTINCT s.sku_code, p.list_price FROM ${T('ref_sales')} s JOIN ${T('src_product')} p ON upper(trim(p.sku_code)) = s.sku_code ORDER BY 1`)).rows.map((r) => ({ sku: String(r[0]), price: Number(r[1]) }))
+  await port.registerText(`${SCHEMA}/sales/${JULY_FILE}`, exportText(julyFile({ customers, skus, firstId: first }).rows))
   for (const s of BUILD_SOURCES) {
     if (!s.fileTable) continue
     const rows = await port.query(`SELECT ${s.columns.join(', ')} FROM ${T(s.fileTable)}`)
@@ -56,10 +62,10 @@ async function prepareOnce(port: SqlPort, onStep?: (text: string) => void): Prom
 }
 
 /** Connect: reads the source's file(s) into its bronze table; returns the rows. */
-export async function connect(port: SqlPort, id: BuildSourceId): Promise<number> {
+export async function connect(port: SqlPort, id: BuildSourceId, mode: SalesMode = 'list'): Promise<number> {
   const names = await prepare(port)
   const source = sourceById(id)
-  await port.query(CONNECT_SQL(source, names))
+  await port.query(CONNECT_SQL(source, names, mode))
   return Number((await port.query(`SELECT count(*) FROM ${T(source.bronze)}`)).rows[0][0])
 }
 
@@ -130,7 +136,7 @@ export async function quickLook(port: SqlPort): Promise<Peek> {
 export async function restore(port: SqlPort, work: BuildWork, model: { links: readonly Link[]; star: boolean; done: boolean } = { links: [], star: false, done: cleanDone(work.passed) }): Promise<void> {
   await prepare(port)
   for (const id of work.connected) {
-    await connect(port, id)
+    await connect(port, id, work.refresh.mode)
     await applySteps(port, id, work.steps[id])
   }
   // the star as it was last built: from the learner's links, or the first version's for a Model step done before the links
@@ -191,7 +197,8 @@ export async function checkP1(port: SqlPort, specs: readonly StepSpec[]): Promis
  * on this, not on the values, because the dates and numbers are still text when P2 is done (they are P5 and P6).
  */
 export async function diffSalesIds(port: SqlPort): Promise<number> {
-  const clean = T('clean_sales')
+  // the July file (Refresh, spec 5.7) is not in the reference: the check judges the 30 months it is about
+  const clean = `(SELECT * FROM ${T('clean_sales')} WHERE source_file <> '${JULY_FILE}')`
   const ref = T('ref_sales')
   const extra = await num(port, `SELECT count(*) FROM (SELECT raw_id FROM ${clean} EXCEPT ALL SELECT raw_id FROM ${ref})`)
   const missing = await num(port, `SELECT count(*) FROM (SELECT raw_id FROM ${ref} EXCEPT ALL SELECT raw_id FROM ${clean})`)
@@ -199,7 +206,7 @@ export async function diffSalesIds(port: SqlPort): Promise<number> {
 }
 
 export async function factsP2(port: SqlPort, blank: string, error: string | null): Promise<P2Facts> {
-  return { rows: await num(port, `SELECT count(*) FROM ${T('clean_sales')}`), twice: await num(port, CHECK_SQL.p2), diff: await diffSalesIds(port), blank, error }
+  return { rows: await num(port, `SELECT count(*) FROM ${T('clean_sales')} WHERE source_file <> '${JULY_FILE}'`), twice: await num(port, CHECK_SQL.p2), diff: await diffSalesIds(port), blank, error }
 }
 
 export async function checkP2(port: SqlPort, blank: string, error: string | null = null): Promise<CheckReport & { facts: P2Facts }> {
@@ -263,6 +270,22 @@ export async function salesLock(port: SqlPort): Promise<number> {
   const family = (c: string) => typeFamily(cols.find((x) => x.name === c)?.type ?? '')
   const untyped = [family('sale_date') !== 'date', family('units') !== 'number', family('revenue') !== 'number'].filter(Boolean).length
   return errs + untyped
+}
+
+export interface OddValues {
+  /** sales without a revenue, without units, and returns (negative units): odd, but not errors (P8, spec 3.0) */
+  noRevenue: number
+  noUnits: number
+  returns: number
+}
+
+/** P8: counted in the clean sales as they are now; null when units or revenue are not numbers yet. */
+export async function oddValues(port: SqlPort): Promise<OddValues | null> {
+  const cols = await describeTable(port, 'clean_sales')
+  const family = (c: string) => typeFamily(cols.find((x) => x.name === c)?.type ?? '')
+  if (family('units') !== 'number' || family('revenue') !== 'number') return null
+  const r = (await port.query(`SELECT count(*) FILTER (WHERE revenue IS NULL), count(*) FILTER (WHERE units IS NULL), count(*) FILTER (WHERE units < 0) FROM ${T('clean_sales')}`)).rows[0]
+  return { noRevenue: Number(r[0]), noUnits: Number(r[1]), returns: Number(r[2]) }
 }
 
 /** Rows with at least one [Error] cell. */
@@ -440,10 +463,12 @@ export async function runTile(port: SqlPort, id: TileId, blank: string): Promise
   }
   if (id === 'line') {
     const ref = T('ref_tile_line')
-    const extra = await num(port, `SELECT count(*) FROM (SELECT revenue FROM ${table} EXCEPT ALL SELECT revenue FROM ${ref})`)
-    const missing = await num(port, `SELECT count(*) FROM (SELECT revenue FROM ${ref} EXCEPT ALL SELECT revenue FROM ${table})`)
-    const points = await num(port, `SELECT count(*) FROM ${table}`)
-    const distinct = await num(port, `SELECT count(DISTINCT month) FROM ${table}`)
+    // the months of the July file (Refresh, spec 5.7) are not in the reference: the tile is judged on the 30 months before them
+    const old = `(SELECT * FROM ${table} WHERE NOT (typeof(month) LIKE 'TIMESTAMP%' OR typeof(month) = 'DATE') OR CAST(month AS VARCHAR) < '2026-07')`
+    const extra = await num(port, `SELECT count(*) FROM (SELECT revenue FROM ${old} EXCEPT ALL SELECT revenue FROM ${ref})`)
+    const missing = await num(port, `SELECT count(*) FROM (SELECT revenue FROM ${ref} EXCEPT ALL SELECT revenue FROM ${old})`)
+    const points = await num(port, `SELECT count(*) FROM ${old}`)
+    const distinct = await num(port, `SELECT count(DISTINCT month) FROM ${old}`)
     return { ...diagnoseLine({ points, distinct, diff: extra + missing, error: null, blank }), data }
   }
   const expected = await port.query(`SELECT chain_name, revenue FROM ${T('ref_tile_chains')}`)

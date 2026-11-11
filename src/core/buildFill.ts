@@ -3,6 +3,8 @@
 // applies the new state and, when a unit touches the tables, rebuilds them from it (the same road as opening the page again).
 import { ANSWERS, MORE_IDS, TILE_IDS, moreQuestion, type AnswerId, type BuildSourceId, type CleanId, type MoreId, type TileId } from '../data/build/kaiyoSales'
 import { EXPECTED_LINKS } from '../data/build/linkData'
+import { NEW_DATE_FORMAT } from '../data/build/julyExport'
+import { R1_QUESTION } from '../data/build/refreshData'
 import { STEP_IDS, markDone, openStep, type BuildState, type StripId } from './build'
 import { answersDone, dashboardDone } from './buildDashboard'
 import { addLink, modelLinked, type Link } from './buildLinks'
@@ -16,6 +18,10 @@ export type FillUnit =
   | { step: 'dashboard'; tile: TileId }
   | { step: 'answer'; q: AnswerId }
   | { step: 'more'; q: MoreId }
+  | { step: 'refresh'; part: RefreshPart }
+
+/** The three moments of Refresh (spec 5.7): the source read by a pattern, the new date format in the date step, the answer R1. */
+export type RefreshPart = 'source' | 'date' | 'answer'
 
 /** The right blank of each tile (spec 5.1 to 5.3). */
 export const RIGHT_BLANKS: Record<TileId, string> = { kpi: 'SUM(revenue)', line: "date_trunc('month', sale_date)", chains: 'customer_id' }
@@ -101,6 +107,16 @@ export function fillUnit(state: BuildState, unit: FillUnit): BuildState {
       const input = { pick: q.right.pick ?? '', number: String(q.right.value) }
       return settle({ ...state, work: { ...work, dash: { ...dash, answers: { ...dash.answers, [unit.q]: input }, answered } } })
     }
+    case 'refresh': {
+      const r = work.refresh
+      if (unit.part === 'source') return { ...state, work: { ...work, refresh: { ...r, mode: 'pattern' } } }
+      if (unit.part === 'date') {
+        // the new spelling goes into the learner's own date step, in the same position
+        const steps = work.steps.sales.map((s) => (s.kind === 'dates' ? { ...s, params: { ...s.params, format2: NEW_DATE_FORMAT } } : s))
+        return { ...state, work: { ...work, steps: { ...work.steps, sales: steps }, refresh: { ...r, format2: NEW_DATE_FORMAT } } }
+      }
+      return { ...state, work: { ...work, refresh: { ...r, answer: { pick: '', number: String(R1_QUESTION.right.value) }, done: true } } }
+    }
     case 'more': {
       const q = moreQuestion(unit.q)
       const more = work.more
@@ -112,7 +128,7 @@ export function fillUnit(state: BuildState, unit: FillUnit): BuildState {
 }
 
 const CLEAN_ORDER: CleanId[] = ['W', 'P1', 'P2', 'P3', 'P5', 'P6']
-const ORDER: StripId[] = [...STEP_IDS, 'more']
+const ORDER: StripId[] = [...STEP_IDS, 'more', 'refresh']
 
 /** Every unit of a step, in the order the page asks for them. */
 export function unitsOf(step: StripId): FillUnit[] {
@@ -129,6 +145,8 @@ export function unitsOf(step: StripId): FillUnit[] {
       return ANSWERS.map((a) => ({ step: 'answer', q: a.id }))
     case 'more':
       return MORE_IDS.map((q) => ({ step: 'more', q }))
+    case 'refresh':
+      return (['source', 'date', 'answer'] as const).map((part) => ({ step: 'refresh', part }))
   }
 }
 
@@ -140,10 +158,10 @@ export function fillBefore(state: BuildState, step: StripId): BuildState {
 }
 
 /** The unit touches the tables (they are rebuilt from the state after it); answers and the More questions do not. */
-export const touchesTables = (unit: FillUnit): boolean => unit.step !== 'answer' && unit.step !== 'more'
+export const touchesTables = (unit: FillUnit): boolean => unit.step === 'refresh' ? unit.part !== 'answer' : unit.step !== 'answer' && unit.step !== 'more'
 
 /** Filling the steps before `step` touches the tables. */
-export const fillBeforeTouchesTables = (step: StripId): boolean => ORDER.slice(0, ORDER.indexOf(step)).some((s) => s !== 'answer' && s !== 'more')
+export const fillBeforeTouchesTables = (step: StripId): boolean => ORDER.slice(0, ORDER.indexOf(step)).some((s) => s !== 'answer' && s !== 'more' && s !== 'refresh')
 
 /** Connect has nothing before it. */
 export const canFillBefore = (step: StripId): boolean => ORDER.indexOf(step) > 0
