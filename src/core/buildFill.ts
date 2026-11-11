@@ -106,7 +106,7 @@ export function fillUnit(state: BuildState, unit: FillUnit): BuildState {
       const more = work.more
       const done = MORE_IDS.filter((id) => id === unit.q || more.done.includes(id))
       const input = { pick: q.right.pick ?? '', number: String(q.right.value) }
-      return { ...state, work: { ...work, more: { ...more, sql: { ...more.sql, [unit.q]: q.solution }, answers: { ...more.answers, [unit.q]: input }, done } } }
+      return { ...state, work: { ...work, more: { ...more, sql: q.slicers ? more.sql : { ...more.sql, [unit.q]: q.solution }, answers: { ...more.answers, [unit.q]: input }, done } } }
     }
   }
 }

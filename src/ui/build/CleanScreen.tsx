@@ -34,6 +34,8 @@ export function CleanScreen({ work, setWork, ready, rebuild, rev, focus, onBackT
   const [source, setSource] = useState<BuildSourceId>(() => focus ?? (active ? CLEAN_CARDS.find((c) => c.id === active)!.source : 'sales'))
   const [hints, setHints] = useState<Partial<Record<CleanId, number>>>({})
   const [report, setReport] = useState<Partial<Record<CleanId, CheckReport>>>({})
+  // a card that has passed can be opened again from its head (to read it, change the step, check again)
+  const [again, setAgain] = useState<CleanId[]>([])
   const connected = work.connected.length === 4
 
   // [Error] cells in the sales, for the P5 and P6 cards (spec 3.6)
@@ -66,17 +68,22 @@ export function CleanScreen({ work, setWork, ready, rebuild, rev, focus, onBackT
       <ol className="build-cards">
         {CLEAN_CARDS.map((c) => {
           const passed = work.passed.includes(c.id)
-          const open = active === c.id
+          const open = active === c.id || (passed && again.includes(c.id))
           const level = hints[c.id] ?? 0
           const last = report[c.id]
           return (
             <li key={c.id} className={`build-clean-card${open ? ' is-open' : ''}${passed ? ' is-passed' : ''}`} data-testid={`clean-card-${c.id}`}>
               <div className="build-clean-head">
                 <span className="build-chip-n">{passed ? <Check size={13} /> : open ? c.id : <Lock size={12} />}</span>
-                <div>
+                <div style={{ flex: 1 }}>
                   <div className="font-semibold">{c.title}</div>
                   <div className="build-muted">{sourceById(c.source).label}</div>
                 </div>
+                {passed && c.id !== 'W' && active !== c.id && (
+                  <button className="btn btn-ghost" aria-expanded={open} onClick={() => setAgain((a) => (a.includes(c.id) ? a.filter((x) => x !== c.id) : [...a, c.id]))} data-testid={`clean-reopen-${c.id}`}>
+                    {open ? 'Close' : 'Open again'}
+                  </button>
+                )}
               </div>
               {open && c.id === 'W' && (
                 <WatchRegions
@@ -105,10 +112,10 @@ export function CleanScreen({ work, setWork, ready, rebuild, rev, focus, onBackT
                   {c.id === 'P5' && <DateStep work={work} setWork={setWork} ready={ready} rebuild={rebuild} errs={errs} onReport={(r) => setReport((x) => ({ ...x, P5: r }))} />}
                   {c.id === 'P6' && <NumberNote work={work} errs={errs} />}
                   <Hints card={c} level={level} onMore={() => setHints((h) => ({ ...h, [c.id]: level + 1 }))} />
-                  <FillButton unit={{ step: 'clean', card: c.id }} />
+                  <FillButton unit={{ step: 'clean', card: c.id }} hidden={passed} />
                   {c.id !== 'P2' && <CheckBar card={c} work={work} ready={ready} report={last} onReport={(r) => setReport((x) => ({ ...x, [c.id]: r }))} />}
                   {last && <Verdict report={last} />}
-                  {last?.ok && (
+                  {last?.ok && !passed && (
                     <button className="btn btn-primary" onClick={() => pass(c.id)} data-testid={`clean-pass-${c.id}`}>
                       {c.id === 'P6' ? 'Finish cleaning' : 'Next problem'} <ArrowRight size={14} />
                     </button>

@@ -1,0 +1,6 @@
+/* clickable bars of the chains tile: the selected one is lit, the others fade */
+.bc-btn { width: 100%; padding: 2px 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; border-radius: 4px; }
+.bc-btn:hover { background: var(--panel-2); }
+.bc.has-selected .bc-btn:not(.is-selected) { opacity: 0.45; }
+.bc-btn.is-selected .bc-name, .bc-btn.is-selected .bc-value { font-weight: 700; }
+.bc-btn.is-selected .bc-track { outline: 2px solid var(--accent); outline-offset: 1px; }

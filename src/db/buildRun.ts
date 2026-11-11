@@ -4,6 +4,7 @@ import { chainsKeyOff, diagnoseKpi, diagnoseLine, tileBlankProblem, tileRunSql, 
 import { compareResults, type ResultData } from '../core/check'
 import { CLEAN_COLUMNS, chainSql, cleanDone, countsSql, diagnoseP1, diagnoseP2, diagnoseP3, diagnoseP4, diagnoseP5, diagnoseP6, diagnoseP7, stepErrorsSql, stepsOf, typedColumn, type BuildWork, type Diagnosis, type P1Facts, type P2Facts, type P3Facts, type P4Facts, type P5Facts, type P6Facts, type P7Facts, type Peek, type StepSpec } from '../core/buildSteps'
 import { starStatements, typeFamily, type FoundFacts, type Link, type LinkFacts, type SideFacts, type Slot } from '../core/buildLinks'
+import { sliceDropStatements } from '../core/buildSlice'
 import { readableError } from '../core/sqlPractice'
 import { csvText } from '../core/csvText'
 import { exportText, type SqlPort } from './pipelineRun'
@@ -64,6 +65,7 @@ export async function connect(port: SqlPort, id: BuildSourceId): Promise<number>
 
 /** Drops the work tables; the sources, references and files stay. */
 export async function resetWork(port: SqlPort): Promise<void> {
+  for (const sql of sliceDropStatements()) await port.query(sql)
   for (const t of WORK_TABLES) await port.query(`DROP TABLE IF EXISTS ${T(t)}`)
 }
 

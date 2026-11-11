@@ -3,11 +3,14 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import type { Table } from 'apache-arrow'
 import { Check, CheckCircle2, Lightbulb, Loader2 } from 'lucide-react'
-import { dashboardDone } from '../../core/buildDashboard'
+import { dashboardDone, tileSql } from '../../core/buildDashboard'
 import { removePin } from '../../core/buildMore'
+import { slicerAdds, sliceOn, toggleSlice, type SliceVariant } from '../../core/buildSlice'
+import type { ResultData } from '../../core/check'
 import type { BuildWork } from '../../core/buildSteps'
 import { TILE_CARDS, TILE_IDS, TILE_SQL, T, TILE_TABLE, type TileCard, type TileId } from '../../data/build/kaiyoSales'
 import { runTile, type TileRun } from '../../db/buildRun'
+import { slicedSql, withSlice } from '../../db/buildSlice'
 import { query } from '../../db/engine'
 import { enginePort } from '../../db/pipelinePort'
 import { ChartView } from '../Chart'
@@ -15,8 +18,21 @@ import { BarChart } from './BarChart'
 import { BuildTable, money } from './BuildTable'
 import { FillButton } from './DemoContext'
 import { PinnedGrid } from './PinTiles'
+import { useSlice } from './SliceContext'
+import { SlicerBar } from './SlicerBar'
 import { StarPanel } from './StarPanel'
 import './dashboard.css'
+import './slicer.css'
+
+/** What the tiles show under the slicers (the checks and the Answer always read the unfiltered tables). */
+interface Sliced {
+  kpi?: ResultData
+  chains?: ResultData
+  line?: Table
+}
+
+/** The chains tile keeps every chain: it leaves its own slicer out. */
+const variantOf = (id: TileId): SliceVariant => (id === 'chains' ? 'nochain' : 'all')
 
 interface Props {
   work: BuildWork
@@ -29,6 +45,33 @@ export function DashboardScreen({ work, setWork, ready }: Props) {
   const [lineTable, setLineTable] = useState<Table | null>(null)
   const [busy, setBusy] = useState<TileId | null>(null)
   const dash = work.dash
+  const { filter, setFilter } = useSlice()
+  const on = sliceOn(filter)
+  const [sliced, setSliced] = useState<Sliced>({})
+
+  // a slicer is on: the passed tiles are read again from the slice (views replaced first, then the tiles, in one queue)
+  useEffect(() => {
+    if (!ready || !on) return setSliced({})
+    let alive = true
+    void (async () => {
+      const next: Sliced = {}
+      for (const id of TILE_IDS) {
+        if (!dash.tiles.includes(id) || !runs[id]?.ok) continue
+        const sql = slicedSql(tileSql(id, dash.blanks[id]), variantOf(id))
+        try {
+          if (id === 'line') next.line = await withSlice(enginePort, filter, () => query(sql))
+          else next[id] = await withSlice(enginePort, filter, () => enginePort.query(sql))
+        } catch {
+          /* the tile keeps the unfiltered picture */
+        }
+      }
+      if (alive) setSliced(next)
+    })()
+    return () => {
+      alive = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, on, filter.chain, filter.brand, dash.tiles.join(','), runs])
 
   const run = async (id: TileId, blank: string) => {
     setBusy(id)
@@ -66,11 +109,18 @@ export function DashboardScreen({ work, setWork, ready }: Props) {
       busy={busy === id}
       ready={ready && busy === null}
       onRun={() => void run(id, dash.blanks[id])}
+      slicerSql={on && runs[id]?.ok && dash.tiles.includes(id) ? slicerAdds(tileSql(id, dash.blanks[id]), filter, variantOf(id)) : null}
+      filtered={on && id === 'kpi'}
     >
       {id === 'kpi' && runs.kpi?.data && runs.kpi.ok && (
         <>
-          <div className="bd-kpi" data-testid="tile-kpi-value">{money(runs.kpi.data.rows[0][0] as string)}</div>
-          {work.peek && (
+          <div className="bd-kpi" data-testid="tile-kpi-value">
+            {(() => {
+              const v = on && sliced.kpi ? sliced.kpi.rows[0]?.[0] : runs.kpi.data.rows[0][0]
+              return v == null ? '–' : money(v as string)
+            })()}
+          </div>
+          {work.peek && !on && (
             <div className="bd-peek" data-testid="tile-kpi-peek">
               Your Quick look showed {money(work.peek.kpi)}. Cleaning took out the sales sent twice and the stores counted twice.
             </div>
@@ -80,10 +130,15 @@ export function DashboardScreen({ work, setWork, ready }: Props) {
       {id === 'kpi' && runs.kpi?.data && !runs.kpi.ok && <BuildTable data={runs.kpi.data} caption="KPI tile result" />}
       {id === 'line' && lineTable && (
         <div className="bd-chart" data-testid="tile-line-chart">
-          <ChartView table={lineTable} tabId="build-line" fileName="kaiyo-revenue-by-month" />
+          <ChartView table={on && sliced.line ? sliced.line : lineTable} tabId="build-line" fileName="kaiyo-revenue-by-month" />
         </div>
       )}
-      {id === 'chains' && runs.chains?.data && runs.chains.ok && <BarChart data={runs.chains.data} label="Revenue by chain" />}
+      {id === 'chains' && runs.chains?.data && runs.chains.ok && (
+        <>
+          <BarChart data={on && sliced.chains ? sliced.chains : runs.chains.data} label="Revenue by chain" selected={filter.chain} onPick={(name) => setFilter(toggleSlice(filter, 'chain', name))} />
+          <p className="build-muted sl-note">Click a bar to slice by that chain. This tile ignores the Chain slicer: every chain stays, the one you picked is lit.</p>
+        </>
+      )}
       {id === 'chains' && runs.chains?.data && !runs.chains.ok && <BuildTable data={runs.chains.data} caption="Chains tile result" />}
     </Tile>
   )
@@ -92,12 +147,13 @@ export function DashboardScreen({ work, setWork, ready }: Props) {
     <div className="space-y-4" data-testid="build-dashboard">
       <p className="build-lead">Three tiles for the Head of Sales, all read from the star you built. Write the blank in each tile.</p>
       <StarPanel ready={ready} />
+      <SlicerBar ready={ready} />
       <div className="bd-grid">
         {tile('kpi')}
         {tile('chains')}
         {tile('line', 'bd-wide')}
       </div>
-      <PinnedGrid pins={work.more.pins} ready={ready} onRemove={(q) => setWork((w) => ({ ...w, more: { ...w.more, pins: removePin(w.more.pins, q) } }))} />
+      <PinnedGrid slice={filter} pins={work.more.pins} ready={ready} onRemove={(q) => setWork((w) => ({ ...w, more: { ...w.more, pins: removePin(w.more.pins, q) } }))} />
       {dashboardDone(dash.tiles) && (
         <div className="build-quick" data-testid="dashboard-done">
           <b>The dashboard is ready.</b> Next, read it and answer the question the Head of Sales asked.
@@ -107,7 +163,7 @@ export function DashboardScreen({ work, setWork, ready }: Props) {
   )
 }
 
-function Tile({ card, className, blank, onBlank, passed, result, busy, ready, onRun, children }: {
+function Tile({ card, className, blank, onBlank, passed, result, busy, ready, onRun, slicerSql, filtered, children }: {
   card: TileCard
   className: string
   blank: string
@@ -117,6 +173,10 @@ function Tile({ card, className, blank, onBlank, passed, result, busy, ready, on
   busy: boolean
   ready: boolean
   onRun: () => void
+  /** what the slicers add to this tile's SQL (null when no slicer is on) */
+  slicerSql: string | null
+  /** the tile shows a filtered number: not the one the Answer step checks */
+  filtered: boolean
   children?: ReactNode
 }) {
   const [hints, setHints] = useState(0)
@@ -125,6 +185,11 @@ function Tile({ card, className, blank, onBlank, passed, result, busy, ready, on
     <section className={`bd-tile ${className}${passed ? ' is-passed' : ''}`} data-testid={`tile-${card.id}`}>
       <div className="bd-tile-head">
         <div className="bd-tile-title">{card.title}</div>
+        {filtered && (
+          <span className="sl-tag" title="A slicer is on: this is not the number the Answer step checks" data-testid="tile-filtered">
+            Filtered
+          </span>
+        )}
         {passed && (
           <span className="build-ok">
             <Check size={14} /> Passed
@@ -171,6 +236,12 @@ function Tile({ card, className, blank, onBlank, passed, result, busy, ready, on
         </div>
       )}
       {children}
+      {slicerSql && (
+        <details className="sl-sql" open data-testid={`tile-slicer-sql-${card.id}`}>
+          <summary>SQL it runs with the slicers</summary>
+          <pre>{slicerSql}</pre>
+        </details>
+      )}
     </section>
   )
 }

@@ -535,9 +535,9 @@ export const ANSWERS: readonly AnswerQuestion[] = [
 /** Where the finish leads back to: the trainer counts the build (quaera.app reads `#lab-done=build:<id>`). */
 export const BUILD_RETURN_URL = 'https://quaera.app/#lab-done=build:kaiyo-sales'
 
-// ---------------------------------------------------------------- More: five more questions (spec 5.5)
+// ---------------------------------------------------------------- More: six more questions (spec 5.5, 5.6)
 
-export type MoreId = 'K1' | 'K2' | 'K3' | 'K4' | 'K5'
+export type MoreId = 'K1' | 'K2' | 'K3' | 'K4' | 'K5' | 'K6'
 
 export const BRANDS = ['Aqualis', 'Fruvia', 'Gastrivo', 'Krosti', 'Milvara', 'Nettora', 'Pyrexan', 'Rhinolar', 'Vitanor'] as const
 export const PREFECTURES = ['Aichi', 'Chiba', 'Fukuoka', 'Hiroshima', 'Hokkaido', 'Hyogo', 'Ibaraki', 'Kanagawa', 'Kyoto', 'Miyagi', 'Niigata', 'Okinawa', 'Osaka', 'Saitama', 'Shizuoka', 'Tokyo'] as const
@@ -553,6 +553,8 @@ export interface MoreQuestion extends Omit<AnswerQuestion, 'id'> {
   start: string
   hints: readonly [string, string]
   solution: string
+  /** answered with the dashboard's slicers, no SQL (K6): the slicers to set */
+  slicers?: { chain: string; brand: string }
 }
 
 const H1 = `sale_date >= DATE '2026-01-01' AND sale_date < DATE '2026-07-01'`
@@ -645,6 +647,24 @@ export const MORE_QUESTIONS: readonly MoreQuestion[] = [
     wrong: [
       { pick: 'Minori #1027', line: 'Minori #1027 is second, 19,893.72. Look at the top row.' },
       { value: 19893.72, line: 'That is Minori #1027, the second store.' },
+    ],
+  },
+  {
+    id: 'K6',
+    title: 'Aqualis in Minori stores',
+    question: 'How much did Aqualis sell in Minori stores from January to June 2026?',
+    practises: 'the slicers: a slicer is a query, no SQL to write',
+    start: '',
+    numberLabel: 'Revenue',
+    right: { value: 24519.83 },
+    where: 'the revenue tile with the slicers set',
+    slicers: { chain: 'Minori', brand: 'Aqualis' },
+    hints: ['Set both slicers: Chain = Minori and Brand = Aqualis. The revenue tile of the dashboard then shows the number.', 'The tile says “Filtered” while a slicer is on. Open the SQL it runs under the tile: the slicer is a view with a WHERE on the chain and on the brand.'],
+    solution: '',
+    wrong: [
+      { value: 90829.5, line: 'That is all of Minori, every brand. Set the Brand slicer to Aqualis too.' },
+      { value: 80977.09, line: 'That is Aqualis in every chain. Set the Chain slicer to Minori too.' },
+      { value: 314906.13, line: 'That is the whole dashboard with no slicer on. Set Chain and Brand.' },
     ],
   },
 ]

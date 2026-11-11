@@ -6,7 +6,7 @@ import { answersDone, checkAnswer, type AnswerResult } from '../../core/buildDas
 import { moreCount } from '../../core/buildMore'
 import { followQuaeraLink } from '../../core/quaeraLink'
 import type { BuildWork } from '../../core/buildSteps'
-import { ANSWERS, BUILD_RETURN_URL, type AnswerId, type AnswerQuestion } from '../../data/build/kaiyoSales'
+import { ANSWERS, BUILD_RETURN_URL, MORE_IDS, type AnswerId, type AnswerQuestion } from '../../data/build/kaiyoSales'
 import { DashCopy } from './DashCopy'
 import { FillButton, useDemo } from './DemoContext'
 import './dashboard.css'
@@ -49,8 +49,8 @@ export function AnswerScreen({ work, setWork, ready, onMore }: Props) {
           <b>You built it.</b> From four raw files to a number, a month and a chain, with every step yours: connected, cleaned, modelled, shown. Minori carries the first half of 2026.
           <div className="more-cards">
             <div className="more-card" data-testid="answer-card-more">
-              <div className="more-card-title">Keep going here: five more questions from the Head of Sales</div>
-              <div className="build-muted">Answer them with SQL you write yourself, and pin the results to your dashboard. {moreCount(work.more)} of 5 done.</div>
+              <div className="more-card-title">Keep going here: six more questions from the Head of Sales</div>
+              <div className="build-muted">Answer them with SQL you write yourself (the last one with the slicers), and pin the results to your dashboard. {moreCount(work.more)} of {MORE_IDS.length} done.</div>
               <button className="btn btn-primary" onClick={onMore} data-testid="answer-more">
                 {moreCount(work.more) > 0 ? 'Continue' : 'Start'} <ArrowRight size={14} />
               </button>

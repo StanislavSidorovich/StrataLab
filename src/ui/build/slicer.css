@@ -1,0 +1,15 @@
+/* Slicers of the Dashboard, the "Filtered" tag, the slicer SQL block and the clickable bars. Colours come from the app's variables. */
+.sl-bar { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.sl-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.sl-label { flex: none; width: 52px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.sl-chip { font: inherit; font-size: 12.5px; padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); color: var(--text); cursor: pointer; }
+.sl-chip:hover { background: var(--panel-2); }
+.sl-chip.is-on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.sl-line { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 13px; }
+.sl-clear { font: inherit; font-size: 13px; padding: 0; border: 0; background: none; color: var(--accent); text-decoration: underline; cursor: pointer; }
+.sl-tag { flex: none; padding: 1px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 600; }
+.sl-badge { flex: none; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); font-size: 11.5px; }
+.sl-sql { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; background: var(--bg); }
+.sl-sql summary { cursor: pointer; font-size: 12.5px; font-weight: 600; }
+.sl-sql pre { margin: 6px 0 0; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 240px; overflow: auto; }
+.sl-note { margin: 0; }

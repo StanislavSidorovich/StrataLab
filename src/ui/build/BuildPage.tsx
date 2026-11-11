@@ -8,6 +8,7 @@ import { canFillBefore, fillBefore, fillBeforeTouchesTables, fillUnit, touchesTa
 import { DEMO_KEY, isEmptyRun, loadSaved, loadSlot, restoreNeedsConfirm, restoreSaved, startOver, writeSaved, type Saved } from '../../core/buildProgress'
 import type { Link } from '../../core/buildLinks'
 import { answersDone, dashboardDone } from '../../core/buildDashboard'
+import { NO_SLICE, type SliceFilter } from '../../core/buildSlice'
 import { cleanDone, type BuildWork, type StepSpec } from '../../core/buildSteps'
 import { BUILD_RETURN_URL, BUILD_SOURCES, type BuildSourceId } from '../../data/build/kaiyoSales'
 import { applySteps, prepare, resetWork, restore, salesLock } from '../../db/buildRun'
@@ -24,6 +25,7 @@ import './build.css'
 import './clean.css'
 import './progress.css'
 import { DemoContext } from './DemoContext'
+import { SliceContext } from './SliceContext'
 import { ProgressMenu } from './ProgressMenu'
 
 /** Where the finish will lead back to. The trainer does not read this format yet, so nothing links here. */
@@ -110,6 +112,8 @@ function Shell() {
   const demoRef = useRef(demo)
   demoRef.current = demo
   const [saved, setSaved] = useState<Saved | null>(loadSaved)
+  // the slicers of the dashboard (Chain, Brand); not saved, cleared when the run changes
+  const [filter, setFilter] = useState<SliceFilter>(NO_SLICE)
 
   /** [Error] cells in the clean sales (spec 3.6): the Dashboard stays locked while there are any, and a step bar already on it goes back to Clean */
   const refreshErrors = useCallback(async () => {
@@ -153,6 +157,7 @@ function Shell() {
   // Progress: Start over, My saved run, Demo mode, and the Fill buttons of demo mode (src/core/buildProgress.ts, buildFill.ts)
   const reload = useCallback(() => {
     setCleanFocus(undefined)
+    setFilter(NO_SLICE)
     // not ready in the same render that brings the new state: a screen must not read tables that are being made again
     setEngine('loading')
     setTries((n) => n + 1)
@@ -179,6 +184,7 @@ function Shell() {
     setEngine('loading')
     setTries((n) => n + 1)
     setCleanFocus(undefined)
+    setFilter(NO_SLICE)
   }, [])
   // a link to #build=kaiyo-sales&demo=1 followed in the open page
   useEffect(() => {
@@ -248,6 +254,7 @@ function Shell() {
 
   return (
     <DemoContext.Provider value={{ demo, ready: ready && engine === 'ready', fill }}>
+    <SliceContext.Provider value={{ filter, setFilter }}>
     <div className="build-page absolute inset-0 z-30 flex flex-col min-w-0" data-testid="build">
       <header className="build-head shrink-0 flex items-center gap-3 px-4 py-2">
         <Hammer size={18} style={{ color: 'var(--accent)' }} />
@@ -294,7 +301,7 @@ function Shell() {
                     disabled={st === 'locked'}
                     aria-current={s === open ? 'step' : undefined}
                     onClick={() => setState(openStep(state, s))}
-                    title={st === 'locked' ? (s === MORE_STEP ? 'Finish Answer first' : 'Finish the step before it first') : s === MORE_STEP ? 'Optional: five more questions' : STEP_LABEL[s]}
+                    title={st === 'locked' ? (s === MORE_STEP ? 'Finish Answer first' : 'Finish the step before it first') : s === MORE_STEP ? 'Optional: six more questions' : STEP_LABEL[s]}
                   >
                     <span className="build-chip-n">{st === 'done' ? <Check size={13} /> : st === 'locked' ? <Lock size={12} /> : i + 1}</span>
                     <span className="build-chip-label">{STEP_LABEL[s]}{s === MORE_STEP && <span className="build-chip-opt"> optional</span>}</span>
@@ -343,7 +350,7 @@ function Shell() {
               ) : open === 'answer' ? (
                 <AnswerScreen work={work} setWork={setWork} ready={ready} onMore={() => setState((s) => openStep(s, MORE_STEP))} />
               ) : (
-                <MoreScreen work={work} setWork={setWork} ready={ready} />
+                <MoreScreen work={work} setWork={setWork} ready={ready} onDashboard={() => setState((s) => openStep(s, 'dashboard'))} />
               )}
             </section>
           </main>
@@ -356,6 +363,7 @@ function Shell() {
         </>
       )}
     </div>
+    </SliceContext.Provider>
     </DemoContext.Provider>
   )
 }

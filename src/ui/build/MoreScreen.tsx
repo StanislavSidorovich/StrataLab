@@ -3,7 +3,7 @@
 // answer field and the two hints on the right. "Show a solution" counts the question as done, marked "with solution".
 import { useEffect, useRef, useState } from 'react'
 import type { Table } from 'apache-arrow'
-import { Check, CheckCircle2, ExternalLink, Lightbulb, Loader2, Pin, Play } from 'lucide-react'
+import { ArrowRight, Check, CheckCircle2, ExternalLink, Lightbulb, Loader2, Pin, Play } from 'lucide-react'
 import { checkMoreAnswer, moreDone, moreSqlProblem, pinnable, removePin, setPin, type MoreWork } from '../../core/buildMore'
 import { followQuaeraLink } from '../../core/quaeraLink'
 import type { BuildWork } from '../../core/buildSteps'
@@ -16,6 +16,7 @@ import { kindOf } from '../Chart'
 import { BuildTable } from './BuildTable'
 import { MoreEditor } from './MoreEditor'
 import { FillButton, useDemo } from './DemoContext'
+import { SlicerBar } from './SlicerBar'
 import { StarPanel } from './StarPanel'
 import './dashboard.css'
 import './more.css'
@@ -24,12 +25,14 @@ interface Props {
   work: BuildWork
   setWork: (f: (w: BuildWork) => BuildWork) => void
   ready: boolean
+  /** opens the Dashboard step (K6 is answered there) */
+  onDashboard: () => void
 }
 
 type Run = { sql: string; table: Table } | { sql: string; error: string }
 const SHOWN_ROWS = 100
 
-export function MoreScreen({ work, setWork, ready }: Props) {
+export function MoreScreen({ work, setWork, ready, onDashboard }: Props) {
   const more = work.more
   const [sel, setSel] = useState<MoreId>(() => MORE_IDS.find((id) => !more.done.includes(id)) ?? 'K1')
   const setMore = (f: (m: MoreWork) => MoreWork) => setWork((w) => ({ ...w, more: f(w.more) }))
@@ -46,7 +49,7 @@ export function MoreScreen({ work, setWork, ready }: Props) {
   return (
     <div className="space-y-4" data-testid="build-more">
       <p className="build-lead">
-        Five more questions from the Head of Sales. You write the SQL yourself this time, over the star you built. Pin a result to the dashboard if it deserves a tile.
+        Six more questions from the Head of Sales. You write the SQL yourself this time, over the star you built; the last one is answered with the dashboard's slicers. Pin a result to the dashboard if it deserves a tile.
       </p>
       <StarPanel ready={ready} defaultOpen withRegions onTables={onTables} />
       <div className="more-layout">
@@ -66,11 +69,11 @@ export function MoreScreen({ work, setWork, ready }: Props) {
             )
           })}
         </ol>
-        <Work key={sel} id={sel} work={work} ready={ready} setMore={setMore} noRegion={noRegion} />
+        <Work key={sel} id={sel} work={work} ready={ready} setMore={setMore} noRegion={noRegion} onDashboard={onDashboard} />
       </div>
       {moreDone(more) && (
         <div className="build-quick" data-testid="more-done">
-          <b>Five more, all yours.</b> You answered every question with your own SQL{more.solved.length ? `, ${more.solved.length} with a solution shown` : ''}. Keep building here, or take the same moves back to Quaera.
+          <b>Six more, all yours.</b> You answered every question, five with your own SQL{more.solved.length ? `, ${more.solved.length} with a solution shown` : ''}. Keep building here, or take the same moves back to Quaera.
           <WaysOut />
         </div>
       )}
@@ -92,7 +95,7 @@ export function WaysOut() {
   )
 }
 
-function Work({ id, work, ready, setMore, noRegion }: { id: MoreId; work: BuildWork; ready: boolean; setMore: (f: (m: MoreWork) => MoreWork) => void; noRegion: boolean }) {
+function Work({ id, work, ready, setMore, noRegion, onDashboard }: { id: MoreId; work: BuildWork; ready: boolean; setMore: (f: (m: MoreWork) => MoreWork) => void; noRegion: boolean; onDashboard: () => void }) {
   const q = moreQuestion(id)
   const more = work.more
   const text = more.sql[id]
@@ -147,13 +150,26 @@ function Work({ id, work, ready, setMore, noRegion }: { id: MoreId; work: BuildW
         <div className="more-q">
           {id}. {q.question}
         </div>
-        <div className="build-muted">Practises: {q.practises}. Write the schema in front of a table: build_kaiyo.gold_fact_sales.</div>
+        <div className="build-muted">Practises: {q.practises}.{!q.slicers && ' Write the schema in front of a table: build_kaiyo.gold_fact_sales.'}</div>
       </div>
       {id === 'K4' && noRegion && (
         <div className="bd-peek" data-testid="more-noregion">
           This star has no region column on the customers. Join clean_regions on region_id (it must be a number: finish Clean for regions first).
         </div>
       )}
+      {q.slicers ? (
+        <div className="space-y-2" data-testid="more-slicers">
+          <p style={{ margin: 0 }}>No SQL this time. Use the slicers of the dashboard and read the revenue tile. Set them here or on the Dashboard: they are the same.</p>
+          <SlicerBar ready={ready} />
+          <div className="flex flex-wrap items-center gap-2">
+            <button className="btn btn-primary" onClick={onDashboard} data-testid="more-open-dashboard">
+              Open the dashboard <ArrowRight size={14} />
+            </button>
+            <span className="build-muted">The slicers stay as you set them.</span>
+          </div>
+        </div>
+      ) : (
+        <>
       <MoreEditor value={text} onChange={edit} onRun={() => void doRun()} label={`SQL for question ${id}`} />
       <div className="flex flex-wrap items-center gap-2">
         <button className="btn btn-primary" disabled={!ready || busy} onClick={() => void doRun()} data-testid="more-run">
@@ -181,6 +197,8 @@ function Work({ id, work, ready, setMore, noRegion }: { id: MoreId; work: BuildW
           {table && !canPin && <div className="build-muted">To pin it, return two columns: a label and a number.</div>}
           {pinned && <div className="build-ok"><Check size={14} /> On the dashboard, under “Your tiles”.</div>}
         </div>
+      )}
+        </>
       )}
       <div className="more-answer">
         <div className="ba-fields">
@@ -222,7 +240,7 @@ function Work({ id, work, ready, setMore, noRegion }: { id: MoreId; work: BuildW
               <Lightbulb size={14} /> {hints === 0 ? 'Hint' : 'Another hint'}
             </button>
           )}
-          {hints >= 2 && !solution && (
+          {hints >= 2 && !solution && !q.slicers && (
             <button className="btn" onClick={showSolution} data-testid="more-solution">
               Show a solution
             </button>

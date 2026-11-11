@@ -701,7 +701,19 @@ Wrong answers with a line (all in `MORE_QUESTIONS`): K1 618 (sales sent twice), 
 
 **Done.** All five: a short block "Five more, all yours." with the same two ways out. No `#lab-done=` for More in this version (the hub decides later whether the trainer counts it).
 
-**Not now:** filter/slicer (section 6, next hub design), learner-chosen chart types, saving queries as files.
+**Not now:** learner-chosen chart types, saving queries as files.
+
+---
+
+### 5.6 Slicers on the dashboard (v0.35.0)
+
+Two rows of chips above the tiles, Chain and Brand (values from `gold_dim_customer` and `gold_dim_product`), single select, the selected chip clears itself; "Showing: Chain = X · Brand = Y" with Clear. A click on a bar of the chains tile sets Chain.
+
+A slicer is a query. Lab keeps views in schema `slice` (`slice_nochain` for the chains tile) named like the star's tables: the dimensions filtered by `WHERE chain_name = …` / `brand = …`, the fact by `IN (SELECT …)` over those. Before a tile or a pin runs, `build_kaiyo.gold_fact_sales|gold_dim_customer|gold_dim_product` in its SQL is rewritten to `slice.<same>` (any case, quoted or spaced; `src/core/buildSlice.ts`). The tiles name `build_kaiyo.` explicitly, so a `search_path` would not reach them. A pin whose SQL names none of the three tables shows "not sliced". The block "SQL it runs with the slicers" shows the renamed tables and the view definitions. The learner's SQL is never changed on the page.
+
+The chains tile ignores Chain: all bars stay, the picked one is lit, the others fade; Brand acts. The KPI tile shows a "Filtered" tag. Run and check, the Answer step and its copy of the dashboard always read the unfiltered tables. The filter is page state (not saved), cleared by Start over and by switching demo.
+
+**K6** (More, no SQL): "How much did Aqualis sell in Minori stores from January to June 2026?" Set Chain = Minori and Brand = Aqualis, read the revenue tile: **24,519.83** (Minori 90,829.50 and Aqualis 80,977.09 alone are the wrong-answer lines). Minori's brands: Fruvia 27,013.69, Aqualis 24,519.83, Krosti 20,381.93, Milvara 17,712.44, Nettora 1,201.61.
 
 ---
 
