@@ -198,44 +198,52 @@ export interface CleanCard {
   id: CleanId
   source: BuildSourceId
   title: string
+  /** the first line: what to press, with the button and column names as the UI writes them (`code` marks a name) */
+  action: string
+  /** the second line: what is wrong in the data and why it matters */
   text: string
+  /** first: what to look at; second: the setting or an example (never the action line again) */
   hints: readonly string[]
 }
 
 export const CLEAN_CARDS: readonly CleanCard[] = [
-  { id: 'W', source: 'regions', title: 'Watch: a prefecture twice', text: 'One problem, solved in front of you. Press Next to see each step.', hints: [] },
+  { id: 'W', source: 'regions', title: 'Watch: a prefecture twice', action: 'Press Next to see each step.', text: 'One problem, solved in front of you.', hints: [] },
   {
     id: 'P1',
     source: 'products',
     title: 'Wrong SKUs in products.csv',
-    text: "6 of the 29 SKUs in the sales files can't be found in products.csv as written.",
+    action: 'Press Trim, then Uppercase, with `sku_code` chosen.',
+    text: "6 of the 29 SKUs in the sales can't be found in products.csv: spaces and small letters make them other words.",
     hints: [
       "Put AQUA002 from the sales next to aqua002 here. To the computer these are different words, and so are 'FRUV002 ' and 'FRUV002'.",
-      'Two buttons on sku_code: Trim, then Uppercase.',
+      "Trim cuts the spaces at the edges (' KROS001' becomes 'KROS001'); Uppercase turns nett002 into NETT002. Each press adds a step to the list below; Check counts the SKUs still without a product.",
     ],
   },
   {
     id: 'P2',
     source: 'sales',
     title: 'Sales sent twice',
-    text: 'Some sales arrived twice: the same line in the same export. Keep one row per sale: what makes two rows the same sale?',
-    hints: ['Two copies of one sale share the date, the store and the SKU. Only raw_id differs.', 'List those columns, separated by commas.'],
+    action: 'Fill the blank with the columns that make two rows the same sale, then Apply and check.',
+    text: 'Some sales arrived twice, the same line in the same export. Counted twice, revenue is too high.',
+    hints: ['Two copies of one sale share the date, the store and the SKU. Only raw_id differs.', 'Write the column names separated by commas, for example: col_a, col_b, col_c (the three columns that stay equal).'],
   },
   {
     id: 'P3',
     source: 'customers',
     title: 'Stores twice in customers.csv',
-    text: '4 stores are in customers.csv twice. Each needs exactly one row, or every sale of theirs will be counted twice.',
+    action: 'Press Keep latest row per key: key `customer_id`, order by `updated_at`, Newest.',
+    text: '4 stores are in customers.csv twice. Every sale of theirs would be counted twice.',
     hints: [
       'Look at the two rows of Nagisa #1045: the city differs, and so does updated_at. Which one is the store today?',
-      'Keep latest row per key: key customer_id, order by updated_at, newest.',
+      'Remove duplicates does not work here: the two rows differ in city and date. The rule is "the newest row of each customer_id stays".',
     ],
   },
   {
     id: 'P5',
     source: 'sales',
     title: 'Dates in the sales',
-    text: 'sale_date came as text. Turn it into a date: press Change type with Date on sale_date in the sales list below, and see what happens.',
+    action: 'Press Change type: column `sale_date`, to Date. Then read what the preview says.',
+    text: 'sale_date came as text. The exports write 2024-01-05 and also 19.02.2024 and 19/02/2024.',
     hints: [
       'Look at the rows in error. A plain Change type reads 2024-01-05 only; the exports also write 19.02.2024 and 19/02/2024.',
       "Write the format of the slash dates. Kaiyo's distributors put the day first: %d/%m/%Y.",
@@ -245,10 +253,11 @@ export const CLEAN_CARDS: readonly CleanCard[] = [
     id: 'P6',
     source: 'sales',
     title: 'Numbers with a decimal comma',
-    text: 'revenue and units are text too. Press Change type on each: Decimal for revenue, Whole number for units. Then see what the preview says.',
+    action: 'Press Change type twice: `revenue` to Decimal, `units` to Whole number. Then read the preview.',
+    text: 'revenue and units are text too, and some are written with a comma (381,99).',
     hints: [
       'Look at the rows in error: 381,99 is written with a comma, and a number with a comma is not a number to the computer.',
-      'Change type again, with Decimal separator set to comma, on revenue and on units.',
+      'Set decimal separator to comma (3,5) next to Change type, then press it again on revenue and on units.',
     ],
   },
 ]

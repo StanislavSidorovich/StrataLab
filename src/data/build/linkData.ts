@@ -88,13 +88,15 @@ export const LINK_TEXT = {
   peekTitle: 'Revenue of January to June 2026 by chain, with this link:',
   p4: {
     title: 'Names that find no customer',
-    text: 'Some store names in the sales find no customer: spaces at the edges, and one chain written two ways. Make the names match to the character, then link again.',
-    hints: ['Group the sales by customer_name and look at the ones that start or end with a space, and at Itiba against Ichiba.', 'Trim on customer_name, then Replace values: Itiba with Ichiba.'],
+    action: 'Press Trim on `customer_name`, then Replace values: find Itiba, with Ichiba.',
+    text: 'Some store names in the sales find no customer: spaces at the edges, and one chain written two ways. Then link again.',
+    hints: ['Group the sales by customer_name and look at the ones that start or end with a space, and at Itiba against Ichiba.', 'Pick customer_name in the column box next to Trim; Replace values uses the same box, and its find and with boxes are case-sensitive.'],
   },
   p7: {
     title: 'Region ids as numbers',
-    text: 'region_id is written R-01 … R-16 here and 1 … 16 in customers. Make it a number so the two can be linked.',
-    hints: ['The number is inside the text: R-03 is region 3.', 'Extract number on region_id.'],
+    action: 'Press Extract number with `region_id` chosen.',
+    text: 'region_id is R-01 … R-16 here and 1 … 16 in customers, so the two cannot be linked.',
+    hints: ['The number is inside the text: R-03 is region 3.', 'Choose region_id in the column box next to Trim first. Example: R-03 becomes 3, R-16 becomes 16.'],
   },
 } as const
 

@@ -17,6 +17,7 @@ import { StepsPanel } from './StepsPanel'
 import { WatchRegions } from './WatchRegions'
 import { FillButton } from './DemoContext'
 import './clean.css'
+import './cleanAction.css'
 import './errors.css'
 
 interface Props {
@@ -60,6 +61,9 @@ export function CleanScreen({ work, setWork, ready, rebuild, rev, focus, onBackT
     if (nextCard) setSource(nextCard.source)
   }
 
+  const problems = CLEAN_CARDS.filter((c) => c.id !== 'W')
+  const total = problems.length
+  const left = problems.filter((c) => !work.passed.includes(c.id)).length
   if (!connected) return <p className="build-muted">Connect the four sources first.</p>
   return (
     <div className="space-y-4" data-testid="build-clean">
@@ -68,6 +72,9 @@ export function CleanScreen({ work, setWork, ready, rebuild, rev, focus, onBackT
         <summary>{GIVEN_NOTE}</summary>
         <p className="build-muted" style={{ margin: '6px 0 0' }}>It is the first step in the list of sales, marked “given”. Pick the sales tab below and open its SQL.</p>
       </details>
+      <p className="build-left" data-testid="clean-left">
+        {left === 0 ? 'All problems solved' : `${left} of ${total} problems left`}
+      </p>
       <ol className="build-cards">
         {CLEAN_CARDS.map((c) => {
           const passed = work.passed.includes(c.id)
@@ -101,7 +108,7 @@ export function CleanScreen({ work, setWork, ready, rebuild, rev, focus, onBackT
               {open && c.id === 'W' && <FillButton unit={{ step: 'clean', card: 'W' }} />}
               {open && c.id !== 'W' && (
                 <>
-                  <p style={{ margin: 0 }}>{c.text}</p>
+                  <ActionText action={c.action} text={c.text} />
                   {c.id === 'P1' && (
                     <div className="build-skus" aria-label="The six SKUs as they are in the file">
                       {P1_SKUS.map((s) => (
@@ -148,6 +155,18 @@ export function CleanScreen({ work, setWork, ready, rebuild, rev, focus, onBackT
   )
 }
 
+/** The first line says what to press (a `name` in backticks is a button label or a column), the second what is wrong. */
+function ActionText({ action, text }: { action: string; text: string }) {
+  return (
+    <div className="build-action">
+      <p className="build-action-do" data-testid="clean-action">
+        {action.split('`').map((part, i) => (i % 2 ? <code key={i}>{part}</code> : part))}
+      </p>
+      <p className="build-action-why">{text}</p>
+    </div>
+  )
+}
+
 function Hints({ card, level, onMore }: { card: CleanCard; level: number; onMore: () => void }) {
   if (card.hints.length === 0) return null
   return (
@@ -161,7 +180,7 @@ function Hints({ card, level, onMore }: { card: CleanCard; level: number; onMore
       )}
       {level < card.hints.length && (
         <button className="btn" style={{ marginTop: level > 0 ? 6 : 0 }} onClick={onMore}>
-          <Lightbulb size={14} /> {level === 0 ? 'Hint' : 'Another hint'}
+          <Lightbulb size={14} /> {level === 0 ? "If you're stuck" : 'Another hint'}
         </button>
       )}
     </div>
@@ -273,7 +292,7 @@ function SalesBlank({ work, setWork, ready, rebuild, onReport }: { work: BuildWo
 }
 
 /** The card the Model step asked for: P4 (names of the sales) or P7 (region ids as numbers). Same shape: text, hints, Check, back to Model. */
-function ExtraCard({ id, work, setWork, ready, onFocus, onBack, text, where, check }: { id: 'P4' | 'P7'; work: BuildWork; setWork: Props['setWork']; ready: boolean; onFocus: () => void; onBack: () => void; text: { title: string; text: string; hints: readonly string[] }; where: string; check: () => Promise<CheckReport> }) {
+function ExtraCard({ id, work, setWork, ready, onFocus, onBack, text, where, check }: { id: 'P4' | 'P7'; work: BuildWork; setWork: Props['setWork']; ready: boolean; onFocus: () => void; onBack: () => void; text: { title: string; action: string; text: string; hints: readonly string[] }; where: string; check: () => Promise<CheckReport> }) {
   const [level, setLevel] = useState(0)
   const [report, setReport] = useState<CheckReport | null>(null)
   const [busy, setBusy] = useState(false)
@@ -300,7 +319,7 @@ function ExtraCard({ id, work, setWork, ready, onFocus, onBack, text, where, che
           <div className="build-muted">{where}</div>
         </div>
       </div>
-      <p style={{ margin: 0 }}>{text.text}</p>
+      <ActionText action={text.action} text={text.text} />
       <div>
         {level > 0 && (
           <ul className="m-0 pl-5" style={{ fontSize: 13 }} data-testid="clean-hints">
@@ -311,7 +330,7 @@ function ExtraCard({ id, work, setWork, ready, onFocus, onBack, text, where, che
         )}
         {level < text.hints.length && (
           <button className="btn" style={{ marginTop: level > 0 ? 6 : 0 }} onClick={() => setLevel(level + 1)}>
-            <Lightbulb size={14} /> {level === 0 ? 'Hint' : 'Another hint'}
+            <Lightbulb size={14} /> {level === 0 ? "If you're stuck" : 'Another hint'}
           </button>
         )}
       </div>
@@ -443,10 +462,10 @@ function OddCard({ work, setWork, ready, rev }: { work: BuildWork; setWork: Prop
           <div className="build-muted">sales · nothing to fix</div>
         </div>
       </div>
+      <ActionText action={work.p8 ? 'Nothing to change here.' : 'Read the three numbers, then press Got it.'} text="Not every odd value is an error: an empty revenue stays NULL, a return stays negative." />
       <p style={{ margin: 0 }} data-testid="clean-p8-numbers">
         {fmtN(odd.noRevenue)} sales have no revenue, {fmtN(odd.noUnits)} have no units, and {fmtN(odd.returns)} have negative units (returns).
       </p>
-      <p style={{ margin: 0 }}>Not every odd value is an error: an empty revenue stays NULL, a return stays negative.</p>
       {!work.p8 && (
         <div>
           <button className="btn btn-primary" onClick={() => setWork((w) => ({ ...w, p8: true }))} data-testid="clean-p8-read">
