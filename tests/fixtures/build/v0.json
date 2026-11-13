@@ -1,0 +1,273 @@
+{
+ "done": [
+  "connect",
+  "clean",
+  "model",
+  "dashboard",
+  "answer"
+ ],
+ "open": "refresh",
+ "work": {
+  "v": 2,
+  "connected": [
+   "sales",
+   "customers",
+   "products",
+   "regions"
+  ],
+  "steps": {
+   "sales": [
+    {
+     "id": "s1",
+     "kind": "dedup",
+     "params": {
+      "blank": "sale_date, customer_name, sku_code"
+     }
+    },
+    {
+     "id": "s2",
+     "kind": "dates",
+     "params": {
+      "format": "%d/%m/%Y"
+     }
+    },
+    {
+     "id": "s3",
+     "kind": "type",
+     "params": {
+      "column": "revenue",
+      "to": "decimal",
+      "sep": "comma"
+     }
+    },
+    {
+     "id": "s4",
+     "kind": "type",
+     "params": {
+      "column": "units",
+      "to": "whole",
+      "sep": "comma"
+     }
+    },
+    {
+     "id": "s5",
+     "kind": "trim",
+     "params": {
+      "column": "customer_name"
+     }
+    },
+    {
+     "id": "s6",
+     "kind": "replace",
+     "params": {
+      "column": "customer_name",
+      "find": "Itiba",
+      "with": "Ichiba"
+     }
+    }
+   ],
+   "customers": [
+    {
+     "id": "s1",
+     "kind": "latest",
+     "params": {
+      "key": "customer_id",
+      "order": "updated_at",
+      "direction": "newest"
+     }
+    }
+   ],
+   "products": [
+    {
+     "id": "s1",
+     "kind": "trim",
+     "params": {
+      "column": "sku_code"
+     }
+    },
+    {
+     "id": "s2",
+     "kind": "upper",
+     "params": {
+      "column": "sku_code"
+     }
+    }
+   ],
+   "regions": [
+    {
+     "id": "s1",
+     "kind": "distinct",
+     "params": {}
+    },
+    {
+     "id": "s2",
+     "kind": "extract",
+     "params": {
+      "column": "region_id"
+     }
+    }
+   ]
+  },
+  "blank": "sale_date, customer_name, sku_code",
+  "format": "%d/%m/%Y",
+  "passed": [
+   "W",
+   "P1",
+   "P2",
+   "P3",
+   "P5",
+   "P6"
+  ],
+  "peek": null,
+  "dash": {
+   "blanks": {
+    "kpi": "SUM(revenue)",
+    "line": "date_trunc('month', sale_date)",
+    "chains": "customer_id"
+   },
+   "tiles": [
+    "kpi",
+    "line",
+    "chains"
+   ],
+   "answers": {
+    "A1": {
+     "pick": "",
+     "number": "314906.13"
+    },
+    "A2": {
+     "pick": "2025-08",
+     "number": "64592.75"
+    },
+    "A3": {
+     "pick": "Minori",
+     "number": "90829.5"
+    }
+   },
+   "answered": [
+    "A1",
+    "A2",
+    "A3"
+   ]
+  },
+  "p7": "done",
+  "p4": "done",
+  "more": {
+   "sql": {
+    "K1": "SELECT count(*) AS sales\nFROM build_kaiyo.gold_fact_sales\nWHERE sale_date >= DATE '2026-01-01' AND sale_date < DATE '2026-07-01'",
+    "K2": "SELECT p.brand, SUM(f.revenue) AS revenue\nFROM build_kaiyo.gold_fact_sales f\nJOIN build_kaiyo.gold_dim_product p ON p.product_id = f.product_id\nWHERE f.sale_date >= DATE '2026-01-01' AND sale_date < DATE '2026-07-01'\nGROUP BY p.brand\nORDER BY revenue DESC",
+    "K3": "SELECT -SUM(units) AS units_returned\nFROM build_kaiyo.gold_fact_sales\nWHERE units < 0 AND sale_date >= DATE '2025-01-01' AND sale_date < DATE '2026-01-01'",
+    "K4": "SELECT c.region_name, SUM(f.revenue) AS revenue\nFROM build_kaiyo.gold_fact_sales f\nJOIN build_kaiyo.gold_dim_customer c ON c.customer_id = f.customer_id\nWHERE f.sale_date >= DATE '2026-01-01' AND sale_date < DATE '2026-07-01'\nGROUP BY c.region_name\nORDER BY revenue DESC",
+    "K5": "SELECT c.customer_name, SUM(f.revenue) AS revenue\nFROM build_kaiyo.gold_fact_sales f\nJOIN build_kaiyo.gold_dim_customer c ON c.customer_id = f.customer_id\nWHERE c.chain_name = 'Minori'\n  AND f.sale_date >= DATE '2025-01-01' AND sale_date < DATE '2026-01-01'\nGROUP BY c.customer_name\nORDER BY revenue DESC\nLIMIT 1",
+    "K6": ""
+   },
+   "answers": {
+    "K1": {
+     "pick": "",
+     "number": "595"
+    },
+    "K2": {
+     "pick": "Fruvia",
+     "number": "100004.67"
+    },
+    "K3": {
+     "pick": "",
+     "number": "217"
+    },
+    "K4": {
+     "pick": "Okinawa",
+     "number": "44845.38"
+    },
+    "K5": {
+     "pick": "Minori #1015",
+     "number": "22383.37"
+    },
+    "K6": {
+     "pick": "",
+     "number": "24519.83"
+    }
+   },
+   "done": [
+    "K1",
+    "K2",
+    "K3",
+    "K4",
+    "K5",
+    "K6"
+   ],
+   "solved": [],
+   "pins": []
+  },
+  "refresh": {
+   "mode": "list",
+   "format2": "",
+   "runs": [],
+   "journal": [],
+   "answer": {
+    "pick": "",
+    "number": ""
+   },
+   "done": false
+  },
+  "p8": false
+ },
+ "links": [
+  {
+   "id": "L1",
+   "many": {
+    "table": "clean_sales",
+    "column": "customer_name"
+   },
+   "one": {
+    "table": "clean_customers",
+    "column": "customer_name"
+   }
+  },
+  {
+   "id": "L2",
+   "many": {
+    "table": "clean_sales",
+    "column": "sku_code"
+   },
+   "one": {
+    "table": "clean_products",
+    "column": "sku_code"
+   }
+  },
+  {
+   "id": "L3",
+   "many": {
+    "table": "clean_customers",
+    "column": "region_id"
+   },
+   "one": {
+    "table": "clean_regions",
+    "column": "region_id"
+   }
+  },
+  {
+   "id": "F1",
+   "many": {
+    "table": "gold_fact_sales",
+    "column": "customer_id"
+   },
+   "one": {
+    "table": "gold_dim_customer",
+    "column": "customer_id"
+   }
+  },
+  {
+   "id": "F2",
+   "many": {
+    "table": "gold_fact_sales",
+    "column": "product_id"
+   },
+   "one": {
+    "table": "gold_dim_product",
+    "column": "product_id"
+   }
+  }
+ ],
+ "star": true,
+ "v1": false
+}

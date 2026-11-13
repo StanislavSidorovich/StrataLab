@@ -1,6 +1,8 @@
 // Step 2 of the build page: Clean (spec section 3). Four cards open one after the other (W watched, P1 products by
 // buttons, P2 sales by a blank, P3 customers by a button with settings); the panel under them shows any source with its
 // toolbar and applied steps, so the learner chooses the tool and the check judges the table.
+import { FABRIC_CLEAN } from '../../data/build/fabricNotes'
+import './fabric.css'
 import { useEffect, useMemo, useState } from 'react'
 import { ArrowRight, Check, CheckCircle2, Lightbulb, Loader2, Lock, XCircle } from 'lucide-react'
 import { CLEAN_COLUMNS, activeCard, addSpec, checkFormat, cleanDone, datesSql, hasFullGiven, passCard, typedColumn, type BuildWork, type StepSpec, dedupSql } from '../../core/buildSteps'
@@ -61,6 +63,7 @@ export function CleanScreen({ work, setWork, ready, rebuild, rev, focus, onBackT
   if (!connected) return <p className="build-muted">Connect the four sources first.</p>
   return (
     <div className="space-y-4" data-testid="build-clean">
+      <p className="build-muted build-fabric" data-testid="fabric-clean">{FABRIC_CLEAN}</p>
       <details className="build-given">
         <summary>{GIVEN_NOTE}</summary>
         <p className="build-muted" style={{ margin: '6px 0 0' }}>It is the first step in the list of sales, marked “given”. Pick the sales tab below and open its SQL.</p>

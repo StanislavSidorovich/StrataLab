@@ -1,6 +1,8 @@
 // The optional step Refresh (spec docs/build-kaiyo-sales-spec.md, 5.7): a new file arrives in the sales folder, the learner runs the
 // whole chain again and reads the journal. Three moments: the source reads a fixed list and misses the file (switch it to a pattern),
 // the run shows the known dirt cleaned by the learner's own steps, and a new date spelling fails the date step (fix it, run again).
+import { FABRIC_REFRESH } from '../../data/build/fabricNotes'
+import './fabric.css'
 import { useEffect, useMemo, useState } from 'react'
 import { ArrowRight, Check, CheckCircle2, FolderOpen, Lightbulb, Loader2, Play } from 'lucide-react'
 import { checkR1, nextRunNumber, pushRun, runGreen, runLine, statusText, STAGE_LABEL, type JournalRow } from '../../core/buildRefresh'
@@ -109,6 +111,7 @@ export function RefreshScreen({ work, setWork, ready, model, onRan, onOpen, onDa
   return (
     <div className="space-y-4" data-testid="build-refresh">
       <p className="build-lead">{REFRESH_TEXT.lead}</p>
+      <p className="build-muted build-fabric" data-testid="fabric-refresh">{FABRIC_REFRESH}</p>
 
       <section className="rf-card" data-testid="refresh-folder">
         <header className="rf-head">

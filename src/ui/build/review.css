@@ -1,0 +1,14 @@
+/* The optional checks A4 and A5 under the answers. Colours come from the app's variables. */
+.rv { display: flex; flex-direction: column; gap: 12px; }
+.rv-title { font-weight: 600; font-size: 13px; color: var(--muted); }
+.rv-q { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.rv-opts { display: flex; flex-wrap: wrap; gap: 8px; }
+.rv-lines { display: flex; flex-direction: column; gap: 8px; }
+.rv-line { text-align: left; font: inherit; font-size: 13.5px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); cursor: pointer; }
+.rv-line:hover { border-color: var(--accent); }
+.rv-line.is-picked { border-color: var(--accent); background: var(--accent-soft); }
+.rv-out { padding: 8px 10px; border-radius: 8px; font-size: 13px; }
+.rv-out p { margin: 4px 0 0; }
+.rv-out b { display: inline-flex; align-items: center; gap: 4px; }
+.rv-out.is-ok { background: var(--accent-soft); }
+.rv-out.is-off { background: var(--warn-soft); }

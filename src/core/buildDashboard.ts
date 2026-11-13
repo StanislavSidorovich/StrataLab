@@ -3,6 +3,8 @@
 // saved state that belongs to these steps. The engine part is src/db/buildRun.ts.
 import { ANSWERS, BUILD_DASH_DIAGNOSIS, TILE_IDS, TILE_SQL, TILE_TABLE, T, type AnswerId, type AnswerQuestion, type TileId } from '../data/build/kaiyoSales'
 import { checkBlank } from './pipeline'
+import { A4_PICKS, A5_PICKS, readPick } from './buildReview'
+import type { A4Pick, A5Pick } from '../data/build/reviewChecks'
 
 export type { AnswerId, TileId }
 
@@ -153,6 +155,8 @@ export interface DashWork {
   answers: Record<AnswerId, AnswerInput>
   /** answers that passed */
   answered: AnswerId[]
+  /** the optional checks after the three answers: the pick of A4 (the chains add up?) and of A5 (the line to send); '' = not picked */
+  review: { a4: A4Pick | ''; a5: A5Pick | '' }
 }
 
 export const emptyDash = (): DashWork => ({
@@ -160,6 +164,7 @@ export const emptyDash = (): DashWork => ({
   tiles: [],
   answers: { A1: { pick: '', number: '' }, A2: { pick: '', number: '' }, A3: { pick: '', number: '' } },
   answered: [],
+  review: { a4: '', a5: '' },
 })
 
 export const dashboardDone = (tiles: readonly TileId[]) => TILE_IDS.every((t) => tiles.includes(t))
@@ -184,5 +189,7 @@ export function readDash(raw: unknown): DashWork {
     if (x && typeof x.number === 'string') d.answers[q.id].number = x.number.slice(0, 40)
   }
   if (Array.isArray(r.answered)) d.answered = ANSWERS.map((q) => q.id).filter((id) => (r.answered as unknown[]).includes(id))
+  const rv = r.review as Record<string, unknown> | undefined
+  d.review = { a4: readPick(rv?.a4, A4_PICKS), a5: readPick(rv?.a5, A5_PICKS) }
   return d
 }

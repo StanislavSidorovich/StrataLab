@@ -1,0 +1,3 @@
+// One line each on Clean and Refresh: what the step is in Power BI / Fabric. Text only, no copy of Fabric's screens.
+export const FABRIC_CLEAN = 'In Power BI and Fabric: your list of steps is the Applied steps of a query in Power Query (a Dataflow Gen2). Each step reads the table the one before it made.'
+export const FABRIC_REFRESH = 'In Fabric: this Run is a pipeline run, Copy the new file, then the Dataflow with all your steps, then the table in the Lakehouse, then the model refresh, every step again on the new data in one go.'

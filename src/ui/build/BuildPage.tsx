@@ -336,7 +336,8 @@ function Shell() {
               {engine !== 'loading' && !ready && (
                 <div className="build-error" role="alert">
                   The data could not be prepared: {engine}{' '}
-                  <button className="btn" onClick={() => setTries((n) => n + 1)}>Try again</button>
+                  <button className="btn" onClick={() => setTries((n) => n + 1)} data-testid="engine-retry">Try again</button>{' '}
+                  <button className="btn" onClick={() => (demo ? (setState(emptyBuild()), reload()) : startAgain())} title={demo ? 'Empties the demo' : "Keeps this run under My saved run, then goes back to step 1"} data-testid="engine-start-over">Start over</button>
                 </div>
               )}
               {open === 'connect' ? (

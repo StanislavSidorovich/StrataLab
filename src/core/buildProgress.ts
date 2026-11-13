@@ -1,7 +1,7 @@
 // "Progress" of the build page (docs/build-kaiyo-sales-spec.md, "Progress and demo"): three places in the browser. The learner's own
 // run (BUILD_KEY), one saved run (My saved run: Start over puts the run there before it clears the page), and the demo run (its own
 // slot, which the learner's work never touches). Pure; the page is src/ui/build/ProgressMenu.tsx and BuildPage.tsx.
-import { BUILD_KEY, emptyBuild, readBuild, type BuildState } from './build'
+import { BUILD_KEY, emptyBuild, keptState, readBuild, type BuildState } from './build'
 
 export const SAVED_KEY = `${BUILD_KEY}.saved`
 export const DEMO_KEY = `${BUILD_KEY}.demo`
@@ -14,8 +14,7 @@ export interface Saved {
 
 /** What is kept of a state: everything but the [Error] count, which the page measures. */
 export function keptJson(state: BuildState): string {
-  const { errors: _errors, ...kept } = state
-  return JSON.stringify(kept)
+  return JSON.stringify(keptState(state))
 }
 
 /** The run itself, without which step happens to be open: two states with the same key are the same work. */

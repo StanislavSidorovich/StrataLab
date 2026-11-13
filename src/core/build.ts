@@ -150,12 +150,43 @@ export const allDone = (state: BuildState) => STEP_IDS.every((s) => state.done.i
 
 export const BUILD_KEY = 'stratalab.build.kaiyo-sales'
 
-/** What was saved, repaired: anything unreadable starts afresh, gaps in the done steps are dropped. */
+/**
+ * The version of what is kept in the browser (the `version` field of the saved JSON). 0 = a run saved before v0.38.0, which had
+ * no version; 1 = v0.38.0 (the optional checks A4 and A5 under `work.dash.review`). Raise it when the shape changes, add a step
+ * to MIGRATIONS, and add a fixture `tests/fixtures/build/v<N>.json`: tests/buildVersion.test.ts loads one per version.
+ */
+export const SAVED_VERSION = 1
+
+/** One step per version: takes the parsed JSON of version `n - 1` and returns that of version `n`. */
+const MIGRATIONS: Record<number, (p: Record<string, unknown>) => Record<string, unknown>> = {
+  // 0 -> 1: nothing to convert (readDash gives `review` its empty default); the step is here so the version moves and the fixture runs it
+  1: (p) => p,
+}
+
+/** The saved JSON brought up to SAVED_VERSION. A run saved by a newer Lab is read as it is (what is not known is dropped). */
+export function migrateSaved(p: Record<string, unknown>): Record<string, unknown> {
+  let v = typeof p.version === 'number' && Number.isInteger(p.version) && p.version >= 0 ? p.version : 0
+  let out = p
+  while (v < SAVED_VERSION) {
+    v += 1
+    out = MIGRATIONS[v](out)
+  }
+  return { ...out, version: Math.max(v, typeof p.version === 'number' ? p.version : 0) }
+}
+
+/** What is written: the state without the [Error] count, with its version. */
+export function keptState(state: BuildState): Record<string, unknown> {
+  const { errors: _errors, ...kept } = state
+  return { version: SAVED_VERSION, ...kept }
+}
+
+/** What was saved, repaired: anything unreadable starts afresh, gaps in the done steps are dropped, an older version is migrated. */
 export function readBuild(raw: string | null): BuildState {
   if (!raw) return emptyBuild()
   try {
-    const p = JSON.parse(raw)
-    if (!p || typeof p !== 'object') return emptyBuild()
+    const parsed = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return emptyBuild()
+    const p = migrateSaved(parsed as Record<string, unknown>) as Record<string, any>
     const done = contiguous(Array.isArray(p.done) ? p.done.filter(isStep) : [])
     const star = p.star === true
     const state: BuildState = {
@@ -183,8 +214,7 @@ export function loadBuild(): BuildState {
 
 export function saveBuild(state: BuildState, key: string = BUILD_KEY) {
   try {
-    const { errors: _errors, ...kept } = state
-    localStorage.setItem(key, JSON.stringify(kept))
+    localStorage.setItem(key, JSON.stringify(keptState(state)))
   } catch {
     /* not kept: the steps start again next time */
   }

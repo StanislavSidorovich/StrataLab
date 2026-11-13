@@ -9,6 +9,7 @@ import { ANSWERS, BUILD_RETURN_URL, MORE_IDS, type AnswerId, type AnswerQuestion
 import { CountInQuaera } from './CountInQuaera'
 import { DashCopy } from './DashCopy'
 import { FillButton, useDemo } from './DemoContext'
+import { ReviewChecks } from './ReviewChecks'
 import './dashboard.css'
 import './more.css'
 
@@ -64,6 +65,7 @@ export function AnswerScreen({ work, setWork, ready, onMore }: Props) {
           </div>
         </div>
       )}
+      {answersDone(answered) && <ReviewChecks work={work} setWork={setWork} ready={ready} />}
     </div>
   )
 }
