@@ -8,6 +8,8 @@ import type { BuildWork } from '../../core/buildSteps'
 import { ANSWERS, BUILD_RETURN_URL, MORE_IDS, type AnswerId, type AnswerQuestion } from '../../data/build/kaiyoSales'
 import { CountInQuaera } from './CountInQuaera'
 import { DashCopy } from './DashCopy'
+import type { Link } from '../../core/buildLinks'
+import { PowerBiBridge } from './PowerBiBridge'
 import { FillButton, useDemo } from './DemoContext'
 import { ReviewChecks } from './ReviewChecks'
 import './dashboard.css'
@@ -17,11 +19,14 @@ interface Props {
   work: BuildWork
   setWork: (f: (w: BuildWork) => BuildWork) => void
   ready: boolean
+  /** the learner's links (the relationships in the steps) and the [Error] count (no export while there are any) */
+  links: readonly Link[]
+  errors: number
   /** opens the optional step More */
   onMore: () => void
 }
 
-export function AnswerScreen({ work, setWork, ready, onMore }: Props) {
+export function AnswerScreen({ work, setWork, ready, links, errors, onMore }: Props) {
   const [results, setResults] = useState<Partial<Record<AnswerId, AnswerResult>>>({})
   const { answers, answered } = work.dash
   const { demo } = useDemo()
@@ -54,6 +59,7 @@ export function AnswerScreen({ work, setWork, ready, onMore }: Props) {
               <div className="build-muted">Next there: the SQL track on GROUP BY and JOIN, the same moves you just made.</div>
               <CountInQuaera url={BUILD_RETURN_URL} primary testid="answer-count" />
             </div>}
+            <PowerBiBridge links={links} ready={ready} errors={errors} />
             <div className="more-card" data-testid="answer-card-more">
               <div className="more-card-title">Keep going here: six more questions from the Head of Sales</div>
               <div className="build-muted">Answer them with SQL you write yourself (the last one with the slicers), and pin the results to your dashboard. {moreCount(work.more)} of {MORE_IDS.length} done.</div>

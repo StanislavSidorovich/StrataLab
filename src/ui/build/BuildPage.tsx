@@ -363,7 +363,7 @@ function Shell() {
               ) : open === 'dashboard' ? (
                 <DashboardScreen work={work} setWork={setWork} ready={ready} />
               ) : open === 'answer' ? (
-                <AnswerScreen work={work} setWork={setWork} ready={ready} onMore={() => setState((s) => openStep(s, MORE_STEP))} />
+                <AnswerScreen work={work} setWork={setWork} ready={ready} links={state.links} errors={state.errors} onMore={() => setState((s) => openStep(s, MORE_STEP))} />
               ) : open === REFRESH_STEP ? (
                 <RefreshScreen work={work} setWork={setWork} ready={ready} model={{ links: state.links, star: state.star }} onRan={afterRun} onOpen={openFromJournal} onDashboard={() => setState((s) => openStep(s, 'dashboard'))} />
               ) : (
