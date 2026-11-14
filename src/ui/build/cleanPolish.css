@@ -1,0 +1,51 @@
+/* Clean canvas polish (v0.44.0): resizable side panes, success state of the task bar, sticky task bar, column tint, Hint button,
+   «Show the fix», folded SQL, inputs of the ribbon. Tokens only, so both themes follow the app's variables. */
+
+/* L7: the task bar stays at the top of the Clean area, so Check and Next are in reach after a ribbon button */
+.cc-root .cc-task { position: sticky; top: 0; z-index: 6; max-height: 45vh; overflow: auto; box-shadow: 0 2px 0 var(--bg); }
+/* L1: a passed problem turns the bar green and says so */
+.cc-root .cc-task.is-pass { background: var(--accent-soft); border-width: 2px; }
+.cc-passed { display: inline-flex; align-items: center; gap: 4px; padding: 1px 10px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-size: 12.5px; font-weight: 600; }
+.build-foot .btn-primary:not(:disabled) { box-shadow: 0 0 0 3px var(--accent-soft); }
+.bf-locked { margin-left: auto; margin-right: 12px; text-align: right; }
+.bf-link { padding: 0; border: 0; background: transparent; color: var(--accent); font: inherit; text-decoration: underline; cursor: pointer; }
+
+/* L4: the hint button names itself */
+.cc-root .cc-hint { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.cc-root .cc-hint:hover { background: var(--accent-soft); }
+
+/* L5: cards that are not the work of the moment are chips */
+.cc-chiprow { display: flex; flex-wrap: wrap; gap: 6px; }
+.cc-done-chip.is-open-problem { border-style: dashed; background: transparent; }
+
+/* L2: the selected column, header and cells; a gradient layer, so the error and null tints stay under it */
+.cc-grid { --cc-selcol: color-mix(in srgb, var(--accent) 13%, transparent); }
+.cc-grid td.is-selcol { background-image: linear-gradient(var(--cc-selcol), var(--cc-selcol)); }
+
+/* L3: the SQL of a solved problem is folded; the dates that still fail */
+.cc-sqlfold > summary { cursor: pointer; color: var(--muted); font-size: 12.5px; }
+.cc-sqlfold[open] > summary { margin-bottom: 6px; }
+.cc-values { margin: 0; padding-left: 18px; font-size: 12.5px; }
+.cc-values code { padding: 0 4px; border-radius: 4px; background: var(--warn-soft); color: var(--warn-text); }
+
+/* L8: the find and with fields look like fields; the group lights up when Replace values can run */
+.cc-replace .build-input { background: var(--code-bg); border-color: color-mix(in srgb, var(--text) 35%, var(--line)); color: var(--text); }
+.cc-replace .build-input:disabled { opacity: 0.55; }
+.cc-replace .build-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.cc-replace.is-ready > .btn { border-color: var(--accent); background: var(--accent-soft); }
+
+/* resizable side panes: the widths are variables set by StepsPanel (none set = the defaults here) */
+.cc-root .cc-body { grid-template-columns: var(--cc-qw, 190px) minmax(0, 1fr) var(--cc-sw, 270px); }
+.cc-queries, .cc-steps { position: relative; }
+.cc-handle { position: absolute; top: 0; bottom: 0; width: 8px; z-index: 4; cursor: col-resize; border-radius: 4px; touch-action: none; }
+.cc-handle.is-left { right: -8px; }
+.cc-handle.is-right { left: -8px; }
+.cc-handle:hover, .cc-handle:focus-visible { background: color-mix(in srgb, var(--accent) 55%, transparent); outline: none; }
+@media (max-width: 1365px) {
+  .cc-root .cc-body { grid-template-columns: minmax(0, 1fr) var(--cc-sw, 230px); }
+  .cc-handle.is-left { display: none; }
+}
+@media (max-width: 1099px) {
+  .cc-root .cc-body { grid-template-columns: minmax(0, 1fr); }
+  .cc-handle { display: none; }
+}

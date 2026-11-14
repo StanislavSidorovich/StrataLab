@@ -51,8 +51,8 @@ export function DataGrid({ table, compact = false, onCellMenu }: { table: Table;
       {...(onCellMenu ? longPress : {})}
     >
       <div style={{ width: total, minWidth: '100%' }}>
-        <div className="sticky top-0 z-10 flex" style={{ background: 'var(--panel-2)', borderBottom: '1px solid var(--line)' }}>
-          <div className="sticky left-0 shrink-0" style={{ width: numW, background: 'var(--panel-2)' }} />
+        <div className="sticky top-0 z-10 flex" style={{ background: 'var(--grid-head)', borderBottom: '1px solid var(--line)' }}>
+          <div className="sticky left-0 shrink-0" style={{ width: numW, background: 'var(--grid-head)' }} />
           {cols.map((c, i) => (
             <div key={i} className="shrink-0 px-2 py-1 truncate" style={{ width: c.width, borderLeft: '1px solid var(--line)', textAlign: c.num ? 'right' : 'left' }} title={`${c.field.name} · ${typeLabel(c.field)}`}>
               <div className="font-semibold truncate" style={{ fontFamily: 'var(--q-font-sans)' }}>{c.field.name}</div>
@@ -62,7 +62,7 @@ export function DataGrid({ table, compact = false, onCellMenu }: { table: Table;
         </div>
         <div style={{ height: v.getTotalSize(), position: 'relative' }}>
           {v.getVirtualItems().map((row) => (
-            <div key={row.index} className="flex absolute left-0" style={{ top: row.start, height: ROW_H, width: '100%', background: row.index % 2 ? 'var(--grid-alt)' : 'var(--panel)' }}>
+            <div key={row.index} className="flex absolute left-0" style={{ top: row.start, height: ROW_H, width: '100%', background: row.index % 2 ? 'var(--grid-alt)' : 'var(--grid-bg)' }}>
               <div className="sticky left-0 shrink-0 px-2 text-right" style={{ width: numW, lineHeight: `${ROW_H}px`, color: 'var(--muted)', background: 'inherit', borderRight: '1px solid var(--line)' }}>
                 {row.index + 1}
               </div>

@@ -96,7 +96,7 @@ export function CleanRibbon({ source, selected, off, busy, onAdd, onAdvanced, ad
           <button className="btn" disabled={off} onClick={onColumn((c) => onAdd('extract', { column: c }))} title="Keep the digits of a text as a whole number: R-03 becomes 3">
             Extract number
           </button>
-          <span className="cc-replace">
+          <span className={`cc-replace${!off && find && selected ? ' is-ready' : ''}`}>
             <button className="btn" disabled={off || !find} onClick={onColumn((c) => onAdd('replace', { column: c, find, with: withText }))} title="Replace a piece of text in the selected column" data-testid="build-replace">
               Replace values
             </button>

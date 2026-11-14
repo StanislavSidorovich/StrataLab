@@ -21,6 +21,9 @@
   --warn-soft: #fef3c7;
   --warn-text: #7a4b00;
   --grid-alt: #fafbfc;
+  /* the data grids (Appearance: Data grid); own defaults, so a panel tint does not reach them */
+  --grid-bg: var(--q-surface);
+  --grid-head: var(--q-surface-2);
   --sel: #e0f2fe;
   /* the SQL editor's background (Appearance: src/core/look.ts) */
   --code-bg: #ffffff;

@@ -9,7 +9,8 @@ import { DEMO_KEY, isEmptyRun, loadSaved, loadSlot, restoreNeedsConfirm, restore
 import type { Link } from '../../core/buildLinks'
 import { answersDone, dashboardDone } from '../../core/buildDashboard'
 import { NO_SLICE, type SliceFilter } from '../../core/buildSlice'
-import { cleanDone, type BuildWork, type StepSpec } from '../../core/buildSteps'
+import { activeCard, cleanDone, type BuildWork, type StepSpec } from '../../core/buildSteps'
+import { CLEAN_CARDS } from '../../data/build/kaiyoSales'
 import { BUILD_RETURN_URL, BUILD_SOURCES, type BuildSourceId } from '../../data/build/kaiyoSales'
 import { applySteps, prepare, resetWork, restore, salesLock } from '../../db/buildRun'
 import { checkpoint } from '../../db/engine'
@@ -253,6 +254,7 @@ function Shell() {
 
   const open = state.open
   const next = nextStep(state)
+  const stillOpen = open === 'clean' && activeCard(work.passed) ? CLEAN_CARDS.find((c) => c.id === activeCard(work.passed)) : undefined
   const num = isOptional(open) ? 0 : STEP_IDS.indexOf(open) + 1
   /** a journal line of Refresh was clicked: open the step it is about */
   const openFromJournal = (row: JournalRow) => {
@@ -344,7 +346,7 @@ function Shell() {
               {open === 'connect' ? (
                 <ConnectScreen work={work} setWork={setWork} ready={ready} />
               ) : open === 'clean' ? (
-                <CleanScreen work={work} setWork={setWork} ready={ready} rebuild={rebuild} rev={rev} focus={cleanFocus} onBackToModel={backToModel} />
+                <CleanScreen work={work} setWork={setWork} ready={ready} rebuild={rebuild} rev={rev} focus={cleanFocus} onBackToModel={backToModel} onNext={next ? () => setState(goNext(state)) : undefined} />
               ) : open === 'model' ? (
                 <ModelScreen
                   ready={ready}
@@ -374,7 +376,16 @@ function Shell() {
           </main>
           <footer className="build-foot shrink-0">
             <button className="btn btn-ghost" onClick={() => openBuild(null)}>Back to Lab</button>
-            <button className="btn" disabled={!next} onClick={() => setState(goNext(state))}>
+            {open === 'clean' && !next && stillOpen && (
+              <span className="build-muted bf-locked" data-testid="clean-locked">
+                Next step is locked:{' '}
+                <button className="bf-link" onClick={() => document.querySelector('[data-testid="clean-task"]')?.scrollIntoView({ block: 'center' })}>
+                  {stillOpen.id} · {stillOpen.title}
+                </button>{' '}
+                is still open
+              </span>
+            )}
+            <button className={`btn${next ? ' btn-primary' : ''}`} disabled={!next} onClick={() => setState(goNext(state))} data-testid="build-next">
               Next step <ArrowRight size={14} />
             </button>
           </footer>

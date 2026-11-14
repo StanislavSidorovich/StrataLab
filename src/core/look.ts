@@ -4,14 +4,16 @@
 // storage shape as StrataSQL's Appearance (model.quaera.app), so the Quaera apps offer the same tints.
 
 export type Theme = 'light' | 'dark'
-export type LookPart = 'editor' | 'panels'
+export type LookPart = 'editor' | 'panels' | 'grid'
 
 export interface Look {
   editor: Partial<Record<Theme, string>>
   panels: Partial<Record<Theme, string>>
+  /** the data grids (results, Clean and the other build tables); an older saved look has none: the default colour */
+  grid: Partial<Record<Theme, string>>
 }
 
-export const NO_LOOK: Look = { editor: {}, panels: {} }
+export const NO_LOOK: Look = { editor: {}, panels: {}, grid: {} }
 
 /**
  * First swatch = the theme's own colour (white panels and editor; the dark panels and One Dark's
@@ -23,6 +25,10 @@ export const SWATCHES: Record<LookPart, Record<Theme, string[]>> = {
     dark: ['#282c34', '#1d1b16', '#14201b', '#131b27', '#1d1826', '#0e1014', '#262a31'],
   },
   panels: {
+    light: ['#ffffff', '#f6f1e4', '#e8f3ec', '#e7eff9', '#efe9f8', '#f9eaec', '#eceef2'],
+    dark: ['#1b1f27', '#24211b', '#18251f', '#18212e', '#231d2d', '#121418', '#2b3038'],
+  },
+  grid: {
     light: ['#ffffff', '#f6f1e4', '#e8f3ec', '#e7eff9', '#efe9f8', '#f9eaec', '#eceef2'],
     dark: ['#1b1f27', '#24211b', '#18251f', '#18212e', '#231d2d', '#121418', '#2b3038'],
   },
@@ -52,9 +58,9 @@ function part(v: unknown): Partial<Record<Theme, string>> {
 export function parseLook(json: string | null): Look {
   try {
     const v = JSON.parse(json ?? '{}') as Record<string, unknown>
-    return { editor: part(v?.editor), panels: part(v?.panels) }
+    return { editor: part(v?.editor), panels: part(v?.panels), grid: part(v?.grid) }
   } catch {
-    return { editor: {}, panels: {} }
+    return { editor: {}, panels: {}, grid: {} }
   }
 }
 
@@ -86,16 +92,20 @@ export function mixColor(a: string, b: string, share: number): string {
 
 /**
  * The CSS variables to set on the page; undefined = remove (the stylesheet's own value).
- * A chosen panel colour also gives the hover / header shade (`--panel-2`) and the striped grid rows
- * (`--grid-alt`) in the same tint, a little darker in light mode and lighter in dark mode.
+ * A chosen panel colour also gives the hover / header shade (`--panel-2`); a chosen grid colour gives
+ * the grid's rows (`--grid-bg`), its header (`--grid-head`) and the striped rows (`--grid-alt`) in the
+ * same tint, a little darker in light mode and lighter in dark mode. The grid does not follow the panels.
  */
 export function lookVars(look: Look, theme: Theme): Record<string, string | undefined> {
   const panel = look.panels[theme]
+  const grid = look.grid[theme]
   const toward = theme === 'dark' ? '#ffffff' : '#000000'
   return {
     '--code-bg': look.editor[theme],
     '--panel': panel,
     '--panel-2': panel && mixColor(panel, toward, theme === 'dark' ? 0.05 : 0.04),
-    '--grid-alt': panel && mixColor(panel, toward, theme === 'dark' ? 0.025 : 0.015),
+    '--grid-bg': grid,
+    '--grid-head': grid && mixColor(grid, toward, theme === 'dark' ? 0.05 : 0.04),
+    '--grid-alt': grid && mixColor(grid, toward, theme === 'dark' ? 0.025 : 0.015),
   }
 }

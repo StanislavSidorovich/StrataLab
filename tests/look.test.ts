@@ -8,6 +8,7 @@ describe('appearance (editor and panel colours)', () => {
     expect(parseLook('{"editor":{"light":"#F8F4EA","dark":"red"},"panels":{"dark":"#18212e;color:red"},"size":2}')).toEqual({
       editor: { light: '#f8f4ea' },
       panels: {},
+      grid: {},
     })
     expect(normalColor(' #ABCDEF ')).toBe('#abcdef')
     expect(normalColor('#abc')).toBeUndefined()
@@ -31,26 +32,42 @@ describe('appearance (editor and panel colours)', () => {
   })
 
   it('gives the CSS variables of the current theme only', () => {
-    const look = { editor: { light: '#edf6f0' }, panels: { dark: '#18212e' } }
-    expect(lookVars(look, 'light')).toEqual({ '--code-bg': '#edf6f0', '--panel': undefined, '--panel-2': undefined, '--grid-alt': undefined })
+    const look = { editor: { light: '#edf6f0' }, panels: { dark: '#18212e' }, grid: { dark: '#18212e' } }
+    expect(lookVars(look, 'light')).toEqual({ '--code-bg': '#edf6f0', '--panel': undefined, '--panel-2': undefined, '--grid-bg': undefined, '--grid-head': undefined, '--grid-alt': undefined })
     const dark = lookVars(look, 'dark')
     expect(dark['--code-bg']).toBeUndefined()
     expect(dark['--panel']).toBe('#18212e')
     // the hover shade is lighter than the panel in dark mode, the striped rows in between
     const sum = (c: string) => [1, 3, 5].reduce((s, i) => s + parseInt(c.slice(i, i + 2), 16), 0)
-    expect(sum(dark['--panel-2']!)).toBeGreaterThan(sum(dark['--grid-alt']!))
+    expect(sum(dark['--grid-head']!)).toBeGreaterThan(sum(dark['--grid-alt']!))
     expect(sum(dark['--grid-alt']!)).toBeGreaterThan(sum('#18212e'))
-    const light = lookVars({ editor: {}, panels: { light: '#f6f1e4' } }, 'light')
+    const light = lookVars({ editor: {}, panels: { light: '#f6f1e4' }, grid: {} }, 'light')
     expect(sum(light['--panel-2']!)).toBeLessThan(sum('#f6f1e4'))
   })
 
   it('offers the same number of tints in both themes, all distinct', () => {
-    for (const p of ['editor', 'panels'] as const) {
+    for (const p of ['editor', 'panels', 'grid'] as const) {
       expect(SWATCHES[p].light).toHaveLength(SWATCHES[p].dark.length)
       for (const t of ['light', 'dark'] as const) {
         expect(new Set(SWATCHES[p][t]).size).toBe(SWATCHES[p][t].length)
         for (const c of SWATCHES[p][t]) expect(normalColor(c)).toBe(c)
       }
     }
+  })
+})
+
+describe('data grid colour', () => {
+  it('an older saved look without a grid keeps the default grid, even with a panel colour', () => {
+    const look = parseLook('{"editor":{},"panels":{"light":"#f6f1e4"}}')
+    expect(look.grid).toEqual({})
+    const v = lookVars(look, 'light')
+    expect(v['--panel']).toBe('#f6f1e4')
+    expect(v['--grid-bg']).toBeUndefined()
+  })
+  it('a chosen grid colour sets its own variables only', () => {
+    const look = setLookColor(NO_LOOK, 'grid', 'light', '#e7eff9')
+    const v = lookVars(look, 'light')
+    expect(v['--grid-bg']).toBe('#e7eff9')
+    expect(v['--panel']).toBeUndefined()
   })
 })

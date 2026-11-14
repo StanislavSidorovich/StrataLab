@@ -171,7 +171,8 @@ export function AppearanceButton({ className = '' }: { className?: string }) {
             </div>
           </div>
           {colorRow('editor', 'SQL editor')}
-          {colorRow('panels', 'Panels (top bar, tree, results, dialogs)')}
+          {colorRow('panels', 'Panels (top bar, tree, dialogs)')}
+          {colorRow('grid', 'Data grid (results, build tables)')}
           <div style={{ color: 'var(--muted)', fontSize: 12 }}>Colours are kept separately for the light and dark theme, in this browser.</div>
           <button type="button" className="btn self-start" onClick={() => {
               setLook(NO_LOOK)

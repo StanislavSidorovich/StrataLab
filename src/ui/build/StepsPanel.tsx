@@ -14,6 +14,8 @@ import { addTab } from '../store'
 import { FoldedSql, fmtN } from './BuildTable'
 import { CleanRibbon } from './CleanRibbon'
 import { ProfileStrip } from './ProfileStrip'
+import { PaneHandle, usePaneWidth } from './PaneResize'
+import './cleanPolish.css'
 import './errors.css'
 
 export const GRID_ROWS = 50
@@ -51,7 +53,9 @@ export function StepsPanel({ source, work, ready, rev, onChange, onSource, focus
   const [types, setTypes] = useState<string[]>([])
   /** the table after this step is on show: 0 = the file as loaded, n = after step n; null = the latest */
   const [viewAt, setViewAt] = useState<number | null>(null)
-  const [sel, setSel] = useState<string | null>(focusColumn && focusColumn.source === source ? focusColumn.column : null)
+  const [qW, setQW] = usePaneWidth('queries')
+  const [sW, setSW] = usePaneWidth('steps')
+  const [selRaw, setSel] = useState<string | null>(focusColumn && focusColumn.source === source ? focusColumn.column : null)
   /** rows of bronze, then after each step; null while loading */
   const [counts, setCounts] = useState<number[] | null>(null)
   const [busy, setBusy] = useState(false)
@@ -65,6 +69,8 @@ export function StepsPanel({ source, work, ready, rev, onChange, onSource, focus
   /** the column profile of the table on show (null while loading) */
   const [profile, setProfile] = useState<ColumnProfile[] | null>(null)
 
+  // one selection for the grid and the ribbon: a name the table on show does not have is no selection
+  const sel = selRaw && (!data || data.header.includes(selRaw)) ? selRaw : null
   const latest = steps.length
   const k = Math.min(viewAt ?? latest, latest)
   const fullSql = connected ? chainSql(source, steps) : ''
@@ -138,7 +144,7 @@ export function StepsPanel({ source, work, ready, rev, onChange, onSource, focus
       {connected && (
         <CleanRibbon source={source} selected={sel} off={off} busy={busy} onAdd={add} onAdvanced={advanced ? onAdvanced : undefined} advancedOpen={advancedOpen} />
       )}
-      <div className="cc-body">
+      <div className="cc-body" style={{ ...(qW ? { ['--cc-qw' as string]: `${qW}px` } : {}), ...(sW ? { ['--cc-sw' as string]: `${sW}px` } : {}) }}>
         <div className="cc-queries" role="tablist" aria-label="Source" data-testid="clean-queries">
           <div className="cc-pane-title">Queries</div>
           {BUILD_SOURCES.map((s) => (
@@ -151,6 +157,7 @@ export function StepsPanel({ source, work, ready, rev, onChange, onSource, focus
               )}
             </button>
           ))}
+          <PaneHandle id="queries" side="left" width={qW} onWidth={setQW} />
         </div>
         <div className="cc-centre">
           {!connected ? (
@@ -201,6 +208,7 @@ export function StepsPanel({ source, work, ready, rev, onChange, onSource, focus
         </div>
         {connected && (
           <aside className="cc-steps" aria-label="Applied steps">
+            <PaneHandle id="steps" side="right" width={sW} onWidth={setSW} />
             <div className="cc-pane-title">Applied steps</div>
             <ol className="build-steps" data-testid="build-steps">
               <li className={`build-step is-source${k === 0 ? ' is-viewing' : ''}`}>
@@ -303,7 +311,7 @@ function Grid({ data, types, mask, profile, source, selected, onSelect, caption 
           {data.rows.map((r, i) => (
             <tr key={i}>
               {r.map((c, j) => (
-                <td key={j} className={mask?.[i]?.[j] ? 'is-error' : c === null ? 'is-null' : undefined} data-error={mask?.[i]?.[j] ? 'true' : undefined}>
+                <td key={j} className={[mask?.[i]?.[j] ? 'is-error' : c === null ? 'is-null' : '', selected === data.header[j] ? 'is-selcol' : ''].filter(Boolean).join(' ') || undefined} data-error={mask?.[i]?.[j] ? 'true' : undefined}>
                   {mask?.[i]?.[j] ? '[Error]' : c === null ? 'null' : String(c)}
                 </td>
               ))}
