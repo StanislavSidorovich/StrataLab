@@ -63,6 +63,9 @@ test('build it by hand: Connect to Answer', async ({ page }) => {
 
   // P1: Trim then Uppercase on products.sku_code
   await expect(task).toHaveAttribute('data-card', 'P1')
+  // the column profile shows the problem before anything is pressed: three SKUs in lowercase, four with spaces
+  await expect(clean.getByTestId('profile-sku_code')).toContainText('3 in lowercase')
+  await expect(clean.getByTestId('profile-sku_code')).toContainText('leading/trailing spaces')
   // no column is selected for the learner: the button asks for one
   await toolbar.getByRole('button', { name: 'Trim', exact: true }).click()
   await expect(clean.getByTestId('clean-pick-column')).toContainText('Pick a column first')

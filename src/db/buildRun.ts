@@ -2,7 +2,8 @@
 // connects a source, drops the work tables. Same port as the pipeline, so the page and the tests run the same code.
 import { chainsKeyOff, diagnoseKpi, diagnoseLine, tileBlankProblem, tileRunSql, type TileDiagnosis } from '../core/buildDashboard'
 import { compareResults, type ResultData } from '../core/check'
-import { CLEAN_COLUMNS, chainSql, cleanDone, countsSql, diagnoseP1, diagnoseP2, diagnoseP3, diagnoseP4, diagnoseP5, diagnoseP6, diagnoseP7, stepErrorsSql, stepsOf, typedColumn, type BuildWork, type Diagnosis, type P1Facts, type P2Facts, type P3Facts, type P4Facts, type P5Facts, type P6Facts, type P7Facts, type Peek, type StepSpec } from '../core/buildSteps'
+import { ERROR_COLUMN_LIST, previewErrorsAtSql, profileSql, readProfile, type ColumnProfile } from '../core/buildProfile'
+import { CLEAN_COLUMNS, chainSql, cleanDone, countsSql, typesAtSql, diagnoseP1, diagnoseP2, diagnoseP3, diagnoseP4, diagnoseP5, diagnoseP6, diagnoseP7, stepErrorsSql, stepsOf, typedColumn, type BuildWork, type Diagnosis, type P1Facts, type P2Facts, type P3Facts, type P4Facts, type P5Facts, type P6Facts, type P7Facts, type Peek, type StepSpec } from '../core/buildSteps'
 import { starStatements, typeFamily, type FoundFacts, type Link, type LinkFacts, type SideFacts, type Slot } from '../core/buildLinks'
 import { sliceDropStatements } from '../core/buildSlice'
 import { readableError } from '../core/sqlPractice'
@@ -319,6 +320,15 @@ export async function previewSales(port: SqlPort, onlyErrors: boolean, limit = 1
   return { data: { ...r, header: [...cols], rows: r.rows.map((row) => row.slice(0, cols.length)) } as ResultData, errors, errorRows: await errorRows(port) }
 }
 
+/** The first rows of the sales after step `at` (not the latest), with the [Error] mask: the grid at an earlier step of Applied steps. */
+export async function previewSalesAt(port: SqlPort, specs: readonly StepSpec[], at: number, limit: number): Promise<{ data: ResultData; errors: boolean[][] }> {
+  const cols = CLEAN_COLUMNS.sales
+  const r = await port.query(previewErrorsAtSql(stepsOf('sales', specs), at, limit))
+  const idx = ERROR_COLUMN_LIST.map((c) => cols.indexOf(c))
+  const errors = r.rows.map((row) => cols.map((_, j) => { const k = idx.indexOf(j); return k >= 0 && Number(row[cols.length + k]) === 1 }))
+  return { data: { ...r, header: [...cols], rows: r.rows.map((row) => row.slice(0, cols.length)) } as ResultData, errors }
+}
+
 const columnType = async (port: SqlPort, table: string, col: string) => (await describeTable(port, table)).find((c) => c.name === col)?.type ?? ''
 
 /** Rows both the clean table and the expected one have, with another value in `col` (raw_id is the key). */
@@ -595,3 +605,21 @@ export async function affectedRows(port: SqlPort, card: 'P2' | 'P3'): Promise<Af
     )
   return { file: await rows('g'), now: await rows(T('clean_sales')), groups: await num(port, `WITH g AS (${given}) SELECT count(*) FROM (${dup})`) }
 }
+
+// ---------------------------------------------------------------- the column profile of Clean
+
+const profileCache = new Map<string, ColumnProfile[]>()
+
+/** The profile of every column of a source after step `at` (0 = the file as loaded). Cached by the SQL text; `clearProfiles` when the files are read again. */
+export async function profileAt(port: SqlPort, id: BuildSourceId, specs: readonly StepSpec[], at: number): Promise<ColumnProfile[]> {
+  const steps = stepsOf(id, specs)
+  const families = (await port.query(typesAtSql(id, steps, at))).rows[0]?.map((t) => typeFamily(String(t))) ?? []
+  const sql = profileSql(id, steps, at, families)
+  const hit = profileCache.get(sql)
+  if (hit) return hit
+  const profile = readProfile(id, (await port.query(sql)).rows, families)
+  profileCache.set(sql, profile)
+  return profile
+}
+
+export const clearProfiles = () => profileCache.clear()

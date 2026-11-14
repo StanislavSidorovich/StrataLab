@@ -187,7 +187,7 @@ const nameOf = (i: number) => (i === 0 ? 'bronze' : `step${i}`)
 /** A step's SQL with `{prev}` replaced by the name of the step before it. */
 export const shownSql = (steps: readonly Step[], i: number) => steps[i].sql.replace('{prev}', nameOf(i))
 
-function chainCtes(source: BuildSourceId, steps: readonly Step[]): string {
+export function chainCtes(source: BuildSourceId, steps: readonly Step[]): string {
   const s = sourceById(source)
   const indent = (t: string) => t.split('\n').map((l) => '    ' + l).join('\n')
   const ctes = [`bronze AS (SELECT * FROM ${SCHEMA}.${s.bronze})`, ...steps.map((_, i) => `step${i + 1} AS (\n${indent(shownSql(steps, i))}\n  )`)]

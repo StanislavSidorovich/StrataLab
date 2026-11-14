@@ -3,15 +3,17 @@
 // ✕ rebuilds the chain; the given step cannot be removed. The task bar above (CleanScreen) says what to do.
 import { useEffect, useState, type ReactNode } from 'react'
 import { ExternalLink, X } from 'lucide-react'
+import type { ColumnProfile } from '../../core/buildProfile'
 import type { ResultData } from '../../core/check'
 import { typeFamily } from '../../core/buildLinks'
 import { CLEAN_COLUMNS, addSpec, chainSql, previewAtSql, removeSpec, rowsChange, shownSql, stepsOf, typesAtSql, type BuildWork, type StepKind, type StepSpec } from '../../core/buildSteps'
 import { BUILD_SOURCES, sourceById, type BuildSourceId } from '../../data/build/kaiyoSales'
-import { previewSales, salesErrors, stepCounts, stepErrors, type ErrorColumn, type SalesPreview } from '../../db/buildRun'
+import { clearProfiles, previewSales, previewSalesAt, profileAt, salesErrors, stepCounts, stepErrors, type ErrorColumn, type SalesPreview } from '../../db/buildRun'
 import { enginePort } from '../../db/pipelinePort'
 import { addTab } from '../store'
 import { FoldedSql, fmtN } from './BuildTable'
 import { CleanRibbon } from './CleanRibbon'
+import { ProfileStrip } from './ProfileStrip'
 import './errors.css'
 
 export const GRID_ROWS = 50
@@ -60,6 +62,8 @@ export function StepsPanel({ source, work, ready, rev, onChange, onSource, focus
   const [mask, setMask] = useState<boolean[][] | null>(null)
   const [stepErr, setStepErr] = useState<number[] | null>(null)
   const [colErr, setColErr] = useState<Record<ErrorColumn, number> | null>(null)
+  /** the column profile of the table on show (null while loading) */
+  const [profile, setProfile] = useState<ColumnProfile[] | null>(null)
 
   const latest = steps.length
   const k = Math.min(viewAt ?? latest, latest)
@@ -75,6 +79,9 @@ export function StepsPanel({ source, work, ready, rev, onChange, onSource, focus
   // a step added or removed brings the grid back to the latest table
   useEffect(() => setViewAt(null), [source, latest])
 
+  // the files or the clean tables changed: what was measured is stale (read before the load effect below)
+  useEffect(() => clearProfiles(), [rev])
+
   useEffect(() => {
     if (!ready || !connected) {
       setData(null)
@@ -84,21 +91,23 @@ export function StepsPanel({ source, work, ready, rev, onChange, onSource, focus
     void (async () => {
       try {
         const atLatest = k === latest
-        const [d, t, c, se, ce] = await Promise.all([
-          sales && atLatest ? previewSales(enginePort, errOnly, GRID_ROWS) : enginePort.query(previewAtSql(source, steps, k, GRID_ROWS)),
+        const [d, t, c, se, ce, pr] = await Promise.all([
+          sales && atLatest ? previewSales(enginePort, errOnly, GRID_ROWS) : sales && k > 0 ? previewSalesAt(enginePort, work.steps.sales, k, GRID_ROWS) : enginePort.query(previewAtSql(source, steps, k, GRID_ROWS)),
           enginePort.query(typesAtSql(source, steps, k)),
           stepCounts(enginePort, source, work.steps[source]),
           sales ? stepErrors(enginePort, work.steps.sales) : Promise.resolve(null),
           sales ? salesErrors(enginePort) : Promise.resolve(null),
+          profileAt(enginePort, source, work.steps[source], k),
         ])
         if (alive) {
-          const prev = 'errors' in d ? (d as SalesPreview) : null
+          const prev = 'errors' in d ? (d as SalesPreview | { data: ResultData; errors: boolean[][] }) : null
           setMask(prev ? prev.errors : null)
           setData(prev ? prev.data : (d as ResultData))
           setTypes(t.rows[0]?.map(String) ?? [])
           setStepErr(se)
           setColErr(ce)
           setCounts(c)
+          setProfile(pr)
         }
       } catch (e) {
         if (alive) setError(String(e instanceof Error ? e.message : e))
@@ -184,7 +193,7 @@ export function StepsPanel({ source, work, ready, rev, onChange, onSource, focus
                       )}
                     </div>
                   )}
-                  <Grid data={data} types={types} mask={mask} selected={sel} onSelect={(c) => setSel((x) => (x === c ? null : c))} caption={`${sourceById(source).clean} after step ${k}`} />
+                  <Grid data={data} types={types} mask={mask} profile={profile} source={source} selected={sel} onSelect={(c) => setSel((x) => (x === c ? null : c))} caption={`${sourceById(source).clean} after step ${k}`} />
                 </>
               )}
             </>
@@ -266,8 +275,8 @@ export function StepsPanel({ source, work, ready, rev, onChange, onSource, focus
   )
 }
 
-/** The table as a grid: a click on a header selects the column (accent outline); a slot under the name is for the column profile. */
-function Grid({ data, types, mask, selected, onSelect, caption }: { data: ResultData | null; types: string[]; mask: boolean[][] | null; selected: string | null; onSelect: (c: string) => void; caption: string }) {
+/** The table as a grid: a click on a header selects the column (accent outline); the column profile strip sits under the name. */
+function Grid({ data, types, mask, profile, source, selected, onSelect, caption }: { data: ResultData | null; types: string[]; mask: boolean[][] | null; profile: ColumnProfile[] | null; source: BuildSourceId; selected: string | null; onSelect: (c: string) => void; caption: string }) {
   if (!data) return <div className="build-muted">Loading…</div>
   return (
     <div className="cc-grid" tabIndex={0} role="region" aria-label={caption} data-testid="clean-grid">
@@ -282,7 +291,9 @@ function Grid({ data, types, mask, selected, onSelect, caption }: { data: Result
                     <span className="cc-type" title={types[j]?.toLowerCase()}>{TYPE_MARK[fam]}</span>
                     <span className="cc-head-name">{c}</span>
                   </button>
-                  <div className="cc-profile-slot" data-col={c} />
+                  <div className="cc-profile-slot" data-col={c}>
+                    {profile?.find((x) => x.col === c) && <ProfileStrip source={source} p={profile.find((x) => x.col === c)!} />}
+                  </div>
                 </th>
               )
             })}

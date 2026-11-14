@@ -18,6 +18,7 @@ import { WatchRegions } from './WatchRegions'
 import { FillButton } from './DemoContext'
 import './clean.css'
 import './cleanCanvas.css'
+import './cleanProfile.css'
 import './cleanAction.css'
 import './errors.css'
 
@@ -117,10 +118,10 @@ export function CleanScreen({ work, setWork, ready, rebuild, rev, focus, onBackT
   const level = cur ? hints[cur] ?? 0 : 0
   return (
     <div className="cc-root" data-testid="build-clean">
-      <p className="build-muted build-fabric" data-testid="fabric-clean">{FABRIC_CLEAN}</p>
-      <details className="build-given">
-        <summary>{GIVEN_NOTE}</summary>
-        <p className="build-muted" style={{ margin: '6px 0 0' }}>It is the first step in the list of sales, marked “given”. Pick sales in the Queries list and look at Applied steps.</p>
+      <details className="cc-notes" data-testid="clean-notes">
+        <summary>Notes: this list in Power BI and Fabric · what Lab already typed for you</summary>
+        <p className="build-muted build-fabric" data-testid="fabric-clean">{FABRIC_CLEAN}</p>
+        <p className="build-muted" style={{ margin: '0 0 4px' }}>{GIVEN_NOTE} It is the first step in the list of sales, marked “given”. Pick sales in the Queries list and look at Applied steps.</p>
       </details>
       <section className="cc-task" data-testid="clean-task" data-card={cur ?? 'done'}>
         <div className="cc-task-line">
