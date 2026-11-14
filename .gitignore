@@ -13,3 +13,7 @@ tsconfig.tsbuildinfo
 
 # Python packages served with the site (pandas, matplotlib, seaborn…): downloaded before a build (npm run python-packages)
 /public/pyodide/
+
+# Playwright (npm run e2e)
+/test-results/
+/playwright-report/
