@@ -10,7 +10,7 @@ The page is for someone who has learnt SQL before and needs to get it back: look
 - `skills` on a task names the moves its solution makes, from `skills.ts`. Helpers such as `ROUND` are not skills.
 - The first task of a section uses one skill. A task adds at most one skill not yet practised on the page. Skills of earlier sections count as practised. `tests/practiceLadder.test.ts` checks all of this, and that the tags are true.
 - The trap is a mistake people really make with this topic, not a general warning.
-- Every function or keyword a solution uses has already appeared in a note or an example above it, on this page. `tests/practiceTaught.test.ts` fails otherwise. Prefer a simpler solution to a new function that only tidies the answer.
+- Every function or keyword a solution uses has already appeared in a note or an example above it, on this page. `tests/practiceTaught.test.ts` fails otherwise. Prefer a simpler solution to a new function that only tidies the answer. The terms a note teaches also feed the hint links and the "Where was it?" search (`src/core/practiceIndex.ts`): put a new function in a note's text or syntax line, in backticks, in the section that should own it.
 - The last task of a section is its hardest: "Test me" jumps there.
 - No story, no characters, no praise. English; no long dashes.
 

@@ -26,6 +26,9 @@ import { completionSchema, darkBackground, lightTheme } from './SqlEditor'
 import { OutputView } from './PythonOutput'
 import { addTab, openAndRun, openPracticeBook, restartPython, runPracticePython, runPracticeQuery, startPython, useLab } from './store'
 import { followQuaeraLink } from '../core/quaeraLink'
+import { buildIndex, exampleAnchor, noteAnchor, type PracticeIndex } from '../core/practiceIndex'
+import { dayOf, pickWarmUp } from '../core/practiceRecall'
+import { Hint, IndexContext, RecallSearch } from './PracticeRecall'
 
 const LINE = 20
 
@@ -67,6 +70,8 @@ interface BookEngine {
   sections: PracticeSection[]
   tasks: SectionTasks[]
   useProgress: ReturnType<typeof progressStore>
+  /** where each function or keyword is first taught: hint links and the search */
+  index: PracticeIndex
   language: (tables: ReturnType<typeof useLab.getState>['tables']) => Extension
   comment: string
   writeHint: string
@@ -96,6 +101,7 @@ const SQL_ENGINE: BookEngine = {
   sections: SQL_SECTIONS,
   tasks: SQL_TASKS,
   useProgress: progressStore('stratalab.sql-practice.v1'),
+  index: buildIndex('sql', SQL_SECTIONS),
   language: (tables) => sqlLang({ dialect: MSSQL, schema: completionSchema(tables, 'main'), upperCaseKeywords: false }),
   comment: '--',
   writeHint: 'Write your query here',
@@ -141,6 +147,7 @@ const PY_ENGINE: BookEngine = {
   sections: PY_SECTIONS,
   tasks: PY_TASKS,
   useProgress: progressStore('stratalab.python-practice.v1'),
+  index: buildIndex('python', PY_SECTIONS),
   language: () => python(),
   comment: '#',
   writeHint: 'Write your code here. The last line is your answer.',
@@ -423,9 +430,9 @@ function RunResult({ run }: { run: Run }) {
 /** The page is wide for code and result tables; running text keeps a line length that reads well. */
 const READABLE = 'max-w-[46rem]'
 
-function NoteBlock({ block, afterWork }: { block: PracticeNote; afterWork: boolean }) {
+function NoteBlock({ block, afterWork, anchor }: { block: PracticeNote; afterWork: boolean; anchor: string }) {
   return (
-    <div className={afterWork ? 'space-y-2 pt-5 mt-2' : 'space-y-2'} style={afterWork ? { borderTop: '1px solid var(--line)' } : undefined}>
+    <div id={anchor} className={afterWork ? 'space-y-2 pt-5 mt-2' : 'space-y-2'} style={{ scrollMarginTop: 72, ...(afterWork ? { borderTop: '1px solid var(--line)' } : {}) }}>
       <div className="font-semibold" style={block.topic ? { color: 'var(--accent)' } : { color: 'var(--muted)', fontWeight: 500 }}>
         {block.topic ? `New: ${block.topic}` : 'Reminder'}
       </div>
@@ -550,7 +557,7 @@ function ExampleBlock({ block }: { block: PracticeExampleCell }) {
     ['Open in Lab', () => (openPracticeBook(null), book.openInLab(text, block.title)), { disabled: !text.trim() }],
   ])
   return (
-    <div className="space-y-2" {...menu}>
+    <div id={exampleAnchor(block.id)} className="space-y-2" style={{ scrollMarginTop: 72 }} {...menu}>
       <div className="flex items-center gap-2 flex-wrap">
         <span className="font-semibold flex-1 min-w-[12rem]">
           <span style={{ color: 'var(--muted)', fontWeight: 500 }}>Example · </span>
@@ -573,7 +580,9 @@ function ExampleBlock({ block }: { block: PracticeExampleCell }) {
 
 type CheckState = { verdict: Verdict; trap: string | null } | null
 
-function TaskBlock({ section, block, onNext }: { section: PracticeSection; block: PracticeTaskCell; onNext: (id: string) => void }) {
+/** `warm`: the cell is shown again as a warm-up, so its ids and run tags must not meet those of the task in its own section. */
+function TaskBlock({ section, block, onNext, warm = false }: { section: PracticeSection; block: PracticeTaskCell; onNext: (id: string) => void; warm?: boolean }) {
+  const key = (warm ? 'warm-' : '') + block.id
   const book = useBook()
   const useProgress = book.useProgress
   const number = taskNumber(section, block)
@@ -583,7 +592,7 @@ function TaskBlock({ section, block, onNext }: { section: PracticeSection; block
   const [initial, setInitial] = useState(saved)
   const [editorKey, setEditorKey] = useState(0)
   const text = useRef(saved)
-  const { run, exec, stop, note } = useCellRun(block.id)
+  const { run, exec, stop, note } = useCellRun(key)
   const [check, setCheck] = useState<CheckState>(null)
   const [checking, setChecking] = useState(false)
   const [offer, setOffer] = useState(false)
@@ -609,22 +618,25 @@ function TaskBlock({ section, block, onNext }: { section: PracticeSection; block
         return
       }
       const got: ResultData = resultRows(ran.table)
-      const expected = await book.rows(block.solution, `practice-${block.id}-answer`)
+      const expected = await book.rows(block.solution, `practice-${key}-answer`)
       const verdict = compareResults(got, expected, block.ordered)
       let trap: string | null = null
       if (!verdict.ok) {
         for (const t of block.traps ?? []) {
-          const wrong = await book.rows(t.code, `practice-${block.id}-trap`)
+          const wrong = await book.rows(t.code, `practice-${key}-trap`)
           if (compareResults(got, wrong, block.ordered).ok) {
             trap = t.says
             break
           }
         }
+        useProgress.setState((p) => ({ failedAt: { ...p.failedAt, [block.id]: Date.now() } }))
       } else {
         const p = useProgress.getState()
         const section_ = book.tasks.find((s) => s.id === section.id)!
-        setOffer(offersKnown(section_, block.id, p))
-        if (!p.solved.includes(block.id)) useProgress.setState({ solved: [...p.solved, block.id] })
+        if (!warm) setOffer(offersKnown(section_, block.id, p))
+        // A task solved twice is still one solved task; only the time of the last pass moves.
+        const { [block.id]: _gone, ...stillFailed } = p.failedAt
+        useProgress.setState({ solved: p.solved.includes(block.id) ? p.solved : [...p.solved, block.id], solvedAt: { ...p.solvedAt, [block.id]: Date.now() }, failedAt: stillFailed })
       }
       setCheck({ verdict, trap })
     } catch (e) {
@@ -666,7 +678,7 @@ function TaskBlock({ section, block, onNext }: { section: PracticeSection; block
   ])
 
   return (
-    <div id={`task-${block.id}`} className="rounded-lg p-3 space-y-2" {...menu} style={{ background: 'var(--panel)', border: `1px solid ${solved ? 'var(--accent)' : 'var(--line)'}`, scrollMarginTop: 72 }}>
+    <div id={`${warm ? 'warm-' : ''}task-${block.id}`} className="rounded-lg p-3 space-y-2" {...menu} style={{ background: 'var(--panel)', border: `1px solid ${solved ? 'var(--accent)' : 'var(--line)'}`, scrollMarginTop: 72 }}>
       <div className="font-semibold flex items-center gap-2">
         {solved ? <CheckCircle2 size={16} style={{ color: 'var(--accent)' }} aria-label="Solved" /> : <GraduationCap size={16} style={{ color: 'var(--muted)' }} />}
         Task {number} · {block.title}
@@ -693,7 +705,7 @@ function TaskBlock({ section, block, onNext }: { section: PracticeSection; block
           {block.hints.slice(0, hints).map((h, i) => (
             <li key={i} className="flex gap-1.5">
               <Lightbulb size={13} className="shrink-0 mt-0.5" style={{ color: 'var(--warn-text)' }} />
-              <span>{h}</span>
+              <Hint text={h} sectionN={section.n} />
             </li>
           ))}
         </ol>
@@ -742,10 +754,10 @@ function TaskBlock({ section, block, onNext }: { section: PracticeSection; block
   )
 }
 
-function Block({ section, block, afterWork, onNext }: { section: PracticeSection; block: PracticeBlock; afterWork: boolean; onNext: (id: string) => void }) {
+function Block({ section, block, index, afterWork, onNext }: { section: PracticeSection; block: PracticeBlock; index: number; afterWork: boolean; onNext: (id: string) => void }) {
   switch (block.kind) {
     case 'note':
-      return <NoteBlock block={block} afterWork={afterWork} />
+      return <NoteBlock block={block} afterWork={afterWork} anchor={noteAnchor(section.id, index)} />
     case 'tables':
       return <TablesBlock block={block} />
     case 'example':
@@ -753,6 +765,45 @@ function Block({ section, block, afterWork, onNext }: { section: PracticeSection
     case 'task':
       return <TaskBlock section={section} block={block} onNext={onNext} />
   }
+}
+
+/** From section 3 on: two tasks of earlier sections to answer first, because retrieving beats rereading. */
+const WARM_FROM = 3
+
+function WarmUp({ section, onNext }: { section: PracticeSection; onNext: (id: string) => void }) {
+  const book = useBook()
+  const useProgress = book.useProgress
+  const folded = useProgress((p) => p.warmFolded.includes(section.id))
+  const day = dayOf(new Date())
+  // Picked once a day and kept: solving a task changes what would be picked, and the cell must not move under the learner.
+  const [ids] = useState(() => {
+    const p = useProgress.getState()
+    const kept = p.warm[section.id]
+    const sections = book.sections.map((s) => ({ id: s.id, n: s.n, taskIds: tasksOf(s).map((t) => t.id) }))
+    return kept && kept.day === day ? kept.ids : pickWarmUp(sections, section.id, p, day)
+  })
+  useEffect(() => {
+    const kept = useProgress.getState().warm[section.id]
+    if (!kept || kept.day !== day) useProgress.setState((p) => ({ warm: { ...p.warm, [section.id]: { day, ids } } }))
+    // once, with the picks of this visit
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  const cells = ids.flatMap((id) => {
+    const home = book.sections.find((s) => tasksOf(s).some((t) => t.id === id))
+    const task = home && tasksOf(home).find((t) => t.id === id)
+    return home && task ? [{ home, task }] : []
+  })
+  if (!cells.length) return null
+  return (
+    <div className="warmup" data-testid="warm-up">
+      <button className="warmup-head" aria-expanded={!folded} onClick={() => useProgress.setState((p) => ({ warmFolded: toggled(p.warmFolded, section.id) }))}>
+        {folded ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+        Warm-up: {cells.length} task{cells.length === 1 ? '' : 's'} from earlier sections
+        <small>{folded ? 'folded' : 'before the new section'}</small>
+      </button>
+      {!folded && cells.map(({ home, task }) => <TaskBlock key={task.id} section={home} block={task} onNext={onNext} warm />)}
+    </div>
+  )
 }
 
 function SectionView({ section, onNext }: { section: PracticeSection; onNext: (id: string) => void }) {
@@ -791,7 +842,8 @@ function SectionView({ section, onNext }: { section: PracticeSection; onNext: (i
           </button>
         )}
       </div>
-      {open && section.blocks.map((b, i) => <Block key={i} section={section} block={b} afterWork={i > 0 && section.blocks[i - 1].kind === 'task'} onNext={onNext} />)}
+      {open && tasks.length > 0 && section.n >= WARM_FROM && <WarmUp section={section} onNext={onNext} />}
+      {open && section.blocks.map((b, i) => <Block key={i} section={section} block={b} index={i} afterWork={i > 0 && section.blocks[i - 1].kind === 'task'} onNext={onNext} />)}
     </section>
   )
 }
@@ -801,7 +853,9 @@ export function PracticeBookPage() {
   if (!kind) return null
   return (
     <BookContext.Provider value={ENGINES[kind]}>
-      <Page key={kind} />
+      <IndexContext.Provider value={ENGINES[kind].index}>
+        <Page key={kind} />
+      </IndexContext.Provider>
     </BookContext.Provider>
   )
 }
@@ -909,6 +963,7 @@ function Page() {
         <label className="flex items-center gap-2 px-2 py-2" style={{ fontSize: 12 }}>
           <input type="checkbox" checked={progress.hideKnown} onChange={(e) => useProgress.setState({ hideKnown: e.target.checked })} /> Hide known sections
         </label>
+        <RecallSearch id="rail" up />
       </nav>
       <div ref={main} className="flex-1 min-w-0 overflow-y-auto">
         <header className="sticky top-0 z-20 px-4 py-2 flex items-center gap-2 flex-wrap" style={{ background: 'var(--panel)', borderBottom: '1px solid var(--line)' }}>
@@ -940,6 +995,7 @@ function Page() {
               </option>
             ))}
           </select>
+          <RecallSearch id="narrow" />
         </div>
         <div className="max-w-5xl mx-auto px-4 py-4 space-y-8">
           <p className={`m-0 ${READABLE}`} style={{ color: 'var(--muted)' }}>

@@ -14,9 +14,20 @@ export interface PracticeProgress {
   /** task → the query being written */
   drafts: Record<string, string>
   hideKnown: boolean
+  /** task → when its Check last passed (ms). Saved before v0.41.0 without it: such a task counts as solved long ago. */
+  solvedAt: Record<string, number>
+  /** task → when its Check last failed, until it passes (ms) */
+  failedAt: Record<string, number>
+  /** section → the warm-up tasks picked for a day, so the cells stay put while they are solved */
+  warm: Record<string, { day: string; ids: string[] }>
+  /** sections whose warm-up the learner folded */
+  warmFolded: string[]
 }
 
-export const emptyProgress = (): PracticeProgress => ({ solved: [], known: [], peeked: [], hints: {}, drafts: {}, hideKnown: false })
+export const emptyProgress = (): PracticeProgress => ({ solved: [], known: [], peeked: [], hints: {}, drafts: {}, hideKnown: false, solvedAt: {}, failedAt: {}, warm: {}, warmFolded: [] })
+
+const numbers = (x: unknown): Record<string, number> =>
+  x && typeof x === 'object' ? Object.fromEntries(Object.entries(x).filter(([, v]) => typeof v === 'number' && Number.isFinite(v))) as Record<string, number> : {}
 
 /** Progress from localStorage: anything unreadable starts afresh, a missing part stays empty. */
 export function readProgress(raw: string | null): PracticeProgress {
@@ -32,6 +43,13 @@ export function readProgress(raw: string | null): PracticeProgress {
       hints: p.hints && typeof p.hints === 'object' ? p.hints : {},
       drafts: p.drafts && typeof p.drafts === 'object' ? p.drafts : {},
       hideKnown: p.hideKnown === true,
+      solvedAt: numbers(p.solvedAt),
+      failedAt: numbers(p.failedAt),
+      warm:
+        p.warm && typeof p.warm === 'object'
+          ? (Object.fromEntries(Object.entries(p.warm).filter(([, v]) => !!v && typeof (v as { day?: unknown }).day === 'string' && Array.isArray((v as { ids?: unknown }).ids))) as PracticeProgress['warm'])
+          : {},
+      warmFolded: Array.isArray(p.warmFolded) ? p.warmFolded.filter((x: unknown) => typeof x === 'string') : [],
     }
   } catch {
     return blank

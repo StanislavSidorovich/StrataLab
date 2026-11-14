@@ -80,6 +80,8 @@ export interface PracticeSection {
   title: string
   /** a heading over this section and those after it, on the page and in its list */
   part?: string
+  /** terms the section teaches where its notes and examples do not show them (derived otherwise: src/core/practiceIndex.ts) */
+  introduces?: string[]
   blocks: PracticeBlock[]
 }
 
