@@ -4,7 +4,7 @@ import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
 import { beforeAll, describe, expect, it } from 'vitest'
 import type { ResultData } from '../src/core/check'
-import { GIVEN_FULL_SPEC, CLEAN_COLUMNS, addSpec, chainSql, countsSql, dedupSql, emptyWork, latestSql, makeStep, readWork, removeSpec, rowsChange, shownSql, stepsOf, trimSql, upperSql, type StepSpec } from '../src/core/buildSteps'
+import { GIVEN_FULL_SPEC, CLEAN_COLUMNS, addSpec, chainSql, countsSql, dedupSql, emptyWork, latestSql, makeStep, previewAtSql, readWork, removeSpec, rowsChange, shownSql, stepsOf, trimSql, typesAtSql, upperSql, type StepSpec } from '../src/core/buildSteps'
 import { readBuild } from '../src/core/build'
 import { resultRows } from '../src/db/export'
 import { describeTable, affectedRows, applySteps, checkP1, checkP2, checkP3, connect, prepare, quickLook, restore, stepCounts } from '../src/db/buildRun'
@@ -311,6 +311,18 @@ describe('rows after each step, and the rows a card is about', () => {
     expect(await stepCounts(port, 'sales', [sp('dedup', { blank: 'sale_date, customer_name, sku_code' })])).toEqual([3110, 3110, 3000])
     expect(await stepCounts(port, 'customers', [sp('latest', { key: 'customer_id', order: 'updated_at', direction: 'newest' })])).toEqual([148, 144])
     expect(await stepCounts(port, 'regions', [])).toEqual([17])
+  })
+  it('shows the table after any step: rows as the counts say, and the type of each column', async () => {
+    const specs = [sp('dedup', { blank: 'sale_date, customer_name, sku_code' })]
+    const steps = stepsOf('sales', specs)
+    await applySteps(port, 'sales', specs)
+    expect((await port.query(previewAtSql('sales', steps, 0, 5000))).rows.length).toBe(3110)
+    expect((await port.query(previewAtSql('sales', steps, 2, 5000))).rows.length).toBe(3000)
+    expect((await port.query(previewAtSql('sales', steps, 2, 50))).rows.length).toBe(50)
+    const types = (await port.query(typesAtSql('sales', steps, 2))).rows[0].map(String)
+    expect(types).toHaveLength(CLEAN_COLUMNS.sales.length)
+    expect(types[0]).toBe('INTEGER')
+    await applySteps(port, 'sales', [])
   })
   it('P3: eight rows of four stores in the file, eight now, four after Keep latest', async () => {
     await applySteps(port, 'customers', [])

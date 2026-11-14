@@ -1,0 +1,84 @@
+/* Clean as a canvas (design docs/clean-canvas-design.md): task bar, ribbon, queries pane, grid, Applied steps, status bar.
+   Colours come from the app's variables, so both themes work. The page itself never scrolls sideways: the grid has its own scroll box. */
+.build-card.is-wide { max-width: 1560px; }
+.cc-root { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+
+/* task bar */
+.cc-task { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border: 1px solid var(--accent); border-radius: 12px; background: var(--panel); }
+.cc-task-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.cc-task-title { min-width: 0; }
+.cc-spacer { flex: 1; }
+.cc-id { flex: none; width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--accent); border: 1px solid var(--accent); color: var(--accent-ink); font-size: 11px; font-weight: 600; }
+.cc-done-chip { display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--accent); background: var(--accent-soft); color: var(--accent); font: inherit; font-size: 12px; cursor: pointer; }
+.cc-done-chip.is-on { background: var(--accent); color: var(--accent-ink); }
+.cc-more summary { cursor: pointer; color: var(--muted); font-size: 12.5px; }
+.cc-more .build-affected { margin-top: 6px; }
+.cc-verdict { position: relative; padding: 10px 36px 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.cc-verdict .build-x { position: absolute; top: 8px; right: 8px; }
+.build-left { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* the canvas */
+.cc { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.cc-pane-title { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+
+/* ribbon */
+.cc-ribbon { display: flex; flex-wrap: wrap; align-items: stretch; gap: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+.cc-group { display: flex; flex-direction: column; justify-content: space-between; gap: 4px; padding: 6px 10px; border-right: 1px solid var(--line); min-width: 0; }
+.cc-group:last-of-type { border-right: 0; }
+.cc-group-body { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.cc-group-name { font-size: 11px; color: var(--muted); text-align: center; }
+.cc-selected b { color: var(--accent); }
+.cc-replace { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.cc-menu { position: relative; display: inline-block; }
+.cc-menu-list { position: absolute; z-index: 5; top: calc(100% + 4px); left: 0; display: flex; flex-direction: column; gap: 4px; min-width: 190px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18); }
+.cc-need { flex-basis: 100%; padding: 6px 12px; font-size: 13px; color: var(--danger); background: var(--warn-soft); border-top: 1px solid var(--line); border-radius: 0 0 8px 8px; }
+.cc-ribbon [aria-pressed='true'] { border-color: var(--accent); background: var(--accent-soft); }
+
+/* queries | centre | applied steps */
+.cc-body { display: grid; grid-template-columns: 190px minmax(0, 1fr) 270px; gap: 10px; min-width: 0; }
+.cc-queries { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.cc-query { display: flex; align-items: center; gap: 6px; width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--muted); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.cc-query.is-on { color: var(--text); border-color: var(--accent); background: var(--accent-soft); }
+.cc-query-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cc-dot { flex: none; min-width: 18px; padding: 0 5px; border-radius: 999px; background: var(--danger); color: #fff; font-size: 11px; line-height: 18px; text-align: center; font-variant-numeric: tabular-nums; }
+.cc-centre { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.cc-advanced { padding: 10px; border: 1px solid var(--accent); border-radius: 8px; background: var(--bg); display: flex; flex-direction: column; gap: 6px; }
+.cc-watch { padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); max-height: 520px; overflow: auto; }
+.cc-sql { margin: 0; max-height: 96px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; box-sizing: border-box; }
+
+/* grid */
+.cc-grid { max-height: clamp(220px, 42vh, 440px); overflow: auto; border: 1px solid var(--line); border-radius: 8px; max-width: 100%; }
+.cc-grid .build-table { min-width: 100%; }
+.cc-grid th { padding: 0; vertical-align: top; z-index: 1; }
+.cc-grid th.is-selected { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent); }
+.cc-grid td { max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+.cc-head { display: flex; align-items: center; gap: 6px; width: 100%; padding: 5px 8px; border: 0; background: transparent; color: inherit; font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
+.cc-head:hover { background: var(--accent-soft); }
+.cc-head:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.cc-type { flex: none; padding: 0 4px; border-radius: 4px; border: 1px solid var(--line); font-size: 10px; font-weight: 600; color: var(--muted); }
+.cc-profile-slot:empty { display: none; }
+
+/* applied steps */
+.cc-steps { min-width: 0; }
+.cc-steps .build-steps { margin-bottom: 6px; }
+.cc-step-main { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.build-step.is-source .cc-step-main { color: var(--muted); }
+.build-step.is-viewing { border-color: var(--accent); background: var(--accent-soft); }
+.cc-step-main .build-step-label { flex: 1 1 100%; overflow-wrap: anywhere; }
+
+/* status bar */
+.cc-status { display: flex; flex-wrap: wrap; gap: 4px 18px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); font-size: 12px; color: var(--muted); }
+.cc-status b { color: var(--text); }
+.cc-status-old { color: var(--accent); }
+
+/* 1100 to 1365: the queries become tabs over the grid, Applied steps get narrower */
+@media (max-width: 1365px) {
+  .cc-body { grid-template-columns: minmax(0, 1fr) 230px; }
+  .cc-queries { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; align-items: center; }
+  .cc-queries .cc-pane-title { margin: 0 6px 0 0; }
+  .cc-query { width: auto; border-radius: 999px; }
+}
+/* below 1100 the sidebar steps go under the grid (the page itself needs a laptop below 768) */
+@media (max-width: 1099px) {
+  .cc-body { grid-template-columns: minmax(0, 1fr); }
+}

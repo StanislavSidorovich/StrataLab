@@ -31,7 +31,6 @@
 
 .build-given { padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
 .build-given summary { cursor: pointer; }
-.build-cards { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .build-clean-card { padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); display: flex; flex-direction: column; gap: 10px; }
 .build-clean-card.is-open { border-color: var(--accent); }
 .build-clean-card.is-passed .build-chip-n { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
@@ -43,15 +42,8 @@
 .build-watch-title { font-weight: 600; }
 .build-watch-fix { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13px; }
 
-.build-panel { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); min-width: 0; }
-.build-panel-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
-.build-tab { padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; }
-.build-tab.is-on { color: var(--text); border-color: var(--accent); background: var(--accent-soft); }
-.build-toolbar { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
-.build-tool { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .build-set { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; color: var(--muted); }
 .build-select { font: inherit; font-size: 13px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); }
-.build-steps-title { font-weight: 600; margin-bottom: 4px; }
 .build-steps { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .build-step { padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
 .build-step.is-source { color: var(--muted); border-style: dashed; display: flex; align-items: center; gap: 8px; }

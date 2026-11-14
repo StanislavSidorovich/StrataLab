@@ -36,8 +36,16 @@ test('build it by hand: Connect to Answer', async ({ page }) => {
   // ---- Clean
   await step('Clean').click()
   const clean = page.getByTestId('build-clean')
-  const toolbar = clean.getByRole('group', { name: 'Buttons' })
-  const column = clean.getByLabel('Column to trim, uppercase or extract the number from')
+  const toolbar = clean.getByRole('group', { name: 'Ribbon' })
+  const header = (col: string) => clean.getByTestId(`clean-col-${col}`)
+  const selected = clean.getByTestId('clean-selected')
+  const task = clean.getByTestId('clean-task')
+  /** Change type from the ribbon: the menu, the decimal separator (numbers), the type */
+  const changeType = async (to: 'date' | 'whole' | 'decimal', sep?: 'comma') => {
+    await clean.getByTestId('build-change-type').click()
+    if (sep) await clean.getByLabel('Decimal separator', { exact: true }).selectOption(sep)
+    await clean.getByTestId(`build-type-${to}`).click()
+  }
   const stepRows = clean.getByTestId('build-step')
   const passed = async (id: string) => {
     await clean.getByTestId(`clean-check-${id}`).click()
@@ -54,8 +62,13 @@ test('build it by hand: Connect to Answer', async ({ page }) => {
   await clean.getByTestId('watch-now-you').click()
 
   // P1: Trim then Uppercase on products.sku_code
-  await expect(clean.getByTestId('clean-card-P1')).toHaveClass(/is-open/)
-  await expect(column).toHaveValue('sku_code')
+  await expect(task).toHaveAttribute('data-card', 'P1')
+  // no column is selected for the learner: the button asks for one
+  await toolbar.getByRole('button', { name: 'Trim', exact: true }).click()
+  await expect(clean.getByTestId('clean-pick-column')).toContainText('Pick a column first')
+  await expect(stepRows).toHaveCount(0)
+  await header('sku_code').click()
+  await expect(header('sku_code')).toHaveAttribute('aria-pressed', 'true')
   await toolbar.getByRole('button', { name: 'Trim', exact: true }).click()
   await expect(stepRows).toHaveCount(1)
   await toolbar.getByRole('button', { name: 'Uppercase', exact: true }).click()
@@ -69,14 +82,15 @@ test('build it by hand: Connect to Answer', async ({ page }) => {
   await clean.getByTestId('clean-pass-P2').click()
 
   // P3: Keep latest row per key, customer_id, updated_at, newest (the defaults)
-  await expect(clean.getByTestId('clean-card-P3')).toHaveClass(/is-open/)
+  await expect(task).toHaveAttribute('data-card', 'P3')
   await toolbar.getByRole('button', { name: 'Keep latest row per key' }).click()
   await expect(stepRows).toHaveCount(1)
   await passed('P3')
 
   // P5: Change type of sale_date to Date fails, then the format of the slash dates
-  await expect(clean.getByTestId('clean-card-P5')).toHaveClass(/is-open/)
-  await clean.getByTestId('build-change-type').click()
+  await expect(task).toHaveAttribute('data-card', 'P5')
+  await header('sale_date').click()
+  await changeType('date')
   await expect(clean.getByTestId('clean-p5-failed')).toBeVisible()
   await clean.getByLabel('The blank: the format of the slash dates').fill('%d/%m/%Y')
   await clean.getByTestId('clean-apply-P5').click()
@@ -84,14 +98,11 @@ test('build it by hand: Connect to Answer', async ({ page }) => {
   await clean.getByTestId('clean-pass-P5').click()
 
   // P6: revenue to Decimal and units to Whole number, decimal separator comma
-  await expect(clean.getByTestId('clean-card-P6')).toHaveClass(/is-open/)
-  const typeColumn = clean.getByLabel('Column to change the type of')
-  await typeColumn.selectOption('revenue')
-  await clean.getByLabel('Decimal separator', { exact: true }).selectOption('comma')
-  await clean.getByTestId('build-change-type').click()
-  await typeColumn.selectOption('units')
-  await clean.getByLabel('Decimal separator', { exact: true }).selectOption('comma')
-  await clean.getByTestId('build-change-type').click()
+  await expect(task).toHaveAttribute('data-card', 'P6')
+  await header('revenue').click()
+  await changeType('decimal', 'comma')
+  await header('units').click()
+  await changeType('whole', 'comma')
   await clean.getByTestId('clean-check-P6').click()
   await expect(clean.getByTestId('clean-line')).toContainText('Passed')
   await clean.getByTestId('clean-pass-P6').click()
@@ -114,7 +125,7 @@ test('build it by hand: Connect to Answer', async ({ page }) => {
   await expect(model.getByTestId('link-fix')).toBeVisible()
   await model.getByTestId('link-fix').click()
   await expect(clean.getByTestId('clean-card-P4')).toBeVisible()
-  await expect(column).toHaveValue('customer_name')
+  await expect(selected).toContainText('customer_name')
   await toolbar.getByRole('button', { name: 'Trim', exact: true }).click()
   await clean.getByLabel('Find', { exact: true }).fill('Itiba')
   await clean.getByLabel('Replace with').fill('Ichiba')
@@ -133,7 +144,7 @@ test('build it by hand: Connect to Answer', async ({ page }) => {
   await link('clean_customers-region_id', 'clean_regions-region_id')
   await model.getByTestId('link-fix').click()
   await expect(clean.getByTestId('clean-card-P7')).toBeVisible()
-  await column.selectOption('region_id')
+  await expect(selected).toContainText('region_id')
   await toolbar.getByRole('button', { name: 'Extract number' }).click()
   await clean.getByTestId('clean-check-P7').click()
   await expect(clean.getByTestId('clean-card-P7').getByTestId('clean-line')).toContainText('Passed')

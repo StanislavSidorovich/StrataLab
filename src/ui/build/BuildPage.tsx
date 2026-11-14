@@ -25,6 +25,7 @@ import { DashboardScreen } from './DashboardScreen'
 import { ModelScreen } from './ModelScreen'
 import './build.css'
 import './clean.css'
+import './cleanCanvas.css'
 import './progress.css'
 import { DemoContext } from './DemoContext'
 import { SliceContext } from './SliceContext'
@@ -330,7 +331,7 @@ function Shell() {
             })}
           </ol>
           <main className="build-body">
-            <section className="build-card" data-testid={`build-step-${open}`}>
+            <section className={`build-card${open === 'clean' ? ' is-wide' : ''}`} data-testid={`build-step-${open}`}>
               <div style={{ color: 'var(--muted)', fontSize: 12 }}>{isOptional(open) ? 'Optional, after the five steps' : `Step ${num} of ${STEP_IDS.length}`}</div>
               <h2 className="font-semibold" style={{ fontSize: 20, margin: '2px 0 8px' }}>{STEP_LABEL[open]}</h2>
               {engine !== 'loading' && !ready && (

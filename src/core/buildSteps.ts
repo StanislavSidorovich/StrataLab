@@ -229,6 +229,18 @@ export function stepErrorsSql(steps: readonly Step[]): string {
 SELECT ${cells.length ? cells.join(', ') : '0'}`
 }
 
+/** The first rows of the table after step `at` (0 = bronze), for the grid of Clean; sales are ordered by raw_id, as the preview always was. */
+export function previewAtSql(source: BuildSourceId, steps: readonly Step[], at: number, limit = 50): string {
+  return `${chainCtes(source, steps)}
+SELECT * FROM ${nameOf(at)}${source === 'sales' ? ' ORDER BY raw_id' : ''} LIMIT ${limit}`
+}
+
+/** One row: the DuckDB type of every column of the table after step `at` (the grid's type marks). */
+export function typesAtSql(source: BuildSourceId, steps: readonly Step[], at: number): string {
+  return `${chainCtes(source, steps)}
+SELECT ${CLEAN_COLUMNS[source].map((c) => `typeof(${c})`).join(', ')} FROM (SELECT * FROM ${nameOf(at)} LIMIT 1)`
+}
+
 /** "3,110 rows → 3,000 rows"; one number when nothing changed. */
 export function rowsChange(before: number, after: number): string {
   const n = (x: number) => `${x.toLocaleString('en-US')} ${x === 1 ? 'row' : 'rows'}`

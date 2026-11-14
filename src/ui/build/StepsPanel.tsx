@@ -1,15 +1,20 @@
-// The working panel of one source in Clean (spec 2.6): a preview of its clean table, the toolbar with the four v1 buttons
-// and their settings, and the list of applied steps (✕ rebuilds the chain; the given step cannot be removed).
-import { useEffect, useState } from 'react'
-import { ExternalLink, Loader2, X } from 'lucide-react'
+// The canvas of Clean (design docs/clean-canvas-design.md, 1): ribbon, queries pane, SQL of the step, the grid, Applied steps and the
+// status bar, for one source at a time. A click on a step shows the table after that step; the SQL line always says what that step ran.
+// ✕ rebuilds the chain; the given step cannot be removed. The task bar above (CleanScreen) says what to do.
+import { useEffect, useState, type ReactNode } from 'react'
+import { ExternalLink, X } from 'lucide-react'
 import type { ResultData } from '../../core/check'
-import { CLEAN_COLUMNS, TYPE_WORD, addSpec, chainSql, removeSpec, rowsChange, shownSql, stepsOf, type BuildWork, type StepSpec, type TypeTo } from '../../core/buildSteps'
+import { typeFamily } from '../../core/buildLinks'
+import { CLEAN_COLUMNS, addSpec, chainSql, previewAtSql, removeSpec, rowsChange, shownSql, stepsOf, typesAtSql, type BuildWork, type StepKind, type StepSpec } from '../../core/buildSteps'
 import { BUILD_SOURCES, sourceById, type BuildSourceId } from '../../data/build/kaiyoSales'
-import { previewSales, previewTable, salesErrors, stepCounts, stepErrors, type ErrorColumn, type SalesPreview } from '../../db/buildRun'
+import { previewSales, salesErrors, stepCounts, stepErrors, type ErrorColumn, type SalesPreview } from '../../db/buildRun'
 import { enginePort } from '../../db/pipelinePort'
 import { addTab } from '../store'
-import { BuildTable, FoldedSql, fmtN } from './BuildTable'
+import { FoldedSql, fmtN } from './BuildTable'
+import { CleanRibbon } from './CleanRibbon'
 import './errors.css'
+
+export const GRID_ROWS = 50
 
 export interface PanelProps {
   source: BuildSourceId
@@ -20,45 +25,55 @@ export interface PanelProps {
   /** sets the source's steps and rebuilds its clean table; resolves with an error message or null */
   onChange: (source: BuildSourceId, specs: StepSpec[]) => Promise<string | null>
   onSource: (source: BuildSourceId) => void
+  /** the column the Model step sent the learner to fix (selected on arrival), or none */
+  focusColumn?: { source: BuildSourceId; column: string }
+  /** open problems per source (the dot in the queries pane) */
+  openCount: Record<BuildSourceId, number>
+  /** shown in the centre in place of the grid (W) */
+  centre?: ReactNode
+  /** the Advanced: SQL panel (P2 blank, P5 format), over the grid; undefined = no Advanced button */
+  advanced?: ReactNode
+  advancedOpen: boolean
+  onAdvanced: () => void
 }
 
-export function StepsPanel({ source, work, ready, rev, onChange, onSource }: PanelProps) {
+const TYPE_MARK: Record<string, string> = { text: 'ABC', number: '123', date: 'date', other: '?' }
+
+export function StepsPanel({ source, work, ready, rev, onChange, onSource, focusColumn, openCount, centre, advanced, advancedOpen, onAdvanced }: PanelProps) {
   const connected = work.connected.includes(source)
   const specs = work.steps[source]
   const steps = stepsOf(source, specs)
   const cols = CLEAN_COLUMNS[source]
+  const sales = source === 'sales'
   const [data, setData] = useState<ResultData | null>(null)
-  const [rows, setRows] = useState<number | null>(null)
+  const [types, setTypes] = useState<string[]>([])
+  /** the table after this step is on show: 0 = the file as loaded, n = after step n; null = the latest */
+  const [viewAt, setViewAt] = useState<number | null>(null)
+  const [sel, setSel] = useState<string | null>(focusColumn && focusColumn.source === source ? focusColumn.column : null)
   /** rows of bronze, then after each step; null while loading */
   const [counts, setCounts] = useState<number[] | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
-  const [col, setCol] = useState(source === 'sales' ? 'customer_name' : cols.includes('sku_code') ? 'sku_code' : cols[0])
-  const [key, setKey] = useState(cols.includes('customer_id') ? 'customer_id' : cols[0])
-  const [order, setOrder] = useState(cols.includes('updated_at') ? 'updated_at' : cols[cols.length - 1])
-  const [dir, setDir] = useState<'newest' | 'oldest'>('newest')
-  // Change type (sales): the column, the type, the decimal separator; Replace values: find and with
-  const [tcol, setTcol] = useState('sale_date')
-  const [tto, setTto] = useState<TypeTo>('date')
-  const [tsep, setTsep] = useState<'point' | 'comma'>('point')
-  const [find, setFind] = useState('')
-  const [withText, setWithText] = useState('')
-  // [Error] cells (sales): the preview with its mask, rows that have one, per step, per column
+  // [Error] cells (sales): the grid with its mask, rows that have one, per step, per column
   const [errOnly, setErrOnly] = useState(false)
-  const [sp, setSp] = useState<SalesPreview | null>(null)
+  const [mask, setMask] = useState<boolean[][] | null>(null)
   const [stepErr, setStepErr] = useState<number[] | null>(null)
   const [colErr, setColErr] = useState<Record<ErrorColumn, number> | null>(null)
 
+  const latest = steps.length
+  const k = Math.min(viewAt ?? latest, latest)
+  const fullSql = connected ? chainSql(source, steps) : ''
+
   useEffect(() => {
-    const c = CLEAN_COLUMNS[source]
-    setCol(source === 'sales' ? 'customer_name' : c.includes('sku_code') ? 'sku_code' : c[0])
-    setKey(c.includes('customer_id') ? 'customer_id' : c[0])
-    setOrder(c.includes('updated_at') ? 'updated_at' : c[c.length - 1])
+    setSel(focusColumn && focusColumn.source === source ? focusColumn.column : null)
     setError(null)
     setNote(null)
     setErrOnly(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source])
+  // a step added or removed brings the grid back to the latest table
+  useEffect(() => setViewAt(null), [source, latest])
 
   useEffect(() => {
     if (!ready || !connected) {
@@ -66,24 +81,23 @@ export function StepsPanel({ source, work, ready, rev, onChange, onSource }: Pan
       return
     }
     let alive = true
-    const clean = sourceById(source).clean
     void (async () => {
       try {
-        const sales = source === 'sales'
-        const [d, n, c, prev, se, ce] = await Promise.all([
-          previewTable(enginePort, clean),
-          enginePort.query(`SELECT count(*) FROM build_kaiyo.${clean}`),
+        const atLatest = k === latest
+        const [d, t, c, se, ce] = await Promise.all([
+          sales && atLatest ? previewSales(enginePort, errOnly, GRID_ROWS) : enginePort.query(previewAtSql(source, steps, k, GRID_ROWS)),
+          enginePort.query(typesAtSql(source, steps, k)),
           stepCounts(enginePort, source, work.steps[source]),
-          sales ? previewSales(enginePort, errOnly) : Promise.resolve(null),
           sales ? stepErrors(enginePort, work.steps.sales) : Promise.resolve(null),
           sales ? salesErrors(enginePort) : Promise.resolve(null),
         ])
         if (alive) {
-          setSp(prev)
+          const prev = 'errors' in d ? (d as SalesPreview) : null
+          setMask(prev ? prev.errors : null)
+          setData(prev ? prev.data : (d as ResultData))
+          setTypes(t.rows[0]?.map(String) ?? [])
           setStepErr(se)
           setColErr(ce)
-          setData(d)
-          setRows(Number(n.rows[0][0]))
           setCounts(c)
         }
       } catch (e) {
@@ -93,7 +107,9 @@ export function StepsPanel({ source, work, ready, rev, onChange, onSource }: Pan
     return () => {
       alive = false
     }
-  }, [ready, connected, source, rev, errOnly])
+    // the chain is read through fullSql (steps are rebuilt every render)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, connected, source, rev, errOnly, k, fullSql])
 
   const apply = async (next: StepSpec[]) => {
     setBusy(true)
@@ -103,143 +119,103 @@ export function StepsPanel({ source, work, ready, rev, onChange, onSource }: Pan
     if (err) setError(err)
     setBusy(false)
   }
-  const add = (kind: Parameters<typeof addSpec>[1], params: Record<string, string> = {}) => void apply(addSpec(specs, kind, params))
+  const add = (kind: StepKind, params: Record<string, string> = {}) => void apply(addSpec(specs, kind, params))
   const off = !ready || !connected || busy
-
-  const select = (value: string, set: (v: string) => void, label: string) => (
-    <select className="build-select" value={value} onChange={(e) => set(e.target.value)} aria-label={label} disabled={off}>
-      {cols.map((c) => (
-        <option key={c} value={c}>
-          {c}
-        </option>
-      ))}
-    </select>
-  )
-
-  const pickTypeColumn = (c: string) => {
-    setTcol(c)
-    // the usual type of the column, as a start; the learner can change it
-    setTto(c === 'revenue' ? 'decimal' : c === 'units' ? 'whole' : c === 'sale_date' ? 'date' : tto)
-  }
   const errCells = colErr ? Object.values(colErr).reduce((a, b) => a + b, 0) : 0
+  const stepSql = k === 0 ? `SELECT * FROM ${sourceById(source).bronze}` : shownSql(steps, k - 1)
 
-  const fullSql = connected ? chainSql(source, steps) : ''
   return (
-    <section className="build-panel" data-testid="build-panel">
-      <div className="build-panel-tabs" role="tablist" aria-label="Source">
-        {BUILD_SOURCES.map((s) => (
-          <button key={s.id} role="tab" aria-selected={s.id === source} className={`build-tab${s.id === source ? ' is-on' : ''}`} onClick={() => onSource(s.id)}>
-            {s.label}
-          </button>
-        ))}
-      </div>
-      {!connected ? (
-        <div className="build-muted">This source is not connected yet. Go back to Connect.</div>
-      ) : (
-        <>
-          <div className="build-muted" data-testid="build-rows">
-            {counts && rows !== null ? (
-              <span data-testid="build-rows-change">
-                {sourceById(source).bronze}: <b>{fmtN(counts[0])} rows</b> → {sourceById(source).clean}: <b>{fmtN(rows)} rows</b>
-              </span>
-            ) : (
-              <>
-                {sourceById(source).clean}: {rows === null ? '…' : fmtN(rows)} rows
-              </>
-            )}
-          </div>
-          {source === 'sales' && colErr && (
-            <div className="build-errbar" data-testid="build-errbar">
-              {errCells > 0 ? (
-                <>
-                  <span className="build-errchip" data-testid="build-errors">
-                    Errors: {(Object.entries(colErr) as [ErrorColumn, number][]).filter(([, n]) => n > 0).map(([c, n]) => `${c} ${fmtN(n)}`).join(' · ')}
-                  </span>
-                  <button className="btn" onClick={() => setErrOnly((v) => !v)} data-testid="build-show-errors" aria-pressed={errOnly}>
-                    {errOnly ? 'Show all rows' : 'Show error rows'}
-                  </button>
-                </>
-              ) : (
-                <span className="build-errchip is-clear" data-testid="build-errors">No errors</span>
+    <section className="cc" data-testid="build-panel">
+      {connected && (
+        <CleanRibbon source={source} selected={sel} off={off} busy={busy} onAdd={add} onAdvanced={advanced ? onAdvanced : undefined} advancedOpen={advancedOpen} />
+      )}
+      <div className="cc-body">
+        <div className="cc-queries" role="tablist" aria-label="Source" data-testid="clean-queries">
+          <div className="cc-pane-title">Queries</div>
+          {BUILD_SOURCES.map((s) => (
+            <button key={s.id} role="tab" aria-selected={s.id === source} className={`cc-query${s.id === source ? ' is-on' : ''}`} onClick={() => onSource(s.id)}>
+              <span className="cc-query-name">{s.label}</span>
+              {openCount[s.id] > 0 && (
+                <span className="cc-dot" title={`${openCount[s.id]} open ${openCount[s.id] === 1 ? 'problem' : 'problems'}`} data-testid={`clean-dot-${s.id}`}>
+                  {openCount[s.id]}
+                </span>
               )}
-            </div>
+            </button>
+          ))}
+        </div>
+        <div className="cc-centre">
+          {!connected ? (
+            <div className="build-muted">This source is not connected yet. Go back to Connect.</div>
+          ) : (
+            <>
+              {advancedOpen && advanced && (
+                <div className="cc-advanced" data-testid="clean-advanced-panel">
+                  <div className="cc-pane-title">Advanced: SQL</div>
+                  {advanced}
+                </div>
+              )}
+              {error && (
+                <div className="build-error" role="alert">
+                  {error}
+                </div>
+              )}
+              {centre ? (
+                <div className="cc-watch">{centre}</div>
+              ) : (
+                <>
+                  <pre className="cc-sql pl-code" data-testid="clean-step-sql" aria-label={`SQL of this step`}>
+                    {stepSql}
+                  </pre>
+                  {sales && colErr && (
+                    <div className="build-errbar" data-testid="build-errbar">
+                      {errCells > 0 ? (
+                        <>
+                          <span className="build-errchip" data-testid="build-errors">
+                            Errors: {(Object.entries(colErr) as [ErrorColumn, number][]).filter(([, n]) => n > 0).map(([c, n]) => `${c} ${fmtN(n)}`).join(' · ')}
+                          </span>
+                          {k === latest && (
+                            <button className="btn" onClick={() => setErrOnly((v) => !v)} data-testid="build-show-errors" aria-pressed={errOnly}>
+                              {errOnly ? 'Show all rows' : 'Show error rows'}
+                            </button>
+                          )}
+                        </>
+                      ) : (
+                        <span className="build-errchip is-clear" data-testid="build-errors">No errors</span>
+                      )}
+                    </div>
+                  )}
+                  <Grid data={data} types={types} mask={mask} selected={sel} onSelect={(c) => setSel((x) => (x === c ? null : c))} caption={`${sourceById(source).clean} after step ${k}`} />
+                </>
+              )}
+            </>
           )}
-          <BuildTable data={source === 'sales' && sp ? sp.data : data} errors={source === 'sales' && sp ? sp.errors : undefined} caption={`${sourceById(source).clean}, ${source === 'sales' && errOnly ? 'rows with an error' : 'first rows'}`} />
-          <div className="build-toolbar" role="group" aria-label="Buttons">
-            <div className="build-tool">
-              <button className="btn" disabled={off} onClick={() => add('distinct')}>Remove duplicates</button>
-            </div>
-            <div className="build-tool">
-              <button className="btn" disabled={off} onClick={() => add('trim', { column: col })}>Trim</button>
-              {select(col, setCol, 'Column to trim, uppercase or extract the number from')}
-              <button className="btn" disabled={off} onClick={() => add('upper', { column: col })}>Uppercase</button>
-              <button className="btn" disabled={off} onClick={() => add('extract', { column: col })} title="Keep the digits of a text as a whole number: R-03 becomes 3">Extract number</button>
-            </div>
-            <div className="build-tool">
-              <button className="btn" disabled={off} onClick={() => add('latest', { key, order, direction: dir })}>Keep latest row per key</button>
-              <label className="build-set">key {select(key, setKey, 'Key')}</label>
-              <label className="build-set">order by {select(order, setOrder, 'Order column')}</label>
-              <select className="build-select" value={dir} onChange={(e) => setDir(e.target.value as 'newest' | 'oldest')} aria-label="Newest or oldest" disabled={off}>
-                <option value="newest">Newest</option>
-                <option value="oldest">Oldest</option>
-              </select>
-            </div>
-            <div className="build-tool">
-              <button className="btn" disabled={off || !find} onClick={() => add('replace', { column: col, find, with: withText })} title="Replace a piece of text in the column chosen next to Trim" data-testid="build-replace">Replace values</button>
-              <label className="build-set">
-                find <input className="build-input" value={find} onChange={(e) => setFind(e.target.value)} aria-label="Find" spellCheck={false} disabled={off} />
-              </label>
-              <label className="build-set">
-                with <input className="build-input" value={withText} onChange={(e) => setWithText(e.target.value)} aria-label="Replace with" spellCheck={false} disabled={off} />
-              </label>
-            </div>
-            {source === 'sales' && (
-              <div className="build-tool">
-                <button className="btn" disabled={off} onClick={() => add('type', { column: tcol, to: tto, sep: tto === 'date' ? 'point' : tsep })} data-testid="build-change-type">Change type</button>
-                <label className="build-set">column {select(tcol, pickTypeColumn, 'Column to change the type of')}</label>
-                <label className="build-set">
-                  to
-                  <select className="build-select" value={tto} onChange={(e) => setTto(e.target.value as TypeTo)} aria-label="Type" disabled={off}>
-                    {(Object.keys(TYPE_WORD) as TypeTo[]).map((t) => (
-                      <option key={t} value={t}>{TYPE_WORD[t]}</option>
-                    ))}
-                  </select>
-                </label>
-                {tto !== 'date' && (
-                  <label className="build-set">
-                    decimal separator
-                    <select className="build-select" value={tsep} onChange={(e) => setTsep(e.target.value as 'point' | 'comma')} aria-label="Decimal separator" disabled={off}>
-                      <option value="point">point (3.5)</option>
-                      <option value="comma">comma (3,5)</option>
-                    </select>
-                  </label>
-                )}
-              </div>
-            )}
-            {busy && <Loader2 size={14} className="animate-spin" />}
-          </div>
-          {error && <div className="build-error" role="alert">{error}</div>}
-          <div>
-            <div className="build-steps-title">Applied steps</div>
+        </div>
+        {connected && (
+          <aside className="cc-steps" aria-label="Applied steps">
+            <div className="cc-pane-title">Applied steps</div>
             <ol className="build-steps" data-testid="build-steps">
-              <li className="build-step is-source">
-                <span className="build-step-label">Source: {sourceById(source).bronze}</span>
-                {counts && <span className="build-count">{fmtN(counts[0])} rows</span>}
+              <li className={`build-step is-source${k === 0 ? ' is-viewing' : ''}`}>
+                <button className="cc-step-main" aria-current={k === 0 ? 'true' : undefined} onClick={() => setViewAt(0)} title="Show the table as it was loaded">
+                  <span className="build-step-label">Source: {sourceById(source).bronze}</span>
+                  {counts && <span className="build-count">{fmtN(counts[0])} rows</span>}
+                </button>
               </li>
               {steps.map((st, i) => (
-                <li key={st.id} className={`build-step${stepErr && stepErr[i] > 0 ? ' is-failing' : ''}`} data-testid="build-step">
+                <li key={st.id} className={`build-step${stepErr && stepErr[i] > 0 ? ' is-failing' : ''}${k === i + 1 ? ' is-viewing' : ''}`} data-testid="build-step">
                   <div className="build-step-row">
-                    <span className="build-step-label">{st.label}</span>
-                    {counts && counts.length > i + 1 && (
-                      <span className="build-count" data-testid="build-step-rows">
-                        {rowsChange(counts[i], counts[i + 1])}
-                      </span>
-                    )}
-                    {stepErr && stepErr[i] > 0 && (
-                      <span className="build-err-badge" data-testid="build-step-errors">
-                        {fmtN(stepErr[i])} rows [Error]
-                      </span>
-                    )}
+                    <button className="cc-step-main" aria-current={k === i + 1 ? 'true' : undefined} onClick={() => setViewAt(i + 1)} title="Show the table after this step">
+                      <span className="build-step-label">{st.label}</span>
+                      {counts && counts.length > i + 1 && (
+                        <span className="build-count" data-testid="build-step-rows">
+                          {rowsChange(counts[i], counts[i + 1])}
+                        </span>
+                      )}
+                      {stepErr && stepErr[i] > 0 && (
+                        <span className="build-err-badge" data-testid="build-step-errors">
+                          {fmtN(stepErr[i])} rows [Error]
+                        </span>
+                      )}
+                    </button>
                     {st.given ? (
                       <span className="build-badge">given</span>
                     ) : (
@@ -248,7 +224,6 @@ export function StepsPanel({ source, work, ready, rev, onChange, onSource }: Pan
                       </button>
                     )}
                   </div>
-                  <FoldedSql summary="SQL" sql={shownSql(steps, i)} />
                 </li>
               ))}
             </ol>
@@ -264,9 +239,67 @@ export function StepsPanel({ source, work, ready, rev, onChange, onSource }: Pan
               </button>
               {note && <span className="build-muted" style={{ marginLeft: 8 }}>{note}</span>}
             </FoldedSql>
-          </div>
-        </>
+          </aside>
+        )}
+      </div>
+      {connected && (
+        <div className="cc-status" data-testid="build-rows" role="status">
+          <span>Columns <b>{cols.length}</b></span>
+          <span data-testid="build-rows-change">
+            {counts && counts.length > k ? (
+              k === 0 ? (
+                <>
+                  Rows <b>{fmtN(counts[0])}</b> as loaded
+                </>
+              ) : (
+                <>Rows {rowsChange(counts[k - 1], counts[k])}</>
+              )
+            ) : (
+              'Rows …'
+            )}
+          </span>
+          <span>First {GRID_ROWS} rows shown</span>
+          {k !== latest && <span className="cc-status-old">Showing the table after step {k}, not the latest</span>}
+        </div>
       )}
     </section>
+  )
+}
+
+/** The table as a grid: a click on a header selects the column (accent outline); a slot under the name is for the column profile. */
+function Grid({ data, types, mask, selected, onSelect, caption }: { data: ResultData | null; types: string[]; mask: boolean[][] | null; selected: string | null; onSelect: (c: string) => void; caption: string }) {
+  if (!data) return <div className="build-muted">Loading…</div>
+  return (
+    <div className="cc-grid" tabIndex={0} role="region" aria-label={caption} data-testid="clean-grid">
+      <table className="build-table">
+        <thead>
+          <tr>
+            {data.header.map((c, j) => {
+              const fam = typeFamily(types[j] ?? '')
+              return (
+                <th key={c} className={selected === c ? 'is-selected' : undefined}>
+                  <button className="cc-head" aria-pressed={selected === c} onClick={() => onSelect(c)} data-testid={`clean-col-${c}`}>
+                    <span className="cc-type" title={types[j]?.toLowerCase()}>{TYPE_MARK[fam]}</span>
+                    <span className="cc-head-name">{c}</span>
+                  </button>
+                  <div className="cc-profile-slot" data-col={c} />
+                </th>
+              )
+            })}
+          </tr>
+        </thead>
+        <tbody>
+          {data.rows.map((r, i) => (
+            <tr key={i}>
+              {r.map((c, j) => (
+                <td key={j} className={mask?.[i]?.[j] ? 'is-error' : c === null ? 'is-null' : undefined} data-error={mask?.[i]?.[j] ? 'true' : undefined}>
+                  {mask?.[i]?.[j] ? '[Error]' : c === null ? 'null' : String(c)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   )
 }

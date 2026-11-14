@@ -4,8 +4,8 @@
 import { FABRIC_CLEAN } from '../../data/build/fabricNotes'
 import './fabric.css'
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowRight, Check, CheckCircle2, Lightbulb, Loader2, Lock, XCircle } from 'lucide-react'
-import { CLEAN_COLUMNS, activeCard, addSpec, checkFormat, cleanDone, datesSql, hasFullGiven, passCard, typedColumn, type BuildWork, type StepSpec, dedupSql } from '../../core/buildSteps'
+import { ArrowRight, Check, CheckCircle2, Lightbulb, Loader2, X, XCircle } from 'lucide-react'
+import { CLEAN_COLUMNS, SOURCE_IDS, activeCard, addSpec, checkFormat, cleanDone, datesSql, hasFullGiven, passCard, typedColumn, type BuildWork, type StepSpec, dedupSql } from '../../core/buildSteps'
 import { checkBlank } from '../../core/pipeline'
 import { CLEAN_CARDS, GIVEN_NOTE, P1_SKUS, P3_NOTE, sourceById, type BuildSourceId, type CleanCard, type CleanId } from '../../data/build/kaiyoSales'
 import { LINK_TEXT } from '../../data/build/linkData'
@@ -17,6 +17,7 @@ import { StepsPanel } from './StepsPanel'
 import { WatchRegions } from './WatchRegions'
 import { FillButton } from './DemoContext'
 import './clean.css'
+import './cleanCanvas.css'
 import './cleanAction.css'
 import './errors.css'
 
@@ -35,10 +36,17 @@ interface Props {
 export function CleanScreen({ work, setWork, ready, rebuild, rev, focus, onBackToModel }: Props) {
   const active = activeCard(work.passed)
   const [source, setSource] = useState<BuildSourceId>(() => focus ?? (active ? CLEAN_CARDS.find((c) => c.id === active)!.source : 'sales'))
+  // the Model step sends the learner to a column to fix: P4 is customer_name in the sales, P7 is region_id in regions.csv
+  const [focusColumn] = useState<{ source: BuildSourceId; column: string } | undefined>(() => (focus === 'sales' ? { source: 'sales', column: 'customer_name' } : focus === 'regions' ? { source: 'regions', column: 'region_id' } : undefined))
   const [hints, setHints] = useState<Partial<Record<CleanId, number>>>({})
+  const [hintOpen, setHintOpen] = useState(false)
   const [report, setReport] = useState<Partial<Record<CleanId, CheckReport>>>({})
-  // a card that has passed can be opened again from its head (to read it, change the step, check again)
-  const [again, setAgain] = useState<CleanId[]>([])
+  /** a verdict panel the learner closed (until the next Check) */
+  const [closed, setClosed] = useState<Partial<Record<CleanId, boolean>>>({})
+  // a card that has passed can be opened again from its chip (to read it, change the step, check again)
+  const [again, setAgain] = useState<CleanId | null>(null)
+  /** Advanced: SQL opened or closed by the learner; null = as the card needs it */
+  const [adv, setAdv] = useState<boolean | null>(null)
   const connected = work.connected.length === 4
 
   // [Error] cells in the sales, for the P5 and P6 cards (spec 3.6)
@@ -54,88 +62,136 @@ export function CleanScreen({ work, setWork, ready, rebuild, rev, focus, onBackT
     }
   }, [ready, work.connected, rev])
 
+  const cur: CleanId | null = again ?? active
+  const card = cur ? CLEAN_CARDS.find((c) => c.id === cur)! : null
+  useEffect(() => {
+    setAdv(null)
+    setHintOpen(false)
+  }, [cur])
+
   const pass = (id: CleanId) => {
     setWork((w) => ({ ...w, passed: passCard(w, id) }))
+    setAgain(null)
     const i = CLEAN_CARDS.findIndex((c) => c.id === id)
     const nextCard = CLEAN_CARDS[i + 1]
     if (nextCard) setSource(nextCard.source)
+  }
+  const reopen = (id: CleanId) => {
+    if (again === id) {
+      setAgain(null)
+      return
+    }
+    setAgain(id)
+    setSource(CLEAN_CARDS.find((c) => c.id === id)!.source)
+  }
+  const onReport = (id: CleanId) => (r: CheckReport) => {
+    setReport((x) => ({ ...x, [id]: r }))
+    setClosed((x) => ({ ...x, [id]: false }))
   }
 
   const problems = CLEAN_CARDS.filter((c) => c.id !== 'W')
   const total = problems.length
   const left = problems.filter((c) => !work.passed.includes(c.id)).length
+  /** open problems per source: the dot in the queries pane */
+  const openCount = SOURCE_IDS.reduce(
+    (acc, s) => ({ ...acc, [s]: problems.filter((c) => c.source === s && !work.passed.includes(c.id)).length + (s === 'sales' && work.p4 === 'asked' ? 1 : 0) + (s === 'regions' && work.p7 === 'asked' ? 1 : 0) }),
+    {} as Record<BuildSourceId, number>,
+  )
+
+  // Advanced: SQL, over the grid, for the cards that are a blank (P2 the sale's key, P5 the date format)
+  const showBlank = source === 'sales' && (cur === 'P2' || work.passed.includes('P2'))
+  const showDates = source === 'sales' && (cur === 'P5' || work.passed.includes('P5'))
+  const hasSaleDateStep = work.steps.sales.some((s) => typedColumn(s) === 'sale_date')
+  const advancedBody =
+    showBlank || showDates ? (
+      <div className="space-y-3">
+        {showBlank && <SalesBlank work={work} setWork={setWork} ready={ready} rebuild={rebuild} onReport={onReport('P2')} />}
+        {showDates && <DateStep work={work} setWork={setWork} ready={ready} rebuild={rebuild} errs={errs} onReport={onReport('P5')} />}
+      </div>
+    ) : undefined
+  const advancedOpen = adv ?? (cur === 'P2' || (cur === 'P5' && hasSaleDateStep))
+
   if (!connected) return <p className="build-muted">Connect the four sources first.</p>
+  const passed = cur ? work.passed.includes(cur) : false
+  const last = cur ? report[cur] : undefined
+  const level = cur ? hints[cur] ?? 0 : 0
   return (
-    <div className="space-y-4" data-testid="build-clean">
+    <div className="cc-root" data-testid="build-clean">
       <p className="build-muted build-fabric" data-testid="fabric-clean">{FABRIC_CLEAN}</p>
       <details className="build-given">
         <summary>{GIVEN_NOTE}</summary>
-        <p className="build-muted" style={{ margin: '6px 0 0' }}>It is the first step in the list of sales, marked “given”. Pick the sales tab below and open its SQL.</p>
+        <p className="build-muted" style={{ margin: '6px 0 0' }}>It is the first step in the list of sales, marked “given”. Pick sales in the Queries list and look at Applied steps.</p>
       </details>
-      <p className="build-left" data-testid="clean-left">
-        {left === 0 ? 'All problems solved' : `${left} of ${total} problems left`}
-      </p>
-      <ol className="build-cards">
-        {CLEAN_CARDS.map((c) => {
-          const passed = work.passed.includes(c.id)
-          const open = active === c.id || (passed && again.includes(c.id))
-          const level = hints[c.id] ?? 0
-          const last = report[c.id]
-          return (
-            <li key={c.id} className={`build-clean-card${open ? ' is-open' : ''}${passed ? ' is-passed' : ''}`} data-testid={`clean-card-${c.id}`}>
-              <div className="build-clean-head">
-                <span className="build-chip-n">{passed ? <Check size={13} /> : open ? c.id : <Lock size={12} />}</span>
-                <div style={{ flex: 1 }}>
-                  <div className="font-semibold">{c.title}</div>
-                  <div className="build-muted">{sourceById(c.source).label}</div>
-                </div>
-                {passed && c.id !== 'W' && active !== c.id && (
-                  <button className="btn btn-ghost" aria-expanded={open} onClick={() => setAgain((a) => (a.includes(c.id) ? a.filter((x) => x !== c.id) : [...a, c.id]))} data-testid={`clean-reopen-${c.id}`}>
-                    {open ? 'Close' : 'Open again'}
-                  </button>
-                )}
-              </div>
-              {open && c.id === 'W' && (
-                <WatchRegions
-                  ready={ready}
-                  onFix={(specs) => {
-                    setSource('regions')
-                    return rebuild('regions', specs)
-                  }}
-                  onDone={() => pass('W')}
-                />
-              )}
-              {open && c.id === 'W' && <FillButton unit={{ step: 'clean', card: 'W' }} />}
-              {open && c.id !== 'W' && (
-                <>
-                  <ActionText action={c.action} text={c.text} />
-                  {c.id === 'P1' && (
-                    <div className="build-skus" aria-label="The six SKUs as they are in the file">
-                      {P1_SKUS.map((s) => (
-                        <code key={s}>{s}</code>
-                      ))}
-                    </div>
-                  )}
-                  {(c.id === 'P2' || c.id === 'P3') && <AffectedRows card={c.id} ready={ready} rev={rev} />}
-                  {c.id === 'P2' && <SalesBlank work={work} setWork={setWork} ready={ready} rebuild={rebuild} onReport={(r) => setReport((x) => ({ ...x, P2: r }))} />}
-                  {c.id === 'P3' && <p className="build-muted" style={{ margin: 0 }}>{P3_NOTE}</p>}
-                  {c.id === 'P5' && <DateStep work={work} setWork={setWork} ready={ready} rebuild={rebuild} errs={errs} onReport={(r) => setReport((x) => ({ ...x, P5: r }))} />}
-                  {c.id === 'P6' && <NumberNote work={work} errs={errs} />}
-                  <Hints card={c} level={level} onMore={() => setHints((h) => ({ ...h, [c.id]: level + 1 }))} />
-                  <FillButton unit={{ step: 'clean', card: c.id }} hidden={passed} />
-                  {c.id !== 'P2' && <CheckBar card={c} work={work} ready={ready} report={last} onReport={(r) => setReport((x) => ({ ...x, [c.id]: r }))} />}
-                  {last && <Verdict report={last} />}
-                  {last?.ok && !passed && (
-                    <button className="btn btn-primary" onClick={() => pass(c.id)} data-testid={`clean-pass-${c.id}`}>
-                      {c.id === 'P6' ? 'Finish cleaning' : 'Next problem'} <ArrowRight size={14} />
-                    </button>
-                  )}
-                </>
-              )}
-            </li>
-          )
-        })}
-      </ol>
+      <section className="cc-task" data-testid="clean-task" data-card={cur ?? 'done'}>
+        <div className="cc-task-line">
+          {CLEAN_CARDS.filter((c) => c.id !== 'W' && work.passed.includes(c.id)).map((c) => (
+            <button key={c.id} className={`cc-done-chip${again === c.id ? ' is-on' : ''}`} aria-pressed={again === c.id} title={`${c.title}: open again`} onClick={() => reopen(c.id)} data-testid={`clean-reopen-${c.id}`}>
+              <Check size={11} /> {c.id}
+            </button>
+          ))}
+          {card ? (
+            <>
+              <span className="build-chip-n cc-id">{card.id}</span>
+              <span className="cc-task-title">
+                <b>{card.title}</b>
+                <span className="build-muted"> · {sourceById(card.source).label}</span>
+              </span>
+            </>
+          ) : (
+            <span className="cc-task-title"><b>All problems solved</b></span>
+          )}
+          <span className="cc-spacer" />
+          <span className="build-left" data-testid="clean-left">{left === 0 ? 'All problems solved' : `${left} of ${total} problems left`}</span>
+          {card && card.id !== 'W' && card.id !== 'P2' && <CheckButton card={card} work={work} ready={ready} onReport={onReport(card.id)} />}
+          {card && last?.ok && !passed && (
+            <button className="btn btn-primary" onClick={() => pass(card.id)} data-testid={`clean-pass-${card.id}`}>
+              {card.id === 'P6' ? 'Finish cleaning' : 'Next problem'} <ArrowRight size={14} />
+            </button>
+          )}
+          {card && card.hints.length > 0 && (
+            <button
+              className="btn"
+              aria-expanded={hintOpen}
+              aria-label="If you're stuck"
+              title="If you're stuck"
+              data-testid="clean-hint-toggle"
+              onClick={() => {
+                if (!hintOpen && level === 0) setHints((h) => ({ ...h, [card.id]: 1 }))
+                setHintOpen((v) => !v)
+              }}
+            >
+              <Lightbulb size={14} /> ?
+            </button>
+          )}
+          {card && <FillButton unit={{ step: 'clean', card: card.id }} hidden={passed} />}
+        </div>
+        {card && card.id !== 'W' && <ActionText action={card.action} text={card.text} />}
+        {card && card.id === 'W' && <p className="build-muted" style={{ margin: 0 }}>{card.text}</p>}
+        {card?.id === 'P1' && (
+          <div className="build-skus" aria-label="The six SKUs as they are in the file">
+            {P1_SKUS.map((s) => (
+              <code key={s}>{s}</code>
+            ))}
+          </div>
+        )}
+        {card?.id === 'P3' && <p className="build-muted" style={{ margin: 0 }}>{P3_NOTE}</p>}
+        {card && (card.id === 'P2' || card.id === 'P3') && (
+          <details className="cc-more">
+            <summary>The rows this problem is about</summary>
+            <AffectedRows card={card.id} ready={ready} rev={rev} />
+          </details>
+        )}
+        {card?.id === 'P6' && <NumberNote work={work} errs={errs} />}
+        {card && hintOpen && <Hints card={card} level={Math.max(level, 1)} onMore={() => setHints((h) => ({ ...h, [card.id]: Math.max(level, 1) + 1 }))} />}
+      </section>
+      {card && last && !closed[card.id] && (
+        <div className="cc-verdict">
+          <Verdict report={last} />
+          <button className="build-x" aria-label="Close the result" title="Close" onClick={() => setClosed((x) => ({ ...x, [card.id]: true }))}>
+            <X size={13} />
+          </button>
+        </div>
+      )}
       {cleanDone(work.passed) && (
         <div className="build-quick" data-testid="clean-done">
           <b>Clean is done.</b> Regions 16 rows, products 47, sales 3,000, customers 144, and the sales have dates and numbers.{' '}
@@ -150,7 +206,31 @@ export function CleanScreen({ work, setWork, ready, rebuild, rev, focus, onBackT
       {work.p7 && cleanDone(work.passed) && (
         <ExtraCard id="P7" work={work} setWork={setWork} ready={ready} onFocus={() => setSource('regions')} onBack={onBackToModel} text={LINK_TEXT.p7} where="regions.csv · asked for by the Model step" check={() => checkP7(enginePort)} />
       )}
-      <StepsPanel source={source} work={work} ready={ready} rev={rev} onChange={rebuild} onSource={setSource} />
+      <StepsPanel
+        source={source}
+        work={work}
+        ready={ready}
+        rev={rev}
+        onChange={rebuild}
+        onSource={setSource}
+        focusColumn={focusColumn}
+        openCount={openCount}
+        centre={
+          cur === 'W' ? (
+            <WatchRegions
+              ready={ready}
+              onFix={(specs) => {
+                setSource('regions')
+                return rebuild('regions', specs)
+              }}
+              onDone={() => pass('W')}
+            />
+          ) : undefined
+        }
+        advanced={advancedBody}
+        advancedOpen={advancedOpen}
+        onAdvanced={() => setAdv(!advancedOpen)}
+      />
     </div>
   )
 }
@@ -187,8 +267,8 @@ function Hints({ card, level, onMore }: { card: CleanCard; level: number; onMore
   )
 }
 
-/** The check of P1 and P3: runs the queries on the table as it is now. */
-function CheckBar({ card, work, ready, report, onReport }: { card: CleanCard; work: BuildWork; ready: boolean; report?: CheckReport; onReport: (r: CheckReport) => void }) {
+/** The Check button of the task bar (P1, P3, P5, P6): runs the queries on the table as it is now. */
+function CheckButton({ card, work, ready, onReport }: { card: CleanCard; work: BuildWork; ready: boolean; onReport: (r: CheckReport) => void }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const run = async () => {
@@ -205,13 +285,12 @@ function CheckBar({ card, work, ready, report, onReport }: { card: CleanCard; wo
     }
   }
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <>
+      {error && <span className="build-error">{error}</span>}
       <button className="btn btn-primary" disabled={!ready || busy} onClick={() => void run()} data-testid={`clean-check-${card.id}`}>
         {busy ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />} Check
       </button>
-      {!report && <span className="build-muted">Use the buttons under {sourceById(card.source).label} below, then Check.</span>}
-      {error && <span className="build-error">{error}</span>}
-    </div>
+    </>
   )
 }
 
@@ -384,7 +463,7 @@ function DateStep({ work, setWork, ready, rebuild, errs, onReport }: { work: Bui
     }
   }
 
-  if (!step) return <p className="build-muted" style={{ margin: 0 }} data-testid="clean-p5-wait">Use the Change type buttons under the sales list below: column sale_date, to Date.</p>
+  if (!step) return <p className="build-muted" style={{ margin: 0 }} data-testid="clean-p5-wait">Click the sale_date header, then Change type → Date in the ribbon.</p>
   return (
     <div className="build-fixbox">
       {step.kind === 'type' && n > 0 && (
@@ -429,7 +508,7 @@ function DateStep({ work, setWork, ready, rebuild, errs, onReport }: { work: Bui
 /** P6: says what the preview says, in words, once Change type has been pressed on the numbers. */
 function NumberNote({ work, errs }: { work: BuildWork; errs: Record<ErrorColumn, number> | null }) {
   const typed = (c: string) => work.steps.sales.some((s) => typedColumn(s) === c)
-  if (!typed('revenue') && !typed('units')) return <p className="build-muted" style={{ margin: 0 }}>Use the Change type buttons under the sales list below: revenue to Decimal, units to Whole number.</p>
+  if (!typed('revenue') && !typed('units')) return <p className="build-muted" style={{ margin: 0 }}>Click the revenue header, then Change type → Decimal; the same for units, Whole number.</p>
   const parts = [typed('revenue') && errs && errs.revenue > 0 && `${fmtN(errs.revenue)} revenues`, typed('units') && errs && errs.units > 0 && `${fmtN(errs.units)} units`].filter(Boolean)
   if (parts.length === 0) return null
   return (
