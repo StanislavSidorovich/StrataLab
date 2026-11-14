@@ -6,7 +6,7 @@ import { unzipSync, strFromU8 } from 'fflate'
 import { beforeAll, describe, expect, it } from 'vitest'
 import type { ResultData } from '../src/core/check'
 import { readBuild } from '../src/core/build'
-import { checkNumbers, csvPath, csvText, exportBlocker, powerBiType, powerBiZip, shortName, starLinks, stepsHtml, type StarTable } from '../src/core/powerBi'
+import { chainTotals, starSvg, checkNumbers, csvPath, csvText, exportBlocker, powerBiType, powerBiZip, shortName, starLinks, stepsHtml, type StarTable } from '../src/core/powerBi'
 import { BUILD_SOURCES } from '../src/data/build/kaiyoSales'
 import { connect, prepare, restore } from '../src/db/buildRun'
 import { resultRows } from '../src/db/export'
@@ -93,7 +93,7 @@ describe('power bi zip', () => {
 
   it('steps.html is one page without scripts or pictures, with F1 and F2 and the numbers of the Answer', () => {
     const html = stepsHtml(tables, state.links)
-    expect(html).not.toMatch(/<script|<img|<link|src=/i)
+    expect(html).not.toMatch(/<script|<img|<link|src=|\son[a-z]+=/i)
     expect(html).toContain('fact_sales[customer_id]')
     expect(html).toContain('dim_product[product_id]')
     expect(html).toContain('Applied steps')
@@ -102,6 +102,47 @@ describe('power bi zip', () => {
     expect(html).toContain('314,906.13')
     expect(html).toContain('Minori 90,829.50')
     expect(html).toContain('Revenue H1 2026')
+  })
+
+  it('steps.html v2: split step 4, display units, chain_name bars with the real chains, hints per check', async () => {
+    const html = stepsHtml(tables, state.links)
+    expect(html).toContain('4. Two measures and one column')
+    expect(html).toContain('New column</b> (<b>not</b> New measure)')
+    expect(html).toContain("A single value for column 'sale_date'")
+    expect(html).toContain('mmm yyyy')
+    expect(html).toContain('Date Hierarchy')
+    expect(html).toContain('Categorical')
+    expect(html).toContain('Display units: None')
+    expect(html).toContain('<b>dim_customer[chain_name]</b>')
+    expect(html).toContain('not <code>customer_name</code>')
+    expect(html).toContain('delete any line that is not in this picture')
+    const n = checkNumbers()
+    expect(html).toContain(`${n.month} 2025 is the highest of 2025 at <b>${n.monthValue}</b>`)
+    // the chains in the text are the real ones, computed from the exported tables, and the top one is the Answer's
+    const chains = chainTotals(tables)
+    expect(chains[0]).toEqual({ chain: n.chain, value: Number(n.chainValue.replace(/,/g, '')) })
+    expect(html).toContain(`<b>${chains.length} bars</b>: ${chains.map((c) => c.chain).join(', ')}`)
+    // each of the three checks says what goes wrong
+    expect(html).toContain('314.91K')
+    expect((html.match(/<br>If /g) ?? []).length).toBe(3)
+    // step 2 lists only date and money columns
+    expect(html).toContain('<code>fact_sales[sale_date]</code></td><td>Date</td>')
+    expect(html).not.toContain('<code>fact_sales[customer_id]</code></td><td>')
+    if (process.env.STEPS_OUT) (await import('node:fs')).writeFileSync(process.env.STEPS_OUT, html)
+  })
+
+  it('the star diagram is an inline SVG with one line per link, labelled * and 1, the column names on the lines', () => {
+    const mls = starLinks(state.links, tables.map((t) => t.table))
+    const svg = starSvg(tables, mls)
+    expect(svg).toMatch(/^<svg role="img"/)
+    expect(svg).toContain('<title id="star-t">')
+    expect(svg).not.toMatch(/<script|<image/i)
+    expect((svg.match(/<line /g) ?? []).length).toBe(mls.length)
+    expect((svg.match(/>\*<\/text>/g) ?? []).length).toBe(mls.length)
+    expect((svg.match(/>1<\/text>/g) ?? []).length).toBe(mls.length)
+    for (const l of mls) expect(svg).toContain(l.many.column === l.one.column ? `>${l.many.column}</text>` : `${l.many.column} → ${l.one.column}`)
+    for (const t of tables) expect(svg).toContain(shortName(t.table))
+    expect(stepsHtml(tables, state.links)).toContain(svg)
   })
 })
 
