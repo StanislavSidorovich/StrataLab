@@ -35,16 +35,12 @@
 .cc-replace.is-ready > .btn { border-color: var(--accent); background: var(--accent-soft); }
 
 /* resizable side panes: the widths are variables set by StepsPanel (none set = the defaults here) */
-.cc-root .cc-body { grid-template-columns: var(--cc-qw, 190px) minmax(0, 1fr) var(--cc-sw, 270px); }
+.cc-root .cc-body { grid-template-columns: var(--cc-qw, 340px) minmax(0, 1fr) var(--cc-sw, 270px); }
 .cc-queries, .cc-steps { position: relative; }
 .cc-handle { position: absolute; top: 0; bottom: 0; width: 8px; z-index: 4; cursor: col-resize; border-radius: 4px; touch-action: none; }
 .cc-handle.is-left { right: -8px; }
 .cc-handle.is-right { left: -8px; }
 .cc-handle:hover, .cc-handle:focus-visible { background: color-mix(in srgb, var(--accent) 55%, transparent); outline: none; }
-@media (max-width: 1365px) {
-  .cc-root .cc-body { grid-template-columns: minmax(0, 1fr) var(--cc-sw, 230px); }
-  .cc-handle.is-left { display: none; }
-}
 @media (max-width: 1099px) {
   .cc-root .cc-body { grid-template-columns: minmax(0, 1fr); }
   .cc-handle { display: none; }

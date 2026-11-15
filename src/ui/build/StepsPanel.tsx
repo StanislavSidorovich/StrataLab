@@ -43,11 +43,14 @@ export interface PanelProps {
   onAdvanced: () => void
   /** the card whose hint level 2 is on screen (P1 to P3, first pass): its header and cells are pointed at in the grid */
   hintCard?: string | null
+  /** laptop layout: the task goes into the left column under the Queries list (the Advanced panel too), and the grid fills the height */
+  wide?: boolean
+  aside?: ReactNode
 }
 
 const TYPE_MARK: Record<string, string> = { text: 'ABC', number: '123', date: 'date', other: '?' }
 
-export function StepsPanel({ source, work, ready, rev, onChange, onSource, focusColumn, openCount, centre, advanced, advancedOpen, onAdvanced, hintCard }: PanelProps) {
+export function StepsPanel({ source, work, ready, rev, onChange, onSource, focusColumn, openCount, centre, advanced, advancedOpen, onAdvanced, hintCard, wide, aside }: PanelProps) {
   const connected = work.connected.includes(source)
   const specs = work.steps[source]
   const steps = stepsOf(source, specs)
@@ -150,18 +153,33 @@ export function StepsPanel({ source, work, ready, rev, onChange, onSource, focus
         <CleanRibbon source={source} selected={sel} off={off} busy={busy} onAdd={add} onAdvanced={advanced ? onAdvanced : undefined} advancedOpen={advancedOpen} />
       )}
       <div className="cc-body" style={{ ...(qW ? { ['--cc-qw' as string]: `${qW}px` } : {}), ...(sW ? { ['--cc-sw' as string]: `${sW}px` } : {}) }}>
-        <div className="cc-queries" role="tablist" aria-label="Source" data-testid="clean-queries">
-          <div className="cc-pane-title">Queries</div>
-          {BUILD_SOURCES.map((s) => (
-            <button key={s.id} role="tab" aria-selected={s.id === source} className={`cc-query${s.id === source ? ' is-on' : ''}`} onClick={() => onSource(s.id)}>
-              <span className="cc-query-name">{s.label}</span>
-              {openCount[s.id] > 0 && (
-                <span className="cc-dot" title={`${openCount[s.id]} open ${openCount[s.id] === 1 ? 'problem' : 'problems'}`} data-testid={`clean-dot-${s.id}`}>
-                  {openCount[s.id]}
-                </span>
-              )}
-            </button>
-          ))}
+        <div className="cc-queries" data-testid="clean-left">
+          <div className="cc-left-scroll">
+            <div role="tablist" aria-label="Source" data-testid="clean-queries" className="cc-queries-list">
+              <div className="cc-pane-title">Queries</div>
+              {BUILD_SOURCES.map((s) => (
+                <button key={s.id} role="tab" aria-selected={s.id === source} className={`cc-query${s.id === source ? ' is-on' : ''}`} onClick={() => onSource(s.id)}>
+                  <span className="cc-query-name">{s.label}</span>
+                  {openCount[s.id] > 0 && (
+                    <span className="cc-dot" title={`${openCount[s.id]} open ${openCount[s.id] === 1 ? 'problem' : 'problems'}`} data-testid={`clean-dot-${s.id}`}>
+                      {openCount[s.id]}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+            {wide && connected && (
+              <div className="cc-aside" data-testid="clean-aside">
+                {aside}
+                {advancedOpen && advanced && (
+                  <div className="cc-advanced" data-testid="clean-advanced-panel">
+                    <div className="cc-pane-title">Advanced: SQL</div>
+                    {advanced}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
           <PaneHandle id="queries" side="left" width={qW} onWidth={setQW} />
         </div>
         <div className="cc-centre">
@@ -169,7 +187,7 @@ export function StepsPanel({ source, work, ready, rev, onChange, onSource, focus
             <div className="build-muted">This source is not connected yet. Go back to Connect.</div>
           ) : (
             <>
-              {advancedOpen && advanced && (
+              {!wide && advancedOpen && advanced && (
                 <div className="cc-advanced" data-testid="clean-advanced-panel">
                   <div className="cc-pane-title">Advanced: SQL</div>
                   {advanced}

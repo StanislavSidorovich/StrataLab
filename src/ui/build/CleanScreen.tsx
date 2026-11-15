@@ -24,6 +24,8 @@ import './cleanProfile.css'
 import './cleanAction.css'
 import './errors.css'
 import './cleanPolish.css'
+import './cleanTaskPane.css'
+import { useWide } from './useWide'
 
 interface Props {
   work: BuildWork
@@ -72,6 +74,7 @@ export function CleanScreen({ work, setWork, ready, rebuild, rev, focus, onBackT
   /** Advanced: SQL opened or closed by the learner; null = as the card needs it */
   const [adv, setAdv] = useState<boolean | null>(null)
   const connected = work.connected.length === 4
+  const wide = useWide()
 
   // [Error] cells in the sales, for the P5 and P6 cards (spec 3.6)
   const [errs, setErrs] = useState<Record<ErrorColumn, number> | null>(null)
@@ -173,13 +176,10 @@ export function CleanScreen({ work, setWork, ready, rebuild, rev, focus, onBackT
   /** the current problem has just passed its Check: the bar says so and offers the way on */
   const justPassed = lingering && !!last?.ok
   const finishes = !!card && problems.every((c) => c.id === card.id || work.passed.includes(c.id))
-  return (
-    <div className="cc-root" data-testid="build-clean">
-      <details className="cc-notes" data-testid="clean-notes">
-        <summary>Notes: this list in Power BI and Fabric · what Lab already typed for you</summary>
-        <p className="build-muted build-fabric" data-testid="fabric-clean">{FABRIC_CLEAN}</p>
-        <p className="build-muted" style={{ margin: '0 0 4px' }}>{GIVEN_NOTE} It is the first step in the list of sales, marked “given”. Pick sales in the Queries list and look at Applied steps.</p>
-      </details>
+  // everything that used to sit above the canvas: the task, its verdict, the done note, the chips and the cards of P4, P7, P8.
+  // On a laptop (wide) it goes into the left column under the Queries list; below 1100 px it stays above the canvas.
+  const stack = (
+    <>
       <section className={`cc-task${justPassed ? ' is-pass' : ''}`} data-testid="clean-task" data-card={cur ?? 'done'}>
         <div className="cc-task-line">
           {CLEAN_CARDS.filter((c) => c.id !== 'W' && work.passed.includes(c.id)).map((c) => (
@@ -282,6 +282,16 @@ export function CleanScreen({ work, setWork, ready, rebuild, rev, focus, onBackT
       {work.p7 && cleanDone(work.passed) && shown('P7') && (
         <ExtraCard id="P7" work={work} setWork={setWork} ready={ready} onFocus={() => setSource('regions')} onBack={onBackToModel} text={LINK_TEXT.p7} where="regions.csv · asked for by the Model step" check={() => checkP7(enginePort)} />
       )}
+    </>
+  )
+  return (
+    <div className={`cc-root${wide ? ' cc-wide' : ''}`} data-testid="build-clean">
+      <details className="cc-notes" data-testid="clean-notes">
+        <summary>Notes: this list in Power BI and Fabric · what Lab already typed for you</summary>
+        <p className="build-muted build-fabric" data-testid="fabric-clean">{FABRIC_CLEAN}</p>
+        <p className="build-muted" style={{ margin: '0 0 4px' }}>{GIVEN_NOTE} It is the first step in the list of sales, marked “given”. Pick sales in the Queries list and look at Applied steps.</p>
+      </details>
+      {!wide && stack}
       <StepsPanel
         hintCard={card && hintOpen && level >= 2 && !passed && !lingering && !again && MARKED_CARDS.includes(card.id as never) ? card.id : null}
         source={source}
@@ -307,6 +317,8 @@ export function CleanScreen({ work, setWork, ready, rebuild, rev, focus, onBackT
         advanced={advancedBody}
         advancedOpen={advancedOpen}
         onAdvanced={() => setAdv(!advancedOpen)}
+        wide={wide}
+        aside={wide ? stack : undefined}
       />
     </div>
   )

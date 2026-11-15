@@ -1,0 +1,46 @@
+/* v0.48.0: on a laptop (1100 px and up) the task of the Clean step lives in the left column under the Queries list, so the grid and
+   Applied steps fill the height of the window and nothing needs a page scroll. Below 1100 px none of this applies: the task stays
+   above the grid (cleanCanvas.css, cleanPolish.css). Tokens only, so both themes follow the app's variables. */
+@media (min-width: 1100px) {
+  /* the chain of heights: window > body > card > cc-root > canvas > columns; the card never gets shorter than 440 px (then the body scrolls) */
+  .build-body:has(> .build-card.is-wide) { display: flex; flex-direction: column; padding: 8px 12px; }
+  .build-card.is-wide:has(.cc-wide) { flex: 1; width: 100%; min-height: 440px; display: flex; flex-direction: column; padding: 8px 12px; }
+  .build-card.is-wide:has(.cc-wide) > h2 { margin: 0 0 4px !important; font-size: 17px !important; }
+  .build-card.is-wide:has(.cc-wide) > div:first-child { line-height: 1.1; }
+  .cc-root.cc-wide { flex: 1; min-height: 0; }
+  .cc-root.cc-wide > .cc { flex: 1; min-height: 0; }
+  .cc-root.cc-wide .cc-body { flex: 1; min-height: 0; grid-template-rows: minmax(0, 1fr); }
+
+  /* the three columns scroll on their own */
+  .cc-wide .cc-queries { position: relative; min-height: 0; }
+  .cc-wide .cc-left-scroll { height: 100%; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; gap: 8px; padding-right: 2px; overscroll-behavior: contain; }
+  .cc-wide .cc-steps { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+  .cc-wide .cc-centre { min-height: 0; }
+  .cc-wide .cc-grid { flex: 1; min-height: 120px; max-height: none; }
+  .cc-wide .cc-watch { flex: 1; min-height: 0; max-height: none; }
+
+  /* the Queries list is compact here, to leave the room to the task */
+  .cc-wide .cc-queries-list { gap: 2px; }
+  .cc-wide .cc-query { padding: 3px 8px; }
+  .cc-wide .cc-pane-title { margin-bottom: 2px; }
+
+  /* the task column */
+  .cc-wide .cc-aside { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .cc-wide .cc-aside .build-quick, .cc-wide .cc-aside .cc-verdict, .cc-wide .cc-aside .build-clean-card { font-size: 13px; }
+  .cc-root .cc-aside .cc-task { position: static; max-height: none; overflow: visible; box-shadow: none; }
+  /* the counter, Check, Hint and Next problem stay in reach while a long task scrolls */
+  .cc-aside .cc-task-line { position: sticky; top: 0; z-index: 3; background: inherit; padding: 4px 0; margin: -4px 0 0; }
+  .cc-aside .cc-spacer { flex-basis: 100%; height: 0; }
+  .cc-aside .cc-task-title { flex: 1 1 100%; overflow-wrap: anywhere; }
+  .cc-aside .build-skus { flex-wrap: wrap; }
+  .cc-aside .cc-advanced { flex: none; }
+  .cc-aside .cc-chiprow { flex-direction: column; align-items: stretch; }
+  .cc-aside .cc-done-chip { white-space: normal; text-align: left; }
+
+  /* wide fields (SQL with a blank, the dates format, the replace fields) wrap inside the narrow column instead of overflowing */
+  .cc-aside .pl-code { white-space: pre-wrap; overflow-wrap: anywhere; overflow-x: hidden; max-width: 100%; box-sizing: border-box; }
+  .cc-aside .pl-blank { display: block; width: 100%; max-width: 100%; box-sizing: border-box; margin: 2px 0; }
+  .cc-aside .build-fixbox, .cc-aside .space-y-2, .cc-aside .space-y-3 { min-width: 0; }
+  .cc-aside .build-action-do, .cc-aside .build-action-why, .cc-aside .build-muted, .cc-aside .build-error, .cc-aside li { overflow-wrap: anywhere; }
+  .cc-aside .cc-values code { white-space: normal; }
+}

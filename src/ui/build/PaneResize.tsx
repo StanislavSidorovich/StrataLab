@@ -5,7 +5,8 @@ import './cleanPolish.css'
 
 export const PANE_STEP = 16
 export const PANES = {
-  queries: { key: 'stratalab.clean.queriesW', min: 140, max: 380 },
+  // v0.48.0: the left column also holds the task, so it starts at 340; a width saved by the old 190 px layout (under min) is ignored
+  queries: { key: 'stratalab.clean.queriesW', min: 260, max: 560 },
   steps: { key: 'stratalab.clean.stepsW', min: 200, max: 520 },
 } as const
 export type PaneId = keyof typeof PANES

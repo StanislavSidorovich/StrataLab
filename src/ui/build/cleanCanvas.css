@@ -36,7 +36,8 @@
 
 /* queries | centre | applied steps */
 .cc-body { display: grid; grid-template-columns: 190px minmax(0, 1fr) 270px; gap: 10px; min-width: 0; }
-.cc-queries { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.cc-queries { min-width: 0; }
+.cc-queries-list { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .cc-query { display: flex; align-items: center; gap: 6px; width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--muted); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
 .cc-query.is-on { color: var(--text); border-color: var(--accent); background: var(--accent-soft); }
 .cc-query-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -71,14 +72,10 @@
 .cc-status b { color: var(--text); }
 .cc-status-old { color: var(--accent); }
 
-/* 1100 to 1365: the queries become tabs over the grid, Applied steps get narrower */
-@media (max-width: 1365px) {
-  .cc-body { grid-template-columns: minmax(0, 1fr) 230px; }
-  .cc-queries { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; align-items: center; }
-  .cc-queries .cc-pane-title { margin: 0 6px 0 0; }
-  .cc-query { width: auto; border-radius: 999px; }
-}
-/* below 1100 the sidebar steps go under the grid (the page itself needs a laptop below 768) */
+/* below 1100 the queries become tabs over the grid and the sidebar steps go under it (the page itself needs a laptop below 768) */
 @media (max-width: 1099px) {
   .cc-body { grid-template-columns: minmax(0, 1fr); }
+  .cc-queries-list { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px; }
+  .cc-queries-list .cc-pane-title { margin: 0 6px 0 0; }
+  .cc-query { width: auto; border-radius: 999px; }
 }
