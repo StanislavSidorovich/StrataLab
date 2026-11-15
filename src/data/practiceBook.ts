@@ -33,6 +33,8 @@ export interface PracticeTable {
 export interface PracticeTables {
   kind: 'tables'
   tables: PracticeTable[]
+  /** keys whose name differs from the one they point to ("fact_sellin.distributor_id → dim_customer.customer_id"): nothing in the table names says so */
+  keys?: string[]
 }
 
 export interface PracticeExampleCell {

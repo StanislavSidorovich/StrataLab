@@ -1,0 +1,4 @@
+/* The keys of the data map whose name differs from the column they point to. */
+.table-keys { margin-top: 8px; padding: 8px 12px; border-radius: 8px; border-left: 3px solid var(--accent); background: var(--accent-soft); font-size: 13px; }
+.table-keys ul { margin: 4px 0 0; padding: 0; list-style: none; }
+.table-keys li { font-size: 12.5px; padding: 1px 0; }

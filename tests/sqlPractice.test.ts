@@ -77,6 +77,12 @@ describe('SQL practice: notes on Fabric', () => {
     expect(ids('SELECT a FROM t JOIN u AS x USING (a)')).toEqual(['using'])
     expect(ids('SELECT a, COUNT(*) FROM t GROUP BY ALL')).toEqual(['group-by-all'])
   })
+  it('finds GROUP BY with a column number, not ORDER BY with one', () => {
+    expect(ids('SELECT a, COUNT(*) FROM t GROUP BY 1')).toEqual(['group-by-number'])
+    expect(ids('SELECT a, b, COUNT(*) FROM t GROUP BY a, 2 ORDER BY 1')).toEqual(['group-by-number'])
+    expect(ids('SELECT a, COUNT(*) FROM t GROUP BY a ORDER BY 2 DESC')).toEqual([])
+    expect(ids('SELECT a, COUNT(*) FROM t GROUP BY a HAVING COUNT(*) > 1')).toEqual([])
+  })
   it('finds a GROUP BY or HAVING on a computed name, at the level it was given', () => {
     expect(ids('SELECT YEAR(d) AS y, COUNT(*) AS n FROM t GROUP BY y')).toEqual(['group-by-alias'])
     expect(ids('SELECT p.brand AS b, COUNT(*) AS n FROM t GROUP BY b')).toEqual(['group-by-alias'])

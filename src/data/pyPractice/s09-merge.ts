@@ -50,7 +50,7 @@ y.merge(products[["product_id", "brand"]], on="product_id").groupby("brand", as_
     },
     {
       kind: 'note',
-      text: 'When the key has a different name in each table, give `left_on` for the left table and `right_on` for the right one. A shipment’s distributor is a customer, so `sellin.distributor_id` matches `customers.customer_id`.',
+      text: 'When the key has a different name in each table, give `left_on` for the left table and `right_on` for the right one. A shipment’s distributor is a customer, so `sellin.distributor_id` matches `customers.customer_id`. A role in the name hides the target (The data lists them), and `(~sellin["distributor_id"].isin(customers["customer_id"])).sum()` giving 0 proves a guess.',
       syntax: 'a.merge(b, left_on="distributor_id", right_on="customer_id")',
     },
     {

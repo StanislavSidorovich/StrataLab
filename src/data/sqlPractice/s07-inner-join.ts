@@ -7,7 +7,7 @@ export const INNER_JOIN: PracticeSection = {
   blocks: [
     {
       kind: 'note',
-      text: 'A fact table holds ids and numbers; the names are in the dimensions. `JOIN … ON` puts columns of two tables on one row wherever the keys match, and rows with no match are dropped.',
+      text: 'A fact table holds ids and numbers; the names are in the dimensions. `JOIN … ON` puts columns of two tables on one row wherever the keys match, and rows with no match are dropped. A key may carry a role in its name (`fact_sellin.distributor_id` is `dim_customer.customer_id`; The data lists them), and `SELECT COUNT(*) FROM quaera.fact_sellin WHERE distributor_id NOT IN (SELECT customer_id FROM quaera.dim_customer)` returning 0 proves a guess.',
       syntax: 'FROM quaera.fact_sellout AS s JOIN quaera.dim_product AS p ON p.product_id = s.product_id',
       trap: 'Give every table an alias and write it before every column: a name that is in both tables stops the query.',
     },

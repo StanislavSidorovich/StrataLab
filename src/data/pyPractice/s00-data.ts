@@ -17,6 +17,12 @@ export const DATA_MAP: PracticeSection = {
     },
     {
       kind: 'tables',
+      keys: [
+        'sellin.distributor_id → customers.customer_id',
+        'stock.distributor_id → customers.customer_id',
+        'customers.served_by_distributor_id → customers.customer_id',
+        'reps.manager_id → reps.rep_id',
+      ],
       tables: [
         { name: 'fact_sellout', alias: 'sellout', row: 'an outlet sold a product in a week', columns: ['sellout_id', 'week_start', 'customer_id', 'product_id', 'units', 'revenue', 'avg_price', 'promo_id'] },
         { name: 'fact_sellin', alias: 'sellin', row: 'Kaiyo shipped a product to a distributor', columns: ['sellin_id', 'order_date', 'ship_date', 'month_start', 'distributor_id', 'product_id', 'units', 'gross_amount', 'discount_amount', 'net_amount'] },

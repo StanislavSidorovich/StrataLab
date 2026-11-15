@@ -205,6 +205,7 @@ const SYNTAX: { id: string; re: RegExp; text: string }[] = [
   { id: 'cast-colons', re: /::/, text: 'x::type is not T-SQL: write CAST(x AS type).' },
   { id: 'filter', re: /\bfilter\s*\(\s*where\b/i, text: 'FILTER (WHERE …) is not T-SQL: use SUM(CASE WHEN … THEN x END).' },
   { id: 'qualify', re: /\bqualify\b/i, text: 'QUALIFY is not T-SQL: put the window function in a CTE and filter outside it.' },
+  { id: 'group-by-number', re: /\bgroup\s+by\s+(?:(?:(?!\border\b|\bhaving\b)[^,;()])+,\s*)*\d+\s*(?=,|\)|;|$|\b(?:order|having|union|except|intersect)\b)/i, text: 'Runs here, but SQL Server rejects GROUP BY 1: name the column.' },
   { id: 'group-by-all', re: /\bgroup\s+by\s+all\b/i, text: 'GROUP BY ALL is not T-SQL: name the columns.' },
   { id: 'using', re: /\bjoin\s+[\w.]+(?:\s+(?:as\s+)?\w+)?\s+using\s*\(/i, text: 'JOIN … USING is not T-SQL: write ON a.x = b.x.' },
   { id: 'ilike', re: /\bilike\b/i, text: 'ILIKE is not T-SQL: compare with LOWER(x) LIKE ….' },

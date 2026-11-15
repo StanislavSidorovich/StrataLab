@@ -13,6 +13,7 @@ import { ArrowDown, ArrowRight, Check, CheckCircle2, ChevronDown, ChevronRight, 
 import { create } from 'zustand'
 import { compareResults, describeVerdict, type ResultData, type Verdict } from '../core/check'
 import type { Output } from '../core/ipynb'
+import './practiceTableKeys.css'
 import { fabricNotes, hashWithPractice, nextTask, offersKnown, practiceCounts, practiceFromHash, practiceSections, PRACTICE_RETURN_URL, readProgress, type BookKind, type FabricNote, type PracticeProgress, type SectionTasks } from '../core/sqlPractice'
 import { cancelQuery } from '../db/engine'
 import { resultRows } from '../db/export'
@@ -503,11 +504,25 @@ function TableItem({ table: t, first }: { table: BookTable; first: boolean }) {
 
 function TablesBlock({ block }: { block: PracticeTables }) {
   return (
-    <ul className="m-0 p-0 list-none rounded-lg overflow-hidden" style={{ border: '1px solid var(--line)' }}>
-      {block.tables.map((t, i) => (
-        <TableItem key={t.name} table={t} first={i === 0} />
-      ))}
-    </ul>
+    <>
+      <ul className="m-0 p-0 list-none rounded-lg overflow-hidden" style={{ border: '1px solid var(--line)' }}>
+        {block.tables.map((t, i) => (
+          <TableItem key={t.name} table={t} first={i === 0} />
+        ))}
+      </ul>
+      {block.keys && (
+        <div className="table-keys">
+          <strong>Keys with another name</strong>
+          <ul>
+            {block.keys.map((k) => (
+              <li key={k} className="mono">
+                {k}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </>
   )
 }
 
