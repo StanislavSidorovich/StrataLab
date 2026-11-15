@@ -11,6 +11,7 @@ import { WALKTHROUGHS } from '../data/walkthroughs'
 const BOOKS = [
   { kind: 'sql', title: 'SQL practice on Kaiyo Trading: one long page in T-SQL', text: 'To get SQL back fast: a short note, an example to run, a task to solve, from SELECT to window functions. Skip what you remember.' },
   { kind: 'python', title: 'Python practice on Kaiyo Trading: one long page in pandas', text: 'From a first look at the data through cleaning and merging to a business answer. Nothing to install; Python starts once, in about ten seconds.' },
+  { kind: 'powerbi', title: 'Power BI practice on Kaiyo Trading: short drills with a zip for Power BI Desktop', text: 'Tasks you answer here, then a drill in the free Power BI Desktop (Windows): download the files and steps, build it, type the numbers back. Model, links, measures.' },
 ] as const
 
 export function PracticeDialog() {

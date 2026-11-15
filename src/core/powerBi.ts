@@ -91,11 +91,11 @@ export function checkNumbers() {
 
 // ---------------------------------------------------------------- steps.html
 
-const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-const code = (s: string) => `<code>${esc(s)}</code>`
-const pre = (s: string) => `<pre>${esc(s)}</pre>`
+export const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+export const code = (s: string) => `<code>${esc(s)}</code>`
+export const pre = (s: string) => `<pre>${esc(s)}</pre>`
 
-const STYLE = `body{font:16px/1.5 system-ui,Segoe UI,sans-serif;max-width:760px;margin:2rem auto;padding:0 1rem;color:#1c2330}
+export const STYLE = `body{font:16px/1.5 system-ui,Segoe UI,sans-serif;max-width:760px;margin:2rem auto;padding:0 1rem;color:#1c2330}
 h1{font-size:1.6rem;margin:0 0 .25rem}h2{font-size:1.15rem;margin:2rem 0 .5rem;border-bottom:1px solid #d5dbe5;padding-bottom:.25rem}
 code,pre{font-family:Consolas,Menlo,monospace;font-size:.92em;background:#f1f4f9;border-radius:4px}code{padding:.05rem .3rem}
 pre{padding:.7rem .9rem;overflow-x:auto;white-space:pre-wrap}li{margin:.3rem 0}.muted{color:#5b6778}

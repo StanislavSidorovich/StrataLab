@@ -1,0 +1,145 @@
+﻿customer_id,customer_name,customer_type,chain_name,region_id,city,region_name,macro_region
+1,Setouchi Trading Co.,distributor,,10,Niigata,Niigata,Chubu
+2,Kanto Logistics Co.,distributor,,6,Saitama,Saitama,Kanto
+3,Nangoku Trading Co.,distributor,,14,Fukuyama,Hiroshima,Chugoku
+4,Hokuriku Supply K.K.,distributor,,11,Kitakyushu,Fukuoka,Kyushu
+5,Sanyo Wholesale Co.,distributor,,3,Osaka,Osaka,Kansai
+6,Capital Distribution Co.,distributor,,2,Fujisawa,Kanagawa,Kanto
+7,Bayside Wholesale Co.,distributor,,4,Mito,Ibaraki,Kanto
+8,Kyushu Trading Co.,distributor,,6,Saitama,Saitama,Kanto
+9,Tokai Group K.K.,distributor,,13,Shizuoka,Shizuoka,Chubu
+10,Hokusei Trading Co.,distributor,,11,Kitakyushu,Fukuoka,Kyushu
+11,Midori Wholesale Co.,distributor,,7,Kyoto,Kyoto,Kansai
+12,Asahi Line K.K.,distributor,,4,Mito,Ibaraki,Kanto
+13,Minori #1013,chain,Minori,4,Tsukuba,Ibaraki,Kanto
+14,Minori #1014,chain,Minori,16,Okinawa,Okinawa,Kyushu
+15,Minori #1015,chain,Minori,9,Himeji,Hyogo,Kansai
+16,Minori #1016,chain,Minori,3,Osaka,Osaka,Kansai
+17,Kaigan #1017,chain,Kaigan,5,Nagoya,Aichi,Chubu
+18,Kaigan #1018,chain,Kaigan,11,Fukuoka,Fukuoka,Kyushu
+19,Nagisa #1019,chain,Nagisa,13,Hamamatsu,Shizuoka,Chubu
+20,Minori #1020,chain,Minori,5,Okazaki,Aichi,Chubu
+21,Minori #1021,chain,Minori,15,Ishinomaki,Miyagi,Tohoku
+22,Nagisa #1022,chain,Nagisa,15,Ishinomaki,Miyagi,Tohoku
+23,Nagisa #1023,chain,Nagisa,14,Fukuyama,Hiroshima,Chugoku
+24,Minori #1024,chain,Minori,7,Uji,Kyoto,Kansai
+25,Prima #1025,chain,Prima,7,Uji,Kyoto,Kansai
+26,Ichiba #1026,chain,Ichiba,2,Yokohama,Kanagawa,Kanto
+27,Minori #1027,chain,Minori,12,Asahikawa,Hokkaido,Hokkaido
+28,Kaigan #1028,chain,Kaigan,13,Shizuoka,Shizuoka,Chubu
+29,Nagisa #1029,chain,Nagisa,8,Chiba,Chiba,Kanto
+30,Nagisa #1030,chain,Nagisa,9,Kobe,Hyogo,Kansai
+31,Kaigan #1031,chain,Kaigan,2,Sagamihara,Kanagawa,Kanto
+32,Prima #1032,chain,Prima,10,Niigata,Niigata,Chubu
+33,Minori #1033,chain,Minori,6,Kawaguchi,Saitama,Kanto
+34,Nagisa #1034,chain,Nagisa,11,Kitakyushu,Fukuoka,Kyushu
+35,Ichiba #1035,chain,Ichiba,16,Okinawa,Okinawa,Kyushu
+36,Ichiba #1036,chain,Ichiba,14,Fukuyama,Hiroshima,Chugoku
+37,Ichiba #1037,chain,Ichiba,5,Toyota,Aichi,Chubu
+38,Kaigan #1038,chain,Kaigan,16,Naha,Okinawa,Kyushu
+39,Kaigan #1039,chain,Kaigan,6,Kawaguchi,Saitama,Kanto
+40,Minori #1040,chain,Minori,15,Ishinomaki,Miyagi,Tohoku
+41,Ichiba #1041,chain,Ichiba,11,Kitakyushu,Fukuoka,Kyushu
+42,Nagisa #1042,chain,Nagisa,2,Sagamihara,Kanagawa,Kanto
+43,Nagisa #1043,chain,Nagisa,9,Himeji,Hyogo,Kansai
+44,Ichiba #1044,chain,Ichiba,16,Okinawa,Okinawa,Kyushu
+45,Nagisa #1045,chain,Nagisa,16,Okinawa,Okinawa,Kyushu
+46,Prima #1046,chain,Prima,13,Shizuoka,Shizuoka,Chubu
+47,Minori #1047,chain,Minori,12,Sapporo,Hokkaido,Hokkaido
+48,Prima #1048,chain,Prima,13,Shizuoka,Shizuoka,Chubu
+49,Nagisa #1049,chain,Nagisa,13,Shizuoka,Shizuoka,Chubu
+50,Prima #1050,chain,Prima,7,Uji,Kyoto,Kansai
+51,Kaigan #1051,chain,Kaigan,5,Okazaki,Aichi,Chubu
+52,Nagisa #1052,chain,Nagisa,1,Tokyo,Tokyo,Kanto
+53,Ichiba #1053,chain,Ichiba,3,Osaka,Osaka,Kansai
+54,Minori #1054,chain,Minori,4,Tsukuba,Ibaraki,Kanto
+55,Konbini 24 Store #1055,traditional,,7,Kyoto,Kyoto,Kansai
+56,Marusan Store #1056,traditional,,15,Sendai,Miyagi,Tohoku
+57,Yasuragi Store #1057,traditional,,2,Yokohama,Kanagawa,Kanto
+58,Hinode Store #1058,traditional,,12,Asahikawa,Hokkaido,Hokkaido
+59,Izumi Store #1059,traditional,,1,Tokyo,Tokyo,Kanto
+60,Konbini 24 Store #1060,traditional,,11,Fukuoka,Fukuoka,Kyushu
+61,Marusan Store #1061,traditional,,16,Okinawa,Okinawa,Kyushu
+62,Izumi Store #1062,traditional,,10,Niigata,Niigata,Chubu
+63,Izumi Store #1063,traditional,,10,Niigata,Niigata,Chubu
+64,Izumi Store #1064,traditional,,13,Shizuoka,Shizuoka,Chubu
+65,Kaede Store #1065,traditional,,16,Naha,Okinawa,Kyushu
+66,Yasuragi Store #1066,traditional,,3,Osaka,Osaka,Kansai
+67,Kaede Store #1067,traditional,,14,Hiroshima,Hiroshima,Chugoku
+68,Marusan Store #1068,traditional,,9,Kobe,Hyogo,Kansai
+69,Kaede Store #1069,traditional,,5,Okazaki,Aichi,Chubu
+70,Hinode Store #1070,traditional,,4,Tsukuba,Ibaraki,Kanto
+71,Marusan Store #1071,traditional,,16,Okinawa,Okinawa,Kyushu
+72,Akebono Store #1072,traditional,,9,Kobe,Hyogo,Kansai
+73,Izumi Store #1073,traditional,,3,Osaka,Osaka,Kansai
+74,Marusan Store #1074,traditional,,15,Sendai,Miyagi,Tohoku
+75,Konbini 24 Store #1075,traditional,,15,Ishinomaki,Miyagi,Tohoku
+76,Akebono Store #1076,traditional,,13,Hamamatsu,Shizuoka,Chubu
+77,Kaede Store #1077,traditional,,14,Fukuyama,Hiroshima,Chugoku
+78,Akebono Store #1078,traditional,,2,Yokohama,Kanagawa,Kanto
+79,Izumi Store #1079,traditional,,3,Osaka,Osaka,Kansai
+80,Hinode Store #1080,traditional,,12,Sapporo,Hokkaido,Hokkaido
+81,Hinode Store #1081,traditional,,10,Niigata,Niigata,Chubu
+82,Yasuragi Store #1082,traditional,,8,Chiba,Chiba,Kanto
+83,Marusan Store #1083,traditional,,15,Sendai,Miyagi,Tohoku
+84,Konbini 24 Store #1084,traditional,,10,Niigata,Niigata,Chubu
+85,Akebono Store #1085,traditional,,15,Sendai,Miyagi,Tohoku
+86,Hinode Store #1086,traditional,,15,Sendai,Miyagi,Tohoku
+87,Izumi Store #1087,traditional,,11,Fukuoka,Fukuoka,Kyushu
+88,Izumi Store #1088,traditional,,13,Shizuoka,Shizuoka,Chubu
+89,Akebono Store #1089,traditional,,9,Kobe,Hyogo,Kansai
+90,Akebono Store #1090,traditional,,3,Osaka,Osaka,Kansai
+91,Hinode Store #1091,traditional,,13,Hamamatsu,Shizuoka,Chubu
+92,Yasuragi Store #1092,traditional,,8,Funabashi,Chiba,Kanto
+93,Marusan Store #1093,traditional,,9,Himeji,Hyogo,Kansai
+94,Konbini 24 Store #1094,traditional,,14,Hiroshima,Hiroshima,Chugoku
+95,Marusan Store #1095,traditional,,11,Kitakyushu,Fukuoka,Kyushu
+96,Hinode Store #1096,traditional,,11,Kitakyushu,Fukuoka,Kyushu
+97,Akebono Store #1097,traditional,,7,Uji,Kyoto,Kansai
+98,Hinode Store #1098,traditional,,7,Uji,Kyoto,Kansai
+99,Wakaba Pharmacy #1099,pharmacy,,8,Chiba,Chiba,Kanto
+100,Wakaba Pharmacy #1100,pharmacy,,12,Sapporo,Hokkaido,Hokkaido
+101,Kusuri 24 #1101,pharmacy,Kusuri 24,6,Kawaguchi,Saitama,Kanto
+102,Kusuri 24 #1102,pharmacy,Kusuri 24,10,Niigata,Niigata,Chubu
+103,Kenko Pharmacy #1103,pharmacy,,1,Tokyo,Tokyo,Kanto
+104,Salus Pharmacy #1104,pharmacy,,13,Shizuoka,Shizuoka,Chubu
+105,Vitalika #1105,pharmacy,Vitalika,2,Sagamihara,Kanagawa,Kanto
+106,Vitalika #1106,pharmacy,Vitalika,6,Saitama,Saitama,Kanto
+107,Farmalux #1107,pharmacy,Farmalux,13,Hamamatsu,Shizuoka,Chubu
+108,Vitalika #1108,pharmacy,Vitalika,14,Hiroshima,Hiroshima,Chugoku
+109,Panacea Pharmacy #1109,pharmacy,,4,Tsukuba,Ibaraki,Kanto
+110,Vitalika #1110,pharmacy,Vitalika,15,Ishinomaki,Miyagi,Tohoku
+111,Panacea Pharmacy #1111,pharmacy,,6,Kawaguchi,Saitama,Kanto
+112,Panacea Pharmacy #1112,pharmacy,,5,Nagoya,Aichi,Chubu
+113,Wakaba Pharmacy #1113,pharmacy,,9,Kobe,Hyogo,Kansai
+114,Kusuri 24 #1114,pharmacy,Kusuri 24,2,Yokohama,Kanagawa,Kanto
+115,Kusuri 24 #1115,pharmacy,Kusuri 24,5,Toyota,Aichi,Chubu
+116,Salus Pharmacy #1116,pharmacy,,3,Osaka,Osaka,Kansai
+117,Wakaba Pharmacy #1117,pharmacy,,15,Sendai,Miyagi,Tohoku
+118,Kusuri 24 #1118,pharmacy,Kusuri 24,7,Uji,Kyoto,Kansai
+119,Salus Pharmacy #1119,pharmacy,,15,Sendai,Miyagi,Tohoku
+120,Panacea Pharmacy #1120,pharmacy,,10,Niigata,Niigata,Chubu
+121,Farmalux #1121,pharmacy,Farmalux,14,Hiroshima,Hiroshima,Chugoku
+122,Kusuri 24 #1122,pharmacy,Kusuri 24,3,Osaka,Osaka,Kansai
+123,Vitalika #1123,pharmacy,Vitalika,6,Saitama,Saitama,Kanto
+124,Wakaba Pharmacy #1124,pharmacy,,12,Asahikawa,Hokkaido,Hokkaido
+125,Vitalika #1125,pharmacy,Vitalika,4,Mito,Ibaraki,Kanto
+126,Vitalika #1126,pharmacy,Vitalika,16,Naha,Okinawa,Kyushu
+127,Panacea Pharmacy #1127,pharmacy,,4,Tsukuba,Ibaraki,Kanto
+128,Farmalux #1128,pharmacy,Farmalux,11,Kitakyushu,Fukuoka,Kyushu
+129,Salus Pharmacy #1129,pharmacy,,8,Funabashi,Chiba,Kanto
+130,Vitalika #1130,pharmacy,Vitalika,9,Kobe,Hyogo,Kansai
+131,Kusuri 24 #1131,pharmacy,Kusuri 24,5,Okazaki,Aichi,Chubu
+132,Salus Pharmacy #1132,pharmacy,,5,Toyota,Aichi,Chubu
+133,Vitalika #1133,pharmacy,Vitalika,7,Kyoto,Kyoto,Kansai
+134,Vitalika #1134,pharmacy,Vitalika,9,Kobe,Hyogo,Kansai
+135,Vitalika #1135,pharmacy,Vitalika,5,Toyota,Aichi,Chubu
+136,Salus Pharmacy #1136,pharmacy,,1,Tokyo,Tokyo,Kanto
+137,Hakobu (warehouse Hiroshima),ecom,Hakobu,14,Hiroshima,Hiroshima,Chugoku
+138,Marketo (warehouse Chiba),ecom,Marketo,8,Chiba,Chiba,Kanto
+139,Sokuhai (warehouse Kawaguchi),ecom,Sokuhai,6,Kawaguchi,Saitama,Kanto
+140,Bazario (warehouse Ishinomaki),ecom,Bazario,15,Ishinomaki,Miyagi,Tohoku
+141,Hakobu (warehouse Yokohama),ecom,Hakobu,2,Yokohama,Kanagawa,Kanto
+142,Marketo (warehouse Asahikawa),ecom,Marketo,12,Asahikawa,Hokkaido,Hokkaido
+143,Bazario (warehouse Nagoya),ecom,Bazario,5,Nagoya,Aichi,Chubu
+144,Bazario (warehouse Tokyo),ecom,Bazario,1,Tokyo,Tokyo,Kanto

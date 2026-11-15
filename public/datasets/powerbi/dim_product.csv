@@ -1,0 +1,48 @@
+﻿product_id,sku_code,product_name,brand,category
+1,AQUA001,Aqualis Still 0.5 L,Aqualis,Beverages
+2,AQUA002,Aqualis Still 1.5 L,Aqualis,Beverages
+3,AQUA003,Aqualis Sparkling 0.5 L,Aqualis,Beverages
+4,AQUA004,Aqualis Sparkling 1.5 L,Aqualis,Beverages
+5,AQUA005,Aqualis Still 5 L,Aqualis,Beverages
+6,AQUA006,Aqualis Sport 0.75 L,Aqualis,Beverages
+7,FRUV001,Fruvia Orange 1 L,Fruvia,Beverages
+8,FRUV002,Fruvia Apple 1 L,Fruvia,Beverages
+9,FRUV003,Fruvia Multifruit 1 L,Fruvia,Beverages
+10,FRUV004,Fruvia Tomato 1 L,Fruvia,Beverages
+11,FRUV005,Fruvia Orange 0.2 L,Fruvia,Beverages
+12,FRUV006,Fruvia Cherry 1 L,Fruvia,Beverages
+13,KROS001,Krosti Salt 90 g,Krosti,Snacks
+14,KROS002,Krosti Sour Cream-Onion 90 g,Krosti,Snacks
+15,KROS003,Krosti Paprika 90 g,Krosti,Snacks
+16,KROS004,Krosti Salt 150 g,Krosti,Snacks
+17,KROS005,Krosti Crab 90 g,Krosti,Snacks
+18,KROS006,Krosti Mix 40 g,Krosti,Snacks
+19,NETT001,Nettora Universal 500 ml,Nettora,Home care
+20,NETT002,Nettora Glass 500 ml,Nettora,Home care
+21,NETT003,Nettora Degreaser 500 ml,Nettora,Home care
+22,NETT004,Nettora Floor 1 L,Nettora,Home care
+23,NETT005,Nettora Bath 750 ml,Nettora,Home care
+24,MILV001,Milvara Strawberry 290 g,Milvara,Dairy
+25,MILV002,Milvara Peach 290 g,Milvara,Dairy
+26,MILV003,Milvara Natural 290 g,Milvara,Dairy
+27,MILV004,Milvara Drinking 430 g,Milvara,Dairy
+28,MILV005,Milvara Kids 100 g,Milvara,Dairy
+29,MILV006,Milvara Greek 200 g,Milvara,Dairy
+30,PYRE001,Pyrexan 500 mg x10,Pyrexan,OTC
+31,PYRE002,Pyrexan 500 mg x20,Pyrexan,OTC
+32,PYRE003,Pyrexan Forte x10,Pyrexan,OTC
+33,PYRE004,Pyrexan Powder x5,Pyrexan,OTC
+34,PYRE005,Pyrexan Kids Syrup 100 ml,Pyrexan,OTC
+35,GAST001,Gastrivo x20,Gastrivo,OTC
+36,GAST002,Gastrivo x40,Gastrivo,OTC
+37,GAST003,Gastrivo Suspension 200 ml,Gastrivo,OTC
+38,GAST004,Gastrivo Express x10,Gastrivo,OTC
+39,VITA001,Vitanor Multi x30,Vitanor,OTC
+40,VITA002,Vitanor D3 x60,Vitanor,OTC
+41,VITA003,Vitanor Omega-3 x60,Vitanor,OTC
+42,VITA004,Vitanor Magnesium B6 x50,Vitanor,OTC
+43,VITA005,Vitanor Forte x30,Vitanor,OTC
+44,RHIN001,Rhinolar Spray 15 ml,Rhinolar,OTC
+45,RHIN002,Rhinolar Drops 10 ml,Rhinolar,OTC
+46,RHIN003,Rhinolar Kids Spray 10 ml,Rhinolar,OTC
+47,RHIN004,Rhinolar Active Spray 15 ml,Rhinolar,OTC

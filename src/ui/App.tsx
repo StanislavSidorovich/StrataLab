@@ -377,6 +377,7 @@ function HelpMenu() {
     ['Practice on the demo shop…', () => openPractice()],
     ['SQL practice on Kaiyo Trading', () => openPracticeBook('sql')],
     ['Python practice on Kaiyo Trading', () => openPracticeBook('python')],
+    ['Power BI practice on Kaiyo Trading', () => openPracticeBook('powerbi')],
     ['Data pipeline on Kaiyo Trading', () => openPipeline('kaiyo-sellout')],
     'separator',
     ['Check for updates', () => void runUpdateCheck()],

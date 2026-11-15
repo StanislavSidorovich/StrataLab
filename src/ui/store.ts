@@ -26,7 +26,7 @@ import { schemaForModel, showAsModel } from '../db/modelExport'
 import { planGeneration, type GenPlan, type GenTable } from '../core/generate'
 import { runGeneration, type GenOutcome } from '../db/generate'
 import { runOrder } from '../core/pdScript'
-import { hashWithPractice, hashWithoutPractice, practiceFromHash, readableError, type BookKind } from '../core/sqlPractice'
+import { hashWithPractice, hashWithoutPractice, practiceFromHash, readableError, type PracticeKind } from '../core/sqlPractice'
 import { buildFromHash, hashWithBuild, hashWithoutBuild } from '../core/build'
 import { hashWithPipeline, hashWithoutPipeline, pipelineFromHash } from '../core/pipeline'
 import { BOOK_TABLES } from '../data/pyPractice/tables'
@@ -181,7 +181,7 @@ interface State {
   /** the welcome screen (what's where, how to start) is open */
   welcomeOpen: boolean
   /** the practice page on Kaiyo that is open (`#practice=sql`, `#practice=python`, src/ui/PracticeBook.tsx) */
-  practiceBook: BookKind | null
+  practiceBook: PracticeKind | null
   /** the data pipeline page that is open (`#pipeline=kaiyo-sellout`, src/ui/PipelinePage.tsx) */
   pipeline: string | null
   /** the build page that is open (`#build=kaiyo-sales`, src/ui/build/BuildPage.tsx) */
@@ -1711,7 +1711,7 @@ export async function openWalkthrough(w: Walkthrough) {
 
 // ------------------------------------------------------------------ practice pages on Kaiyo
 
-export function openPracticeBook(kind: BookKind | null, at: string | null = null) {
+export function openPracticeBook(kind: PracticeKind | null, at: string | null = null) {
   const base = hashWithoutBuild(hashWithoutPipeline(location.hash))
   const hash = kind ? hashWithPractice(base, at, kind) : hashWithoutPractice(base)
   history.replaceState(null, '', location.pathname + location.search + hash)

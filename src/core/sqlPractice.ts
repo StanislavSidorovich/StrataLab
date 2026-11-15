@@ -1,4 +1,4 @@
-// The practice pages (`#practice=sql`, `#practice=python`): their address, what the learner has done,
+// The practice pages (`#practice=sql`, `#practice=python`, `#practice=powerbi`): their address, what the learner has done,
 // and the notes on T-SQL that runs here but not on Fabric. Queries are translated to DuckDB, and DuckDB forgives
 // things SQL Server refuses, or answers differently; a note says so instead of letting a habit form.
 
@@ -57,10 +57,12 @@ export function readProgress(raw: string | null): PracticeProgress {
 }
 
 export type BookKind = 'sql' | 'python'
+/** The practice pages: the two code books and the Power BI page (src/ui/PowerBiPractice.tsx), which has no code cells. */
+export type PracticeKind = BookKind | 'powerbi'
 
 /** The address of the page: whether it is asked for, which one, and which section. */
-export function practiceFromHash(hash: string): { kind: BookKind; at: string | null } | null {
-  const kind = /(?:^#|&)practice=(sql|python)(?:&|$)/i.exec(hash)?.[1].toLowerCase() as BookKind | undefined
+export function practiceFromHash(hash: string): { kind: PracticeKind; at: string | null } | null {
+  const kind = /(?:^#|&)practice=(sql|python|powerbi)(?:&|$)/i.exec(hash)?.[1].toLowerCase() as PracticeKind | undefined
   if (!kind) return null
   return { kind, at: /(?:^#|&)at=([a-z0-9-]+)/i.exec(hash)?.[1].toLowerCase() ?? null }
 }
@@ -70,7 +72,7 @@ export function hashWithoutPractice(hash: string): string {
   return rest.length ? '#' + rest.join('&') : ''
 }
 
-export function hashWithPractice(hash: string, at: string | null, kind: BookKind = 'sql'): string {
+export function hashWithPractice(hash: string, at: string | null, kind: PracticeKind = 'sql'): string {
   const rest = hashWithoutPractice(hash).replace(/^#/, '')
   return `#practice=${kind}${at ? `&at=${at}` : ''}${rest ? `&${rest}` : ''}`
 }

@@ -1,0 +1,30 @@
+/* The Power BI practice page (src/ui/PowerBiPractice.tsx): answer options, the order list, the number fields, the drill card. */
+.pbi-options { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.pbi-option { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); cursor: pointer; line-height: 1.4; }
+.pbi-option:hover { background: var(--panel-2); }
+.pbi-option:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.pbi-option:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 1px; }
+.pbi-option input { margin-top: 4px; flex-shrink: 0; }
+.pbi-right { border-color: var(--accent); }
+
+.pbi-order { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.pbi-order li { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.pbi-order .pbi-n { width: 1.4rem; text-align: center; color: var(--muted); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.pbi-order .pbi-text { flex: 1; min-width: 0; }
+.pbi-order li[data-ok='true'] { border-color: var(--accent); }
+
+.pbi-number { width: 14rem; max-width: 100%; font-variant-numeric: tabular-nums; }
+.pbi-snippet { margin: 0; padding: 8px 12px; border-radius: 6px; background: var(--panel-2); font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.pbi-checks { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.pbi-checks .pbi-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pbi-checks label { min-width: 12rem; flex: 1; }
+.pbi-checks .pbi-where { color: var(--muted); font-size: 12px; }
+.pbi-msg { border-radius: 6px; padding: 5px 9px; display: flex; gap: 6px; font-size: 14px; }
+.pbi-msg[data-ok='true'] { background: var(--accent-soft); color: var(--accent); }
+.pbi-msg[data-ok='false'] { background: var(--warn-soft); color: var(--warn-text); }
+
+.pbi-steps { width: 100%; height: 34rem; max-height: 70vh; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+
+.pbi-soon { border: 1px dashed var(--line); border-radius: 10px; padding: 10px 14px; color: var(--muted); }
+.pbi-soon strong { color: var(--text); }

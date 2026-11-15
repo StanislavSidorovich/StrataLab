@@ -30,6 +30,7 @@ import { followQuaeraLink } from '../core/quaeraLink'
 import { buildIndex, exampleAnchor, noteAnchor, type PracticeIndex } from '../core/practiceIndex'
 import { dayOf, pickWarmUp } from '../core/practiceRecall'
 import { Hint, IndexContext, RecallSearch } from './PracticeRecall'
+import { PowerBiPracticePage } from './PowerBiPractice'
 
 const LINE = 20
 
@@ -866,6 +867,7 @@ function SectionView({ section, onNext }: { section: PracticeSection; onNext: (i
 export function PracticeBookPage() {
   const kind = useLab((s) => s.practiceBook)
   if (!kind) return null
+  if (kind === 'powerbi') return <PowerBiPracticePage />
   return (
     <BookContext.Provider value={ENGINES[kind]}>
       <IndexContext.Provider value={ENGINES[kind].index}>
