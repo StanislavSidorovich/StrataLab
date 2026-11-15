@@ -32,6 +32,29 @@ export const EXTRA_WHEELS: ExtraWheel[] = [
 /** The folder under the site's root: Pyodide's core and the packages, side by side. */
 export const PYODIDE_DIR = 'pyodide'
 
+/**
+ * Pyodide's standard library as the site serves it. Not `python_stdlib.zip`: download managers (IDM)
+ * take .zip files even from a worker's fetch and answer with an empty body. The bytes are the same.
+ */
+export const STDLIB_FILE = 'stdlib.pydat'
+
+export const DOWNLOAD_MANAGER_NOTE =
+  "A download manager may be intercepting files; allow lab.quaera.app (add it to the manager's exceptions, or press Cancel in its dialog and accept “add to exceptions”), then retry."
+
+/** A zip starts with "PK". An empty or HTML answer means something other than the site replied. */
+export const looksLikeZip = (bytes: Uint8Array) => bytes.length > 4 && bytes[0] === 0x50 && bytes[1] === 0x4b
+
+/**
+ * The standard library as a blob URL for Pyodide's `stdLibURL`, fetched under a name download managers
+ * leave alone. Throws DOWNLOAD_MANAGER_NOTE when the answer is empty or not a zip.
+ */
+export async function fetchStdlib(indexURL: string): Promise<string> {
+  const res = await fetch(`${indexURL}${STDLIB_FILE}`)
+  const bytes = new Uint8Array(await res.arrayBuffer())
+  if (!res.ok || !looksLikeZip(bytes)) throw new Error(DOWNLOAD_MANAGER_NOTE)
+  return URL.createObjectURL(new Blob([bytes], { type: 'application/octet-stream' }))
+}
+
 /** Where Pyodide's own build of a version lives on jsDelivr (a copy without the files uses it). */
 export const pyodideCdn = (version: string) => `https://cdn.jsdelivr.net/pyodide/v${version}/full/`
 

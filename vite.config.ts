@@ -8,7 +8,7 @@ import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { swFiles } from './src/core/pwa.ts'
 import { EXTENSIONS_DIR } from './src/core/extensions.ts'
-import { EXTRA_WHEELS, hasOwnPackages, packageClosure, PYODIDE_DIR as PY_DIR, PYTHON_PACKAGES, pythonPackageFiles, servedImports, type PackageSize } from './src/core/python.ts'
+import { EXTRA_WHEELS, STDLIB_FILE, hasOwnPackages, packageClosure, PYODIDE_DIR as PY_DIR, PYTHON_PACKAGES, pythonPackageFiles, servedImports, type PackageSize } from './src/core/python.ts'
 import { isLicenseFile, licenseOf, licensesText, packageOf, sourceUrl, type Notice } from './src/core/licenses.ts'
 
 // The .wasm is served gzip-compressed, so the browser can't tell how big it is
@@ -31,8 +31,8 @@ const PYODIDE_FILES: Record<string, string> = {
   'pyodide.mjs': 'text/javascript',
   'pyodide.asm.mjs': 'text/javascript',
   'pyodide.asm.wasm': 'application/wasm',
-  'python_stdlib.zip': 'application/zip',
   'pyodide-lock.json': 'application/json',
+  [STDLIB_FILE]: 'application/octet-stream',
 }
 
 // Pandas, matplotlib and seaborn for Python tabs (stage 7), next to Pyodide in public/pyodide/
@@ -51,6 +51,9 @@ const pythonSizes: Record<string, PackageSize> = Object.fromEntries([
   ...EXTRA_WHEELS.map((w) => [w.module, { size: ownPython ? fileSize(join(pyDir, w.file)) : 0, depends: [] as string[] }] as const),
 ])
 
+// The standard library goes out as stdlib.pydat (src/core/python.ts STDLIB_FILE): download managers take .zip.
+const SERVED_AS: Record<string, string> = { [STDLIB_FILE]: 'python_stdlib.zip' }
+
 function pyodideFiles(): Plugin {
   return {
     name: 'pyodide-files',
@@ -60,11 +63,11 @@ function pyodideFiles(): Plugin {
         const type = m && PYODIDE_FILES[m[1]]
         if (!type) return next()
         res.setHeader('Content-Type', type)
-        createReadStream(join(PYODIDE_DIR, m[1])).pipe(res)
+        createReadStream(join(PYODIDE_DIR, SERVED_AS[m[1]] ?? m[1])).pipe(res)
       })
     },
     generateBundle() {
-      for (const f of Object.keys(PYODIDE_FILES)) this.emitFile({ type: 'asset', fileName: `pyodide/${f}`, source: readFileSync(join(PYODIDE_DIR, f)) })
+      for (const f of Object.keys(PYODIDE_FILES)) this.emitFile({ type: 'asset', fileName: `pyodide/${f}`, source: readFileSync(join(PYODIDE_DIR, SERVED_AS[f] ?? f)) })
     },
   }
 }

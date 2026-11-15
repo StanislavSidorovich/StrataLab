@@ -8,7 +8,7 @@ import LAB_PY from './lab.py?raw'
 import BACKEND_PY from './lab_backend.py?raw'
 import type { PyFrame } from './columns'
 import type { Output } from '../core/ipynb'
-import { bytesToLoad, type PackageSize } from '../core/python'
+import { bytesToLoad, fetchStdlib, DOWNLOAD_MANAGER_NOTE, type PackageSize } from '../core/python'
 
 export type ToWorker =
   | { type: 'init'; indexURL: string; packageBaseUrl: string; startup: string[]; imports: Record<string, string>; extra: { module: string; url: string; needs: string[] }[]; sizes: Record<string, PackageSize>; coreBytes: number }
@@ -41,7 +41,6 @@ const post = (msg: FromWorker) => (self as unknown as Worker).postMessage(msg)
 let phase: { text: string; loaded: number; total: number | null; sentAt: number } | null = null
 let counted: string[] = []
 
-const DOWNLOAD_MANAGER_NOTE = 'A download manager (e.g. IDM) took a Python file. Add lab.quaera.app to its exceptions, or press Cancel twice in its dialog and accept “add to exceptions”, then press Retry.'
 /** A Pyodide file that came back empty (204 or no bytes): a download manager took it. */
 let emptyFetch = false
 
@@ -95,7 +94,8 @@ async function start(msg: Extract<ToWorker, { type: 'init' }>) {
   const packages = bytesToLoad(msg.sizes, msg.startup, new Set())
   startPhase('Downloading Python', packages === null || !msg.coreBytes ? null : msg.coreBytes + packages)
   const { loadPyodide } = (await import(/* @vite-ignore */ `${msg.indexURL}pyodide.mjs`)) as typeof import('pyodide')
-  py = await loadPyodide({ indexURL: msg.indexURL, packageBaseUrl: msg.packageBaseUrl })
+  const stdLibURL = await fetchStdlib(msg.indexURL)
+  py = await loadPyodide({ indexURL: msg.indexURL, packageBaseUrl: msg.packageBaseUrl, stdLibURL })
   await loadPackages(msg.startup, true)
   phase = null
   post({ type: 'progress', text: 'Starting pandas' })

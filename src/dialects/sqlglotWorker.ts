@@ -2,6 +2,7 @@
 // then from the browser's cache) without freezing the page. Both are served with the site
 // (vite.config.ts copies Pyodide to pyodide/, the sqlglot wheel is in public/sqlglot/).
 import type { PyodideInterface } from 'pyodide'
+import { fetchStdlib, looksLikeZip, DOWNLOAD_MANAGER_NOTE } from '../core/python'
 import TRANSLATE_PY from './translate.py?raw'
 
 export interface TranslateRequest {
@@ -16,11 +17,14 @@ let ready: Promise<PyodideInterface> | null = null
 async function start(indexURL: string, wheelURL: string): Promise<PyodideInterface> {
   post({ progress: 'download' })
   const { loadPyodide } = (await import(/* @vite-ignore */ `${indexURL}pyodide.mjs`)) as typeof import('pyodide')
+  const stdLibURL = await fetchStdlib(indexURL)
   const [py, wheel] = await Promise.all([
-    loadPyodide({ indexURL }),
-    fetch(wheelURL).then((r) => {
+    loadPyodide({ indexURL, stdLibURL }),
+    fetch(wheelURL).then(async (r) => {
       if (!r.ok) throw new Error(`Could not download sqlglot (${r.status})`)
-      return r.arrayBuffer()
+      const bytes = await r.arrayBuffer()
+      if (!looksLikeZip(new Uint8Array(bytes))) throw new Error(DOWNLOAD_MANAGER_NOTE)
+      return bytes
     }),
   ])
   post({ progress: 'start' })
