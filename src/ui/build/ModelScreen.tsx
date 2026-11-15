@@ -4,7 +4,7 @@
 // this step (a star built for the learner) keeps Model done and is shown read-only with Try it.
 import { useEffect, useRef, useState } from 'react'
 import { ArrowRight, Check, ExternalLink, Hammer, Loader2, RotateCcw, X } from 'lucide-react'
-import { acceptedLabel, addLink, canBuildStar, diagnoseLink, linksOfPass, modelLinked, removeLink, sameLink, slotName, starSql, type Fix, type Link, type LinkDiagnosis, type Slot } from '../../core/buildLinks'
+import { acceptedLabel, addLink, canBuildStar, diagnoseLink, dragPair, linksOfPass, modelLinked, removeLink, sameLink, slotName, starSql, type Fix, type Link, type LinkDiagnosis, type Slot } from '../../core/buildLinks'
 import type { BuildSourceId } from '../../data/build/kaiyoSales'
 import { LINK_TEXT, PASS_TABLES, type Pass } from '../../data/build/linkData'
 import { buildStar, describeTable, linkFacts, linkPeek, starFacts, type ChainPeek, type StarFacts } from '../../db/buildRun'
@@ -160,6 +160,13 @@ export function ModelScreen(p: Props) {
     if (s.table === many.table) setMany(s)
     else setOne(s)
   }
+  // a drag from one row onto another box's row is the two picks in order (the one side is told by the expected links)
+  const drop = (from: Slot, to: Slot) => {
+    const d = dragPair(from, to, pass)
+    if (!d) return
+    setMany(d.many)
+    setOne(d.one)
+  }
   const onSlot = (which: 'many' | 'one', s: SlotState) => (which === 'many' ? setMany(s) : setOne(s))
   const doSwap = () => {
     setMany(one)
@@ -240,7 +247,7 @@ export function ModelScreen(p: Props) {
         <div className={`lk-grid${panelOn ? '' : ' is-wide'}`}>
           <div className="lk-board">
             {live && !pair && <p className="lk-caption">{pass === 2 ? LINK_TEXT.idleStar : LINK_TEXT.idle}</p>}
-            <LinkCanvas pass={pass} tables={tables} links={legacy ? legacyLinks() : links} labels={legacy ? {} : labels} pending={pending} picked={{ many: filled(many) ? many : null, one: filled(one) ? one : null }} onPick={live ? pick : undefined} />
+            <LinkCanvas pass={pass} tables={tables} links={legacy ? legacyLinks() : links} labels={legacy ? {} : labels} pending={pending} picked={{ many: filled(many) ? many : null, one: filled(one) ? one : null }} onPick={live ? pick : undefined} onDrag={live ? drop : undefined} />
             {!legacy && (
               <ul className="lk-links" aria-label="Links" data-testid="link-list">
                 {made.map((l) => (

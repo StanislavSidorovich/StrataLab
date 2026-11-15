@@ -1,0 +1,7 @@
+/* Links by drag: the line that follows the pointer, and what a row under it says about a drop. */
+.lk-svg { user-select: none; -webkit-user-select: none; }
+.lk-svg.is-dragging, .lk-svg.is-dragging .lk-row.is-live { cursor: grabbing; }
+.lk-svg.is-dragging .lk-row.is-drop-ok { cursor: copy; }
+.lk-svg.is-dragging .lk-row.is-drop-no { cursor: not-allowed; }
+.lk-row.is-drop-ok .lk-row-bg { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2; }
+.lk-row.is-drop-no .lk-row-bg { fill: transparent; stroke: var(--danger); stroke-width: 1.5; stroke-dasharray: 4 3; }

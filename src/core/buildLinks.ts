@@ -38,6 +38,18 @@ export const swap = (p: { many: Slot; one: Slot }): { many: Slot; one: Slot } =>
 export const matchExpected = (pair: { many: Slot; one: Slot }, pass: Pass): ExpectedLink | null =>
   EXPECTED_LINKS.find((e) => e.pass === pass && sameLink(e, pair)) ?? null
 
+/**
+ * What a drag from one row to another means as the two picks in order (many side, then one side). The first pick is the
+ * many side, so a drag from the one side swaps: it is told by the pass's expected links. A pair that is no expected link
+ * keeps the drag order. Null when both rows are in one box (nothing to link) or the drop is on the starting row.
+ */
+export function dragPair(from: Slot, to: Slot, pass: Pass): { many: Slot; one: Slot } | null {
+  if (from.table === to.table) return null
+  const straight = { many: from, one: to }
+  const back = swap(straight)
+  return !matchExpected(straight, pass) && matchExpected(back, pass) ? back : straight
+}
+
 const short = (t: string) => TABLE_INFO[t]?.short ?? t
 /** "sales.customer_name" */
 export const slotName = (s: Slot) => `${short(s.table)}.${s.column}`

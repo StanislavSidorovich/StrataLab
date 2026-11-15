@@ -18,7 +18,7 @@ function watchErrors(page: Page) {
   return () => expect(errors, 'console errors and page errors').toEqual([])
 }
 
-test('build it by hand: Connect to Answer', async ({ page }) => {
+test('build it by hand: Connect to Answer', async ({ page, browserName }) => {
   const expectNoErrors = watchErrors(page)
   await page.goto('/#build=kaiyo-sales')
   await expect(page.getByTestId('build')).toBeVisible()
@@ -118,6 +118,20 @@ test('build it by hand: Connect to Answer', async ({ page }) => {
     await model.getByTestId(`link-col-${many}`).click()
     await model.getByTestId(`link-col-${one}`).click()
   }
+  // links by drag: from the one side, so the screen swaps the picks itself (Chromium only; the other engines click)
+  const dragLink = async (from: string, to: string) => {
+    if (browserName !== 'chromium') return link(to, from)
+    const a = (await model.getByTestId(`link-col-${from}`).boundingBox())!
+    const b = (await model.getByTestId(`link-col-${to}`).boundingBox())!
+    await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(a.x + a.width / 2 + 40, a.y + a.height / 2 + 10, { steps: 4 })
+    await expect(model.getByTestId('link-line-drag')).toBeVisible()
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 8 })
+    await expect(model.getByTestId(`link-col-${to}`)).toHaveClass(/is-drop-ok/)
+    await page.mouse.up()
+    await expect(model.getByTestId('link-line-drag')).toHaveCount(0)
+  }
   const create = async () => {
     await expect(model.getByTestId('link-line')).toHaveAttribute('data-key', 'pass')
     await model.getByTestId('link-create').click()
@@ -140,7 +154,7 @@ test('build it by hand: Connect to Answer', async ({ page }) => {
   await create()
 
   // L2 by SKU
-  await link('clean_sales-sku_code', 'clean_products-sku_code')
+  await dragLink('clean_products-sku_code', 'clean_sales-sku_code')
   await create()
 
   // L3: region_id is R-03 on one side and 3 on the other, so Clean again (P7)

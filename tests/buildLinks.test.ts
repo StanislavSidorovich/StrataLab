@@ -1,7 +1,7 @@
 // Б5a of the build page: the pure rules of the linking screen (docs/build-linking-screen.md, 3 to 6, 8.1).
 import { describe, expect, it } from 'vitest'
 import { emptyBuild, modelDone, readBuild } from '../src/core/build'
-import { acceptedLabel, addLink, canBuildStar, diagnoseLink, linksOfPass, matchExpected, modelLinked, readLinks, removeLink, starSql, starStatements, swap, typeFamily, type Link, type LinkFacts, type SideFacts } from '../src/core/buildLinks'
+import { acceptedLabel, addLink, canBuildStar, diagnoseLink, dragPair, linksOfPass, matchExpected, modelLinked, readLinks, removeLink, starSql, starStatements, swap, typeFamily, type Link, type LinkFacts, type SideFacts } from '../src/core/buildLinks'
 import { EXPECTED_LINKS } from '../src/data/build/linkData'
 
 const link = (id: Link['id']): Link => {
@@ -201,5 +201,27 @@ describe('Build the star (6)', () => {
     expect(sql).toContain('p.sku_code = s.sku_code')
     expect(sql).toContain('r.region_name, r.macro_region')
     expect(sql.trim().endsWith(';')).toBe(true)
+  })
+})
+
+describe('dragPair (links by drag)', () => {
+  const e = (id: string) => EXPECTED_LINKS.find((x) => x.id === id)!
+  it('keeps the order when the drag starts on the many side', () => {
+    expect(dragPair(e('L1').many, e('L1').one, 1)).toEqual({ many: e('L1').many, one: e('L1').one })
+  })
+  it('swaps when the drag starts on the one side', () => {
+    expect(dragPair(e('L1').one, e('L1').many, 1)).toEqual({ many: e('L1').many, one: e('L1').one })
+    expect(dragPair(e('F2').one, e('F2').many, 2)).toEqual({ many: e('F2').many, one: e('F2').one })
+  })
+  it('keeps the drag order for a pair that is no expected link, so the checks can say what is wrong', () => {
+    const a = { table: 'clean_sales', column: 'revenue' }
+    const b = { table: 'clean_products', column: 'sku_code' }
+    expect(dragPair(a, b, 1)).toEqual({ many: a, one: b })
+    expect(dragPair(b, a, 1)).toEqual({ many: b, one: a })
+  })
+  it('is null inside one box', () => {
+    const a = { table: 'clean_sales', column: 'revenue' }
+    expect(dragPair(a, { table: 'clean_sales', column: 'units' }, 1)).toBeNull()
+    expect(dragPair(a, a, 1)).toBeNull()
   })
 })
