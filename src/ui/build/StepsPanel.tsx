@@ -1,9 +1,10 @@
 // The canvas of Clean (design docs/clean-canvas-design.md, 1): ribbon, queries pane, SQL of the step, the grid, Applied steps and the
 // status bar, for one source at a time. A click on a step shows the table after that step; the SQL line always says what that step ran.
 // ✕ rebuilds the chain; the given step cannot be removed. The task bar above (CleanScreen) says what to do.
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ExternalLink, X } from 'lucide-react'
 import type { ColumnProfile } from '../../core/buildProfile'
+import { hintMark, type HintMark } from '../../core/buildHintMark'
 import type { ResultData } from '../../core/check'
 import { typeFamily } from '../../core/buildLinks'
 import { CLEAN_COLUMNS, addSpec, chainSql, previewAtSql, removeSpec, rowsChange, shownSql, stepsOf, typesAtSql, type BuildWork, type StepKind, type StepSpec } from '../../core/buildSteps'
@@ -17,6 +18,7 @@ import { ProfileStrip } from './ProfileStrip'
 import { PaneHandle, usePaneWidth } from './PaneResize'
 import './cleanPolish.css'
 import './errors.css'
+import './hintMark.css'
 
 export const GRID_ROWS = 50
 
@@ -39,11 +41,13 @@ export interface PanelProps {
   advanced?: ReactNode
   advancedOpen: boolean
   onAdvanced: () => void
+  /** the card whose hint level 2 is on screen (P1 to P3, first pass): its header and cells are pointed at in the grid */
+  hintCard?: string | null
 }
 
 const TYPE_MARK: Record<string, string> = { text: 'ABC', number: '123', date: 'date', other: '?' }
 
-export function StepsPanel({ source, work, ready, rev, onChange, onSource, focusColumn, openCount, centre, advanced, advancedOpen, onAdvanced }: PanelProps) {
+export function StepsPanel({ source, work, ready, rev, onChange, onSource, focusColumn, openCount, centre, advanced, advancedOpen, onAdvanced, hintCard }: PanelProps) {
   const connected = work.connected.includes(source)
   const specs = work.steps[source]
   const steps = stepsOf(source, specs)
@@ -70,6 +74,7 @@ export function StepsPanel({ source, work, ready, rev, onChange, onSource, focus
   const [profile, setProfile] = useState<ColumnProfile[] | null>(null)
 
   // one selection for the grid and the ribbon: a name the table on show does not have is no selection
+  const mark = useMemo(() => (hintCard && data ? hintMark(hintCard, source, data.header, data.rows) : null), [hintCard, source, data])
   const sel = selRaw && (!data || data.header.includes(selRaw)) ? selRaw : null
   const latest = steps.length
   const k = Math.min(viewAt ?? latest, latest)
@@ -200,7 +205,7 @@ export function StepsPanel({ source, work, ready, rev, onChange, onSource, focus
                       )}
                     </div>
                   )}
-                  <Grid data={data} types={types} mask={mask} profile={profile} source={source} selected={sel} onSelect={(c) => setSel((x) => (x === c ? null : c))} caption={`${sourceById(source).clean} after step ${k}`} />
+                  <Grid mark={mark} data={data} types={types} mask={mask} profile={profile} source={source} selected={sel} onSelect={(c) => setSel((x) => (x === c ? null : c))} caption={`${sourceById(source).clean} after step ${k}`} />
                 </>
               )}
             </>
@@ -284,17 +289,22 @@ export function StepsPanel({ source, work, ready, rev, onChange, onSource, focus
 }
 
 /** The table as a grid: a click on a header selects the column (accent outline); the column profile strip sits under the name. */
-function Grid({ data, types, mask, profile, source, selected, onSelect, caption }: { data: ResultData | null; types: string[]; mask: boolean[][] | null; profile: ColumnProfile[] | null; source: BuildSourceId; selected: string | null; onSelect: (c: string) => void; caption: string }) {
+function Grid({ mark, data, types, mask, profile, source, selected, onSelect, caption }: { mark: HintMark | null; data: ResultData | null; types: string[]; mask: boolean[][] | null; profile: ColumnProfile[] | null; source: BuildSourceId; selected: string | null; onSelect: (c: string) => void; caption: string }) {
+  const ref = useRef<HTMLDivElement>(null)
+  // the first offending cell comes into view when the mark appears
+  useEffect(() => {
+    if (mark?.first) ref.current?.querySelector('td.is-hint')?.scrollIntoView({ block: 'center', inline: 'nearest' })
+  }, [mark])
   if (!data) return <div className="build-muted">Loading…</div>
   return (
-    <div className="cc-grid" tabIndex={0} role="region" aria-label={caption} data-testid="clean-grid">
+    <div className="cc-grid" ref={ref} tabIndex={0} role="region" aria-label={caption} data-testid="clean-grid">
       <table className="build-table">
         <thead>
           <tr>
             {data.header.map((c, j) => {
               const fam = typeFamily(types[j] ?? '')
               return (
-                <th key={c} className={selected === c ? 'is-selected' : undefined}>
+                <th key={c} className={[selected === c ? 'is-selected' : '', mark?.cols.includes(c) ? 'is-hint' : ''].filter(Boolean).join(' ') || undefined} data-hint={mark?.cols.includes(c) ? 'true' : undefined}>
                   <button className="cc-head" aria-pressed={selected === c} onClick={() => onSelect(c)} data-testid={`clean-col-${c}`}>
                     <span className="cc-type" title={types[j]?.toLowerCase()}>{TYPE_MARK[fam]}</span>
                     <span className="cc-head-name">{c}</span>
@@ -311,7 +321,7 @@ function Grid({ data, types, mask, profile, source, selected, onSelect, caption 
           {data.rows.map((r, i) => (
             <tr key={i}>
               {r.map((c, j) => (
-                <td key={j} className={[mask?.[i]?.[j] ? 'is-error' : c === null ? 'is-null' : '', selected === data.header[j] ? 'is-selcol' : ''].filter(Boolean).join(' ') || undefined} data-error={mask?.[i]?.[j] ? 'true' : undefined}>
+                <td key={j} className={[mask?.[i]?.[j] ? 'is-error' : c === null ? 'is-null' : '', selected === data.header[j] ? 'is-selcol' : '', mark?.cells[i]?.[j] ? 'is-hint' : ''].filter(Boolean).join(' ') || undefined} data-error={mask?.[i]?.[j] ? 'true' : undefined}>
                   {mask?.[i]?.[j] ? '[Error]' : c === null ? 'null' : String(c)}
                 </td>
               ))}

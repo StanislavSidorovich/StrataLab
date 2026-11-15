@@ -1,0 +1,16 @@
+/* Hint level 2 (v0.45.0): the header and the offending cells of the grid. A gradient layer over the cell, so the null and error tints stay. */
+.cc-grid { --cc-hint: color-mix(in srgb, var(--warn-text, #b45309) 22%, transparent); }
+.cc-grid th.is-hint { box-shadow: inset 0 -3px 0 var(--warn-text, #b45309); }
+.cc-grid td.is-hint { background-image: linear-gradient(var(--cc-hint), var(--cc-hint)); box-shadow: inset 0 0 0 1px var(--warn-text, #b45309); }
+
+/* the Hint button is a filled button (amber, so it is not taken for Check), not a ghost one */
+.cc-root .cc-task .cc-hint { background: var(--warn-soft); border-color: var(--warn-text); color: var(--warn-text); font-weight: 700; }
+.cc-root .cc-task .cc-hint:hover { background: var(--warn-soft); filter: brightness(0.96); }
+.cc-root .cc-task .cc-hint[aria-expanded='true'] { box-shadow: 0 0 0 2px var(--warn-soft); }
+
+/* the footer: why Next step is locked, and the way out of the last step */
+.bf-optional { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); font-size: 13px; }
+.bf-why { color: var(--muted); font-size: 13px; }
+.build-quick.is-finish { animation: bf-pulse 1.6s ease-out 1; }
+@keyframes bf-pulse { 0% { box-shadow: 0 0 0 0 var(--accent); } 100% { box-shadow: 0 0 0 14px transparent; } }
+@media (prefers-reduced-motion: reduce) { .build-quick.is-finish { animation: none; } }

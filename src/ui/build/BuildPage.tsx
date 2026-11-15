@@ -3,7 +3,7 @@
 // page is the "Open on a laptop" screen, as on the pipeline page.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowRight, Check, Copy, Hammer, Laptop, Lock, RotateCcw, Share2, Wand2, X } from 'lucide-react'
-import { BUILD_ID, BUILD_KEY, MORE_STEP, REFRESH_STEP, isOptional, STEP_IDS, STEP_LABEL, STRIP_IDS, demoFromHash, emptyBuild, goNext, hashWithDemo, isUnlocked, markDone, modelDone, nextStep, openStep, saveBuild, statusOf } from '../../core/build'
+import { BUILD_ID, BUILD_KEY, MORE_STEP, REFRESH_STEP, isOptional, STEP_IDS, STEP_LABEL, STRIP_IDS, type StepId, demoFromHash, emptyBuild, goNext, hashWithDemo, isUnlocked, markDone, modelDone, nextStep, openStep, saveBuild, statusOf } from '../../core/build'
 import { canFillBefore, fillBefore, fillBeforeTouchesTables, fillUnit, touchesTables, type FillUnit } from '../../core/buildFill'
 import { DEMO_KEY, isEmptyRun, loadSaved, loadSlot, restoreNeedsConfirm, restoreSaved, startOver, writeSaved, type Saved } from '../../core/buildProgress'
 import type { Link } from '../../core/buildLinks'
@@ -28,9 +28,19 @@ import './build.css'
 import './clean.css'
 import './cleanCanvas.css'
 import './progress.css'
+import './hintMark.css'
 import { DemoContext } from './DemoContext'
 import { SliceContext } from './SliceContext'
 import { ProgressMenu } from './ProgressMenu'
+
+/** What a step waits for before Next step opens, shown next to the locked button */
+const LOCK_WHY: Record<StepId, string> = {
+  connect: 'all four files are connected.',
+  clean: 'every problem is solved.',
+  model: 'both links are made (F1 and F2).',
+  dashboard: 'every tile is on the dashboard.',
+  answer: 'all three answers are right.',
+}
 
 /** Where the finish leads back to (`#lab-done=build:kaiyo-sales`; More and Refresh have keys of their own). */
 export const RETURN_URL = BUILD_RETURN_URL
@@ -255,6 +265,14 @@ function Shell() {
   const open = state.open
   const next = nextStep(state)
   const stillOpen = open === 'clean' && activeCard(work.passed) ? CLEAN_CARDS.find((c) => c.id === activeCard(work.passed)) : undefined
+  /** Finish on the Answer step: the run is already complete (Answer done); this brings the done card with Count in Quaera into view */
+  const finish = () => {
+    const card = document.querySelector<HTMLElement>('[data-testid="answer-done"]')
+    card?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    card?.classList.remove('is-finish')
+    void card?.offsetWidth
+    card?.classList.add('is-finish')
+  }
   const num = isOptional(open) ? 0 : STEP_IDS.indexOf(open) + 1
   /** a journal line of Refresh was clicked: open the step it is about */
   const openFromJournal = (row: JournalRow) => {
@@ -385,9 +403,35 @@ function Shell() {
                 is still open
               </span>
             )}
-            <button className={`btn${next ? ' btn-primary' : ''}`} disabled={!next} onClick={() => setState(goNext(state))} data-testid="build-next">
-              Next step <ArrowRight size={14} />
-            </button>
+            {open === 'answer' && state.done.includes('answer') ? (
+              <>
+                <span className="bf-optional" data-testid="answer-optional">
+                  Optional:{' '}
+                  <button className="bf-link" onClick={() => setState((s) => openStep(s, MORE_STEP))} data-testid="foot-more">More</button>
+                  {' · '}
+                  <button className="bf-link" onClick={() => setState((s) => openStep(s, REFRESH_STEP))} data-testid="foot-refresh">Refresh</button>
+                </span>
+                <button className="btn btn-primary" onClick={finish} data-testid="build-finish">
+                  <Check size={14} /> Finish
+                </button>
+              </>
+            ) : isOptional(open) ? (
+              <>
+                <span className="bf-why" data-testid="optional-note">Optional step: you can stop whenever you like.</span>
+                <button className="btn btn-primary" onClick={() => setState((s) => openStep(s, 'answer'))} data-testid="build-back-answer">
+                  Back to Answer <ArrowRight size={14} />
+                </button>
+              </>
+            ) : (
+              <>
+                {!next && !(open === 'clean' && stillOpen) && (
+                  <span className="bf-why" data-testid="next-locked">Next step unlocks when {LOCK_WHY[open]}</span>
+                )}
+                <button className={`btn${next ? ' btn-primary' : ''}`} disabled={!next} onClick={() => setState(goNext(state))} data-testid="build-next">
+                  Next step <ArrowRight size={14} />
+                </button>
+              </>
+            )}
           </footer>
         </>
       )}

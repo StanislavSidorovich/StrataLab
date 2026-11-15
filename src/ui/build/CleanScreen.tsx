@@ -5,6 +5,7 @@ import { FABRIC_CLEAN } from '../../data/build/fabricNotes'
 import './fabric.css'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { ArrowRight, Check, CheckCircle2, Lightbulb, Loader2, X, XCircle } from 'lucide-react'
+import { MARKED_CARDS } from '../../core/buildHintMark'
 import { DEDUP_KEY } from '../../core/buildSolved'
 import { CLEAN_COLUMNS, SOURCE_IDS, activeCard, addSpec, checkFormat, cleanDone, datesSql, hasFullGiven, passCard, typedColumn, type BuildWork, type StepSpec, dedupSql } from '../../core/buildSteps'
 import { checkBlank } from '../../core/pipeline'
@@ -66,6 +67,8 @@ export function CleanScreen({ work, setWork, ready, rebuild, rev, focus, onBackT
   const [closed, setClosed] = useState<Partial<Record<CleanId, boolean>>>({})
   // a card that has passed can be opened again from its chip (to read it, change the step, check again)
   const [again, setAgain] = useState<CleanId | null>(null)
+  /** a card that passed its Check a moment ago: it is already counted as passed, and stays on the bar until «Next problem» */
+  const [linger, setLinger] = useState<CleanId | null>(null)
   /** Advanced: SQL opened or closed by the learner; null = as the card needs it */
   const [adv, setAdv] = useState<boolean | null>(null)
   const connected = work.connected.length === 4
@@ -83,7 +86,7 @@ export function CleanScreen({ work, setWork, ready, rebuild, rev, focus, onBackT
     }
   }, [ready, work.connected, rev])
 
-  const cur: CleanId | null = again ?? active
+  const cur: CleanId | null = linger ?? again ?? active
   const card = cur ? CLEAN_CARDS.find((c) => c.id === cur)! : null
   useEffect(() => {
     setAdv(null)
@@ -91,8 +94,10 @@ export function CleanScreen({ work, setWork, ready, rebuild, rev, focus, onBackT
   }, [cur])
 
   const pass = (id: CleanId) => {
-    setWork((w) => ({ ...w, passed: passCard(w, id) }))
+    // Next problem: the card was counted when its Check passed (onReport); W and the rest are counted here
+    if (!work.passed.includes(id)) setWork((w) => ({ ...w, passed: passCard(w, id) }))
     setAgain(null)
+    setLinger(null)
     const i = CLEAN_CARDS.findIndex((c) => c.id === id)
     const nextCard = CLEAN_CARDS[i + 1]
     if (nextCard) setSource(nextCard.source)
@@ -107,6 +112,11 @@ export function CleanScreen({ work, setWork, ready, rebuild, rev, focus, onBackT
   }
   const onReport = (id: CleanId) => (r: CheckReport) => {
     if (!r.ok) setFails((x) => ({ ...x, [id]: (x[id] ?? 0) + 1 }))
+    // the count, the dot and the footer follow the Check at once, not the press of Next problem
+    if (r.ok && !work.passed.includes(id)) {
+      setWork((w) => ({ ...w, passed: passCard(w, id) }))
+      setLinger(id)
+    }
     setReport((x) => ({ ...x, [id]: r }))
     setClosed((x) => ({ ...x, [id]: false }))
   }
@@ -156,11 +166,12 @@ export function CleanScreen({ work, setWork, ready, rebuild, rev, focus, onBackT
   const advancedOpen = adv ?? (cur === 'P2' || (cur === 'P5' && hasSaleDateStep))
 
   if (!connected) return <p className="build-muted">Connect the four sources first.</p>
-  const passed = cur ? work.passed.includes(cur) : false
+  const lingering = !!cur && linger === cur
+  const passed = cur ? work.passed.includes(cur) && !lingering : false
   const last = cur ? report[cur] : undefined
   const level = cur ? hints[cur] ?? 0 : 0
   /** the current problem has just passed its Check: the bar says so and offers the way on */
-  const justPassed = !!card && !!last?.ok && !passed
+  const justPassed = lingering && !!last?.ok
   const finishes = !!card && problems.every((c) => c.id === card.id || work.passed.includes(c.id))
   return (
     <div className="cc-root" data-testid="build-clean">
@@ -195,7 +206,7 @@ export function CleanScreen({ work, setWork, ready, rebuild, rev, focus, onBackT
           <span className="cc-spacer" />
           <span className="build-left" data-testid="clean-left">{left === 0 ? 'All problems solved' : `${left} of ${total} problems left`}</span>
           {card && card.id !== 'W' && card.id !== 'P2' && <CheckButton card={card} work={work} ready={ready} quiet={justPassed} onReport={onReport(card.id)} />}
-          {card && last?.ok && !passed && (
+          {card && lingering && (
             <button className="btn btn-primary" onClick={() => pass(card.id)} data-testid={`clean-pass-${card.id}`}>
               {finishes ? 'Finish cleaning' : 'Next problem'} <ArrowRight size={14} />
             </button>
@@ -272,6 +283,7 @@ export function CleanScreen({ work, setWork, ready, rebuild, rev, focus, onBackT
         <ExtraCard id="P7" work={work} setWork={setWork} ready={ready} onFocus={() => setSource('regions')} onBack={onBackToModel} text={LINK_TEXT.p7} where="regions.csv · asked for by the Model step" check={() => checkP7(enginePort)} />
       )}
       <StepsPanel
+        hintCard={card && hintOpen && level >= 2 && !passed && !lingering && !again && MARKED_CARDS.includes(card.id as never) ? card.id : null}
         source={source}
         work={work}
         ready={ready}
@@ -340,7 +352,7 @@ function Hints({ card, level, onMore }: { card: CleanCard; level: number; onMore
       )}
       {level < card.hints.length && (
         <button className="btn" style={{ marginTop: level > 0 ? 6 : 0 }} onClick={onMore}>
-          <Lightbulb size={14} /> {level === 0 ? "If you're stuck" : 'Another hint'}
+          <Lightbulb size={14} /> {level === 0 ? "If you're stuck" : MARKED_CARDS.includes(card.id as never) ? 'Another hint: show me in the table' : 'Another hint'}
         </button>
       )}
     </div>
