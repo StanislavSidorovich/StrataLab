@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { modelDdl, modelUrl, postgresType, type ModelTable } from '../src/core/modelLink'
+import { MAX_MODEL_URL, modelDdl, modelUrl, postgresType, starModel, type ModelTable } from '../src/core/modelLink'
 import { decodeDdl } from '../src/core/ddlLink'
 
 const t = (name: string, extra: Partial<ModelTable> = {}): ModelTable => ({ name, columns: [], primaryKey: [], uniques: [], foreignKeys: [], checks: [], ...extra })
@@ -54,5 +54,28 @@ describe('show as model (stage 2c)', () => {
     const p = new URLSearchParams(url.hash.slice(1))
     expect(p.get('name')).toBe('Chinook')
     expect(await decodeDdl(p.get('sql')!)).toBe('CREATE TABLE a (id integer);')
+  })
+})
+
+describe('starModel (the build page)', () => {
+  const col = (name: string) => ({ name, type: 'INTEGER', notNull: false })
+  const t = (name: string, cols: string[]): ModelTable => ({ name, columns: cols.map(col), primaryKey: [], uniques: [], foreignKeys: [], checks: [] })
+  const all = [t('bronze_sales', ['x']), t('clean_sales', ['x']), t('gold_fact_sales', ['customer_id', 'product_id', 'revenue']), t('gold_dim_customer', ['customer_id', 'city']), t('gold_dim_product', ['product_id', 'sku_code'])]
+  it('keeps the three gold tables, fact first, with the keys of the two links', () => {
+    const m = starModel(all)
+    expect(m.map((x) => x.name)).toEqual(['gold_fact_sales', 'gold_dim_customer', 'gold_dim_product'])
+    expect(m[1].primaryKey).toEqual(['customer_id'])
+    expect(m[0].foreignKeys.map((f) => f.refTable)).toEqual(['gold_dim_customer', 'gold_dim_product'])
+    const { sql } = modelDdl(m, 'Kaiyo sales star')
+    expect(sql).toContain('FOREIGN KEY (customer_id) REFERENCES gold_dim_customer (customer_id)')
+  })
+  it('sends what is there when the star is not complete, and nothing when it is empty', () => {
+    expect(starModel(all.filter((x) => x.name !== 'gold_dim_product')).map((x) => x.name)).toEqual(['gold_fact_sales', 'gold_dim_customer'])
+    expect(starModel(all.filter((x) => x.name === 'gold_dim_product')).length).toBe(1)
+    expect(starModel([t('clean_sales', ['x'])])).toEqual([])
+  })
+  it('fits the address limit with room to spare', async () => {
+    const { sql } = modelDdl(starModel(all), 'Kaiyo sales star')
+    expect((await modelUrl(sql, 'Kaiyo sales star')).length).toBeLessThan(MAX_MODEL_URL)
   })
 })

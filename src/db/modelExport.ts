@@ -2,7 +2,7 @@
 // and opens them in model.quaera.app (src/core/modelLink.ts builds the statements and the link).
 import { query } from './engine'
 import { quoteString } from '../core/sql'
-import { MODEL_URL, MODEL_WINDOW, modelDdl, modelUrl, type ModelDdl, type ModelTable } from '../core/modelLink'
+import { MAX_MODEL_URL, MODEL_URL, MODEL_WINDOW, modelDdl, modelUrl, starModel, type ModelDdl, type ModelTable } from '../core/modelLink'
 
 // Lists come back joined with the unit separator: no JSON extension to download.
 const SEP = '\u001f'
@@ -40,12 +40,14 @@ const MODEL_BASE = /^(localhost|127\.0\.0\.1)$/.test(location.hostname) ? 'http:
  * window opened later may be blocked) under StrataSQL's name, so a tab it already has is reused:
  * there only the fragment changes and StrataSQL reads it without reloading.
  */
-export async function showAsModel(schema: string, label: string): Promise<ModelDdl & { tables: number }> {
+export async function showAsModel(schema: string, label: string, pick: (tables: ModelTable[]) => ModelTable[] = (t) => t): Promise<ModelDdl & { tables: number }> {
   const win = window.open('', MODEL_WINDOW)
   try {
-    const tables = await schemaForModel(schema)
+    const tables = pick(await schemaForModel(schema))
+    if (tables.length === 0) throw new Error('There are no tables to send yet.')
     const ddl = modelDdl(tables, label)
     const url = await modelUrl(ddl.sql, label, MODEL_BASE)
+    if (url.length > MAX_MODEL_URL) throw new Error(`The model is too big for a link (${url.length} characters; the most is ${MAX_MODEL_URL}).`)
     if (win) win.location.href = url
     else window.open(url, MODEL_WINDOW)
     return { ...ddl, tables: tables.length }
@@ -54,3 +56,6 @@ export async function showAsModel(schema: string, label: string): Promise<ModelD
     throw e
   }
 }
+
+/** The build's star (three `gold_*` tables of the learner) as a model in model.quaera.app. Called straight from the click. */
+export const showStarAsModel = (schema: string) => showAsModel(schema, 'Kaiyo sales star', starModel)

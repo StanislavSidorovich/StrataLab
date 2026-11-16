@@ -15,6 +15,7 @@ import { fmtN } from './BuildTable'
 import { LinkCanvas, type PendingLine, type TableView } from './LinkCanvas'
 import { LinkPanel, type Run, type SlotState } from './LinkPanel'
 import { FillButton } from './DemoContext'
+import { OpenStarInModel } from './OpenStarInModel'
 import './dashboard.css'
 import './linking.css'
 
@@ -307,6 +308,7 @@ export function ModelScreen(p: Props) {
                   </div>
                 )}
                 {!legacy && !modelLinked(links) && !done && <span className="build-muted">Links made: {pass2.length} of 2.</span>}
+                {star && <div><OpenStarInModel ready={ready} /></div>}
                 {done ? (
                   <span className="build-ok">
                     <Check size={14} /> Model done

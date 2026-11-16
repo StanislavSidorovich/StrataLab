@@ -136,3 +136,32 @@ export async function modelUrl(sql: string, label: string, base: string = MODEL_
   url.hash = `${SQL_PARAM}=${await encodeDdl(sql)}&${NAME_PARAM}=${encodeURIComponent(label)}`
   return url.toString()
 }
+
+/** The longest address handed to the browser: far under any limit that matters, and a clear line to tell a too-big model from a broken one. */
+export const MAX_MODEL_URL = 8000
+
+const STAR = { fact: 'gold_fact_sales', customer: 'gold_dim_customer', product: 'gold_dim_product' }
+
+/**
+ * The learner's star out of the build schema: the three `gold_*` tables, with the keys the links F1 and F2 stand for
+ * (a dimension's id is its key, the fact's id column points at it). The tables in the database have no keys of their own.
+ */
+export function starModel(tables: ModelTable[]): ModelTable[] {
+  const by = new Map(tables.map((t) => [t.name, t]))
+  const has = (t: ModelTable | undefined, c: string) => !!t?.columns.some((x) => x.name === c)
+  const out: ModelTable[] = []
+  for (const name of [STAR.fact, STAR.customer, STAR.product]) {
+    const t = by.get(name)
+    if (!t) continue
+    const copy: ModelTable = { ...t, columns: t.columns.map((c) => ({ ...c })), primaryKey: [...t.primaryKey], uniques: [], foreignKeys: [], checks: [] }
+    if (name === STAR.customer && has(t, 'customer_id')) copy.primaryKey = ['customer_id']
+    if (name === STAR.product && has(t, 'product_id')) copy.primaryKey = ['product_id']
+    out.push(copy)
+  }
+  const fact = out.find((t) => t.name === STAR.fact)
+  if (fact) {
+    if (has(fact, 'customer_id') && out.some((t) => t.name === STAR.customer && t.primaryKey.length)) fact.foreignKeys.push({ columns: ['customer_id'], refTable: STAR.customer, refColumns: ['customer_id'] })
+    if (has(fact, 'product_id') && out.some((t) => t.name === STAR.product && t.primaryKey.length)) fact.foreignKeys.push({ columns: ['product_id'], refTable: STAR.product, refColumns: ['product_id'] })
+  }
+  return out
+}
