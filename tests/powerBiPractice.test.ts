@@ -15,9 +15,12 @@ import {
   checkNumber,
   dataRows,
   drillFiles,
+  dirtyProductCsv,
   drillStepsHtml,
   drillZip,
+  extraFile,
   fillTotal,
+  EXTRA,
   isDrill,
   numberMessage,
   numberOf,
@@ -56,6 +59,7 @@ beforeAll(async () => {
   await db.instantiate()
   conn = db.connect()
   for (const n of STAR) db.registerFileBuffer(starFile(n), csvs[n].slice())
+  for (const n of EXTRA) db.registerFileBuffer(extraFile(n), new TextEncoder().encode(dirtyProductCsv(csvs)))
   port = {
     query: async (sql) => resultRows(conn.query(sql) as never) as ResultData,
     registerText: async (name, text) => void db.registerFileText(name, text),
@@ -195,14 +199,14 @@ describe('the truth of the tasks, computed over the CSV files', () => {
         if (isDrill(b)) for (const c of b.checks) sqls.push({ id: `${b.id}:${c.id}`, sql: c.sql, traps: (c.traps ?? []).map((t) => t.sql) })
       }
     }
-    expect(sqls.length).toBeGreaterThanOrEqual(12)
+    expect(sqls.length).toBeGreaterThanOrEqual(39)
     for (const { id, sql, traps } of sqls) {
       const v = await q(sql)
       expect(Number.isFinite(v), id).toBe(true)
       expect(traps.length, `${id} has a trap`).toBeGreaterThan(0)
       for (const t of traps) expect(await q(t), `${id}: a trap must differ from the answer`).not.toBe(v)
     }
-  })
+  }, 60_000)
 
   it('the drills\' numbers equal an independent sum over the parsed files', async () => {
     const total = fact.reduce((a, r) => a + (r[4] === '' ? 0 : cents(r)), 0) / 100
@@ -227,6 +231,80 @@ describe('the truth of the tasks, computed over the CSV files', () => {
     expect(await q("SELECT round(sum(revenue), 2) FROM fact_sales WHERE strftime(sale_date, '%Y-%m') = '2025-08'")).toBe(64592.75)
   })
 
+  it('pass 2: the numbers of sections 2 and 5 to 8 equal independent sums over the parsed files', async () => {
+    const prod = rows('dim_product')
+    const pi = (c: string) => prod[0].indexOf(c)
+    const region = new Map(cust.slice(1).map((r) => [r[ci('customer_id')], r[ci('macro_region')]]))
+    const cat = new Map(prod.slice(1).map((r) => [r[pi('product_id')], r[pi('category')]]))
+    const cents2 = (f: (r: string[]) => boolean) => fact.filter((r) => r[4] !== '' && f(r)).reduce((a, r) => a + cents(r), 0)
+    const money = (f: (r: string[]) => boolean) => cents2(f) / 100
+    const check = (drillId: string, checkId: string) => {
+      const c = drills.find((x) => x.d.id === drillId)!.d.checks.find((x) => x.id === checkId)!
+      return q(c.sql)
+    }
+    const inRange = (r: string[], from: string, to: string) => r[0] >= from && r[0] < to
+    const total = money(() => true)
+
+    // section 2: the messy products
+    const dirty = parseCsv(dirtyProductCsv(csvs))
+    const clean = new Set(prod.slice(1).map((r) => r[pi('sku_code')]))
+    const dirtyRows = dirty.slice(1)
+    expect(dirtyRows).toHaveLength(47)
+    expect(await check('cl-drill', 'before')).toBe(dirtyRows.filter((r) => !clean.has(r[1])).length)
+    expect(await check('cl-drill', 'after')).toBe(dirtyRows.filter((r) => !clean.has(r[1].trim().toUpperCase())).length)
+    expect(await check('cl-drill', 'after')).toBe(0)
+    expect(await check('cl-drill', 'before')).toBeGreaterThan(0)
+    // Trim alone is not enough: some SKUs are lower case
+    expect(dirtyRows.filter((r) => !clean.has(r[1].trim())).length).toBeGreaterThan(0)
+    expect(await check('cl-drill', 'cats-before')).toBe(new Set(dirtyRows.map((r) => r[3].split(' / ')[1])).size)
+    expect(await check('cl-drill', 'cats-after')).toBe(new Set(prod.slice(1).map((r) => r[pi('category')])).size)
+    expect(await check('cl-drill', 'cats-before')).toBe((await check('cl-drill', 'cats-after')) + 1)
+    expect(dirty[0]).toEqual(['product_id', 'sku_code', 'product_name', 'brand_category'])
+    // the same file every time; a padded SKU is quoted so Power BI keeps its spaces
+    expect(dirtyProductCsv(csvs)).toBe(dirtyProductCsv(csvs))
+    expect(dirtyProductCsv(csvs).startsWith('\ufeff')).toBe(true)
+    expect(await q('SELECT count(*) FROM dim_customer WHERE chain_name IS NULL')).toBe(cust.slice(1).filter((r) => r[ci('chain_name')] === '').length)
+
+    // section 5: CALCULATE
+    expect(await check('ca-drill', 'plain')).toBe(money((r) => region.get(r[1]) === 'Kansai'))
+    expect(await check('ca-drill', 'kanto')).toBe(money((r) => region.get(r[1]) === 'Kanto'))
+    expect(await check('ca-drill', 'bev')).toBe(money((r) => region.get(r[1]) === 'Kansai' && cat.get(r[2]) === 'Beverages'))
+    expect(await check('ca-drill', 'returns')).toBe(fact.filter((r) => region.get(r[1]) === 'Kansai' && Number(r[3]) < 0).reduce((a, r) => a + Number(r[3]), 0))
+    expect(await check('ca-drill', 'returns')).toBeLessThan(0)
+    expect(await q('SELECT sum(units) FROM fact_sales WHERE units < 0')).toBe(fact.filter((r) => Number(r[3]) < 0).reduce((a, r) => a + Number(r[3]), 0))
+
+    // section 6: dates. The Date table runs 2024-01-01 to 2026-06-30; every sale date is inside it
+    expect(fact.every((r) => r[0] >= '2024-01-01' && r[0] <= '2026-06-30')).toBe(true)
+    expect(await check('dt-drill', 'days')).toBe((Date.UTC(2026, 5, 30) - Date.UTC(2024, 0, 1)) / 86_400_000 + 1)
+    expect(await check('dt-drill', 'ly')).toBe(money((r) => inRange(r, '2025-03-01', '2025-04-01')))
+    expect(await check('dt-drill', 'ytd-jun')).toBe(money((r) => inRange(r, '2026-01-01', '2026-07-01')))
+    expect(await check('dt-drill', 'ytd-jun')).toBe(314906.13)
+    expect(await check('dt-drill', 'ytd-dec')).toBe(money((r) => inRange(r, '2025-01-01', '2026-01-01')))
+    expect(await q("SELECT round(sum(revenue), 2) FROM fact_sales WHERE sale_date >= DATE '2025-01-01' AND sale_date < DATE '2025-07-01'")).toBe(money((r) => inRange(r, '2025-01-01', '2025-07-01')))
+    expect(await q("SELECT round(sum(revenue), 2) FROM fact_sales WHERE sale_date >= DATE '2025-01-01' AND sale_date < DATE '2025-09-01'")).toBe(money((r) => inRange(r, '2025-01-01', '2025-09-01')))
+
+    // section 7: share, rank, top 3
+    const byRegion = new Map<string, number>()
+    for (const r of fact) if (r[4] !== '') byRegion.set(region.get(r[1])!, (byRegion.get(region.get(r[1])!) ?? 0) + cents(r))
+    const ranked = [...byRegion.entries()].sort((a, b) => b[1] - a[1])
+    expect(ranked).toHaveLength(7)
+    expect(new Set(ranked.map((x) => x[1])).size, 'no ties in the ranking').toBe(7)
+    expect(await check('sh-drill', 'share')).toBeCloseTo((100 * byRegion.get('Kyushu')!) / (total * 100), 2)
+    expect(await check('sh-drill', 'rank')).toBe(ranked.findIndex((x) => x[0] === 'Kansai') + 1)
+    expect(await check('sh-drill', 'top3')).toBe(ranked.slice(0, 3).reduce((a, x) => a + x[1], 0) / 100)
+    const bev = (r: string[]) => cat.get(r[2]) === 'Beverages'
+    expect(await check('sh-drill', 'bev-share')).toBeCloseTo((100 * cents2((r) => bev(r) && region.get(r[1]) === 'Kansai')) / cents2(bev), 2)
+    expect(await q("SELECT round(100.0 * sum(f.revenue) FILTER (WHERE c.chain_name = 'Minori') / sum(f.revenue), 2) FROM fact_sales f JOIN dim_customer c ON c.customer_id = f.customer_id")).toBeCloseTo((100 * money((r) => cust.slice(1).some((c) => c[ci('customer_id')] === r[1] && c[ci('chain_name')] === 'Minori'))) / total, 2)
+
+    // section 8: the page
+    expect(await check('ve-drill', 'card')).toBe(money((r) => bev(r) && inRange(r, '2026-01-01', '2026-07-01')))
+    expect(await check('ve-drill', 'kept')).toBe(await check('ve-drill', 'card'))
+    const bevByRegion = new Map<string, number>()
+    for (const r of fact) if (r[4] !== '' && bev(r)) bevByRegion.set(region.get(r[1])!, (bevByRegion.get(region.get(r[1])!) ?? 0) + cents(r))
+    expect(await check('ve-drill', 'bar')).toBe(Math.max(...bevByRegion.values()) / 100)
+    expect(await q("SELECT round(sum(f.revenue), 2) FROM fact_sales f JOIN dim_product p ON p.product_id = f.product_id WHERE p.category = 'Dairy'")).toBe(money((r) => cat.get(r[2]) === 'Dairy'))
+  }, 60_000)
+
   it('the traps of the drills really are the numbers they name', async () => {
     expect(await q('SELECT count(*) FROM (SELECT * FROM fact_sales LIMIT 1000) WHERE revenue IS NULL')).toBe(fact.slice(0, 1000).filter((r) => r[4] === '').length)
     expect(fact.slice(0, 1000).filter((r) => r[4] === '').length).toBeLessThan(fact.filter((r) => r[4] === '').length)
@@ -243,15 +321,17 @@ describe('the truth of the tasks, computed over the CSV files', () => {
 
 describe('the zip of a drill', () => {
   it('has the three CSV files untouched, steps.html, the start notes and the README', () => {
-    expect(drills.length).toBe(3)
+    expect(drills.map((x) => x.s.n)).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
     for (const { s, d } of drills) {
       const number = String(s.n)
       const files = unzipSync(drillZip(d, csvs, number))
-      expect(Object.keys(files).sort()).toEqual(['README.txt', 'data/dim_customer.csv', 'data/dim_product.csv', 'data/fact_sales.csv', 'start/start-from-scratch.txt', 'steps.html'])
+      const extras = (d.extra ?? []).map((n) => `data/${n}.csv`)
+      expect(Object.keys(files).sort()).toEqual(['README.txt', 'data/dim_customer.csv', 'data/dim_product.csv', 'data/fact_sales.csv', ...extras, 'start/start-from-scratch.txt', 'steps.html'].sort())
       for (const n of STAR) expect(Buffer.from(files[`data/${n}.csv`]).equals(Buffer.from(csvs[n])), `${n}.csv is byte for byte`).toBe(true)
       expect([...files['data/fact_sales.csv'].slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf])
       expect(strFromU8(files['README.txt'])).toContain('steps.html')
-      expect(Object.keys(drillFiles(d, csvs, number))).toHaveLength(6)
+      expect(Object.keys(drillFiles(d, csvs, number))).toHaveLength(6 + extras.length)
+      for (const x of extras) expect([...files[x].slice(0, 3)], `${x} has the BOM`).toEqual([0xef, 0xbb, 0xbf])
     }
   })
 
@@ -274,8 +354,17 @@ describe('the zip of a drill', () => {
   })
 
   it('later drills say how to start from scratch in 2 minutes, the first one starts with the files', () => {
-    const [d1, d3, d4] = drills.map((x) => x.d)
+    const [d1, , d3, d4, d5, d6, d7, d8] = drills.map((x) => x.d)
     expect(drillStepsHtml(d1, csvs, '1')).not.toContain('From scratch')
+    for (const [d, n] of [[d5, '5'], [d6, '6'], [d7, '7'], [d8, '8']] as const) {
+      const h = drillStepsHtml(d, csvs, n)
+      expect(h, d.id).toContain('From scratch, about 2 minutes')
+      expect(h).toContain('Text/CSV')
+      expect(h).toContain('fact_sales[customer_id]')
+    }
+    expect(drillStepsHtml(d8, csvs, '8')).toContain('Mark as date table')
+    expect(drillStepsHtml(d8, csvs, '8')).toContain('SAMEPERIODLASTYEAR')
+    expect(drillStepsHtml(d7, csvs, '7')).toContain('ALL(dim_customer[macro_region])')
     const h3 = drillStepsHtml(d3, csvs, '3')
     expect(h3).toContain('From scratch, about 2 minutes')
     expect(h3).toContain('Text/CSV')
@@ -291,7 +380,7 @@ describe('the zip of a drill', () => {
   })
 
   it('the model drill has the star picture and exactly the two links; the measures drill has the v2 lessons', () => {
-    const [, d3, d4] = drills.map((x) => x.d)
+    const [, , d3, d4] = drills.map((x) => x.d)
     const h3 = drillStepsHtml(d3, csvs, '3')
     expect(h3).toMatch(/<svg role="img"/)
     expect((h3.match(/<line /g) ?? []).length).toBe(2)
@@ -307,8 +396,8 @@ describe('the zip of a drill', () => {
 })
 
 describe('the content', () => {
-  it('has sections 1, 3 and 4 complete and 2, 5 to 8 as coming next', () => {
-    expect(SECTIONS.map((s) => [s.n, !!s.soon])).toEqual([[1, false], [2, true], [3, false], [4, false], [5, true], [6, true], [7, true], [8, true]])
+  it('has all eight sections complete, none left as coming next', () => {
+    expect(SECTIONS.map((s) => [s.n, !!s.soon])).toEqual([1, 2, 3, 4, 5, 6, 7, 8].map((n) => [n, false]))
     expect(new Set(SECTIONS.map((s) => s.id)).size).toBe(SECTIONS.length)
     for (const s of SECTIONS.filter((x) => !x.soon)) {
       const a = tasksA(s)
@@ -317,7 +406,7 @@ describe('the content', () => {
       expect(s.blocks.filter(isDrill)).toHaveLength(1)
       expect(s.blocks[s.blocks.length - 1].kind, 'the drill is last').toBe('drill')
     }
-    expect(SECTION_TASKS.map((s) => s.id)).toEqual(['get-data', 'model', 'measures'])
+    expect(SECTION_TASKS.map((s) => s.id)).toEqual(['get-data', 'clean', 'model', 'measures', 'calculate', 'dates', 'share', 'visuals'])
   })
 
   it('has unique ids, one right option that exists, a reason for every wrong one, hints, and a trap for every number', () => {

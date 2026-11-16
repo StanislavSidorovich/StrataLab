@@ -1,7 +1,7 @@
 // The engine side of the Power BI practice page: the three CSV files of the Kaiyo star fetched from the site and registered
 // with DuckDB, and the truth of a task computed over them (src/core/powerBiPractice.ts `withStar`). Nothing is created in
 // the learner's database: the files are read by `read_csv` inside the query.
-import { STAR, numberOf, starFile, starUrl, withStar, type StarName } from '../core/powerBiPractice'
+import { EXTRA, STAR, extraFile, extraText, numberOf, starFile, starUrl, withStar, type StarName } from '../core/powerBiPractice'
 import { dropFile, query, registerBuffer } from './engine'
 import { resultRows } from './export'
 
@@ -33,6 +33,10 @@ async function register(): Promise<void> {
     await dropFile(starFile(n)).catch(() => {})
     // a copy: the engine takes the buffer over, and the zip still needs these bytes
     await registerBuffer(starFile(n), files[n].slice())
+  }
+  for (const n of EXTRA) {
+    await dropFile(extraFile(n)).catch(() => {})
+    await registerBuffer(extraFile(n), new TextEncoder().encode(extraText(n, files)))
   }
   registered = true
 }

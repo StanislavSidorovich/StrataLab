@@ -16,14 +16,22 @@ export const starUrl = (name: StarName) => `datasets/powerbi/${name}.csv`
 /** The name a file is registered under in the engine. */
 export const starFile = (name: StarName) => `pbi_${name}.csv`
 
+/** Files made from the star for one drill (section 2: a messy copy of the products to clean in Power Query). */
+export const EXTRA = ['dim_product_dirty'] as const
+export type ExtraName = (typeof EXTRA)[number]
+export const extraFile = (name: ExtraName) => `pbi_${name}.csv`
+
 /**
- * A query over the three files as if they were tables `fact_sales`, `dim_customer` and `dim_product`: CTEs over
- * `read_csv`, so nothing is created in the learner's database. The query itself starts with SELECT.
+ * A query over the three files as if they were tables `fact_sales`, `dim_customer` and `dim_product` (and, when the
+ * query names it, `dim_product_dirty`): CTEs over `read_csv`, so nothing is created in the learner's database. The
+ * query itself starts with SELECT. The dirty copy is read as text only: that is how Power Query meets it.
  */
 export function withStar(sql: string): string {
   const body = sql.trim().replace(/;$/, '')
   if (!/^select\b/i.test(body)) throw new Error('A truth query starts with SELECT.')
-  return `WITH ${STAR.map((n) => `${n} AS (SELECT * FROM read_csv('${starFile(n)}', header = true))`).join(', ')} ${body}`
+  const ctes = STAR.map((n) => `${n} AS (SELECT * FROM read_csv('${starFile(n)}', header = true))`)
+  for (const n of EXTRA) if (body.includes(n)) ctes.push(`${n} AS (SELECT * FROM read_csv('${extraFile(n)}', header = true, all_varchar = true))`)
+  return `WITH ${ctes.join(', ')} ${body}`
 }
 
 /** The first cell of the first row of a result as a number: the truth of a task. */
@@ -186,7 +194,7 @@ export function numberMessage(v: NumberVerdict, where?: string): { ok: boolean; 
     case 'sign':
       return { ok: false, title: 'A negative number.', detail: 'Returns are units < 0; did you filter them? The answer is not negative.' }
     case 'wrong':
-      return { ok: false, title: 'Not the number I expected.', detail: where ? `Look again at ${where}. A missing link or a wrong filter is the usual cause.` : 'Look at the filter and the links again.' }
+      return { ok: false, title: 'Not the number I expected.', detail: where ? `Look again (${where}). A missing link or a wrong filter is the usual cause.` : 'Look at the filter and the links again.' }
   }
 }
 
@@ -258,6 +266,8 @@ export interface PbiDrill extends PbiHints {
   question: string
   /** the archive's name */
   zip: string
+  /** more files for `data/`, made from the star (see EXTRA) */
+  extra?: ExtraName[]
   /** the first line on the steps page */
   intro: string
   /** "start from scratch in 2 minutes": list items (HTML), the state the drill begins from */
@@ -380,6 +390,33 @@ export function dataRows(bytes: Uint8Array): number {
   return Math.max(0, n - 1)
 }
 
+// ---------------------------------------------------------------- a messy copy of the products (section 2)
+
+const BOM = '﻿'
+const field = (v: string) => (/[",\r\n]/.test(v) || v !== v.trim() ? `"${v.replace(/"/g, '""')}"` : v)
+
+/**
+ * `dim_product` made messy by a fixed rule, so the same file comes out every time and the truth of a number can be asked
+ * of it: every 4th SKU has a space on both sides, every 5th (from the 2nd) is in lower case, the brand and the category
+ * share one column "Brand / Category", and the category Beverages is written Beverage on every 2nd product.
+ */
+export function dirtyProductCsv(csvs: Record<StarName, Uint8Array>): string {
+  const [head, ...rows] = parseCsv(new TextDecoder('utf-8').decode(csvs.dim_product))
+  const at = (c: string) => head.indexOf(c)
+  const out = rows
+    .filter((r) => r.length === head.length)
+    .map((r, i) => {
+      let sku = r[at('sku_code')]
+      if (i % 5 === 1) sku = sku.toLowerCase()
+      if (i % 4 === 0) sku = ` ${sku} `
+      const category = r[at('category')] === 'Beverages' && i % 2 === 0 ? 'Beverage' : r[at('category')]
+      return [r[at('product_id')], sku, r[at('product_name')], `${r[at('brand')]} / ${category}`]
+    })
+  return BOM + [['product_id', 'sku_code', 'product_name', 'brand_category'], ...out].map((r) => r.map(field).join(',')).join('\n') + '\n'
+}
+
+export const extraText = (_name: ExtraName, csvs: Record<StarName, Uint8Array>): string => dirtyProductCsv(csvs)
+
 // ---------------------------------------------------------------- the steps page of a drill
 
 /** The page of steps: same look as the bridge's (src/core/powerBi.ts), English, no scripts, one file. Numbers of the answers are not in it. */
@@ -433,7 +470,7 @@ ${checks}
 }
 
 export const drillReadme = (d: PbiDrill, number: string) => `Kaiyo Trading: Power BI drill ${number}, ${d.title}
-data/            the Kaiyo star as CSV (UTF-8 with BOM, comma, ISO dates): fact_sales, dim_customer, dim_product
+data/            the Kaiyo star as CSV (UTF-8 with BOM, comma, ISO dates): fact_sales, dim_customer, dim_product${(d.extra ?? []).map((n) => `, ${n}`).join('')}
 steps.html       open it in a browser: the steps and what to read off your report
 start/           how to begin from scratch in 2 minutes if you have no file from the last drill
 Power BI Desktop is free (Windows). Start with steps.html. Type the numbers back into Lab: lab.quaera.app/#practice=powerbi
@@ -450,6 +487,7 @@ export const drillStartText = (d: PbiDrill) =>
 export function drillFiles(d: PbiDrill, csvs: Record<StarName, Uint8Array>, number: string): Record<string, Uint8Array> {
   const files: Record<string, Uint8Array> = {}
   for (const n of STAR) files[`data/${n}.csv`] = csvs[n]
+  for (const n of d.extra ?? []) files[`data/${n}.csv`] = strToU8(extraText(n, csvs))
   files['steps.html'] = strToU8(drillStepsHtml(d, csvs, number))
   files['start/start-from-scratch.txt'] = strToU8(drillStartText(d))
   files['README.txt'] = strToU8(drillReadme(d, number))

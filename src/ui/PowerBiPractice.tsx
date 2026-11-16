@@ -313,7 +313,11 @@ function DrillCard({ section, drill, onNext }: { section: PbiSection; drill: Pbi
   const done = drill.checks.every((c) => said[c.id]?.ok)
   const next = done ? nextTask(SECTION_TASKS, useProgress.getState()) : null
 
+  // a second click while the first zip is being made (or just after) does not make a second file
+  const zipping = useRef(false)
   const zip = async () => {
+    if (zipping.current) return
+    zipping.current = true
     try {
       const bytes = await starBytes()
       const files = drillFiles(drill, bytes, number)
@@ -321,6 +325,8 @@ function DrillCard({ section, drill, onNext }: { section: PbiSection; drill: Pbi
       setNote({ ok: true, text: `${drill.zip}: ${Object.keys(files).length} files. Open steps.html first.` })
     } catch (e) {
       setNote({ ok: false, text: String(e instanceof Error ? e.message : e) })
+    } finally {
+      setTimeout(() => (zipping.current = false), 1500)
     }
   }
   const toggleSteps = async () => {
