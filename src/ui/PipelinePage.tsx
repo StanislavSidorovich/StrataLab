@@ -812,9 +812,10 @@ const INTRO_KEY = 'stratalab.pipeline.intro-open'
 function Intro() {
   const [open, setOpen] = useState(() => {
     try {
-      return localStorage.getItem(INTRO_KEY) !== 'closed'
+      // folded until the learner opens it (and then it stays as they left it): the three lanes belong in the first screen
+      return localStorage.getItem(INTRO_KEY) === 'open'
     } catch {
-      return true
+      return false
     }
   })
   const toggle = () => {
