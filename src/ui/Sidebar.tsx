@@ -8,7 +8,7 @@ import { CheckSquare, CornerDownLeft, ChevronDown, ChevronRight, ClipboardPaste,
 import { RESERVED_IDS, addTab, copySchemaToPostgres, newPythonNotebookOn, downloadBackup, dropPgObject, dependentsOf, exportDatasetCsv, dropDataset, dropObjects, enqueueFiles, hasDemoTables, hideDemo, loadDemo, newDataset, openAndRun, openAsModel, openCatalog, openDataset, openGenerate, openGuide, openMove, openPractice, openTables, ownTables, pasteTableFromClipboard, refreshTree, renameDataset, renameObject, restoreBackup, useLab } from './store'
 import { isOwnSchema } from '../core/ownDatasets'
 import { qualifiedName } from '../core/sql'
-import { treeMatch, type TreeMatch } from '../core/tree'
+import { isServiceTable, treeMatch, type TreeMatch } from '../core/tree'
 import { isDatabaseFile } from '../core/backup'
 import { Menu, type MenuItem } from './Menu'
 import { canPickFolder, exportTable } from '../db/export'
@@ -121,7 +121,8 @@ export function Sidebar() {
   const shown = matching(tables, search)
   const shownDemo = matching(demoTables, search)
   // While searching, only folders with a match; otherwise every one, empty ones too (yours, waiting for tables).
-  const shownSchemas = schemas.map((s) => [s, matching(all.filter((t) => t.schema === s), search)] as const).filter(([, list]) => !searching || list.length > 0)
+  const inTree = all.filter((t) => !isServiceTable(t.schema, t.name))
+  const shownSchemas = schemas.map((s) => [s, matching(inTree.filter((t) => t.schema === s), search)] as const).filter(([, list]) => !searching || list.length > 0)
 
   return (
     <aside className="h-full flex flex-col" style={{ background: 'var(--panel)', borderRight: '1px solid var(--line)' }}>
@@ -247,7 +248,7 @@ export function Sidebar() {
           </p>
         )}
         {shownSchemas.map(([s, list]) => (
-          <SchemaNode key={s} schema={s} tables={all.filter((t) => t.schema === s)} shown={searching ? list : undefined} />
+          <SchemaNode key={s} schema={s} tables={inTree.filter((t) => t.schema === s)} shown={searching ? list : undefined} />
         ))}
         <PostgresSection search={search} />
       </div>

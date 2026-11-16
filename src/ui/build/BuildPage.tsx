@@ -2,7 +2,7 @@
 // the Dashboard and the Answer are Б6. The rules are in src/core/build.ts. Under 768 px the whole
 // page is the "Open on a laptop" screen, as on the pipeline page.
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowRight, Check, Copy, Hammer, Laptop, Lock, RotateCcw, Share2, Wand2, X } from 'lucide-react'
+import { ArrowRight, Check, Copy, Hammer, Laptop, Lock, RotateCcw, Share2, Wand2 } from 'lucide-react'
 import { BUILD_ID, BUILD_KEY, MORE_STEP, REFRESH_STEP, isOptional, STEP_IDS, STEP_LABEL, STRIP_IDS, type StepId, demoFromHash, emptyBuild, goNext, hashWithDemo, isUnlocked, markDone, modelDone, nextStep, openStep, saveBuild, statusOf } from '../../core/build'
 import { canFillBefore, fillBefore, fillBeforeTouchesTables, fillUnit, touchesTables, type FillUnit } from '../../core/buildFill'
 import { DEMO_KEY, isEmptyRun, loadSaved, loadSlot, restoreNeedsConfirm, restoreSaved, startOver, writeSaved, type Saved } from '../../core/buildProgress'
@@ -32,6 +32,7 @@ import './hintMark.css'
 import { DemoContext } from './DemoContext'
 import { SliceContext } from './SliceContext'
 import { ProgressMenu } from './ProgressMenu'
+import { ExitButtons } from './BackToQuaera'
 
 /** What a step waits for before Next step opens, shown next to the locked button */
 const LOCK_WHY: Record<StepId, string> = {
@@ -309,9 +310,7 @@ function Shell() {
             onExitDemo={() => goDemo(false)}
           />
         )}
-        <button className="btn btn-ghost" onClick={() => openBuild(null)} aria-label="Close the build" title="Back to the workbench">
-          <X size={16} />
-        </button>
+        <ExitButtons onWorkbench={() => openBuild(null)} testid="build-exit" />
       </header>
       {demo && wide && (
         <div className="demo-banner" role="status" data-testid="demo-banner">
@@ -393,7 +392,7 @@ function Shell() {
             </section>
           </main>
           <footer className="build-foot shrink-0">
-            <button className="btn btn-ghost" onClick={() => openBuild(null)}>Back to Lab</button>
+            <button className="btn btn-ghost" onClick={() => openBuild(null)} data-testid="build-foot-workbench">SQL Workbench</button>
             {open === 'clean' && !next && stillOpen && (
               <span className="build-muted bf-locked" data-testid="clean-locked">
                 Next step is locked:{' '}

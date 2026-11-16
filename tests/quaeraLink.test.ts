@@ -70,6 +70,31 @@ describe('followQuaeraLink', () => {
   })
 })
 
+describe('a plain address (Back to Quaera)', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+  const plain = 'https://quaera.app/?roles=map'
+  it('with the trainer as opener: focuses its tab and opens nothing, however often it is clicked', () => {
+    const calls: [string, string][] = []
+    const posted: unknown[] = []
+    let focused = 0
+    const opener = { postMessage(m: unknown) { posted.push(m) }, focus() { focused++ } }
+    const e = env({ calls, quaeraOpener: () => opener })
+    e.listen = () => () => {}
+    expect(followQuaeraLink(click(), plain, e)).toBe(true)
+    expect(followQuaeraLink(click(), plain, e)).toBe(true)
+    vi.advanceTimersByTime(ACK_WAIT_MS * 3)
+    expect(focused).toBe(2)
+    expect(calls).toEqual([])
+  })
+  it('without an opener: the one named window, so a double click reuses it', () => {
+    const calls: [string, string][] = []
+    followQuaeraLink(click(), plain, env({ calls }))
+    followQuaeraLink(click(), plain, env({ calls }))
+    expect(calls).toEqual([[plain, QUAERA_WINDOW], [plain, QUAERA_WINDOW]])
+  })
+})
+
 describe('waiting for quaera:done', () => {
   beforeEach(() => vi.useFakeTimers())
   afterEach(() => vi.useRealTimers())

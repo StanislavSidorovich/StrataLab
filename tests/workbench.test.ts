@@ -1,8 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { treeMatch } from '../src/core/tree'
+import { isServiceTable, treeMatch } from '../src/core/tree'
 import { CLOSED_TABS_KEPT, copyTitle, rememberClosed, tabsToClose } from '../src/core/tabs'
 import { backupFileName, fillOrder, isDatabaseFile, wipeStatements } from '../src/core/backup'
 import { decimalJson, rowsToJson } from '../src/core/jsonWrite'
+
+describe('Tables the tree leaves out', () => {
+  it('hides the working tables of the build schema, not the ones a learner reads', () => {
+    for (const n of ['src_customer', 'ref_sales', 'file_customers']) expect(isServiceTable('build_kaiyo', n)).toBe(true)
+    for (const n of ['bronze_sales', 'clean_sales', 'gold_fact_sales']) expect(isServiceTable('build_kaiyo', n)).toBe(false)
+  })
+  it('leaves every other schema alone', () => {
+    expect(isServiceTable('main', 'ref_x')).toBe(false)
+    expect(isServiceTable('chinook', 'file_x')).toBe(false)
+  })
+})
 
 describe('Object tree search', () => {
   const cols = ['CustomerId', 'FirstName', 'Email']

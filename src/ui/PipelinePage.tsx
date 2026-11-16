@@ -43,6 +43,7 @@ import { openPipeline, refreshCatalog, useLab } from './store'
 import { PipelineTutorial } from './PipelineTutorial'
 import { TUT_STORAGE } from '../data/pipelines/storesByRegion'
 import { followQuaeraLink } from '../core/quaeraLink'
+import { ExitButtons } from './build/BackToQuaera'
 
 const KEY = `stratalab.pipeline.${PIPELINE_ID}`
 const URL_HERE = () => `${location.origin}${location.pathname}#pipeline=${PIPELINE_ID}`
@@ -127,9 +128,7 @@ function Shell() {
           <div className="font-semibold">Data pipeline on Kaiyo Trading</div>
           <div style={{ color: 'var(--muted)', fontSize: 12 }}>From the distributor files to one answer, through three roles</div>
         </div>
-        <button className="btn btn-ghost" onClick={() => openPipeline(null)} aria-label="Close the pipeline" title="Back to the workbench">
-          <X size={16} />
-        </button>
+        <ExitButtons onWorkbench={() => openPipeline(null)} testid="pipeline-exit" />
       </header>
       {wide ? intro ? <PipelineTutorial onDone={() => (markIntro('done'), setIntro(false))} onSkip={() => (markIntro('skipped'), setIntro(false))} /> : <Board onWarmUp={() => setIntro(true)} /> : <PhoneNotice />}
     </div>

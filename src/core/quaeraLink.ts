@@ -102,7 +102,10 @@ export function followQuaeraLink(e: { preventDefault: () => void; ctrlKey?: bool
           /* the tab is updated even where focus is refused */
         }
         e.preventDefault()
-        awaitDone(env, origin, doneKey(url), () => onAck?.(true), () => {
+        const key = doneKey(url)
+        // an address that counts nothing (plain "Back to Quaera") gets no reply: the focused tab is the whole answer
+        if (!key) return true
+        awaitDone(env, origin, key, () => onAck?.(true), () => {
           try {
             env.open(url, QUAERA_WINDOW)
           } catch {
