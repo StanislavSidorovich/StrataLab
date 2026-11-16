@@ -27,6 +27,7 @@ import { completionSchema, darkBackground, lightTheme } from './SqlEditor'
 import { OutputView } from './PythonOutput'
 import { addTab, openAndRun, openPracticeBook, restartPython, runPracticePython, runPracticeQuery, startPython, useLab } from './store'
 import { followQuaeraLink } from '../core/quaeraLink'
+import './practiceNote.css'
 import { buildIndex, exampleAnchor, noteAnchor, type PracticeIndex } from '../core/practiceIndex'
 import { dayOf, pickWarmUp } from '../core/practiceRecall'
 import { Hint, IndexContext, RecallSearch } from './PracticeRecall'
@@ -432,11 +433,11 @@ function RunResult({ run }: { run: Run }) {
 /** The page is wide for code and result tables; running text keeps a line length that reads well. */
 const READABLE = 'max-w-[46rem]'
 
-function NoteBlock({ block, afterWork, anchor }: { block: PracticeNote; afterWork: boolean; anchor: string }) {
+function NoteBlock({ block, afterWork, anchor, children }: { block: PracticeNote; afterWork: boolean; anchor: string; children?: ReactNode }) {
   return (
-    <div id={anchor} className={afterWork ? 'space-y-2 pt-5 mt-2' : 'space-y-2'} style={{ scrollMarginTop: 72, ...(afterWork ? { borderTop: '1px solid var(--line)' } : {}) }}>
-      <div className="font-semibold" style={block.topic ? { color: 'var(--accent)' } : { color: 'var(--muted)', fontWeight: 500 }}>
-        {block.topic ? `New: ${block.topic}` : 'Reminder'}
+    <div id={anchor} data-testid={block.topic ? 'note-new' : undefined} className={`${block.topic ? 'pn-new space-y-2' : afterWork ? 'space-y-2 pt-5 mt-2' : 'space-y-2'}`} style={{ scrollMarginTop: 72, ...(afterWork && !block.topic ? { borderTop: '1px solid var(--line)' } : {}) }}>
+      <div className="font-semibold" style={block.topic ? undefined : { color: 'var(--muted)', fontWeight: 500 }}>
+        {block.topic ? (<><span className="pn-label">New:</span> <span className="pn-topic">{block.topic}</span></>) : 'Reminder'}
       </div>
       <p className={`m-0 ${READABLE}`} style={{ fontSize: 15, lineHeight: 1.55 }}>
         <Prose text={block.text} />
@@ -454,6 +455,7 @@ function NoteBlock({ block, afterWork, anchor }: { block: PracticeNote; afterWor
           </span>
         </p>
       )}
+      {children}
     </div>
   )
 }
@@ -859,7 +861,21 @@ function SectionView({ section, onNext }: { section: PracticeSection; onNext: (i
         )}
       </div>
       {open && tasks.length > 0 && section.n >= WARM_FROM && <WarmUp section={section} onNext={onNext} />}
-      {open && section.blocks.map((b, i) => <Block key={i} section={section} block={b} index={i} afterWork={i > 0 && section.blocks[i - 1].kind === 'task'} onNext={onNext} />)}
+      {open &&
+        section.blocks.map((b, i) => {
+          const prev = section.blocks[i - 1]
+          // the example of a "New:" note is the walk-through of that note: it sits inside the callout, not after it
+          if (b.kind === 'example' && prev?.kind === 'note' && prev.topic) return null
+          const after = section.blocks[i + 1]
+          if (b.kind === 'note' && b.topic && after?.kind === 'example') {
+            return (
+              <NoteBlock key={i} block={b} afterWork={i > 0 && prev.kind === 'task'} anchor={noteAnchor(section.id, i)}>
+                <ExampleBlock block={after} />
+              </NoteBlock>
+            )
+          }
+          return <Block key={i} section={section} block={b} index={i} afterWork={i > 0 && prev.kind === 'task'} onNext={onNext} />
+        })}
     </section>
   )
 }

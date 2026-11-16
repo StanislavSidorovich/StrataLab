@@ -15,6 +15,7 @@ import { SECTIONS, SECTION_TASKS } from '../data/powerBiPractice'
 import { download } from '../db/export'
 import { starBytes, truth } from '../db/powerBiPracticeRun'
 import { openPracticeBook, useLab } from './store'
+import './practiceNote.css'
 
 const READABLE = 'max-w-[46rem]'
 const KEY = 'stratalab.powerbi-practice.v1'
@@ -433,9 +434,9 @@ function DrillCard({ section, drill, onNext }: { section: PbiSection; drill: Pbi
 function BlockView({ section, block, onNext }: { section: PbiSection; block: PbiBlock; onNext: (id: string) => void }) {
   if (block.kind === 'note') {
     return (
-      <div className="space-y-2">
-        <div className="font-semibold" style={block.topic ? { color: 'var(--accent)' } : { color: 'var(--muted)', fontWeight: 500 }}>
-          {block.topic ? `New: ${block.topic}` : 'Reminder'}
+      <div className={block.topic ? 'pn-new space-y-2' : 'space-y-2'}>
+        <div className="font-semibold" style={block.topic ? undefined : { color: 'var(--muted)', fontWeight: 500 }}>
+          {block.topic ? (<><span className="pn-label">New:</span> <span className="pn-topic">{block.topic}</span></>) : 'Reminder'}
         </div>
         <p className={`m-0 ${READABLE}`} style={{ fontSize: 15, lineHeight: 1.55 }}>
           <Prose text={block.text} />
