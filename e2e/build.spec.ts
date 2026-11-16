@@ -191,6 +191,15 @@ test('build it by hand: Connect to Answer', async ({ page, browserName }) => {
   await tile('line', "date_trunc('month', sale_date)", 'Revenue by month')
   await tile('chains', 'customer_id', 'Revenue by chain, January to June 2026')
   await expect(dash.getByTestId('dashboard-done')).toBeVisible()
+  // passed tiles keep their SQL under "View SQL", the number and the line stay in view
+  await expect(dash.getByTestId('tile-kpi-fold')).not.toHaveAttribute('open', '')
+  await expect(dash.getByTestId('tile-line-chart')).toBeVisible()
+  // a chain with no sales: the line says so instead of drawing an empty frame (a 0 to 1 scale), and the active slicer is named
+  await dash.getByTestId('slicer-chain-Bazario').click()
+  await expect(dash.getByTestId('slicer-active')).toContainText('Chain = Bazario')
+  await expect(dash.getByTestId('tile-line-empty')).toBeVisible()
+  await dash.getByTestId('slicer-clear').click()
+  await expect(dash.getByTestId('tile-line-chart')).toBeVisible()
 
   // ---- Answer
   await step('Answer').click()

@@ -38,12 +38,12 @@ export function SlicerBar({ ready }: { ready: boolean }) {
       {row('brand', 'Brand', values.brands)}
       <div className="sl-line" data-testid="slicer-line">
         {sliceOn(filter) ? (
-          <>
-            <span>Showing: {line}</span>
-            <button className="sl-clear" onClick={() => setFilter({ chain: null, brand: null })} data-testid="slicer-clear">
-              Clear
+          <span className="sl-active" data-testid="slicer-active">
+            Filtered by: <b>{line}</b>
+            <button className="sl-active-x" onClick={() => setFilter({ chain: null, brand: null })} aria-label="Clear the slicers" title="Clear the slicers" data-testid="slicer-clear">
+              ×
             </button>
-          </>
+          </span>
         ) : (
           <span className="build-muted">No slicer on: every tile shows all the sales.</span>
         )}

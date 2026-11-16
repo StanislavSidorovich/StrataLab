@@ -120,6 +120,7 @@ export function DashboardScreen({ work, setWork, ready }: Props) {
               return v == null ? '–' : money(v as string)
             })()}
           </div>
+          {on && sliced.kpi && sliced.kpi.rows[0]?.[0] == null && <p className="build-muted bd-empty" data-testid="tile-kpi-empty">No sales match the slicers.</p>}
           {work.peek && !on && (
             <div className="bd-peek" data-testid="tile-kpi-peek">
               Your Quick look showed {money(work.peek.kpi)}. Cleaning took out the sales sent twice and the stores counted twice.
@@ -129,9 +130,14 @@ export function DashboardScreen({ work, setWork, ready }: Props) {
       )}
       {id === 'kpi' && runs.kpi?.data && !runs.kpi.ok && <BuildTable data={runs.kpi.data} caption="KPI tile result" />}
       {id === 'line' && lineTable && (
-        <div className="bd-chart" data-testid="tile-line-chart">
-          <ChartView table={on && sliced.line ? sliced.line : lineTable} tabId="build-line" fileName="kaiyo-revenue-by-month" />
-        </div>
+        on && sliced.line && sliced.line.numRows === 0 ? (
+          // an empty slice (a chain with no sales) drawn as a chart is a blank frame with a meaningless 0 to 1 scale: say it in words
+          <p className="build-muted bd-empty" data-testid="tile-line-empty">No sales match the slicers, so there is no line to draw. Clear a slicer or pick another chain or brand.</p>
+        ) : (
+          <div className="bd-chart" data-testid="tile-line-chart">
+            <ChartView table={on && sliced.line ? sliced.line : lineTable} tabId="build-line" fileName="kaiyo-revenue-by-month" />
+          </div>
+        )
       )}
       {id === 'chains' && runs.chains?.data && runs.chains.ok && (
         <>
@@ -181,21 +187,10 @@ function Tile({ card, className, blank, onBlank, passed, result, busy, ready, on
 }) {
   const [hints, setHints] = useState(0)
   const [before, after] = TILE_SQL[card.id].split('____')
-  return (
-    <section className={`bd-tile ${className}${passed ? ' is-passed' : ''}`} data-testid={`tile-${card.id}`}>
-      <div className="bd-tile-head">
-        <div className="bd-tile-title">{card.title}</div>
-        {filtered && (
-          <span className="sl-tag" title="A slicer is on: this is not the number the Answer step checks" data-testid="tile-filtered">
-            Filtered
-          </span>
-        )}
-        {passed && (
-          <span className="build-ok">
-            <Check size={14} /> Passed
-          </span>
-        )}
-      </div>
+  /** a passed tile whose SQL was changed and failed shows its SQL again */
+  const failed = !!result && !result.ok
+  const workbench = (
+    <>
       <p style={{ margin: 0 }}>{card.prompt}</p>
       <pre className="pl-code" data-testid={`tile-${card.id}-sql`}>
         {before}
@@ -230,12 +225,42 @@ function Tile({ card, className, blank, onBlank, passed, result, busy, ready, on
           ))}
         </ul>
       )}
+    </>
+  )
+  return (
+    <section className={`bd-tile ${className}${passed ? ' is-passed' : ''}`} data-testid={`tile-${card.id}`}>
+      <div className="bd-tile-head">
+        <div className="bd-tile-title">{card.title}</div>
+        {filtered && (
+          <span className="sl-tag" title="A slicer is on: this is not the number the Answer step checks" data-testid="tile-filtered">
+            Filtered
+          </span>
+        )}
+        {passed && (
+          <span className="build-ok">
+            <Check size={14} /> Passed
+          </span>
+        )}
+      </div>
       {result && !result.ok && (
         <div className="build-error" role="alert" data-testid={`tile-line-${card.id}`}>
           {result.line}
         </div>
       )}
-      {children}
+      {passed ? (
+        <>
+          {children}
+          <details key={failed ? 'failed' : 'passed'} className="bd-fold" open={failed} data-testid={`tile-${card.id}-fold`}>
+            <summary>View SQL ▾</summary>
+            {workbench}
+          </details>
+        </>
+      ) : (
+        <>
+          {workbench}
+          {children}
+        </>
+      )}
       {slicerSql && (
         <details className="sl-sql" open data-testid={`tile-slicer-sql-${card.id}`}>
           <summary>SQL it runs with the slicers</summary>
