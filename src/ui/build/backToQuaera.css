@@ -1,3 +1,4 @@
 .exit-buttons { display: inline-flex; align-items: center; gap: 4px; flex: none; }
 .exit-buttons .btn { white-space: nowrap; }
-@media (max-width: 767px) { .exit-buttons .btn { padding-inline: 6px; } }
+/* a phone: icons only, the title of the page keeps its room */
+@media (max-width: 767px) { .exit-buttons .exit-text { display: none; } }

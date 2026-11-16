@@ -11,11 +11,11 @@ export const BACK_URL = 'https://quaera.app/?roles=map'
 export function ExitButtons({ onWorkbench, testid }: { onWorkbench: () => void; testid: string }) {
   return (
     <span className="exit-buttons">
-      <a className="btn btn-ghost" href={BACK_URL} target="_blank" rel="noopener" onClick={(e) => followQuaeraLink(e, BACK_URL)} data-testid={`${testid}-back`}>
-        <ArrowLeft size={14} /> Back to Quaera
+      <a className="btn btn-ghost" href={BACK_URL} target="_blank" rel="noopener" onClick={(e) => followQuaeraLink(e, BACK_URL)} aria-label="Back to Quaera" data-testid={`${testid}-back`}>
+        <ArrowLeft size={14} /> <span className="exit-text">Back to Quaera</span>
       </a>
-      <button className="btn btn-ghost" onClick={onWorkbench} title="Leave this page for the SQL workbench" data-testid={`${testid}-workbench`}>
-        <Database size={14} /> SQL Workbench
+      <button className="btn btn-ghost" onClick={onWorkbench} aria-label="SQL Workbench" title="Leave this page for the SQL workbench" data-testid={`${testid}-workbench`}>
+        <Database size={14} /> <span className="exit-text">SQL Workbench</span>
       </button>
     </span>
   )
