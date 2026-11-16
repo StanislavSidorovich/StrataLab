@@ -15,6 +15,7 @@ import { addTab } from '../store'
 import { FoldedSql, fmtN } from './BuildTable'
 import { CleanRibbon } from './CleanRibbon'
 import { ProfileStrip } from './ProfileStrip'
+import './cleanWatch.css'
 import { PaneHandle, usePaneWidth } from './PaneResize'
 import './cleanPolish.css'
 import './errors.css'
@@ -199,7 +200,11 @@ export function StepsPanel({ source, work, ready, rev, onChange, onSource, focus
                 </div>
               )}
               {centre ? (
-                <div className="cc-watch">{centre}</div>
+                <>
+                  <div className="cc-watch">{centre}</div>
+                  {/* the table is already loaded: its first rows and the quality strips are there from the start, under the watch bar */}
+                  <Grid mark={null} data={data} types={types} mask={null} profile={profile} source={source} selected={null} onSelect={() => {}} caption={`${sourceById(source).bronze}, as loaded`} />
+                </>
               ) : (
                 <>
                   <pre className="cc-sql pl-code" data-testid="clean-step-sql" aria-label={`SQL of this step`}>
