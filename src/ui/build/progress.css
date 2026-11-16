@@ -13,4 +13,7 @@
 .build-chip-wrap .build-chip { flex: 1 1 0; }
 .demo-fill-to { flex: none; display: inline-flex; align-items: center; gap: 3px; padding: 0 6px; border: 1px dashed var(--accent); border-radius: 8px; background: var(--bg); color: var(--accent); font: inherit; font-size: 11px; cursor: pointer; }
 .demo-fill-to:disabled { opacity: 0.5; cursor: not-allowed; }
-@media (max-width: 1100px) { .demo-fill-to span { display: none; } }
+/* the button is an icon (its title says what it does) so the step names keep their room; a long name wraps instead of being cut */
+.demo-fill-to span { display: none; }
+.demo-fill-to { padding: 0 5px; }
+.build-chip-wrap .build-chip-label { white-space: normal; text-overflow: clip; line-height: 1.15; overflow-wrap: anywhere; }
