@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { compareResults, describeVerdict, type ResultData } from '../src/core/check'
+import { compareResults, diffRows, showCell, describeVerdict, type ResultData } from '../src/core/check'
 import { EXAMPLES, TASKS, hashWithoutTask, taskFromHash, taskStarter } from '../src/data/practice'
 
 const expected: ResultData = {
@@ -79,5 +79,22 @@ describe('Practice: tasks', () => {
     const start = taskStarter(TASKS[0])
     expect(start.startsWith('-- Task 1 · Basics: one table\n-- How many customers')).toBe(true)
     expect(start.split('\n').every((l) => l === '' || l.startsWith('-- '))).toBe(true)
+  })
+})
+
+
+describe('diffRows and showCell', () => {
+  const exp = { header: ['a', 'b'], rows: [[1, 'x'], [2, 'y']] }
+  it('marks rows with no partner on the other side', () => {
+    const got = { header: ['a', 'b'], rows: [[2, 'y'], [3, 'z']] }
+    expect(diffRows(got, exp)).toEqual({ got: [false, true], expected: [true, false] })
+  })
+  it('marks nothing when the column counts differ', () => {
+    expect(diffRows({ header: ['a'], rows: [[1]] }, exp)).toEqual({ got: [false], expected: [false, false] })
+  })
+  it('spells NULL and trims float noise', () => {
+    expect(showCell(null)).toBe('NULL')
+    expect(showCell(0.1 + 0.2)).toBe('0.3')
+    expect(showCell('12,50')).toBe('12,50')
   })
 })

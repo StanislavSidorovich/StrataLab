@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ArrowDown, ArrowRight, ArrowUp, Check, CheckCircle2, ChevronDown, ChevronRight, Download, Eye, GraduationCap, Lightbulb, Loader2, Package, TriangleAlert, X, XCircle } from 'lucide-react'
 import { create } from 'zustand'
 import './powerBiPractice.css'
+import './pbiValues.css'
 import './practiceRecall.css'
 import { drillFiles, drillStepsHtml, drillZip, fillTotal, isDrill, checkNumber, numberMessage, orderVerdict, progressIds, shuffledOrder, taskNumber, tasksA, TOTAL_SQL, type PbiBlock, type PbiCheck, type PbiDrill, type PbiSection, type PbiTask } from '../core/powerBiPractice'
 import { hashWithPractice, nextTask, practiceCounts, practiceFromHash, readProgress, type PracticeProgress } from '../core/sqlPractice'
@@ -77,6 +78,33 @@ function Verdict({ said, children }: { said: Said; children?: ReactNode }) {
   )
 }
 
+const fmtValue = (v: number) => v.toLocaleString('en-US', { maximumFractionDigits: 4 })
+
+interface Given {
+  value: number
+  says: string
+  right: boolean
+}
+
+/** What every answer of a predict task would have given: the right number and the wrong ones with the reading that produces them. Shown after a check or the answer, never before. */
+function OptionValues({ rows }: { rows: Given[] }) {
+  return (
+    <div className="pbi-values">
+      <div className="pbi-values-title">What each answer would give</div>
+      <table>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={i} data-right={r.right || undefined}>
+              <td className="num mono">{fmtValue(r.value)}</td>
+              <td>{r.right ? 'Right: the question as asked.' : r.says}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 /** A snippet; `{{TOTAL}}` in it is the total revenue, computed. */
 function Snippet({ text }: { text: string }) {
   const [shown, setShown] = useState(text.includes('{{TOTAL}}') ? text.split('{{TOTAL}}').join('…') : text)
@@ -115,6 +143,11 @@ function HintList({ hints, shown }: { hints: string[]; shown: number }) {
   )
 }
 
+/** The right value first, then the trap values that differ from it (a trap equal to the truth adds nothing). */
+function givenOf(expected: number, traps: { value: number; says: string }[]): Given[] {
+  return [{ value: expected, says: '', right: true }, ...traps.filter((t) => t.value !== expected).map((t) => ({ value: t.value, says: t.says, right: false }))]
+}
+
 /** One layer A task: predict, pick, spot or order. */
 function TaskCard({ section, task, warm = false, onNext }: { section: PbiSection; task: PbiTask; warm?: boolean; onNext: (id: string) => void }) {
   const solved = useProgress((p) => p.solved.includes(task.id))
@@ -135,6 +168,7 @@ function TaskCard({ section, task, warm = false, onNext }: { section: PbiSection
   const [said, setSaid] = useState<Said | null>(null)
   const [busy, setBusy] = useState(false)
   const [revealed, setRevealed] = useState<string | null>(null)
+  const [given, setGiven] = useState<Given[] | null>(null)
   const needsEngine = task.kind === 'predict'
   const next = said?.ok ? nextTask(SECTION_TASKS, useProgress.getState()) : null
 
@@ -142,6 +176,7 @@ function TaskCard({ section, task, warm = false, onNext }: { section: PbiSection
   const set = (v: string) => {
     setAnswer(v)
     setSaid(null)
+    setGiven(null)
     keep(v)
   }
   const move = (i: number, by: -1 | 1) => {
@@ -162,6 +197,7 @@ function TaskCard({ section, task, warm = false, onNext }: { section: PbiSection
         const expected = await truth(task.sql)
         const traps = await Promise.all((task.traps ?? []).map(async (t) => ({ value: await truth(t.sql), says: t.says })))
         const v = checkNumber(answer, expected, { percent: task.percent, traps })
+        if (v.kind !== 'empty' && v.kind !== 'unreadable') setGiven(givenOf(expected, traps))
         const m = numberMessage(v, 'the question')
         result = v.kind === 'empty' || v.kind === 'unreadable' ? m : m.ok ? { ...m, detail: `${m.detail} ${task.explain}`.trim() } : m
         if (v.kind === 'empty') {
@@ -199,6 +235,8 @@ function TaskCard({ section, task, warm = false, onNext }: { section: PbiSection
     if (task.kind === 'predict') {
       try {
         const v = await truth(task.sql)
+        const traps = await Promise.all((task.traps ?? []).map(async (t) => ({ value: await truth(t.sql), says: t.says })))
+        setGiven(givenOf(v, traps))
         setRevealed(`${v.toLocaleString('en-US', { maximumFractionDigits: 2 })}. ${task.explain}`)
       } catch (e) {
         setRevealed(String(e instanceof Error ? e.message : e))
@@ -287,6 +325,7 @@ function TaskCard({ section, task, warm = false, onNext }: { section: PbiSection
           )}
         </Verdict>
       )}
+      {given && <OptionValues rows={given} />}
       {revealed && (
         <p className={`m-0 ${READABLE}`} style={{ color: 'var(--muted)' }}>
           <b>Answer: </b>
@@ -308,6 +347,7 @@ function DrillCard({ section, drill, onNext }: { section: PbiSection; drill: Pbi
     return Object.fromEntries(drill.checks.map((c) => [c.id, d[`${drill.id}:${c.id}`] ?? '']))
   })
   const [said, setSaid] = useState<Record<string, Said>>({})
+  const [expectedOf, setExpectedOf] = useState<Record<string, number>>({})
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null)
   const [steps, setSteps] = useState<string | null>(null)
@@ -350,12 +390,15 @@ function DrillCard({ section, drill, onNext }: { section: PbiSection; drill: Pbi
     setBusy(true)
     try {
       const out: Record<string, Said> = {}
+      const exp: Record<string, number> = {}
       for (const c of drill.checks) {
         const expected = await truth(c.sql)
+        exp[c.id] = expected
         const traps = await Promise.all((c.traps ?? []).map(async (t) => ({ value: await truth(t.sql), says: t.says })))
         out[c.id] = numberMessage(checkNumber(values[c.id] ?? '', expected, { percent: c.percent, traps }), c.where)
       }
       setSaid(out)
+      setExpectedOf(exp)
       if (drill.checks.some((c) => (values[c.id] ?? '').trim())) markSolved(drill.id, drill.checks.every((c) => out[c.id].ok))
     } catch (e) {
       setNote({ ok: false, text: `The numbers could not be computed: ${String(e instanceof Error ? e.message : e).split('\n')[0]}` })
@@ -417,6 +460,31 @@ function DrillCard({ section, drill, onNext }: { section: PbiSection; drill: Pbi
           </li>
         ))}
       </ul>
+      {drill.checks.some((c) => said[c.id]?.ok && expectedOf[c.id] !== undefined) && (
+        <div className="pbi-values">
+          <div className="pbi-values-title">What your report should show</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Number</th>
+                <th>Value</th>
+                <th>Read it at</th>
+              </tr>
+            </thead>
+            <tbody>
+              {drill.checks
+                .filter((c) => said[c.id]?.ok && expectedOf[c.id] !== undefined)
+                .map((c) => (
+                  <tr key={c.id}>
+                    <td>{c.label}</td>
+                    <td className="num mono">{fmtValue(expectedOf[c.id])}{c.percent ? ' %' : ''}</td>
+                    <td>{c.where}</td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
+      )}
       <div className="flex items-center gap-1.5 flex-wrap">
         <button className="btn btn-primary" disabled={busy || !ready} onClick={() => void check()} title={ready ? 'Check the numbers' : 'The engine is still loading'}>
           {busy ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} Check

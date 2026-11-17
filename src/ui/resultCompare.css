@@ -1,0 +1,17 @@
+/* "Your result" next to "Expected" under a wrong practice answer (src/ui/ResultCompare.tsx). */
+.rc { margin-top: 2px; }
+.rc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: start; }
+.rc-side { min-width: 0; }
+.rc-title { margin-bottom: 4px; font-size: 13px; }
+.rc-title span { color: var(--muted); font-size: 12px; }
+.rc-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+.rc-table { border-collapse: collapse; font-size: 12px; width: max-content; min-width: 100%; }
+.rc-table th, .rc-table td { padding: 3px 8px; text-align: left; white-space: nowrap; border-bottom: 1px solid var(--line); }
+.rc-table th { background: var(--panel-2); color: var(--muted); font-weight: 600; }
+.rc-table td[data-num] { text-align: right; font-variant-numeric: tabular-nums; }
+.rc-table td[data-null] { color: var(--muted); font-style: italic; }
+.rc-table tr:last-child td { border-bottom: 0; }
+.rc-table tr[data-off] td { background: var(--warn-soft); color: var(--warn-text); }
+.rc-empty { padding: 6px 8px; border: 1px dashed var(--line); border-radius: 6px; color: var(--muted); font-size: 12px; }
+.rc-more, .rc-legend { margin: 3px 0 0; color: var(--muted); font-size: 12px; }
+@media (max-width: 640px) { .rc-grid { grid-template-columns: 1fr; } }

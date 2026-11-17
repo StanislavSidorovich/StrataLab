@@ -11,6 +11,7 @@ import { oneDark } from '@codemirror/theme-one-dark'
 import type { Table } from 'apache-arrow'
 import { ArrowDown, ArrowRight, Check, CheckCircle2, ChevronDown, ChevronRight, ExternalLink, Eye, GraduationCap, Lightbulb, Loader2, Play, Square, Table2, Target, TriangleAlert, X, XCircle } from 'lucide-react'
 import { create } from 'zustand'
+import { ResultCompare } from './ResultCompare'
 import { compareResults, describeVerdict, type ResultData, type Verdict } from '../core/check'
 import type { Output } from '../core/ipynb'
 import './practiceTableKeys.css'
@@ -596,7 +597,7 @@ function ExampleBlock({ block }: { block: PracticeExampleCell }) {
   )
 }
 
-type CheckState = { verdict: Verdict; trap: string | null } | null
+type CheckState = { verdict: Verdict; trap: string | null; got: ResultData; expected: ResultData } | null
 
 /** `warm`: the cell is shown again as a warm-up, so its ids and run tags must not meet those of the task in its own section. */
 function TaskBlock({ section, block, onNext, warm = false }: { section: PracticeSection; block: PracticeTaskCell; onNext: (id: string) => void; warm?: boolean }) {
@@ -656,7 +657,7 @@ function TaskBlock({ section, block, onNext, warm = false }: { section: Practice
         const { [block.id]: _gone, ...stillFailed } = p.failedAt
         useProgress.setState({ solved: p.solved.includes(block.id) ? p.solved : [...p.solved, block.id], solvedAt: { ...p.solvedAt, [block.id]: Date.now() }, failedAt: stillFailed })
       }
-      setCheck({ verdict, trap })
+      setCheck({ verdict, trap, got, expected })
     } catch (e) {
       setCheck(null)
       useLab.setState({ importError: `The answer could not be computed (were the quaera tables changed?): ${String(e instanceof Error ? e.message : e).split('\n')[0]}` })
@@ -754,6 +755,7 @@ function TaskBlock({ section, block, onNext, warm = false }: { section: Practice
           )}
         </div>
       )}
+      {check && !check.verdict.ok && <ResultCompare got={check.got} expected={check.expected} trap={check.trap != null} />}
       {offer && (
         <div className="flex items-center gap-2 flex-wrap">
           <span className="flex-1 min-w-[12rem]">You solved the hardest task of this section. Skip the rest?</span>

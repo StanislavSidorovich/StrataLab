@@ -125,3 +125,37 @@ export function describeVerdict(v: Verdict, lang: 'sql' | 'python' = 'sql'): { t
       return { title: 'Right rows, wrong order', detail: py ? 'The task asks for a sort order: check sort_values (and ascending=False).' : 'The task asks for a sort order: check ORDER BY (and DESC).' }
   }
 }
+
+/**
+ * Which rows of each side have no partner on the other side (same rules as `compareResults`), for highlighting.
+ * Only meaningful when the column counts match; otherwise nothing is marked.
+ */
+export function diffRows(got: ResultData, expected: ResultData): { got: boolean[]; expected: boolean[] } {
+  if (got.header.length !== expected.header.length) return { got: got.rows.map(() => false), expected: expected.rows.map(() => false) }
+  const rules = columnRules(expected)
+  const rowKey = (r: Cell[]) => JSON.stringify(r.map((v, j) => key(v, rules[j])))
+  const mine = alignColumns(got, expected).map(rowKey)
+  const want = expected.rows.map(rowKey)
+  const pool = new Map<string, number>()
+  for (const k of want) pool.set(k, (pool.get(k) ?? 0) + 1)
+  const gotOff = mine.map((k) => {
+    const n = pool.get(k) ?? 0
+    if (n > 0) pool.set(k, n - 1)
+    return n === 0
+  })
+  const pool2 = new Map<string, number>()
+  for (const k of mine) pool2.set(k, (pool2.get(k) ?? 0) + 1)
+  const wantOff = want.map((k) => {
+    const n = pool2.get(k) ?? 0
+    if (n > 0) pool2.set(k, n - 1)
+    return n === 0
+  })
+  return { got: gotOff, expected: wantOff }
+}
+
+/** One cell as text, the same way on both sides (NULL spelled out, a whole-number float without the noise). */
+export function showCell(v: Cell): string {
+  if (v == null) return 'NULL'
+  if (typeof v === 'number') return Number.isInteger(v) ? String(v) : String(Number(v.toFixed(6)))
+  return String(v)
+}

@@ -1,0 +1,9 @@
+/* Power BI practice: the values behind a check (src/ui/PowerBiPractice.tsx `OptionValues`, the drill's table). */
+.pbi-values { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); padding: 6px 10px; overflow-x: auto; }
+.pbi-values-title { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 3px; }
+.pbi-values table { border-collapse: collapse; font-size: 13px; width: 100%; }
+.pbi-values th { text-align: left; color: var(--muted); font-weight: 600; font-size: 12px; padding: 2px 8px 2px 0; }
+.pbi-values td { padding: 3px 8px 3px 0; vertical-align: top; border-top: 1px solid var(--line); }
+.pbi-values td.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; padding-right: 14px; }
+.pbi-values tr[data-right] td { color: var(--accent); font-weight: 600; }
+@media (max-width: 480px) { .pbi-values table { font-size: 12.5px; } }
