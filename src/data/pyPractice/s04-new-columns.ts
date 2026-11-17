@@ -10,6 +10,10 @@ export const NEW_COLUMNS: PracticeSection = {
       kind: 'note',
       topic: 'a new column',
       text: 'A new column is computed for every row at once, with no loop. `assign` returns a copy of the table with the column added, and `products["name"] = ...` adds it to the table itself.',
+      syntax: `# before: add it to the table itself
+products["price_with_tax"] = products["list_price"] * 1.2
+# now: a copy with the column added
+products.assign(price_with_tax=products["list_price"] * 1.2)`,
       trap: '`assign` does not change `products`: keep its result in a variable, or the new column is gone after the cell.',
     },
     {
@@ -91,6 +95,10 @@ y.assign(kind=np.where(y["units"] > 10, "bulk", "regular"))["kind"].value_counts
       kind: 'note',
       topic: 'more than two outcomes',
       text: '`np.select` takes a list of conditions and a list of values, and uses the value of the first condition that is true. A row that meets none gets the `default`.',
+      syntax: `# before: np.where inside np.where
+np.where(cond_a, "A", np.where(cond_b, "B", "other"))
+# now: the same, flat
+np.select([cond_a, cond_b], ["A", "B"], default="other")`,
     },
     {
       kind: 'example',
@@ -131,6 +139,10 @@ sellout.assign(kind=kind)["kind"].value_counts()`,
       kind: 'note',
       topic: 'a counts table with your own column names',
       text: '`value_counts` sorts by how often a value comes, and `sort_index` puts the values back in their own order. `rename_axis` names the column of values and `reset_index(name=...)` names the column of counts.',
+      syntax: `# before: a Series, values as the row labels
+products["unit"].value_counts()
+# now: a table with columns you named
+products["unit"].value_counts().sort_index().rename_axis("unit").reset_index(name="products")`,
     },
     {
       kind: 'example',

@@ -265,14 +265,16 @@ sellout[sellout["units"] > 100].head()`,
     {
       kind: 'note',
       topic: 'rows and columns in one step',
-      text: '`loc` takes the rows condition and the list of columns inside one pair of brackets, separated by a comma. It reads better than two bracket pairs once the conditions get long.',
+      text: '`loc` takes the rows condition and the list of columns inside one pair of brackets, separated by a comma. Both lines below return the same rows. `loc` is preferred: it reads better once the conditions get long, and assigning through it gives no chained-indexing warning.',
+      syntax: `# without loc: two pairs of brackets
+sellout[sellout["units"] > 100][["week_start", "customer_id", "units"]].head()`,
     },
     {
       kind: 'example',
       id: 'py-filter-loc',
       title: 'Big weeks with loc',
       code: `sellout.loc[sellout["units"] > 100, ["week_start", "customer_id", "units"]].head()`,
-      sees: 'The same table as with two pairs of brackets: rows over 100 units, three columns.',
+      sees: 'The same table as the two-bracket line above: rows over 100 units, three columns. With loc it is one pair of brackets, `[rows, columns]`.',
     },
     {
       kind: 'note',
