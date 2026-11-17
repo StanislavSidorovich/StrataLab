@@ -88,7 +88,7 @@ export const S01: PbiSection = {
           title: 'Check the column types',
           html: `<p>Open <b>Table view</b>, press the column, read <b>Data type</b> under Column tools. The other columns are read right; check only these:</p>
 {{types}}
-<p class="muted">If a date or a number is wrong: press <b>Transform data</b>, then on the column <b>Change type, Using locale…</b> with English (United States).</p>`,
+<p class="muted">If a date or a number is wrong: press <b>Transform data</b>, then on the column <b>Change Type, Using Locale…</b> (right-click the column header) with English (United States).</p>`,
         },
         {
           title: 'Look at the empty revenue in Power Query',
@@ -104,7 +104,7 @@ export const S01: PbiSection = {
           title: 'Count the rows in a card',
           html: `<ol>
 <li>In Report view add a <b>Card</b> visual.</li>
-<li>Drag <code>fact_sales[sale_date]</code> into Fields. Press the arrow next to it and choose <b>Count</b> (not Count (Distinct), not Earliest).</li>
+<li>Drag <code>fact_sales[sale_date]</code> into the <b>Values</b> well. Press the arrow next to it and choose <b>Count</b> (not Count (Distinct), not Earliest).</li>
 </ol>`,
         },
       ],

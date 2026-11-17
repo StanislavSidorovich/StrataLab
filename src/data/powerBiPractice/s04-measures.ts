@@ -92,7 +92,7 @@ ${pre('Month = FORMAT(fact_sales[sale_date], "yyyy-mm")')}
         },
         {
           title: 'Three cards',
-          html: `<p>Add a <b>Card</b> for each of <code>Revenue</code>, <code>Avg revenue per sale</code> and <code>Customers</code>. In <b>Format visual, Visual, Callout values, Values</b> set <b>Display units: None</b> and <b>Decimal places: 2</b> (0 for Customers). <span class="muted">(On a classic Card the same setting is under Callout value, Display units.)</span></p>`,
+          html: `<p>Add a <b>Card</b> for each of <code>Revenue</code>, <code>Avg revenue per sale</code> and <code>Customers</code>. In <b>Format visual, Visual, Callout values, Values</b> set <b>Display units: None</b> and <b>Value decimal places: 2</b> (0 for Customers). <span class="muted">(On a classic Card the same setting is under Callout value, Display units.)</span></p>`,
         },
         {
           title: 'A table by month',

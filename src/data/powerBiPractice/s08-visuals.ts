@@ -85,7 +85,7 @@ export const S08: PbiSection = {
         },
         {
           title: 'The card',
-          html: `<p>Add a <b>Card</b> with <code>Revenue YTD</code>. In <b>Format visual, Visual, Callout values, Values</b> set <b>Display units: None</b> and <b>Decimal places: 2</b>.</p>`,
+          html: `<p>Add a <b>Card</b> with <code>Revenue YTD</code>. In <b>Format visual, Visual, Callout values, Values</b> set <b>Display units: None</b> and <b>Value decimal places: 2</b>.</p>`,
         },
         {
           title: 'The slicer and the first two numbers',

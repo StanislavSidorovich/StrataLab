@@ -101,7 +101,7 @@ export const S07: PbiSection = {
         },
         {
           title: 'A card with the top 3',
-          html: `<p>Add a <b>Card</b> with <code>Top 3 revenue</code>. In <b>Format visual, Visual, Callout values, Values</b> set <b>Display units: None</b> and <b>Decimal places: 2</b>.</p>`,
+          html: `<p>Add a <b>Card</b> with <code>Top 3 revenue</code>. In <b>Format visual, Visual, Callout values, Values</b> set <b>Display units: None</b> and <b>Value decimal places: 2</b>.</p>`,
         },
         {
           title: 'A slicer on the category',

@@ -93,7 +93,7 @@ export const S03: PbiSection = {
           html: `<ol>
 <li>Back in Report view add a <b>Table</b> visual.</li>
 <li>Drag <code>dim_customer[chain_name]</code> into Columns, then <code>fact_sales[revenue]</code> (Power BI sums it: Sum of revenue).</li>
-<li>If a number shows with K or M: <b>Format, Cell elements, Values</b>, <b>Display units: None</b>.</li>
+<li>If a number shows with K or M: <b>Format visual, Visual, Specific column, Values</b> (pick the revenue series), <b>Display units: None</b>.</li>
 <li>Read the row <b>Minori</b> and the row <b>(Blank)</b>: the customers with no chain.</li>
 </ol>
 <p class="muted">Use <code>chain_name</code>, not <code>customer_name</code>: those are single stores like "Minori #1013".</p>`,

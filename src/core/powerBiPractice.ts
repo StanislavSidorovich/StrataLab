@@ -432,7 +432,7 @@ export function drillStepsHtml(d: PbiDrill, csvs: Record<StarName, Uint8Array>, 
   const showStar = d.steps.some((s) => s.html.includes('{{star}}'))
   const star = showStar ? starSvg(tables, links) : ''
   const linkList = links
-    .map((l) => `<li>Drag ${code(`${shortName(l.many.table)}[${l.many.column}]`)} onto ${code(`${shortName(l.one.table)}[${l.one.column}]`)}. Check: Cardinality <b>Many to one (*:1)</b>, Cross filter direction <b>Single</b>, <b>Make this relationship active</b> ticked, then OK.</li>`)
+    .map((l) => `<li>Drag ${code(`${shortName(l.many.table)}[${l.many.column}]`)} onto ${code(`${shortName(l.one.table)}[${l.one.column}]`)}. Check: Cardinality <b>Many to one (*:1)</b>, Cross filter direction <b>Single</b>, <b>Make this relationship active</b> ticked. Power BI may create the line at once (change it in Properties, then Apply changes) or open a dialog (then OK or Save).</li>`)
     .join('')
   const fill = (html: string) => html.replace('{{star}}', star).replace('{{files}}', `<ul>${fileList}</ul>`).replace('{{types}}', `<table><tr><th>Column</th><th>Expected type</th></tr>${typeRows}</table>`).replace('{{links}}', `<ol>${linkList}</ol>`)
   const start = d.continues

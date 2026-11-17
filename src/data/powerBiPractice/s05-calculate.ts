@@ -88,7 +88,7 @@ export const S05: PbiSection = {
         },
         {
           title: 'Four cards',
-          html: `<p>Add a <b>Card</b> for each of <code>Revenue</code>, <code>Revenue Kanto</code>, <code>Revenue Beverages</code> and <code>Return units</code>. In <b>Format visual, Visual, Callout values, Values</b> set <b>Display units: None</b> and <b>Decimal places: 2</b> (0 for Return units).</p>`,
+          html: `<p>Add a <b>Card</b> for each of <code>Revenue</code>, <code>Revenue Kanto</code>, <code>Revenue Beverages</code> and <code>Return units</code>. In <b>Format visual, Visual, Callout values, Values</b> set <b>Display units: None</b> and <b>Value decimal places: 2</b> (0 for Return units).</p>`,
         },
         {
           title: 'A slicer on the region',

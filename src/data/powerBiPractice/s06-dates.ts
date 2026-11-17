@@ -99,7 +99,7 @@ ${pre(DATE_COLUMNS.join('\n'))}
         },
         {
           title: 'Link the Date table',
-          html: `<p>Open <b>Model view</b>. Drag ${code('Date[Date]')} onto ${code('fact_sales[sale_date]')}. Check: Cardinality <b>Many to one (*:1)</b> (the many side is fact_sales), Cross filter direction <b>Single</b>, <b>Make this relationship active</b> ticked, then OK.</p>`,
+          html: `<p>Open <b>Model view</b>. Drag ${code('Date[Date]')} onto ${code('fact_sales[sale_date]')}. Check: Cardinality <b>Many to one (*:1)</b> (the many side is fact_sales), Cross filter direction <b>Single</b>, <b>Make this relationship active</b> ticked. Power BI may create the line at once (change it in Properties, then Apply changes) or open a dialog (then OK or Save).</p>`,
         },
         {
           title: 'Last year and year to date',
