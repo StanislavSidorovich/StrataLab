@@ -1,0 +1,4 @@
+/* The editor's tab strip: tall enough for the label plus the horizontal scrollbar, so nothing is clipped at the top. */
+.editor-tabs { min-height: 44px; padding-top: 8px; overflow-x: auto; overflow-y: hidden; align-items: flex-end; }
+.editor-tabs > [data-tab] { box-sizing: border-box; min-height: 32px; line-height: 1.25; }
+.editor-tabs > [data-tab] > span.truncate { min-width: 0; }

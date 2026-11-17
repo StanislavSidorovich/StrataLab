@@ -10,6 +10,7 @@ import { ScriptDatasetDialog } from './ScriptDatasetDialog'
 import { SaveKindDialog } from './SaveKindDialog'
 import { ImportDialog } from './ImportDialog'
 import { DdlDialog } from './DdlDialog'
+import './editorTabs.css'
 import { GenerateDialog } from './GenerateDialog'
 import { CatalogDialog, DatasetProgressCard } from './CatalogDialog'
 import { WelcomeDialog } from './WelcomeDialog'
@@ -491,7 +492,7 @@ function Tabs() {
     if (id) setMenu({ id, at })
   })
   return (
-    <div className="h-9 shrink-0 flex items-end gap-0.5 px-2 overflow-x-auto" style={{ background: 'var(--panel-2)', borderBottom: '1px solid var(--line)' }} {...longPress}>
+    <div className="editor-tabs shrink-0 flex gap-0.5 px-2" style={{ background: 'var(--panel-2)', borderBottom: '1px solid var(--line)' }} {...longPress}>
       {tabs.map((t) => (
         <div
           key={t.id}

@@ -975,6 +975,19 @@ export function addTab(sql = '', title?: string, dialect?: Dialect) {
   return id
 }
 
+/**
+ * Opens a tab, or focuses the one already open with the same title, text and dialect (a dataset's
+ * starter query opened again, a guide example): keyed by content, in memory, so it needs no storage.
+ */
+export function addOrFocusTab(sql: string, title: string, dialect?: Dialect) {
+  const same = get().tabs.find((t) => t.title === title && t.sql === sql && tabDialect(t) === (dialect ?? 'duckdb'))
+  if (same) {
+    set({ activeTab: same.id })
+    return same.id
+  }
+  return addTab(sql, title, dialect)
+}
+
 export function closeTab(id: string) {
   closeTabs([id])
 }
@@ -1361,14 +1374,14 @@ export async function openDataset(d: Dataset, reload = false, lang: 'sql' | 'pyt
   const { state, extra } = catalogState(d)
   if (!reload && state === 'loaded') {
     if (lang === 'python') newPythonNotebookOn(`${d.id}.${d.main}`, d.title)
-    else addTab(d.starter, d.title)
+    else addOrFocusTab(d.starter, d.title)
     return
   }
   // A schema of the user's with the dataset's name: loading would drop their tables.
   if (state === 'foreign' && !confirm(`There is already a schema called ${d.id} with your table${extra.length === 1 ? '' : 's'} ${extra.join(', ')}. Loading ${d.title} replaces it and ${extra.length === 1 ? 'that table is' : 'those tables are'} lost. Load anyway?`)) return
   if (!(await fetchDataset(d))) return
   if (lang === 'python') newPythonNotebookOn(`${d.id}.${d.main}`, d.title)
-  else openAndRun(d.starter, d.title)
+  else void runSql(addOrFocusTab(d.starter, d.title), d.starter)
 }
 
 /** Whether a catalog dataset is in its schema (src/core/ownDatasets.ts). */
@@ -1693,7 +1706,7 @@ export async function openGuideCode(d: Dataset, code: string, title: string, lan
     if (state === 'foreign' && !confirm(`There is already a schema called ${d.id} with your table${extra.length === 1 ? '' : 's'} ${extra.join(', ')}. Loading ${d.title} replaces it and ${extra.length === 1 ? 'that table is' : 'those tables are'} lost. Load anyway?`)) return
     if (!(await fetchDataset(d))) return
   }
-  const id = addTab(code, title, lang === 'python' ? 'python' : undefined)
+  const id = addOrFocusTab(code, title, lang === 'python' ? 'python' : undefined)
   if (!run) return
   if (lang === 'sql') return void runSql(id, code)
   const cells = splitCells(code)
