@@ -12,7 +12,7 @@ export const S02: PbiSection = {
     {
       kind: 'note',
       topic: 'Applied steps',
-      text: "Transform data opens Power Query. Every press (Trim, Split Column, Replace Values, Merge Queries) adds a step to the Applied steps list on the right, named by Power Query: Trimmed Text, Split Column by Delimiter, Replaced Value, Merged Queries. It is the same idea as the steps of Lab's Clean: the file is never changed, the steps are replayed each time the data refreshes. Trim cuts the spaces at the edges, UPPERCASE (Transform, Format) makes a text upper case, Merge Queries joins two tables on a column, Unpivot Columns turns columns into rows.",
+      text: "Transform data opens Power Query. Every press (Trim, Split Column, Replace Values, Merge Queries) adds a step to the Applied steps list on the right, named by Power Query: Trimmed Text, Split Column by Delimiter, Replaced Value, Merged Queries. It is the same idea as the steps of Lab's Clean: the file is never changed, the steps are replayed each time the data refreshes. Trim cuts the spaces at the edges, UPPERCASE (Transform, Text Column, Format) makes a text upper case, Merge Queries (Home, Combine) joins two tables on a column, Unpivot Columns turns columns into rows.",
       trap: "A join on text is exact: a space or a different case is a different value. Replace Values changes part of a cell unless you tick Match entire cell contents under Advanced options: replacing Beverage with Beverages inside the cell Beverages gives Beveragess.",
     },
     {
@@ -33,7 +33,7 @@ export const S02: PbiSection = {
       id: 'cl-order',
       title: 'Clean a column',
       question: 'Put these steps in the order you do them to clean a text column that is full of stray spaces and mixed case.',
-      steps: ['Home, Transform data', 'Select the column', 'Transform, Format, Trim', 'Transform, Format, UPPERCASE', 'Check Column quality again', 'Home, Close & Apply'],
+      steps: ['Home, Transform data', 'Select the column', 'Transform, Text Column, Format, Trim', 'Transform, Text Column, Format, UPPERCASE', 'Check Column quality again', 'Home, Close & Apply'],
       hints: ['Nothing can be cleaned before Power Query is open.', 'You look at the result before you load it.'],
       explain: 'Open Power Query, select the column, apply Trim and UPPERCASE (each adds an Applied step), check Column quality, then Close & Apply loads the clean table into the report.',
     },
@@ -91,25 +91,26 @@ export const S02: PbiSection = {
         {
           title: 'Merge with the clean products and read what does not match',
           html: `<ol>
-<li>With <code>dim_product_dirty</code> selected press <b>Home, Merge Queries, Merge Queries as New</b>.</li>
+<li>With <code>dim_product_dirty</code> selected press <b>Home, Combine, Merge queries, Merge queries as new</b>.</li>
 <li>Top table <code>dim_product_dirty</code>: press the <code>sku_code</code> column. Bottom table <code>dim_product</code>: press its <code>sku_code</code>. <b>Join Kind: Left Outer</b>. OK. A new query <code>Merge1</code> appears.</li>
 <li>In <code>Merge1</code> press the expand icon on the <code>dim_product</code> column, keep only <code>product_id</code>, OK.</li>
 <li>Press the new column. The column profile shows <b>Empty</b>: the products with no match. Read it.</li>
-</ol>`,
+</ol>
+<p class="muted">The new query follows the two source queries when they change. If you rename or remove <code>sku_code</code> in either of them, the Merge step fails with an error.</p>`,
         },
         {
           title: 'Trim and UPPERCASE the SKU',
           html: `<ol>
-<li>Select <code>dim_product_dirty</code> again, press the <code>sku_code</code> column. <b>Transform, Format, Trim</b>.</li>
+<li>Select <code>dim_product_dirty</code> again, press the <code>sku_code</code> column. <b>Transform, Text Column, Format, Trim</b>.</li>
 <li>Open <code>Merge1</code>: it follows the query it is made from. Read <b>Empty</b> of the product_id column. If it is not 0 yet, one more step is missing.</li>
-<li>Back in <code>dim_product_dirty</code>: <b>Transform, Format, UPPERCASE</b> on <code>sku_code</code>. Read <b>Empty</b> in <code>Merge1</code> again.</li>
+<li>Back in <code>dim_product_dirty</code>: <b>Transform, Text Column, Format, UPPERCASE</b> on <code>sku_code</code>. Read <b>Empty</b> in <code>Merge1</code> again.</li>
 </ol>
 <p class="muted">The Applied steps of <code>dim_product_dirty</code> now read Trimmed Text and Uppercased Text.</p>`,
         },
         {
           title: 'Split brand and category',
           html: `<ol>
-<li>In <code>dim_product_dirty</code> press <code>brand_category</code>. <b>Transform, Split Column, By Delimiter</b>.</li>
+<li>In <code>dim_product_dirty</code> press <code>brand_category</code>. <b>Home, Transform, Split Column, By Delimiter</b>.</li>
 <li>Choose <b>Custom</b> and type a space, a slash and a space: <code> / </code>. <b>At each occurrence of the delimiter</b>. OK.</li>
 <li>Double-click the two new headers and name them <code>brand</code> and <code>category</code>.</li>
 <li>Press the <code>category</code> column and read <b>Distinct</b> in the column profile.</li>
@@ -165,7 +166,7 @@ export const S02: PbiSection = {
         'it is 1: the split did not happen, the whole text is one value (step 4).',
         'it did not drop by one: the typo is not replaced, or Match entire cell contents is not ticked (step 5).',
       ],
-      hints: ['Merge Queries as New leaves the clean query alone and follows it when it changes.', 'Trim and UPPERCASE are both under Transform, Format.', 'Replace Values has Advanced options with Match entire cell contents.'],
+      hints: ['Merge queries as new leaves the clean query alone and follows it when it changes.', 'Trim and UPPERCASE are both under Transform, Text Column, Format.', 'Replace Values has Advanced options with Match entire cell contents.'],
     },
   ],
 }

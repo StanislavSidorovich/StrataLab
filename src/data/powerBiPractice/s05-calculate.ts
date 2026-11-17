@@ -88,7 +88,7 @@ export const S05: PbiSection = {
         },
         {
           title: 'Four cards',
-          html: `<p>Add a <b>Card</b> for each of <code>Revenue</code>, <code>Revenue Kanto</code>, <code>Revenue Beverages</code> and <code>Return units</code>. In <b>Format, Callout value</b> set <b>Display units: None</b> and <b>Decimal places: 2</b> (0 for Return units).</p>`,
+          html: `<p>Add a <b>Card</b> for each of <code>Revenue</code>, <code>Revenue Kanto</code>, <code>Revenue Beverages</code> and <code>Return units</code>. In <b>Format visual, Visual, Callout values, Values</b> set <b>Display units: None</b> and <b>Decimal places: 2</b> (0 for Return units).</p>`,
         },
         {
           title: 'A slicer on the region',
@@ -138,7 +138,7 @@ export const S05: PbiSection = {
         'it shows Beverages for every region, or Kansai for every category: the filter of the measure or the slicer is on the wrong column (steps 1 and 3).',
         'it is positive or the net units: the filter fact_sales[units] < 0 is missing (step 1).',
       ],
-      hints: ['New measure, with fact_sales selected in the Data pane.', 'A filter in CALCULATE on a column replaces the slicer on that same column.', 'Callout value has Display units; set it to None.'],
+      hints: ['New measure, with fact_sales selected in the Data pane.', 'A filter in CALCULATE on a column replaces the slicer on that same column.', 'Callout values has Display units; set it to None.'],
     },
   ],
 }

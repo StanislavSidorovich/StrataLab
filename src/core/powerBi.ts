@@ -252,7 +252,7 @@ ${pre(monthCol)}
 <h2>5. Build the three visuals</h2>
 <p>The same three tiles as the dashboard in Lab.</p>
 <ol>
-<li><b>${esc(kpi)}</b>: add a <b>Card</b>. Drag <code>Revenue H1 2026</code> into Fields. In <b>Format, Callout value</b> set <b>Display units: None</b> and <b>Decimal places: 2</b>. It reads <b>${n.total}</b>.</li>
+<li><b>${esc(kpi)}</b>: add a <b>Card</b>. Drag <code>Revenue H1 2026</code> into Fields. In <b>Format visual, Visual, Callout values, Values</b> set <b>Display units: None</b> and <b>Decimal places: 2</b>. <span class="muted">(On a classic Card the same setting is under Callout value, Display units.)</span> It reads <b>${n.total}</b>.</li>
 <li><b>${esc(line)}</b>: add a <b>Line chart</b>. Drag <code>${esc(fSale)}[Month]</code> into <b>X-axis</b>. If the axis shows Year, Quarter, Month, Day, press the arrow next to Month in the X-axis well and choose <b>Month</b>, not Date Hierarchy. In <b>Format, X-axis</b>, set <b>Type</b> to <b>Categorical</b>. Y-axis: <code>Revenue</code>. You see one point per month, January 2024 to June 2026 (30 points); ${esc(n.month)} 2025 is the highest of 2025 at <b>${n.monthValue}</b>.</li>
 <li><b>${esc(chains)}</b>: add a <b>Clustered bar chart</b>. Y-axis: <b>${esc(`${dimC}[${chainCol}]`)}</b>, not <code>customer_name</code> (those are single stores like "Minori #1013"). X-axis: <code>Revenue H1 2026</code>. In Filters on this visual set <code>${chainCol}</code> to <b>is not blank</b>, as Lab's tile does. You see <b>${chainCount} bars</b>: ${esc(chainNames.join(', '))}; the top one is <b>${esc(n.chain)} ${n.chainValue}</b>.</li>
 </ol>

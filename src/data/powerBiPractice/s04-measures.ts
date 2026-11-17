@@ -87,12 +87,12 @@ export const S04: PbiSection = {
           title: 'One column',
           html: `<p>Select <code>fact_sales</code> in the Data pane again. Press <b>Table tools, New column</b> (<b>not</b> New measure) and paste:</p>
 ${pre('Month = FORMAT(fact_sales[sale_date], "yyyy-mm")')}
-<p>Check in the Data pane that <code>Month</code> sits under <code>fact_sales</code>. It is text, such as 2025-08, so Power BI makes no date hierarchy of it.</p>
+<p>Check in the Data pane that <code>Month</code> sits under <code>fact_sales</code>. It is text, such as 2025-08, so Power BI makes no date hierarchy of it. The year comes first, so the months sort in date order by themselves. Month names such as Aug would sort alphabetically: for those add a <code>MonthNumber</code> column and press <b>Column tools, Sort by column, MonthNumber</b>.</p>
 <p class="muted">Yellow error "A single value for column 'sale_date' in table 'fact_sales' cannot be determined"? You made a measure where a column is needed. Delete it and make it again with <b>New column</b>.</p>`,
         },
         {
           title: 'Three cards',
-          html: `<p>Add a <b>Card</b> for each of <code>Revenue</code>, <code>Avg revenue per sale</code> and <code>Customers</code>. In <b>Format, Callout value</b> set <b>Display units: None</b> and <b>Decimal places: 2</b> (0 for Customers).</p>`,
+          html: `<p>Add a <b>Card</b> for each of <code>Revenue</code>, <code>Avg revenue per sale</code> and <code>Customers</code>. In <b>Format visual, Visual, Callout values, Values</b> set <b>Display units: None</b> and <b>Decimal places: 2</b> (0 for Customers). <span class="muted">(On a classic Card the same setting is under Callout value, Display units.)</span></p>`,
         },
         {
           title: 'A table by month',
@@ -138,7 +138,7 @@ ${pre('Month = FORMAT(fact_sales[sale_date], "yyyy-mm")')}
         'it is the number of sales or of all customers: use DISTINCTCOUNT on fact_sales[customer_id] (step 1).',
         'the table has one row, or Month is not under fact_sales: it is a measure or sits in another table, remake it as a column on the fact (step 2).',
       ],
-      hints: ['Select fact_sales in the Data pane before New measure.', 'Month is a column: Table tools, New column.', 'On a card, Callout value has Display units; set it to None.'],
+      hints: ['Select fact_sales in the Data pane before New measure.', 'Month is a column: Table tools, New column.', 'On a card, Callout values has Display units; set it to None.'],
     },
   ],
 }

@@ -95,7 +95,7 @@ ${pre(DATE_TABLE)}
           title: 'Month and Year on the Date table',
           html: `<p>With <code>Date</code> selected in the Data pane press <b>Table tools, New column</b> (<b>not</b> New measure), once for each:</p>
 ${pre(DATE_COLUMNS.join('\n'))}
-<p>They are text and a number, such as 2025-08 and 2025: no date hierarchy appears. Check that both sit under <code>Date</code>, not under <code>fact_sales</code>.</p>`,
+<p>They are text and a number, such as 2025-08 and 2025: no date hierarchy appears, and the months sort in date order because the year comes first. (With month names such as Aug, add <code>MonthNumber</code> and press <b>Column tools, Sort by column, MonthNumber</b>.) Check that both sit under <code>Date</code>, not under <code>fact_sales</code>.</p>`,
         },
         {
           title: 'Link the Date table',
