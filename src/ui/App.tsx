@@ -30,7 +30,7 @@ import { checkForUpdates, updateCheckMessage, useUpdateReady } from '../pwa/regi
 import { memoryNote } from '../core/dbLock'
 import { takeDatabaseHere } from '../db/engine'
 import { engineLoadingLabel, engineLoadingShort } from './EngineLoading'
-import { addTab, closeTabs, currentPythonStarter, newPythonTab, openAiSettings, openPipeline, openPractice, openPracticeBook, switchTabDialect, tabDialect, downloadBackup, duplicateTab, enqueueFiles, openAbout, openCatalog, openShare, openTables, openWelcome, pasteTable, pasteTableFromClipboard, renameTab, reopenClosedTab, updateNow, useLab } from './store'
+import { addTab, closeTabs, currentPythonStarter, newPythonTab, openAiSettings, openPipeline, openPractice, openPracticeBook, switchTabDialect, syncPythonPanelsForViewport, tabDialect, downloadBackup, duplicateTab, enqueueFiles, openAbout, openCatalog, openShare, openTables, openWelcome, pasteTable, pasteTableFromClipboard, renameTab, reopenClosedTab, updateNow, useLab } from './store'
 import { AppearanceButton } from './Appearance'
 import { Menu, useLongPress, type MenuItem } from './Menu'
 import { tabsToClose } from '../core/tabs'
@@ -47,9 +47,16 @@ export function App() {
   const theme = useLab((s) => s.theme)
   const importError = useLab((s) => s.importError)
   const notice = useLab((s) => s.notice)
+  const aiBottomDockOpen = useLab((s) => s.aiPanelOpen && tabDialect(s.tabs.find((t) => t.id === s.activeTab)) === 'python')
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
   }, [theme])
+  useEffect(() => {
+    const onResize = () => syncPythonPanelsForViewport(window.innerWidth)
+    onResize()
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
 
   // F5 runs the query like in SSMS (instead of reloading the page), also when the
   // focus is outside the editor; the editor handles its own keys first.
@@ -184,7 +191,7 @@ export function App() {
       </div>
       <MovedScreen />
       {importError && (
-        <div className="fixed bottom-4 right-4 z-40 max-w-md rounded-lg p-3 flex gap-2 shadow-lg" style={{ background: 'var(--danger-soft)', color: 'var(--danger)' }}>
+        <div className={`fixed ${aiBottomDockOpen ? 'bottom-[48vh] md:bottom-4' : 'bottom-4'} right-4 left-3 sm:left-auto z-40 max-w-md rounded-lg p-3 flex gap-2 shadow-lg`} style={{ background: 'var(--danger-soft)', color: 'var(--danger)' }}>
           <AlertTriangle size={16} className="shrink-0 mt-0.5" />
           <span className="flex-1">{importError}</span>
           <button onClick={() => useLab.setState({ importError: null })} aria-label="Close">
@@ -193,7 +200,7 @@ export function App() {
         </div>
       )}
       {notice && !importError && (
-        <div className="fixed bottom-4 right-4 z-40 max-w-md rounded-lg p-3 flex gap-2 shadow-lg" style={{ background: 'var(--accent-soft)', color: 'var(--text)', border: '1px solid var(--accent)' }} role="status">
+        <div className={`fixed ${aiBottomDockOpen ? 'bottom-[48vh] md:bottom-4' : 'bottom-4'} right-4 left-3 sm:left-auto z-40 max-w-md rounded-lg p-3 flex gap-2 shadow-lg`} style={{ background: 'var(--accent-soft)', color: 'var(--text)', border: '1px solid var(--accent)' }} role="status">
           <Share2 size={16} className="shrink-0 mt-0.5" style={{ color: 'var(--accent)' }} />
           <span className="flex-1">{notice}</span>
           <button onClick={() => useLab.setState({ notice: null })} aria-label="Close">

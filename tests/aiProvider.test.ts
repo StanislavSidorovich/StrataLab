@@ -15,8 +15,11 @@ import {
   parseAiConsent,
   parseAiReplyBlocks,
   parseAiSettings,
+  parseAiSpeechLang,
   parseProviderReply,
   redactSecrets,
+  appendDictatedText,
+  nextAiSpeechLang,
 } from '../src/core/aiProvider'
 import { splitCells } from '../src/core/pyCells'
 
@@ -78,6 +81,31 @@ describe('AI settings and consent parsing', () => {
       provider: 'gemini',
       models: { gemini: 'gemini-3.8-flash', claude: 'claude-sonnet-4-6' },
     })
+    expect(
+      parseAiSettings(
+        JSON.stringify({
+          enabled: true,
+          provider: 'gemini',
+          models: { gemini: 'gemini-2.5-pro', claude: 'claude-opus-4-6' },
+        }),
+      ),
+    ).toEqual({
+      enabled: true,
+      provider: 'gemini',
+      models: { gemini: 'gemini-2.5-pro', claude: 'claude-opus-4-6' },
+    })
+  })
+
+  it('parses speech language and appends dictated text cleanly', () => {
+    expect(parseAiSpeechLang('ru-RU', 'en-US')).toBe('ru-RU')
+    expect(parseAiSpeechLang('en-US', 'ru-RU')).toBe('en-US')
+    expect(parseAiSpeechLang(null, 'ru-RU')).toBe('ru-RU')
+    expect(parseAiSpeechLang('fr-FR', 'en-GB')).toBe('en-US')
+    expect(nextAiSpeechLang('ru-RU')).toBe('en-US')
+    expect(nextAiSpeechLang('en-US')).toBe('ru-RU')
+    expect(appendDictatedText('', 'check missing values')).toBe('check missing values')
+    expect(appendDictatedText('What about  ', '  describe? ')).toBe('What about describe?')
+    expect(appendDictatedText('Existing text', '   ')).toBe('Existing text')
   })
 
   it('parses per-provider consent strictly', () => {

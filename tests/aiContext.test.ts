@@ -7,6 +7,7 @@ import {
   MAX_AI_CONTEXT_COLS,
   MAX_AI_SUMMARY_CHARS,
   buildAiContext,
+  classifyDescribeText,
   detectCellStage,
   extractComputedSummaries,
   formatLastCellOutcome,
@@ -120,7 +121,8 @@ describe('extractComputedSummaries & formatLastCellOutcome', () => {
             output_type: 'execute_result',
             execution_count: 4,
             data: {
-              'text/plain': '          count   mean\norder_id  649.0  325.0',
+              'text/plain':
+                '          count   mean    std   min    25%    50%    75%    max\norder_id  649.0  325.0  187.5   1.0  163.0  325.0  487.0  649.0',
               'text/html': '<table><tr><td>325.0</td></tr></table>',
             },
             metadata: {},
@@ -287,7 +289,10 @@ describe('buildAiContext', () => {
             {
               output_type: 'execute_result',
               execution_count: 3,
-              data: { 'text/plain': '       count   mean\ntotal  649.0  42.50' },
+              data: {
+                'text/plain':
+                  '       count   mean    std   min   25%   50%   75%    max\ntotal  649.0  42.50  12.10  5.00  34.0  42.0  50.0  99.00',
+              },
               metadata: {},
             },
           ],
@@ -433,5 +438,175 @@ describe('buildAiContext', () => {
     expect(withRows.text).toContain('=== First 20 Rows (explicit user opt-in) ===')
     expect(withRows.text).toContain('order_id | status')
     expect(withRows.text).toContain('1 | paid')
+  })
+})
+
+describe('describe() content detection and precedence', () => {
+  const NUMERIC_DF_DESCRIBE = [
+    '              age    studytime         G1',
+    'count  649.000000   649.000000  649.000000',
+    'mean    16.744222     1.930663   11.399076',
+    'std      1.218138     0.829510    2.745265',
+    'min     15.000000     1.000000    0.000000',
+    '25%     16.000000     1.000000   10.000000',
+    '50%     17.000000     2.000000   11.000000',
+    '75%     18.000000     2.000000   13.000000',
+    'max     22.000000     4.000000   19.000000',
+  ].join('\n')
+
+  const ALL_DF_DESCRIBE = [
+    '       school         age',
+    'count     649  649.000000',
+    'unique      2         NaN',
+    'top        GP         NaN',
+    'freq      423         NaN',
+    'mean      NaN   16.744222',
+    'std       NaN    1.218138',
+    'min       NaN   15.000000',
+    '25%       NaN   16.000000',
+    '50%       NaN   17.000000',
+    '75%       NaN   18.000000',
+    'max       NaN   22.000000',
+  ].join('\n')
+
+  const CAT_DF_DESCRIBE = [
+    '       school  sex  address',
+    'count     649  649      649',
+    'unique      2    2        2',
+    'top        GP    F        U',
+    'freq      423  383      452',
+  ].join('\n')
+
+  const SERIES_DESCRIBE = [
+    'count    649.000000',
+    'mean     324.000000',
+    'std      187.494444',
+    'min        0.000000',
+    '25%      162.000000',
+    '50%      324.000000',
+    '75%      486.000000',
+    'max      648.000000',
+    'Name: column00, dtype: float64',
+  ].join('\n')
+
+  it('detects numeric, include=all, categorical-only, transposed, and Series describe formats by content', () => {
+    expect(classifyDescribeText(NUMERIC_DF_DESCRIBE)).toBe('dataframe')
+    expect(classifyDescribeText(ALL_DF_DESCRIBE)).toBe('dataframe')
+    expect(classifyDescribeText(CAT_DF_DESCRIBE)).toBe('dataframe')
+    expect(classifyDescribeText(SERIES_DESCRIBE)).toBe('series')
+
+    const partialCountOnly = [
+      '         metric  value',
+      'count     100.0   12.0',
+      'other     200.0   34.0',
+      'extra     300.0   56.0',
+      'label     400.0   78.0',
+    ].join('\n')
+    expect(classifyDescribeText(partialCountOnly)).toBeNull()
+
+    const countWithoutMinMaxStd = [
+      '       col_a  col_b',
+      'count     10     20',
+      'mean     1.5    2.5',
+      'median   1.5    2.5',
+      'sum       15     50',
+    ].join('\n')
+    expect(classifyDescribeText(countWithoutMinMaxStd)).toBeNull()
+
+    const headLikeRows = [
+      '   stat  val',
+      '0  count  10',
+      '1   mean   5',
+      '2    std   1',
+      '3    min   2',
+      '4    max   9',
+    ].join('\n')
+    expect(classifyDescribeText(headLikeRows)).toBeNull()
+  })
+
+  it('prefers full-table DataFrame describe over later Series describe (student_data scenario)', () => {
+    const runs: { source: string; outputs: Output[] }[] = [
+      {
+        source: 'summary_tbl = df.describe()\nsummary_tbl',
+        outputs: [
+          {
+            output_type: 'execute_result',
+            execution_count: 1,
+            data: { 'text/plain': NUMERIC_DF_DESCRIBE, 'text/html': '<table><tr><td>16.74</td></tr></table>' },
+            metadata: {},
+          },
+        ],
+      },
+      {
+        source: 's = df["column00"].dropna()\ns.describe()',
+        outputs: [
+          {
+            output_type: 'execute_result',
+            execution_count: 2,
+            data: { 'text/plain': SERIES_DESCRIBE },
+            metadata: {},
+          },
+        ],
+      },
+    ]
+
+    const summaries = extractComputedSummaries(runs)
+    expect(summaries.describeSummary).toContain('studytime')
+    expect(summaries.describeSummary).not.toContain('Name: column00, dtype: float64')
+    expect(summaries.describeSummary).not.toContain('<table>')
+
+    // Series describe alone still works when no DataFrame describe was run.
+    const seriesOnly = extractComputedSummaries([runs[1]])
+    expect(seriesOnly.describeSummary).toContain('Name: column00, dtype: float64')
+  })
+
+  it('includes DataFrame describe in Last Error / Output even via variable assignment while keeping head() omitted', () => {
+    const descVarOutcome = formatLastCellOutcome(
+      [
+        {
+          output_type: 'execute_result',
+          execution_count: 1,
+          data: { 'text/plain': ALL_DF_DESCRIBE, 'text/html': '<table></table>' },
+          metadata: {},
+        },
+      ],
+      'summary = df.describe(include="all")\nsummary',
+    )
+    expect(descVarOutcome.outputText).toContain('school')
+    expect(descVarOutcome.outputText).toContain('16.744222')
+
+    const headOutcome = formatLastCellOutcome(
+      [
+        {
+          output_type: 'execute_result',
+          execution_count: 2,
+          data: { 'text/plain': NUMERIC_DF_DESCRIBE, 'text/html': '<table></table>' },
+          metadata: {},
+        },
+      ],
+      'df.head()',
+    )
+    expect(headOutcome.outputText).toBe('<DataFrame output omitted: no raw rows included>')
+  })
+
+  it('truncates over-cap describe() tables cleanly and leaves opt-in sampleRows untouched', () => {
+    const wideDescribe = [
+      '           count      mean       std       min       25%       50%       75%       max',
+      ...Array.from(
+        { length: 30 },
+        (_, i) =>
+          `col_${String(i).padStart(2, '0')}    649.0     12.34      1.23      0.00     10.00     12.00     14.00     20.00`,
+      ),
+    ].join('\n')
+
+    const summaries = extractComputedSummaries([
+      {
+        source: 'df.describe()',
+        outputs: [{ output_type: 'execute_result', execution_count: 1, data: { 'text/plain': wideDescribe }, metadata: {} }],
+      },
+    ])
+    expect(summaries.describeSummary).not.toBeNull()
+    expect(summaries.describeSummary!.length).toBeLessThanOrEqual(MAX_AI_SUMMARY_CHARS)
+    expect(summaries.describeSummary).toContain('[... summary truncated]')
   })
 })

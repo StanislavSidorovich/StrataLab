@@ -4,7 +4,15 @@ import { resolve, sep } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { Table } from 'apache-arrow'
 import { loadPyodide, type PyodideInterface } from 'pyodide'
-import { buildExampleCellInsertion, parseDmCycleOpen, parseDmCycleStage } from '../src/core/dmCycle'
+import {
+  PHONE_BREAKPOINT_PX,
+  buildExampleCellInsertion,
+  parseDmCycleOpen,
+  parseDmCycleStage,
+  resolveInitialPythonPanels,
+  resolveResizePythonPanels,
+  resolveTogglePythonPanel,
+} from '../src/core/dmCycle'
 import { callKey, cellAt, labCalls, splitCells, tableSql } from '../src/core/pyCells'
 import { datasetById } from '../src/data/datasets'
 import { DM_CYCLE_DATASET, DM_STAGES } from '../src/data/dmCycle'
@@ -65,6 +73,43 @@ describe('Data analysis cycle: pure helpers', () => {
     expect(cells).toHaveLength(2)
     expect(cells[0].source).toBe('x = 10')
     expect(res.run.index).toBe(1)
+  })
+
+  it('keeps at most one Python panel open below PHONE_BREAKPOINT_PX and preserves desktop layout', () => {
+    expect(PHONE_BREAKPOINT_PX).toBe(768)
+
+    // Initial load with both saved open: desktop keeps both, narrow keeps AI helper only.
+    expect(resolveInitialPythonPanels(true, true, 1366)).toEqual({
+      dmCycleOpen: true,
+      aiPanelOpen: true,
+      lastOpened: 'aiHelper',
+    })
+    expect(resolveInitialPythonPanels(true, true, 375)).toEqual({
+      dmCycleOpen: false,
+      aiPanelOpen: true,
+      lastOpened: 'aiHelper',
+    })
+
+    // Narrow screen: opening one closes the other.
+    let s = resolveInitialPythonPanels(false, false, 375)
+    s = resolveTogglePythonPanel(s, 'dmCycle', true, 375)
+    expect(s).toEqual({ dmCycleOpen: true, aiPanelOpen: false, lastOpened: 'dmCycle' })
+    s = resolveTogglePythonPanel(s, 'aiHelper', true, 375)
+    expect(s).toEqual({ dmCycleOpen: false, aiPanelOpen: true, lastOpened: 'aiHelper' })
+    s = resolveTogglePythonPanel(s, 'dmCycle', true, 375)
+    expect(s).toEqual({ dmCycleOpen: true, aiPanelOpen: false, lastOpened: 'dmCycle' })
+
+    // Desktop width: both can stay open together.
+    let d = resolveInitialPythonPanels(false, false, 1366)
+    d = resolveTogglePythonPanel(d, 'aiHelper', true, 1366)
+    d = resolveTogglePythonPanel(d, 'dmCycle', true, 1366)
+    expect(d).toEqual({ dmCycleOpen: true, aiPanelOpen: true, lastOpened: 'dmCycle' })
+
+    // Resizing down closes only the older panel; resizing back up does not flip or re-open.
+    const narrowed = resolveResizePythonPanels(d, 375)
+    expect(narrowed).toEqual({ dmCycleOpen: true, aiPanelOpen: false, lastOpened: 'dmCycle' })
+    expect(resolveResizePythonPanels(narrowed, 1366)).toBe(narrowed)
+    expect(resolveResizePythonPanels(narrowed, 375)).toBe(narrowed)
   })
 })
 

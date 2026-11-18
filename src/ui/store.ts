@@ -18,7 +18,16 @@ import { clearFill } from '../db/fill'
 import { DATASETS, datasetById, datasetFromHash, hashWithoutDataset, type Dataset } from '../data/datasets'
 import { loadDataset, removeDataset, type DatasetProgress } from '../db/datasets'
 import { splitCells } from '../core/pyCells'
-import { DM_CYCLE_OPEN_KEY, buildExampleCellInsertion, parseDmCycleOpen } from '../core/dmCycle'
+import {
+  DM_CYCLE_OPEN_KEY,
+  PHONE_BREAKPOINT_PX,
+  buildExampleCellInsertion,
+  parseDmCycleOpen,
+  resolveInitialPythonPanels,
+  resolveResizePythonPanels,
+  resolveTogglePythonPanel,
+  type PythonPanelId,
+} from '../core/dmCycle'
 import { activeCursorPos, replaceActiveAndFocusCursor } from './SqlEditor'
 import type { Walkthrough } from '../data/walkthroughs'
 import { createSchema, listSchemas, moveTables, renameSchema } from '../db/ownDatasets'
@@ -260,6 +269,8 @@ interface State {
   cellRuns: Record<string, Record<string, CellRun>>
   /** the Data analysis cycle cheat sheet panel in Python tabs is expanded */
   dmCycleOpen: boolean
+  /** which Python panel (`dmCycle` | `aiHelper`) was opened most recently, for narrow viewports */
+  pythonLastPanel: PythonPanelId | null
   /** fallback modal text when clipboard access fails for "Copy context for AI" */
   copyContextFallback: string | null
   /** whether localStorage is writable for AI settings/keys; false keeps them in memory only */
@@ -364,6 +375,11 @@ function initialDmCycleOpen(): boolean {
   }
 }
 
+const viewportWidth = () =>
+  typeof window !== 'undefined' && window.innerWidth > 0 ? window.innerWidth : PHONE_BREAKPOINT_PX
+
+const initialPanels = resolveInitialPythonPanels(initialDmCycleOpen(), false, viewportWidth())
+
 function detectAiStorageAvailable(): boolean {
   try {
     const probe = 'stratalab.ai.__probe__'
@@ -465,7 +481,8 @@ export const useLab = create<State>(() => ({
   checks: {},
   python: { status: 'off' },
   cellRuns: {},
-  dmCycleOpen: initialDmCycleOpen(),
+  dmCycleOpen: initialPanels.dmCycleOpen,
+  pythonLastPanel: initialPanels.lastOpened,
   copyContextFallback: null,
   aiStorageAvailable: detectAiStorageAvailable(),
   aiSettings: loadAiSettings(),
@@ -1872,13 +1889,46 @@ export async function openWalkthrough(w: Walkthrough) {
 
 // ------------------------------------------------------------------ data analysis cycle cheat sheet
 
-export function toggleDmCycle(open?: boolean) {
-  const next = open ?? !get().dmCycleOpen
-  set({ dmCycleOpen: next })
+function persistDmCycleOpen(open: boolean) {
   try {
-    localStorage.setItem(DM_CYCLE_OPEN_KEY, next ? '1' : '0')
+    localStorage.setItem(DM_CYCLE_OPEN_KEY, open ? '1' : '0')
   } catch {
     /* ignore */
+  }
+}
+
+export function toggleDmCycle(open?: boolean) {
+  const s = get()
+  const next = resolveTogglePythonPanel(
+    { dmCycleOpen: s.dmCycleOpen, aiPanelOpen: s.aiPanelOpen, lastOpened: s.pythonLastPanel },
+    'dmCycle',
+    open,
+    viewportWidth(),
+  )
+  set({
+    dmCycleOpen: next.dmCycleOpen,
+    aiPanelOpen: next.aiPanelOpen,
+    pythonLastPanel: next.lastOpened,
+  })
+  persistDmCycleOpen(next.dmCycleOpen)
+}
+
+export function syncPythonPanelsForViewport(widthPx: number) {
+  const s = get()
+  const next = resolveResizePythonPanels(
+    { dmCycleOpen: s.dmCycleOpen, aiPanelOpen: s.aiPanelOpen, lastOpened: s.pythonLastPanel },
+    widthPx,
+  )
+  if (
+    next.dmCycleOpen !== s.dmCycleOpen ||
+    next.aiPanelOpen !== s.aiPanelOpen ||
+    next.lastOpened !== s.pythonLastPanel
+  ) {
+    set({
+      dmCycleOpen: next.dmCycleOpen,
+      aiPanelOpen: next.aiPanelOpen,
+      pythonLastPanel: next.lastOpened,
+    })
   }
 }
 
@@ -1999,7 +2049,18 @@ export function openAiSettings(open = true) {
 }
 
 export function toggleAiPanel(open?: boolean) {
-  set((s) => ({ aiPanelOpen: open ?? !s.aiPanelOpen }))
+  const s = get()
+  const next = resolveTogglePythonPanel(
+    { dmCycleOpen: s.dmCycleOpen, aiPanelOpen: s.aiPanelOpen, lastOpened: s.pythonLastPanel },
+    'aiHelper',
+    open,
+    viewportWidth(),
+  )
+  set({
+    dmCycleOpen: next.dmCycleOpen,
+    aiPanelOpen: next.aiPanelOpen,
+    pythonLastPanel: next.lastOpened,
+  })
 }
 
 export function setAiProvider(provider: AiProvider) {
@@ -2230,7 +2291,7 @@ export async function askAi(opts: AiAskOptions) {
 }
 
 export function askAiFromError(errorText: string) {
-  set({ aiPanelOpen: true })
+  toggleAiPanel(true)
   void askAi({ action: 'why-failed', errorOverride: errorText })
 }
 

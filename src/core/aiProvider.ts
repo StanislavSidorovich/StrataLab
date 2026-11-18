@@ -93,6 +93,7 @@ export function parseAiSettings(raw: string | null): AiSettings {
       parsed.models && typeof parsed.models === 'object' ? (parsed.models as Record<string, unknown>) : {}
     const rawGemini =
       typeof rawModels.gemini === 'string' ? stripGeminiModelsPrefix(rawModels.gemini) : ''
+    // Google retired gemini-2.5-flash for new users (404), so saved settings must not keep the dead id.
     const geminiModel =
       rawGemini && rawGemini !== 'gemini-2.5-flash' ? rawGemini : DEFAULT_AI_MODELS.gemini
     const claudeModel =
@@ -142,6 +143,8 @@ export function redactSecrets(text: string, keys: readonly string[] = []): strin
 export function buildTutorSystemPrompt(): string {
   return [
     'You are a patient, practical data-mining tutor inside Quaera Lab (a browser-based SQL + Python workbench).',
+    'Reply in the same language as the learner\'s question (for example Russian or English), while keeping Python and pandas code identifiers in English.',
+    'Guide the learner step by step through Exploration, Preprocessing, Processing, and Analysis.',
     'Explain the analytical decision and reasoning first before writing code, and ask the learner a brief check-in question about what they think or want to verify when sensible.',
     'Keep code snippets short, clear, and runnable using pandas and Quaera Lab helpers:',
     '- lab.table("table_name") or lab.table("schema.table_name") to load a DuckDB table as a DataFrame',
@@ -458,4 +461,24 @@ export function insertCodeCellBelow(
   const index = i >= 0 ? i + 1 : 0
   const cell = newCells[index] ?? newCells[newCells.length - 1]
   return { text, cursor: cell ? cell.to : text.length }
+}
+
+export type AiSpeechLang = 'ru-RU' | 'en-US'
+export const AI_SPEECH_LANG_KEY = 'stratalab.ai.speechLang'
+
+export function parseAiSpeechLang(raw: string | null, navLang = ''): AiSpeechLang {
+  if (raw === 'ru-RU' || raw === 'en-US') return raw
+  if (/^ru\b/i.test(navLang.trim())) return 'ru-RU'
+  return 'en-US'
+}
+
+export function nextAiSpeechLang(current: AiSpeechLang): AiSpeechLang {
+  return current === 'ru-RU' ? 'en-US' : 'ru-RU'
+}
+
+export function appendDictatedText(existing: string, dictated: string): string {
+  const clean = dictated.trim()
+  if (!clean) return existing
+  const base = existing.replace(/\s+$/, '')
+  return base ? `${base} ${clean}` : clean
 }

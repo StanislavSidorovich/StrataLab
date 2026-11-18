@@ -2,7 +2,7 @@
 // - AiSettingsDialog: opt-in master switch (OFF by default), Gemini/Claude provider, masked key input, model override
 // - AiConsentDialog: plain-words consent before first request per provider
 // - AiHelperPanel: side panel on desktop / bounded section on phone in Python tabs
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   AlertTriangle,
   Check,
@@ -10,6 +10,8 @@ import {
   ExternalLink,
   KeyRound,
   Loader2,
+  Mic,
+  MicOff,
   PlusSquare,
   Send,
   Settings,
@@ -21,11 +23,80 @@ import {
 import {
   AI_KEY_HELP,
   AI_QUICK_ACTIONS,
+  AI_SPEECH_LANG_KEY,
   DEFAULT_AI_MODELS,
+  appendDictatedText,
+  nextAiSpeechLang,
   parseAiReplyBlocks,
+  parseAiSpeechLang,
   type AiProvider,
   type AiQuickAction,
+  type AiSpeechLang,
 } from '../core/aiProvider'
+
+interface SpeechRecognitionAlternativeLike {
+  transcript: string
+}
+
+interface SpeechRecognitionResultLike {
+  isFinal: boolean
+  readonly length: number
+  [index: number]: SpeechRecognitionAlternativeLike
+}
+
+interface SpeechRecognitionResultEventLike {
+  resultIndex: number
+  results: {
+    readonly length: number
+    [index: number]: SpeechRecognitionResultLike
+  }
+}
+
+interface SpeechRecognitionErrorEventLike {
+  error?: string
+}
+
+interface SpeechRecognitionLike {
+  continuous: boolean
+  interimResults: boolean
+  lang: string
+  onresult: ((e: SpeechRecognitionResultEventLike) => void) | null
+  onerror: ((e: SpeechRecognitionErrorEventLike) => void) | null
+  onend: (() => void) | null
+  start: () => void
+  stop: () => void
+  abort: () => void
+}
+
+type SpeechRecognitionCtor = new () => SpeechRecognitionLike
+
+function getSpeechRecognitionCtor(): SpeechRecognitionCtor | null {
+  if (typeof window === 'undefined') return null
+  const w = window as unknown as {
+    SpeechRecognition?: SpeechRecognitionCtor
+    webkitSpeechRecognition?: SpeechRecognitionCtor
+  }
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null
+}
+
+function loadSpeechLang(): AiSpeechLang {
+  try {
+    return parseAiSpeechLang(
+      localStorage.getItem(AI_SPEECH_LANG_KEY),
+      typeof navigator !== 'undefined' ? navigator.language : '',
+    )
+  } catch {
+    return parseAiSpeechLang(null, typeof navigator !== 'undefined' ? navigator.language : '')
+  }
+}
+
+function saveSpeechLang(lang: AiSpeechLang) {
+  try {
+    localStorage.setItem(AI_SPEECH_LANG_KEY, lang)
+  } catch {
+    /* ignore when localStorage is unavailable */
+  }
+}
 import {
   askAi,
   cancelAiConsent,
@@ -361,6 +432,30 @@ export function AiHelperPanel() {
 
   const [question, setQuestion] = useState('')
   const [includeSampleRows, setIncludeSampleRows] = useState(false)
+  const [speechLang, setSpeechLang] = useState<AiSpeechLang>(loadSpeechLang)
+  const [listening, setListening] = useState(false)
+  const [speechError, setSpeechError] = useState<string | null>(null)
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
+  const speechSupported = getSpeechRecognitionCtor() !== null
+
+  const stopListening = () => {
+    const rec = recognitionRef.current
+    if (rec) {
+      recognitionRef.current = null
+      try {
+        rec.stop()
+      } catch {
+        /* ignore already stopped */
+      }
+    }
+    setListening(false)
+  }
+
+  useEffect(() => {
+    if (!open || tabDialect(tab) !== 'python') stopListening()
+  }, [open, tab])
+
+  useEffect(() => () => stopListening(), [])
 
   if (!open || tabDialect(tab) !== 'python') return null
 
@@ -371,7 +466,64 @@ export function AiHelperPanel() {
   const ready = settings.enabled && hasKey
   const loading = req.status === 'loading'
 
+  const toggleDictation = () => {
+    if (listening) {
+      stopListening()
+      return
+    }
+    const Ctor = getSpeechRecognitionCtor()
+    if (!Ctor) return
+    setSpeechError(null)
+    try {
+      const rec = new Ctor()
+      rec.continuous = true
+      rec.interimResults = false
+      rec.lang = speechLang
+      rec.onresult = (e) => {
+        let added = ''
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const item = e.results[i]
+          if (item?.isFinal && item[0]?.transcript) {
+            added = appendDictatedText(added, item[0].transcript)
+          }
+        }
+        if (added) setQuestion((prev) => appendDictatedText(prev, added))
+      }
+      rec.onerror = (e) => {
+        const code = e?.error ?? ''
+        if (code === 'not-allowed' || code === 'service-not-allowed') {
+          setSpeechError('Microphone access denied in this browser.')
+        } else if (code === 'audio-capture') {
+          setSpeechError('No microphone device found.')
+        } else if (code && code !== 'no-speech' && code !== 'aborted') {
+          setSpeechError(`Voice dictation stopped (${code}).`)
+        }
+        recognitionRef.current = null
+        setListening(false)
+      }
+      rec.onend = () => {
+        recognitionRef.current = null
+        setListening(false)
+      }
+      recognitionRef.current = rec
+      rec.start()
+      setListening(true)
+    } catch {
+      recognitionRef.current = null
+      setListening(false)
+      setSpeechError('Could not start voice dictation in this browser.')
+    }
+  }
+
+  const toggleSpeechLang = () => {
+    if (listening) stopListening()
+    const next = nextAiSpeechLang(speechLang)
+    setSpeechLang(next)
+    saveSpeechLang(next)
+  }
+
   const sendQuick = (action: AiQuickAction) => {
+    stopListening()
     const withRows = includeSampleRows
     setIncludeSampleRows(false)
     void askAi({ action, question, includeSampleRows: withRows })
@@ -380,6 +532,7 @@ export function AiHelperPanel() {
   const sendQuestion = () => {
     const q = question.trim()
     if (!q || loading) return
+    stopListening()
     const withRows = includeSampleRows
     setIncludeSampleRows(false)
     void askAi({ question: q, includeSampleRows: withRows })
@@ -480,7 +633,7 @@ export function AiHelperPanel() {
                 <span>Also send the first 20 rows for this request</span>
               </label>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-1.5">
                 <button
                   type="button"
                   className="btn btn-primary"
@@ -489,6 +642,41 @@ export function AiHelperPanel() {
                   onClick={sendQuestion}
                 >
                   <Send size={12} /> Send
+                </button>
+                <button
+                  type="button"
+                  className="btn"
+                  style={{
+                    padding: '4px 8px',
+                    fontSize: 12,
+                    ...(listening
+                      ? { borderColor: 'var(--danger)', color: 'var(--danger)', background: 'var(--danger-soft)' }
+                      : undefined),
+                  }}
+                  disabled={loading || !speechSupported}
+                  onClick={toggleDictation}
+                  aria-pressed={listening}
+                  aria-label={listening ? 'Stop voice dictation' : 'Dictate question with microphone'}
+                  title={
+                    speechSupported
+                      ? listening
+                        ? 'Stop dictation'
+                        : 'Dictate question into the input box (never auto-sends)'
+                      : 'Voice dictation uses browser SpeechRecognition (unavailable here)'
+                  }
+                >
+                  {listening ? <MicOff size={13} /> : <Mic size={13} />}
+                  <span className="hidden sm:inline">{listening ? 'Stop' : 'Speak'}</span>
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  style={{ padding: '4px 6px', fontSize: 11 }}
+                  disabled={loading || !speechSupported}
+                  onClick={toggleSpeechLang}
+                  title={`Dictation language: ${speechLang === 'ru-RU' ? 'Russian' : 'English'} (click to switch)`}
+                >
+                  {speechLang === 'ru-RU' ? 'RU' : 'EN'}
                 </button>
                 {loading && (
                   <button
@@ -501,6 +689,16 @@ export function AiHelperPanel() {
                   </button>
                 )}
               </div>
+              {speechError && (
+                <div style={{ fontSize: 11, color: 'var(--danger)' }} role="status">
+                  {speechError}
+                </div>
+              )}
+              {listening && !speechError && (
+                <div style={{ fontSize: 11, color: 'var(--accent)' }} role="status">
+                  Listening ({speechLang === 'ru-RU' ? 'RU' : 'EN'})… speak your question, then click Send when ready.
+                </div>
+              )}
             </div>
 
             {req.status === 'loading' && (

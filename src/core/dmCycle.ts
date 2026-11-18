@@ -58,3 +58,75 @@ export function buildExampleCellInsertion(
     run: { code: cell.source, line: cell.line, index: resolvedIndex, source: cell.source },
   }
 }
+
+/** Matches Tailwind `md:` (`768px`) and `TablesSheet` in `src/ui/App.tsx`. */
+export const PHONE_BREAKPOINT_PX = 768
+
+export type PythonPanelId = 'dmCycle' | 'aiHelper'
+
+export interface PythonPanelsState {
+  dmCycleOpen: boolean
+  aiPanelOpen: boolean
+  lastOpened: PythonPanelId | null
+}
+
+/**
+ * Resolves initial panel visibility from saved preferences and viewport width. On narrow screens
+ * (`< 768px`), if both panels start open, only `aiHelper` stays open so the editor keeps room.
+ */
+export function resolveInitialPythonPanels(
+  savedDmCycleOpen: boolean,
+  savedAiPanelOpen: boolean,
+  widthPx: number,
+): PythonPanelsState {
+  if (widthPx < PHONE_BREAKPOINT_PX && savedDmCycleOpen && savedAiPanelOpen) {
+    return { dmCycleOpen: false, aiPanelOpen: true, lastOpened: 'aiHelper' }
+  }
+  const lastOpened: PythonPanelId | null = savedAiPanelOpen
+    ? 'aiHelper'
+    : savedDmCycleOpen
+      ? 'dmCycle'
+      : null
+  return { dmCycleOpen: savedDmCycleOpen, aiPanelOpen: savedAiPanelOpen, lastOpened }
+}
+
+/**
+ * Computes panel state when toggling `target`. Below `PHONE_BREAKPOINT_PX`, opening one panel
+ * closes the other; on desktop widths both can stay open together.
+ */
+export function resolveTogglePythonPanel(
+  state: PythonPanelsState,
+  target: PythonPanelId,
+  nextOpen: boolean | undefined,
+  widthPx: number,
+): PythonPanelsState {
+  const current = target === 'dmCycle' ? state.dmCycleOpen : state.aiPanelOpen
+  const open = nextOpen ?? !current
+  let dmCycleOpen = target === 'dmCycle' ? open : state.dmCycleOpen
+  let aiPanelOpen = target === 'aiHelper' ? open : state.aiPanelOpen
+  const lastOpened = open ? target : state.lastOpened
+
+  if (open && widthPx < PHONE_BREAKPOINT_PX) {
+    if (target === 'dmCycle') aiPanelOpen = false
+    else dmCycleOpen = false
+  }
+
+  return { dmCycleOpen, aiPanelOpen, lastOpened }
+}
+
+/**
+ * Reconciles panels across viewport resizes/rotations without flipping panels back and forth:
+ * only closes the older panel if width drops below `PHONE_BREAKPOINT_PX` while both are open.
+ */
+export function resolveResizePythonPanels(
+  state: PythonPanelsState,
+  widthPx: number,
+): PythonPanelsState {
+  if (widthPx >= PHONE_BREAKPOINT_PX || !(state.dmCycleOpen && state.aiPanelOpen)) {
+    return state
+  }
+  if (state.lastOpened === 'dmCycle') {
+    return { dmCycleOpen: true, aiPanelOpen: false, lastOpened: 'dmCycle' }
+  }
+  return { dmCycleOpen: false, aiPanelOpen: true, lastOpened: 'aiHelper' }
+}
