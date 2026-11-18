@@ -1,6 +1,7 @@
 // The cells a new Python tab starts with. They must run: the example reads a table that is really
 // loaded (the demo shop's, else the first table the user has), and says how to get one when none is.
 import { PYTHON_STARTER } from '../data/demo'
+import { generateTableNotebook, type TableNotebookInput } from './tableNotebook'
 
 export interface StarterTable {
   schema: string
@@ -70,4 +71,12 @@ df.describe(include="all").T
 # %%
 df.dtypes
 `
+}
+
+/**
+ * "New Python notebook for this table": a guided 4-stage notebook tailored to the table's
+ * columns, types, and size.
+ */
+export function pythonNotebookForTable(table: TableNotebookInput): string {
+  return generateTableNotebook(table)
 }

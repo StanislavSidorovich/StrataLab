@@ -34,8 +34,8 @@ import { hashWithPipeline, hashWithoutPipeline, pipelineFromHash } from '../core
 import { BOOK_TABLES } from '../data/pyPractice/tables'
 import { duckdbScript, translateTsql, type TranslatedStatement, type TranslatorProgress } from '../dialects/tsql'
 import { copyToPostgres, explainPostgres, getPostgres, postgresCatalog, runPostgres } from '../dialects/postgres'
-import { copyTitle, dialectSwitch, rememberClosed } from '../core/tabs'
-import { pythonStarter, pythonTableStarter } from '../core/pyStarter'
+import { copyTitle, dialectSwitch, findMatchingTab, rememberClosed } from '../core/tabs'
+import { pythonNotebookForTable, pythonStarter, pythonTableStarter } from '../core/pyStarter'
 import { backupFileName } from '../core/backup'
 import { backupDatabase, restoreDatabase } from '../db/backup'
 import { download, exportTablesCsv, pickFolder, resultRows } from '../db/export'
@@ -772,6 +772,12 @@ export function newPythonNotebookOn(name: string, title = name) {
   return addTab(pythonTableStarter(name, title), `${title} · Python`, 'python')
 }
 
+/** "New Python notebook for this table": opens or focuses a 4-stage notebook tailored to `t`. */
+export function newPythonNotebookForTable(t: TableInfo) {
+  const code = pythonNotebookForTable(t)
+  return addOrFocusTab(code, `${t.name} · Python`, 'python')
+}
+
 /** The example for a Python tab, over what is loaded now. */
 export const currentPythonStarter = () => pythonStarter(get().tables, hasDemoTables(get().tables))
 
@@ -993,7 +999,7 @@ export function addTab(sql = '', title?: string, dialect?: Dialect) {
  * starter query opened again, a guide example): keyed by content, in memory, so it needs no storage.
  */
 export function addOrFocusTab(sql: string, title: string, dialect?: Dialect) {
-  const same = get().tabs.find((t) => t.title === title && t.sql === sql && tabDialect(t) === (dialect ?? 'duckdb'))
+  const same = findMatchingTab(get().tabs, sql, title, dialect ?? 'duckdb')
   if (same) {
     set({ activeTab: same.id })
     return same.id

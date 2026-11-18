@@ -5,7 +5,7 @@
 import { insertAtCursor } from './SqlEditor'
 import { createContext, useContext, useRef, useState } from 'react'
 import { CheckSquare, CornerDownLeft, ChevronDown, ChevronRight, ClipboardPaste, Database, DatabaseZap, Eye, Folder, FolderPlus, Library, Loader2, MoreHorizontal, Network, RefreshCw, Search, Sparkles, Store, Table2, Upload, X } from 'lucide-react'
-import { RESERVED_IDS, addTab, copySchemaToPostgres, newPythonNotebookOn, downloadBackup, dropPgObject, dependentsOf, exportDatasetCsv, dropDataset, dropObjects, enqueueFiles, hasDemoTables, hideDemo, loadDemo, newDataset, openAndRun, openAsModel, openCatalog, openDataset, openGenerate, openGuide, openMove, openPractice, openTables, ownTables, pasteTableFromClipboard, refreshTree, renameDataset, renameObject, restoreBackup, useLab } from './store'
+import { RESERVED_IDS, addTab, copySchemaToPostgres, newPythonNotebookForTable, newPythonNotebookOn, downloadBackup, dropPgObject, dependentsOf, exportDatasetCsv, dropDataset, dropObjects, enqueueFiles, hasDemoTables, hideDemo, loadDemo, newDataset, openAndRun, openAsModel, openCatalog, openDataset, openGenerate, openGuide, openMove, openPractice, openTables, ownTables, pasteTableFromClipboard, refreshTree, renameDataset, renameObject, restoreBackup, useLab } from './store'
 import { isOwnSchema } from '../core/ownDatasets'
 import { qualifiedName } from '../core/sql'
 import { isServiceTable, treeMatch, type TreeMatch } from '../core/tree'
@@ -533,7 +533,7 @@ function TableMenu({ t, name, close, pick }: { t: TableInfo; name: string; close
   const fillable = (isOwnSchema(t.schema, RESERVED_IDS) || t.schema === DEMO_SCHEMA) && t.kind === 'table'
   const items: MenuItem[] = [
     ['New SQL query', () => addTab(`SELECT *\nFROM ${name}\nLIMIT 100;\n`, t.name)],
-    ['New Python notebook', () => newPythonNotebookOn(labName(t), t.name), { hint: `lab.table(${JSON.stringify(labName(t))})` }],
+    ['New Python notebook for this table', () => newPythonNotebookForTable(t), { hint: `lab.table(${JSON.stringify(labName(t))})` }],
     'separator',
     ['Select first 100 rows', () => openAndRun(`SELECT * FROM ${name} LIMIT 100;`, t.name)],
     ['Count rows', () => openAndRun(`SELECT count(*) AS rows FROM ${name};`, `count ${t.name}`)],

@@ -34,3 +34,13 @@ export function dialectSwitch(from: string, to: string, text: string): 'in-place
   const crossesKinds = (from === 'python') !== (to === 'python')
   return crossesKinds && text.trim() ? 'new-tab' : 'in-place'
 }
+
+/** Finds an already-open tab with the same title, code, and dialect so repeated opens focus instead of duplicating. */
+export function findMatchingTab<T extends { title: string; sql: string; dialect?: string }>(
+  tabs: readonly T[],
+  sql: string,
+  title: string,
+  dialect = 'duckdb',
+): T | undefined {
+  return tabs.find((t) => t.title === title && t.sql === sql && (t.dialect ?? 'duckdb') === dialect)
+}
