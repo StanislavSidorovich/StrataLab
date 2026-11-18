@@ -23,13 +23,14 @@ import { BuildPage } from './build/BuildPage'
 import { GuideDialog } from './Guide'
 import { CompareDialog } from './Compare'
 import { CopyContextDialog } from './CopyContextDialog'
+import { AiConsentDialog, AiHelperPanel, AiSettingsDialog } from './AiHelper'
 import { DialectBar } from './DialectBar'
 import { DmCyclePanel } from './DmCyclePanel'
 import { checkForUpdates, updateCheckMessage, useUpdateReady } from '../pwa/register'
 import { memoryNote } from '../core/dbLock'
 import { takeDatabaseHere } from '../db/engine'
 import { engineLoadingLabel, engineLoadingShort } from './EngineLoading'
-import { addTab, closeTabs, currentPythonStarter, newPythonTab, openPipeline, openPractice, openPracticeBook, switchTabDialect, tabDialect, downloadBackup, duplicateTab, enqueueFiles, openAbout, openCatalog, openShare, openTables, openWelcome, pasteTable, pasteTableFromClipboard, renameTab, reopenClosedTab, updateNow, useLab } from './store'
+import { addTab, closeTabs, currentPythonStarter, newPythonTab, openAiSettings, openPipeline, openPractice, openPracticeBook, switchTabDialect, tabDialect, downloadBackup, duplicateTab, enqueueFiles, openAbout, openCatalog, openShare, openTables, openWelcome, pasteTable, pasteTableFromClipboard, renameTab, reopenClosedTab, updateNow, useLab } from './store'
 import { AppearanceButton } from './Appearance'
 import { Menu, useLongPress, type MenuItem } from './Menu'
 import { tabsToClose } from '../core/tabs'
@@ -96,7 +97,7 @@ export function App() {
   }, [])
 
   const [split, setSplit] = useState(0.45)
-  const main = useRef<HTMLDivElement>(null)
+  const workArea = useRef<HTMLDivElement>(null)
   const editorBox = useRef<HTMLDivElement>(null)
   const dragging = useDropZone()
 
@@ -133,7 +134,7 @@ export function App() {
     // The editor and the results share what is left under the tab strip and the bars, minus the handle itself.
     const handle = (e.currentTarget as HTMLElement).getBoundingClientRect()
     const top = editorBox.current!.getBoundingClientRect().top
-    const area = main.current!.getBoundingClientRect().bottom - top - handle.height
+    const area = workArea.current!.getBoundingClientRect().bottom - top - handle.height
     const move = (ev: PointerEvent) => setSplit(Math.min(0.8, Math.max(0.15, (ev.clientY - handle.height / 2 - top) / area)))
     const up = () => {
       window.removeEventListener('pointermove', move)
@@ -162,17 +163,22 @@ export function App() {
             aria-orientation="vertical"
           />
         </div>
-        <div ref={main} className="flex-1 min-w-0 flex flex-col">
+        <div className="flex-1 min-w-0 flex flex-col">
           <Tabs />
           <DialectBar />
           <DmCyclePanel />
           <TaskBar />
-          <div ref={editorBox} style={{ flex: `${split} 1 0` }} className="min-h-0">
-            <SqlEditor />
-          </div>
-          <div onPointerDown={startResize} className="h-1.5 shrink-0 cursor-row-resize hover:bg-[var(--accent)]" style={{ background: 'var(--line)' }} title="Drag to resize" />
-          <div style={{ flex: `${1 - split} 1 0` }} className="min-h-0">
-            <Results />
+          <div className="flex-1 min-h-0 flex flex-col md:flex-row">
+            <div ref={workArea} className="flex-1 min-w-0 min-h-0 flex flex-col">
+              <div ref={editorBox} style={{ flex: `${split} 1 0` }} className="min-h-0">
+                <SqlEditor />
+              </div>
+              <div onPointerDown={startResize} className="h-1.5 shrink-0 cursor-row-resize hover:bg-[var(--accent)]" style={{ background: 'var(--line)' }} title="Drag to resize" />
+              <div style={{ flex: `${1 - split} 1 0` }} className="min-h-0">
+                <Results />
+              </div>
+            </div>
+            <AiHelperPanel />
           </div>
         </div>
       </div>
@@ -218,6 +224,8 @@ export function App() {
       <GuideDialog />
       <CompareDialog />
       <CopyContextDialog />
+      <AiSettingsDialog />
+      <AiConsentDialog />
     </div>
   )
 }
@@ -387,6 +395,7 @@ function HelpMenu() {
     ['Power BI practice on Kaiyo Trading', () => openPracticeBook('powerbi')],
     ['Data pipeline on Kaiyo Trading', () => openPipeline('kaiyo-sellout')],
     'separator',
+    ['AI helper (optional)…', () => openAiSettings(true)],
     ['Check for updates', () => void runUpdateCheck()],
     ['About & licences', () => openAbout('about')],
     ['Privacy: your data stays here', () => openAbout('privacy')],

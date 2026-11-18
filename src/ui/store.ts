@@ -44,6 +44,24 @@ import {
   type AiContextTable,
   type BuiltAiContext,
 } from '../core/aiContext'
+import {
+  AI_API_KEY_STORAGE,
+  AI_CONSENT_KEY,
+  AI_QUICK_ACTIONS,
+  AI_SETTINGS_KEY,
+  DEFAULT_AI_MODELS,
+  buildProviderRequest,
+  buildTutorSystemPrompt,
+  classifyFetchError,
+  insertCodeCellBelow,
+  parseAiConsent,
+  parseAiSettings,
+  parseProviderReply,
+  type AiConsent,
+  type AiProvider,
+  type AiQuickAction,
+  type AiSettings,
+} from '../core/aiProvider'
 import { backupFileName } from '../core/backup'
 import { backupDatabase, restoreDatabase } from '../db/backup'
 import { download, exportTablesCsv, pickFolder, resultRows } from '../db/export'
@@ -244,7 +262,38 @@ interface State {
   dmCycleOpen: boolean
   /** fallback modal text when clipboard access fails for "Copy context for AI" */
   copyContextFallback: string | null
+  /** whether localStorage is writable for AI settings/keys; false keeps them in memory only */
+  aiStorageAvailable: boolean
+  /** optional bring-your-own-key AI helper settings (OFF by default, never stores API keys) */
+  aiSettings: AiSettings
+  /** per-provider consent confirmation for sending schema/summary context */
+  aiConsent: AiConsent
+  /** API keys loaded solely from AI_API_KEY_STORAGE[provider], never saved inside aiSettings */
+  aiKeys: Record<AiProvider, string>
+  aiSettingsOpen: boolean
+  aiConsentPrompt: AiConsentPrompt | null
+  aiPanelOpen: boolean
+  aiRequest: AiRequestState
 }
+
+export interface AiAskOptions {
+  action?: AiQuickAction
+  question?: string
+  includeSampleRows?: boolean
+  errorOverride?: string
+}
+
+export interface AiConsentPrompt {
+  provider: AiProvider
+  pendingEnable: boolean
+  pendingAsk?: AiAskOptions
+}
+
+export type AiRequestState =
+  | { status: 'idle' }
+  | { status: 'loading'; promptLabel: string }
+  | { status: 'done'; text: string; truncated: boolean; provider: AiProvider; model: string; promptLabel: string }
+  | { status: 'error'; kind: string; message: string; promptLabel: string }
 
 export interface PracticeProgress {
   solved: string[]
@@ -315,6 +364,48 @@ function initialDmCycleOpen(): boolean {
   }
 }
 
+function detectAiStorageAvailable(): boolean {
+  try {
+    const probe = 'stratalab.ai.__probe__'
+    localStorage.setItem(probe, '1')
+    const ok = localStorage.getItem(probe) === '1'
+    localStorage.removeItem(probe)
+    return ok
+  } catch {
+    return false
+  }
+}
+
+function loadAiSettings(): AiSettings {
+  try {
+    return parseAiSettings(localStorage.getItem(AI_SETTINGS_KEY))
+  } catch {
+    return parseAiSettings(null)
+  }
+}
+
+function loadAiConsent(): AiConsent {
+  try {
+    return parseAiConsent(localStorage.getItem(AI_CONSENT_KEY))
+  } catch {
+    return parseAiConsent(null)
+  }
+}
+
+function loadAiKeys(): Record<AiProvider, string> {
+  const readKey = (provider: AiProvider): string => {
+    try {
+      return localStorage.getItem(AI_API_KEY_STORAGE[provider]) ?? ''
+    } catch {
+      return ''
+    }
+  }
+  return {
+    gemini: readKey('gemini'),
+    claude: readKey('claude'),
+  }
+}
+
 function initialTheme(): 'light' | 'dark' {
   try {
     const t = localStorage.getItem(THEME_KEY)
@@ -376,6 +467,14 @@ export const useLab = create<State>(() => ({
   cellRuns: {},
   dmCycleOpen: initialDmCycleOpen(),
   copyContextFallback: null,
+  aiStorageAvailable: detectAiStorageAvailable(),
+  aiSettings: loadAiSettings(),
+  aiConsent: loadAiConsent(),
+  aiKeys: loadAiKeys(),
+  aiSettingsOpen: false,
+  aiConsentPrompt: null,
+  aiPanelOpen: false,
+  aiRequest: { status: 'idle' },
 }))
 
 /** The user's own tables and views (schema main), without the catalog datasets. */
@@ -433,6 +532,25 @@ useLab.subscribe((s, prev) => {
   if (s.theme !== prev.theme) {
     try {
       localStorage.setItem(THEME_KEY, s.theme)
+    } catch {
+      /* ignore */
+    }
+  }
+  if (s.aiSettings !== prev.aiSettings) {
+    try {
+      const safeSettings: AiSettings = {
+        enabled: s.aiSettings.enabled,
+        provider: s.aiSettings.provider,
+        models: s.aiSettings.models,
+      }
+      localStorage.setItem(AI_SETTINGS_KEY, JSON.stringify(safeSettings))
+    } catch {
+      /* ignore */
+    }
+  }
+  if (s.aiConsent !== prev.aiConsent) {
+    try {
+      localStorage.setItem(AI_CONSENT_KEY, JSON.stringify(s.aiConsent))
     } catch {
       /* ignore */
     }
@@ -1861,6 +1979,268 @@ export async function copyContextForAi(tabId: string, cursorPos: number) {
   } catch {
     set({ copyContextFallback: built.text })
   }
+}
+
+// ------------------------------------------------------------------ Optional in-app AI helper (BYOK)
+
+let activeAiController: AbortController | null = null
+let activeAiGen = 0
+
+function abortActiveAiRequest() {
+  activeAiGen++
+  if (activeAiController) {
+    activeAiController.abort()
+    activeAiController = null
+  }
+}
+
+export function openAiSettings(open = true) {
+  set({ aiSettingsOpen: open })
+}
+
+export function toggleAiPanel(open?: boolean) {
+  set((s) => ({ aiPanelOpen: open ?? !s.aiPanelOpen }))
+}
+
+export function setAiProvider(provider: AiProvider) {
+  abortActiveAiRequest()
+  set((s) => ({
+    aiSettings: { ...s.aiSettings, provider },
+    aiRequest: s.aiRequest.status === 'loading' ? { status: 'idle' } : s.aiRequest,
+  }))
+}
+
+export function setAiModel(provider: AiProvider, model: string) {
+  set((s) => ({
+    aiSettings: {
+      ...s.aiSettings,
+      models: { ...s.aiSettings.models, [provider]: model },
+    },
+  }))
+}
+
+export function setAiApiKey(provider: AiProvider, key: string) {
+  try {
+    if (key.trim()) localStorage.setItem(AI_API_KEY_STORAGE[provider], key)
+    else localStorage.removeItem(AI_API_KEY_STORAGE[provider])
+  } catch {
+    /* session-only memory fallback when storage is unavailable */
+  }
+  set((s) => ({ aiKeys: { ...s.aiKeys, [provider]: key } }))
+}
+
+export function removeAiApiKey(provider: AiProvider) {
+  try {
+    localStorage.removeItem(AI_API_KEY_STORAGE[provider])
+  } catch {
+    /* ignore */
+  }
+  const active = get().aiSettings.provider === provider
+  if (active) abortActiveAiRequest()
+  set((s) => ({
+    aiKeys: { ...s.aiKeys, [provider]: '' },
+    aiRequest: active && s.aiRequest.status === 'loading' ? { status: 'idle' } : s.aiRequest,
+  }))
+}
+
+export function requestEnableAi(enable: boolean) {
+  const s = get()
+  if (!enable) {
+    abortActiveAiRequest()
+    set({
+      aiSettings: { ...s.aiSettings, enabled: false },
+      aiRequest: s.aiRequest.status === 'loading' ? { status: 'idle' } : s.aiRequest,
+    })
+    return
+  }
+  const provider = s.aiSettings.provider
+  if (!s.aiConsent[provider]) {
+    set({ aiConsentPrompt: { provider, pendingEnable: true } })
+    return
+  }
+  set({ aiSettings: { ...s.aiSettings, enabled: true } })
+}
+
+export function confirmAiConsent() {
+  const prompt = get().aiConsentPrompt
+  if (!prompt) return
+  set((s) => ({
+    aiConsent: { ...s.aiConsent, [prompt.provider]: true },
+    aiConsentPrompt: null,
+    ...(prompt.pendingEnable ? { aiSettings: { ...s.aiSettings, enabled: true } } : {}),
+  }))
+  if (prompt.pendingAsk) {
+    void askAi(prompt.pendingAsk)
+  }
+}
+
+export function cancelAiConsent() {
+  set({ aiConsentPrompt: null })
+}
+
+export function cancelAiRequest() {
+  abortActiveAiRequest()
+  set({ aiRequest: { status: 'idle' } })
+}
+
+async function fetchSampleRowsForAi(tableName: string | undefined): Promise<AiContextSampleRows | null> {
+  const tables = get().tables
+  const target =
+    (tableName ? tables.find((t) => labName(t).toLowerCase() === tableName.toLowerCase()) : undefined) ??
+    tables[0]
+  if (!target) return null
+  const sqlRef =
+    target.schema === 'main'
+      ? quoteIdent(target.name)
+      : `${quoteIdent(target.schema)}.${quoteIdent(target.name)}`
+  try {
+    const arrowTable = await query(`SELECT * FROM ${sqlRef} LIMIT 20`)
+    const { header, rows } = resultRows(arrowTable)
+    return {
+      tableName: labName(target),
+      header,
+      rows: rows.map((row) => row.map((v) => (v == null ? 'NULL' : String(v)))),
+    }
+  } catch {
+    return null
+  }
+}
+
+export async function askAi(opts: AiAskOptions) {
+  if (get().aiRequest.status === 'loading') return
+  const s = get()
+  const provider = s.aiSettings.provider
+
+  if (!s.aiSettings.enabled) {
+    set({ aiSettingsOpen: true })
+    return
+  }
+
+  if (!s.aiConsent[provider]) {
+    set({ aiConsentPrompt: { provider, pendingEnable: false, pendingAsk: opts } })
+    return
+  }
+
+  const quick = opts.action ? AI_QUICK_ACTIONS.find((a) => a.id === opts.action) : undefined
+  const userQuestion = opts.question?.trim() ?? ''
+  if (!quick && !userQuestion) return
+
+  const promptLabel = quick ? quick.label : userQuestion.slice(0, 80)
+  const apiKey = s.aiKeys[provider].trim()
+  if (!apiKey) {
+    const label = provider === 'gemini' ? 'Gemini' : 'Claude'
+    set({
+      aiRequest: {
+        status: 'error',
+        kind: 'auth',
+        message: `No ${label} API key stored. Add your key in AI helper settings.`,
+        promptLabel,
+      },
+      aiSettingsOpen: true,
+    })
+    return
+  }
+
+  const baseInstruction = quick
+    ? userQuestion
+      ? `${quick.instruction}\n\nLearner question: ${userQuestion}`
+      : quick.instruction
+    : userQuestion
+  const instruction = opts.errorOverride
+    ? `${baseInstruction}\n\nError to explain: ${opts.errorOverride}`
+    : baseInstruction
+
+  const controller = new AbortController()
+  const gen = ++activeAiGen
+  activeAiController = controller
+  set({ aiRequest: { status: 'loading', promptLabel } })
+
+  const tabId = s.activeTab
+  const cursorPos = activeCursorPos()
+
+  try {
+    let sampleRows: AiContextSampleRows | null = null
+    if (opts.includeSampleRows) {
+      const preContext = gatherTabAiContext(tabId, cursorPos, { sampleRows: null })
+      sampleRows = await fetchSampleRowsForAi(preContext.referencedTables[0])
+      if (gen !== activeAiGen || !get().aiSettings.enabled) return
+    }
+
+    const built = gatherTabAiContext(tabId, cursorPos, { sampleRows, instruction })
+    const currentSettings = get().aiSettings
+    const model = currentSettings.models[provider].trim() || DEFAULT_AI_MODELS[provider]
+    const req = buildProviderRequest({
+      provider,
+      apiKey,
+      model,
+      systemPrompt: buildTutorSystemPrompt(),
+      userPrompt: built.text,
+    })
+
+    const res = await fetch(req.url, {
+      method: req.method,
+      headers: req.headers,
+      body: req.body,
+      signal: controller.signal,
+    })
+    const rawBody = await res.text()
+    if (gen !== activeAiGen) return
+
+    const outcome = parseProviderReply(provider, res.status, rawBody, [apiKey])
+    if (outcome.ok) {
+      set({
+        aiRequest: {
+          status: 'done',
+          text: outcome.text,
+          truncated: outcome.truncated,
+          provider,
+          model,
+          promptLabel,
+        },
+      })
+    } else {
+      set({
+        aiRequest: {
+          status: 'error',
+          kind: outcome.kind,
+          message: outcome.message,
+          promptLabel,
+        },
+      })
+    }
+  } catch (err) {
+    if (gen !== activeAiGen) return
+    const online = typeof navigator !== 'undefined' ? navigator.onLine : true
+    const outcome = classifyFetchError(err, online, [apiKey])
+    if (outcome.kind === 'aborted') {
+      set({ aiRequest: { status: 'idle' } })
+    } else {
+      set({
+        aiRequest: {
+          status: 'error',
+          kind: outcome.kind,
+          message: outcome.message,
+          promptLabel,
+        },
+      })
+    }
+  } finally {
+    if (activeAiController === controller) activeAiController = null
+  }
+}
+
+export function askAiFromError(errorText: string) {
+  set({ aiPanelOpen: true })
+  void askAi({ action: 'why-failed', errorOverride: errorText })
+}
+
+export function insertAiCodeCell(code: string) {
+  const s = get()
+  const tab = s.tabs.find((t) => t.id === s.activeTab)
+  if (!tab) return
+  const cursorPos = activeCursorPos()
+  const { text, cursor } = insertCodeCellBelow(tab.sql, cursorPos, code)
+  if (!replaceActiveAndFocusCursor(text, cursor)) setTabSql(tab.id, text)
 }
 
 // ------------------------------------------------------------------ practice pages on Kaiyo

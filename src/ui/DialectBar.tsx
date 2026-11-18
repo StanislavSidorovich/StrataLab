@@ -2,8 +2,8 @@
 // to DuckDB first (sqlglot) and the translation can be seen side by side; PostgreSQL runs on a
 // real PostgreSQL (PGlite), a separate database that tables are copied into.
 import { useEffect, useState } from 'react'
-import { ArrowLeftRight, BookOpen, ChevronDown, ClipboardCopy, Copy, ListTree, Loader2, Play, Plus, Redo2, RotateCcw, Search, Square, SquareSlash, Undo2, WandSparkles, X } from 'lucide-react'
-import { copyContextForAi, copySchemaToPostgres, explainSql, ownTables, openCompare, openWelcome, restartPython, retryPython, setTabDialect, showTranslation, startPython, stopQuery, tabDialect, toggleDmCycle, useLab } from './store'
+import { ArrowLeftRight, BookOpen, ChevronDown, ClipboardCopy, Copy, ListTree, Loader2, Play, Plus, Redo2, RotateCcw, Search, Sparkles, Square, SquareSlash, Undo2, WandSparkles, X } from 'lucide-react'
+import { copyContextForAi, copySchemaToPostgres, explainSql, ownTables, openCompare, openWelcome, restartPython, retryPython, setTabDialect, showTranslation, startPython, stopQuery, tabDialect, toggleAiPanel, toggleDmCycle, useLab } from './store'
 import { activeCursorPos, activeSql, addCell, editorCommand, formatActiveTab, runActive, runActiveAll, runActiveCell } from './SqlEditor'
 import { Menu, type MenuItem } from './Menu'
 import { SQL_DIALECTS, dismissNote, needsNote, noteDismissed, sqlLabel, type SqlDialect } from '../core/dialectNote'
@@ -18,6 +18,8 @@ export function DialectBar() {
   const translation = useLab((s) => (tab ? s.translations[tab.id] : undefined))
   const python = useLab((s) => s.python)
   const dmCycleOpen = useLab((s) => s.dmCycleOpen)
+  const aiPanelOpen = useLab((s) => s.aiPanelOpen)
+  const aiEnabled = useLab((s) => s.aiSettings.enabled)
   const dialect = tabDialect(tab)
   const shown = useSlowLoading(python.status === 'loading')
   // A Python tab starts Python (a download the first time) as soon as it is shown.
@@ -107,6 +109,25 @@ export function DialectBar() {
             title="Copy table schema, exploration summary, current cell, and last output/error for AI (no raw rows included)"
           >
             <ClipboardCopy size={13} /> Copy context for AI
+          </button>
+          <button
+            className="btn btn-ghost shrink-0"
+            style={aiPanelOpen ? { background: 'var(--accent-soft)', color: 'var(--accent)', fontWeight: 600 } : undefined}
+            onClick={() => toggleAiPanel()}
+            aria-expanded={aiPanelOpen}
+            title="Optional bring-your-own-key AI helper (OFF by default)"
+          >
+            <Sparkles size={13} /> AI helper
+            <span
+              className="px-1 py-0.2 rounded text-[10px] font-semibold"
+              style={
+                aiEnabled
+                  ? { background: 'var(--accent-soft)', color: 'var(--accent)' }
+                  : { background: 'var(--panel-2)', color: 'var(--muted)' }
+              }
+            >
+              {aiEnabled ? 'ON' : 'OFF'}
+            </span>
           </button>
         </>
       )}

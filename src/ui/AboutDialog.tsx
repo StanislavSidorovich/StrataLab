@@ -195,6 +195,11 @@ function Privacy() {
           <b>Share</b> links and <b>Show as model ↗</b> carry queries and table definitions in the part of the address after #, which browsers don’t send to servers. Anyone you
           give a link to can read what is in it.
         </li>
+        <li>
+          The optional bring-your-own-key <b>AI helper</b> (OFF by default) is the only feature that can send table schema, computed summary statistics, the current cell, and the
+          last error out of the browser — only when you click Send, after you confirm consent, and directly to the provider you chose (Google Gemini or Anthropic Claude). Raw
+          rows are never included unless you explicitly tick <i>&ldquo;Also send the first 20 rows for this request&rdquo;</i> for a single question.
+        </li>
       </ul>
       <p className="font-semibold">Keep a copy</p>
       <p>

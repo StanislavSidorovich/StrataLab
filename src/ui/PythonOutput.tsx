@@ -3,14 +3,14 @@
 // small table of its first rows, with a link that opens that one in the DataFrame view (Copy, Export
 // and Save as table work there); the last one is there already. Only text and images are shown:
 // never HTML from the code.
-import { AlertTriangle, Loader2, TableProperties } from 'lucide-react'
+import { AlertTriangle, Loader2, Sparkles, TableProperties } from 'lucide-react'
 import { useMemo, type ReactNode } from 'react'
 import { DataType } from 'apache-arrow'
 import type { Output } from '../core/ipynb'
 import { INLINE_COLS, frameShape, inlineNumber, inlineRows } from '../core/pyOutput'
 import { formatterFor, isNumericField } from '../db/format'
 import type { ShownFrame } from '../python/kernel'
-import { openFrame, useLab, type PyCellRun, type TabResult } from './store'
+import { askAiFromError, openFrame, useLab, type PyCellRun, type TabResult } from './store'
 import { pythonLoading, useSlowLoading } from './DialectBar'
 import { pythonNameHint } from '../core/dialect'
 
@@ -21,6 +21,26 @@ function NameHint({ evalue }: { evalue: string }) {
   const tables = useLab((s) => s.tables)
   const hint = pythonNameHint(evalue, tables)
   return hint ? <div className="mt-1.5 font-semibold">{hint}</div> : null
+}
+
+function AskAiErrorButton({ errorText }: { errorText: string }) {
+  const aiEnabled = useLab((s) => s.aiSettings.enabled)
+  if (!aiEnabled) return null
+  return (
+    <button
+      type="button"
+      className="mt-2 inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium border hover:opacity-90"
+      style={{
+        background: 'var(--panel)',
+        color: 'var(--text)',
+        borderColor: 'var(--line)',
+      }}
+      onClick={() => askAiFromError(errorText)}
+      title="Open AI helper to explain why this cell failed"
+    >
+      <Sparkles size={12} style={{ color: 'var(--accent)' }} /> Ask AI
+    </button>
+  )
 }
 
 /** A DataFrame inline: its first rows as a compact table, and a link to the whole of it. */
@@ -116,6 +136,7 @@ export function OutputView({ o, frame }: { o: Output; frame?: ReactNode }) {
             </pre>
           )}
           <NameHint evalue={o.evalue} />
+          <AskAiErrorButton errorText={`${o.ename}: ${o.evalue}`} />
         </div>
       </div>
     )
