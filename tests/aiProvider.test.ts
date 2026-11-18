@@ -11,6 +11,7 @@ import {
   buildProviderRequest,
   buildTutorSystemPrompt,
   classifyFetchError,
+  insertCodeAtCursor,
   insertCodeCellBelow,
   parseAiConsent,
   parseAiReplyBlocks,
@@ -18,6 +19,7 @@ import {
   parseAiSpeechLang,
   parseProviderReply,
   redactSecrets,
+  replaceCurrentCodeCell,
   appendDictatedText,
   nextAiSpeechLang,
 } from '../src/core/aiProvider'
@@ -131,6 +133,10 @@ describe('Tutor system prompt and request builders', () => {
     expect(prompt).toContain('seaborn')
     expect(prompt).toContain('scikit-learn')
     expect(prompt).toContain('pip install')
+    expect(prompt).toContain('Insert as new cell')
+    expect(prompt).toContain('Replace current cell')
+    expect(prompt).toContain('Insert at cursor')
+    expect(prompt).toContain('```python')
   })
 
   it('builds Gemini request with x-goog-api-key header and never puts key in URL', () => {
@@ -363,5 +369,82 @@ describe('Reply block parsing and cell insertion', () => {
     const emptyRes = insertCodeCellBelow('   ', 0, 'df.describe()')
     expect(emptyRes.text).toBe('# %%\ndf.describe()\n')
     expect(splitCells(emptyRes.text).map((c) => c.source)).toEqual(['df.describe()'])
+  })
+
+  it('replaces the current cell across empty, unmarked, marked, markdown, and out-of-bounds cases', () => {
+    const emptyRes = replaceCurrentCodeCell('   ', 0, 'df.describe()')
+    expect(emptyRes.text).toBe('# %%\ndf.describe()\n')
+    expect(emptyRes.cursor).toBe(emptyRes.text.length)
+
+    const unmarked = replaceCurrentCodeCell('a = 1\nb = 2', 3, 'df.info()')
+    expect(unmarked.text).toBe('df.info()\n')
+    expect(splitCells(unmarked.text).map((c) => c.source)).toEqual(['df.info()'])
+
+    const multi = '# %% Explore\na = 1\n\n# %%\nb = 2\n\n# %%\nc = 3\n'
+    const repFirst = replaceCurrentCodeCell(multi, multi.indexOf('a = 1'), 'df.head()')
+    expect(repFirst.text).toBe('# %% Explore\ndf.head()\n\n# %%\nb = 2\n\n# %%\nc = 3\n')
+    expect(splitCells(repFirst.text).map((c) => c.source)).toEqual(['df.head()', 'b = 2', 'c = 3'])
+    expect(repFirst.cursor).toBe(splitCells(repFirst.text)[0].to)
+
+    const repMid = replaceCurrentCodeCell(multi, multi.indexOf('b = 2'), 'df.isna().sum()')
+    expect(splitCells(repMid.text).map((c) => c.source)).toEqual(['a = 1', 'df.isna().sum()', 'c = 3'])
+    expect(repMid.cursor).toBe(splitCells(repMid.text)[1].to)
+
+    const repPastEnd = replaceCurrentCodeCell(multi, 9999, 'df.tail()')
+    expect(splitCells(repPastEnd.text).map((c) => c.source)).toEqual(['a = 1', 'b = 2', 'df.tail()'])
+
+    const repNegative = replaceCurrentCodeCell(multi, -5, 'x = 0')
+    expect(splitCells(repNegative.text).map((c) => c.source)).toEqual(['x = 0', 'b = 2', 'c = 3'])
+
+    const tight = '# %%\na = 1\n# %%\nb = 2\n'
+    const repTight = replaceCurrentCodeCell(tight, tight.indexOf('a = 1'), 'x = 9')
+    expect(splitCells(repTight.text).map((c) => c.source)).toEqual(['x = 9', 'b = 2'])
+
+    const unmarkedThenMarked = 'x = 0\n\n# %%\na = 1\n'
+    const repPreamble = replaceCurrentCodeCell(unmarkedThenMarked, 1, 'y = 1')
+    expect(repPreamble.text).toBe('y = 1\n\n# %%\na = 1\n')
+    expect(splitCells(repPreamble.text).map((c) => c.source)).toEqual(['y = 1', 'a = 1'])
+
+    const mdDoc = '# %% [markdown]\n# Old note\n\n# %%\nb = 2\n'
+    const repMd = replaceCurrentCodeCell(mdDoc, mdDoc.indexOf('Old note'), 'print("hi")')
+    expect(repMd.text).toBe('# %%\nprint("hi")\n\n# %%\nb = 2\n')
+    expect(splitCells(repMd.text).map((c) => c.kind)).toEqual(['code', 'code'])
+
+    const clearCell = replaceCurrentCodeCell('# %%\na = 1\n\n# %%\nb = 2\n', 6, '   ')
+    expect(splitCells(clearCell.text).map((c) => c.source)).toEqual(['', 'b = 2'])
+  })
+
+  it('inserts code at cursor cleanly across line boundaries, expressions, and edge cases', () => {
+    expect(insertCodeAtCursor('', 0, 'df.head()')).toEqual({ text: 'df.head()', cursor: 9 })
+    expect(insertCodeAtCursor('   ', 2, 'df.head()')).toEqual({ text: 'df.head()', cursor: 9 })
+    expect(insertCodeAtCursor('a = 1\n', 5, '   ')).toEqual({ text: 'a = 1\n', cursor: 5 })
+
+    const doc = '# %%\na = 1\n\nb = 2\n'
+    const onBlank = insertCodeAtCursor(doc, doc.indexOf('\n\n') + 1, 'mid = 10')
+    expect(onBlank.text).toBe('# %%\na = 1\nmid = 10\nb = 2\n')
+    expect(onBlank.cursor).toBe('# %%\na = 1\nmid = 10'.length)
+
+    const atMarkerEnd = insertCodeAtCursor('# %%\na = 1\n', 4, 'x = 0')
+    expect(atMarkerEnd.text).toBe('# %%\nx = 0\na = 1\n')
+
+    const atLineEnd = insertCodeAtCursor('# %%\na = 1', 10, 'b = 2')
+    expect(atLineEnd.text).toBe('# %%\na = 1\nb = 2')
+    expect(atLineEnd.cursor).toBe(atLineEnd.text.length)
+
+    const atLineStart = insertCodeAtCursor('# %%\na = 1\n', 0, 'x = 0')
+    expect(atLineStart.text).toBe('x = 0\n# %%\na = 1\n')
+
+    const afterEquals = insertCodeAtCursor('res = \n', 6, 'df.mean()')
+    expect(afterEquals.text).toBe('res = df.mean()\n')
+
+    const midExpr = insertCodeAtCursor('print()', 6, 'df.shape')
+    expect(midExpr.text).toBe('print(df.shape)')
+    expect(midExpr.cursor).toBe('print(df.shape'.length)
+
+    const outOfBoundsNeg = insertCodeAtCursor('a = 1\n', -10, 'x = 0')
+    expect(outOfBoundsNeg.text).toBe('x = 0\na = 1\n')
+
+    const outOfBoundsHigh = insertCodeAtCursor('a = 1\n', 999, 'b = 2')
+    expect(outOfBoundsHigh.text).toBe('a = 1\nb = 2')
   })
 })

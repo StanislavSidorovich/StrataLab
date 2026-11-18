@@ -146,6 +146,8 @@ export function buildTutorSystemPrompt(): string {
     'Reply in the same language as the learner\'s question (for example Russian or English), while keeping Python and pandas code identifiers in English.',
     'Guide the learner step by step through Exploration, Preprocessing, Processing, and Analysis.',
     'Explain the analytical decision and reasoning first before writing code, and ask the learner a brief check-in question about what they think or want to verify when sensible.',
+    'Every fenced ```python code block you return has one-click UI buttons in the panel: "Insert as new cell", "Replace current cell", and "Insert at cursor".',
+    'When asked to write, edit, comment, fix, or offer alternatives for code, provide ready-to-apply ```python code blocks and explain the change rather than claiming you cannot edit the notebook.',
     'Keep code snippets short, clear, and runnable using pandas and Quaera Lab helpers:',
     '- lab.table("table_name") or lab.table("schema.table_name") to load a DuckDB table as a DataFrame',
     '- lab.sql("SELECT ...") to run DuckDB SQL and get a DataFrame',
@@ -461,6 +463,97 @@ export function insertCodeCellBelow(
   const index = i >= 0 ? i + 1 : 0
   const cell = newCells[index] ?? newCells[newCells.length - 1]
   return { text, cursor: cell ? cell.to : text.length }
+}
+
+function clampCursorPos(textLength: number, cursorPos: number): number {
+  return Math.max(0, Math.min(textLength, Number.isFinite(cursorPos) ? Math.trunc(cursorPos) : 0))
+}
+
+/**
+ * Replaces the code cell containing `cursorPos` while preserving its `# %%` boundary/header
+ * (or without forcing `# %%` when the tab is a single unmarked cell). Markdown cell headers
+ * become `# %%` so applied Python code stays runnable.
+ */
+export function replaceCurrentCodeCell(
+  tabText: string,
+  cursorPos: number,
+  code: string,
+): { text: string; cursor: number } {
+  const cleanCode = code.trim()
+  if (!tabText.trim()) {
+    const text = `# %%\n${cleanCode}\n`
+    const cells = splitCells(text)
+    const cell = cells[0]
+    return { text, cursor: cell ? cell.to : text.length }
+  }
+
+  const clampedPos = clampCursorPos(tabText.length, cursorPos)
+  const cells = splitCells(tabText)
+  const i = cellAt(cells, clampedPos)
+  if (i < 0) {
+    const text = `# %%\n${cleanCode}\n`
+    const newCells = splitCells(text)
+    return { text, cursor: newCells[0] ? newCells[0].to : text.length }
+  }
+
+  const target = cells[i]
+  const slice = tabText.slice(target.from, target.to)
+  const nl = slice.indexOf('\n')
+  const firstLine = nl >= 0 ? slice.slice(0, nl) : slice
+  const hasMarker = /^#\s?%%(.*)$/.test(firstLine)
+
+  const before = tabText.slice(0, target.from)
+  const after = tabText.slice(target.to)
+  const body = cleanCode ? `${cleanCode}\n` : ''
+  const replacement = hasMarker
+    ? `${target.kind === 'markdown' ? '# %%' : firstLine}\n${body}`
+    : body
+
+  const text =
+    !hasMarker && !cleanCode && after
+      ? `${before}${after.replace(/^\n+/, '')}`
+      : `${before}${replacement}${after}`
+  const newCells = splitCells(text)
+  const cell = newCells[i] ?? newCells[newCells.length - 1]
+  return { text, cursor: cell ? cell.to : text.length }
+}
+
+/**
+ * Inserts `code` at `cursorPos`, adding a leading/trailing newline when needed so adjacent
+ * statements or `# %%` markers are not merged on the same line.
+ */
+export function insertCodeAtCursor(
+  tabText: string,
+  cursorPos: number,
+  code: string,
+): { text: string; cursor: number } {
+  const cleanCode = code.trim()
+  const clampedPos = clampCursorPos(tabText.length, cursorPos)
+  if (!cleanCode) return { text: tabText, cursor: clampedPos }
+  if (!tabText.trim()) return { text: cleanCode, cursor: cleanCode.length }
+
+  const before = tabText.slice(0, clampedPos)
+  const after = tabText.slice(clampedPos)
+  const atLineStart = before === '' || before.endsWith('\n')
+
+  const lineStart = before.lastIndexOf('\n') + 1
+  const lineBefore = before.slice(lineStart)
+  const nextNl = after.indexOf('\n')
+  const lineAfter = nextNl >= 0 ? after.slice(0, nextNl) : after
+
+  const needsLeadingNewline =
+    !atLineStart &&
+    lineBefore.trim() !== '' &&
+    lineAfter.trim() === '' &&
+    !/[=(\[{,]\s*$/.test(lineBefore)
+
+  const needsTrailingNewline = atLineStart && after.length > 0 && !after.startsWith('\n')
+
+  const prefix = needsLeadingNewline ? '\n' : ''
+  const suffix = needsTrailingNewline ? '\n' : ''
+  const text = `${before}${prefix}${cleanCode}${suffix}${after}`
+  const cursor = before.length + prefix.length + cleanCode.length
+  return { text, cursor }
 }
 
 export type AiSpeechLang = 'ru-RU' | 'en-US'

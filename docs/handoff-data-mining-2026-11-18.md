@@ -1,4 +1,4 @@
-# Handoff: Data Mining Workflow Helpers & Optional BYOK AI Helper (`v0.56.0`–`v0.59.1`)
+# Handoff: Data Mining Workflow Helpers & Optional BYOK AI Helper (`v0.56.0`–`v0.59.2`)
 
 Date: 2026-11-18  
 Repository: `StanislavSidorovich/StrataLab` (`lab/`, production app at `https://lab.quaera.app/`)  
@@ -16,6 +16,11 @@ Safety tag preserved on `origin`: `pre-dm-helper-2026-11-18` (version tags remai
    - **FIX 3 (`src/core/dmCycle.ts`, `tests/dmCycle.test.ts`, `src/ui/store.ts`, `src/ui/App.tsx`)**: Added `PHONE_BREAKPOINT_PX = 768` mutual exclusion between `Data cycle` and `AI helper` on narrow viewports (`resolveInitialPythonPanels`, `resolveTogglePythonPanel`, `resolveResizePythonPanels`), resize handling in `App.tsx`, and lifted toasts (`bottom-[48vh] md:bottom-4`) when `aiBottomDockOpen` is true on phones.
    - **Voice dictation (`src/core/aiProvider.ts`, `src/ui/AiHelper.tsx`)**: Added `Speak` / `Stop` button and `RU` / `EN` language toggle using the browser Web Speech API (`SpeechRecognition` / `webkitSpeechRecognition`), persisted in `stratalab.ai.speechLang` (`AI_SPEECH_LANG_KEY`).
    - Bumped `package.json` version to `0.59.1`.
+6. `v0.59.2` — **1-click canvas code-application actions & updated tutor prompt**:
+   - Added pure helpers `replaceCurrentCodeCell()` and `insertCodeAtCursor()` in `src/core/aiProvider.ts` (+ unit tests in `tests/aiProvider.test.ts`), and store actions `replaceAiCodeCell()` and `insertAiCodeAtCursor()` in `src/ui/store.ts` (all using `replaceActiveAndFocusCursor` so `Ctrl+Z` undo works in CodeMirror).
+   - Added **Replace current cell** and **Insert at cursor** buttons next to **Insert as new cell** and **Copy** in `src/ui/AiHelper.tsx` (with `flex-wrap` header bar).
+   - Updated `buildTutorSystemPrompt()` so the model knows the UI provides these three 1-click actions and outputs ready-to-apply ```python blocks instead of claiming it cannot edit the notebook.
+   - Bumped `package.json` version to `0.59.2`.
 
 ## What the AI receives (and what is never sent)
 

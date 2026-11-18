@@ -62,10 +62,12 @@ import {
   buildProviderRequest,
   buildTutorSystemPrompt,
   classifyFetchError,
+  insertCodeAtCursor,
   insertCodeCellBelow,
   parseAiConsent,
   parseAiSettings,
   parseProviderReply,
+  replaceCurrentCodeCell,
   type AiConsent,
   type AiProvider,
   type AiQuickAction,
@@ -2295,13 +2297,28 @@ export function askAiFromError(errorText: string) {
   void askAi({ action: 'why-failed', errorOverride: errorText })
 }
 
-export function insertAiCodeCell(code: string) {
+function applyAiCodeEdit(
+  code: string,
+  transform: (tabText: string, cursorPos: number, code: string) => { text: string; cursor: number },
+) {
   const s = get()
   const tab = s.tabs.find((t) => t.id === s.activeTab)
-  if (!tab) return
+  if (!tab || tabDialect(tab) !== 'python') return
   const cursorPos = activeCursorPos()
-  const { text, cursor } = insertCodeCellBelow(tab.sql, cursorPos, code)
+  const { text, cursor } = transform(tab.sql, cursorPos, code)
   if (!replaceActiveAndFocusCursor(text, cursor)) setTabSql(tab.id, text)
+}
+
+export function insertAiCodeCell(code: string) {
+  applyAiCodeEdit(code, insertCodeCellBelow)
+}
+
+export function replaceAiCodeCell(code: string) {
+  applyAiCodeEdit(code, replaceCurrentCodeCell)
+}
+
+export function insertAiCodeAtCursor(code: string) {
+  applyAiCodeEdit(code, insertCodeAtCursor)
 }
 
 // ------------------------------------------------------------------ practice pages on Kaiyo

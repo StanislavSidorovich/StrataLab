@@ -13,10 +13,12 @@ import {
   Mic,
   MicOff,
   PlusSquare,
+  Replace,
   Send,
   Settings,
   ShieldAlert,
   Sparkles,
+  TextCursorInput,
   Trash2,
   X,
 } from 'lucide-react'
@@ -102,9 +104,11 @@ import {
   cancelAiConsent,
   cancelAiRequest,
   confirmAiConsent,
+  insertAiCodeAtCursor,
   insertAiCodeCell,
   openAiSettings,
   removeAiApiKey,
+  replaceAiCodeCell,
   requestEnableAi,
   setAiApiKey,
   setAiModel,
@@ -761,10 +765,10 @@ export function AiHelperPanel() {
                         style={{ border: '1px solid var(--line)', background: 'var(--code-bg)' }}
                       >
                         <div
-                          className="flex items-center gap-1 px-2 py-1"
+                          className="flex flex-wrap items-center gap-1 px-2 py-1"
                           style={{ background: 'var(--panel)', borderBottom: '1px solid var(--line)', fontSize: 11 }}
                         >
-                          <span className="mono flex-1 truncate" style={{ color: 'var(--muted)' }}>
+                          <span className="mono mr-auto min-w-0 truncate" style={{ color: 'var(--muted)' }}>
                             {block.lang || 'code'}
                           </span>
                           <CopyCodeButton code={block.code} />
@@ -776,6 +780,24 @@ export function AiHelperPanel() {
                             title="Insert below current cell without running it"
                           >
                             <PlusSquare size={12} /> Insert as new cell
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-ghost shrink-0"
+                            style={{ padding: '2px 6px', fontSize: 11.5, color: 'var(--accent)' }}
+                            onClick={() => replaceAiCodeCell(block.code)}
+                            title="Replace current cell content (preserving # %% boundary; Ctrl+Z to undo)"
+                          >
+                            <Replace size={12} /> Replace current cell
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-ghost shrink-0"
+                            style={{ padding: '2px 6px', fontSize: 11.5, color: 'var(--accent)' }}
+                            onClick={() => insertAiCodeAtCursor(block.code)}
+                            title="Insert code at current cursor position (Ctrl+Z to undo)"
+                          >
+                            <TextCursorInput size={12} /> Insert at cursor
                           </button>
                         </div>
                         <pre className="mono p-2 overflow-x-auto whitespace-pre" style={{ fontSize: 11.5 }}>
