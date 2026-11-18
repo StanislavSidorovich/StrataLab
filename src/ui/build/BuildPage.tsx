@@ -392,7 +392,7 @@ function Shell() {
             </section>
           </main>
           <footer className="build-foot shrink-0">
-            <button className="btn btn-ghost" onClick={() => openBuild(null)} data-testid="build-foot-workbench">SQL Workbench</button>
+            <button className="btn btn-ghost" onClick={() => openBuild(null)} data-testid="build-foot-workbench" title="Close this page and go to Lab home (your progress stays saved)">✕ Close</button>
             {open === 'clean' && !next && stillOpen && (
               <span className="build-muted bf-locked" data-testid="clean-locked">
                 Next step is locked:{' '}
