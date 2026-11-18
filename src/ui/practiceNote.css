@@ -1,5 +1,7 @@
-/* "New: <topic>" notes of the practice pages (SQL, Python, Power BI): a callout the eye stops at. Theme tokens only, so light and dark both hold. */
-.pn-new { padding: 10px 14px; border-left: 4px solid var(--accent); border-radius: 0 8px 8px 0; background: var(--accent-soft); min-width: 0; max-width: 100%; }
+/* "New: <topic>" notes of the practice pages (SQL, Python, Power BI): a quiet callout, the border carries the colour.
+   Appearance (src/core/tint.ts) sets --note-border / --note-bg on :root; these are the muted defaults. */
+.pn-new { --nb: var(--note-border, hsl(150 22% 44%)); --nbg: var(--note-bg, hsl(150 20% 95%)); padding: 10px 14px; border-left: 4px solid var(--nb); border-radius: 0 8px 8px 0; background: var(--nbg); min-width: 0; max-width: 100%; }
+.dark .pn-new { --nb: var(--note-border, hsl(150 20% 40%)); --nbg: var(--note-bg, hsl(150 12% 16%)); }
 .pn-new .pn-label { color: var(--text); font-weight: 700; }
 .pn-new .pn-topic { color: var(--text); font-weight: 600; }
 .pn-new pre { max-width: 100%; overflow-x: auto; background: var(--bg) !important; border: 1px solid var(--line); }

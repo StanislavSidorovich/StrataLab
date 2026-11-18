@@ -1,0 +1,6 @@
+/* Appearance: the hue / saturation / lightness sliders of the note and accent colours. */
+.tint-sliders { display: grid; gap: 4px; }
+.tint-sliders label { display: grid; grid-template-columns: 5.5rem 1fr 2.2rem; align-items: center; gap: 8px; }
+.tint-sliders span { color: var(--text); }
+.tint-sliders output { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tint-sliders input[type='range'] { width: 100%; accent-color: var(--accent); }

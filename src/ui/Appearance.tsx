@@ -5,7 +5,9 @@ import { useEffect, useRef, useState } from 'react'
 import { applyBorders, readBorders, type Borders } from '../core/borders'
 import { parseZoom, ZOOM_KEY, ZOOM_STEPS, zoomLabel } from '../core/practiceZoom'
 import { lookColor, lookVars, NO_LOOK, parseLook, setLookColor, SWATCHES, type Look, type LookPart } from '../core/look'
+import { clampTint, hslToHex, lightnessRange, NO_TINT, parseTint, TINT_KEY, tintColor, tintVars, type Hsl, type Tint, type TintPart } from '../core/tint'
 import { toggleTheme, useLab } from './store'
+import './appearanceTint.css'
 
 const LOOK_KEY = 'stratalab.look'
 
@@ -28,6 +30,13 @@ export function AppearanceButton({ className = '' }: { className?: string }) {
       return 1
     }
   })
+  const [tint, setTint] = useState<Tint>(() => {
+    try {
+      return parseTint(localStorage.getItem(TINT_KEY))
+    } catch {
+      return NO_TINT
+    }
+  })
   const [open, setOpen] = useState(false)
   const root = useRef<HTMLDivElement>(null)
 
@@ -43,6 +52,20 @@ export function AppearanceButton({ className = '' }: { className?: string }) {
       /* private mode: the look is not remembered */
     }
   }, [look, theme])
+
+  // Callout and accent colours: the panel only writes CSS variables (--note-border, --note-bg, --accent, --accent-soft).
+  useEffect(() => {
+    const style = document.documentElement.style
+    for (const [name, value] of Object.entries(tintVars(tint, theme))) {
+      if (value) style.setProperty(name, value)
+      else style.removeProperty(name)
+    }
+    try {
+      localStorage.setItem(TINT_KEY, JSON.stringify(tint))
+    } catch {
+      /* private mode: the colours hold for this session only */
+    }
+  }, [tint, theme])
 
   useEffect(() => applyBorders(borders), [borders])
 
@@ -103,6 +126,34 @@ export function AppearanceButton({ className = '' }: { className?: string }) {
     )
   }
 
+  const tintRow = (part: TintPart, label: string) => {
+    const c = tintColor(tint, part, theme)
+    const [lo, hi] = lightnessRange(part, theme, c.h, c.s)
+    const set = (patch: Partial<Hsl>) => setTint((t) => ({ ...t, [part]: { ...t[part], [theme]: clampTint(part, theme, { ...tintColor(t, part, theme), ...patch }) } }))
+    const sliders: { key: keyof Hsl; name: string; min: number; max: number }[] = [
+      { key: 'h', name: 'Hue', min: 0, max: 360 },
+      { key: 's', name: 'Saturation', min: 0, max: part === 'callout' ? 60 : 100 },
+      { key: 'l', name: 'Lightness', min: lo, max: hi },
+    ]
+    return (
+      <div>
+        <div className="mb-1.5 flex items-center gap-2" style={{ color: 'var(--muted)' }}>
+          <span className="inline-block w-4 h-4 rounded" style={{ background: hslToHex(c), border: '1px solid var(--line)' }} aria-hidden />
+          {label}
+        </div>
+        <div className="tint-sliders">
+          {sliders.map(({ key, name, min, max }) => (
+            <label key={key}>
+              <span>{name}</span>
+              <input type="range" min={min} max={max} value={c[key]} aria-label={`${label}: ${name.toLowerCase()}`} onChange={(e) => set({ [key]: Number(e.target.value) })} />
+              <output>{c[key]}</output>
+            </label>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className={`relative ${className}`} ref={root}>
       <button className="btn btn-ghost font-semibold" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen((o) => !o)} aria-label="Appearance" title="Appearance: light or dark theme, editor and panel colours">
@@ -112,7 +163,7 @@ export function AppearanceButton({ className = '' }: { className?: string }) {
         <div
           role="dialog"
           aria-label="Appearance"
-          className="absolute right-0 top-10 z-50 rounded-lg p-3 shadow-lg flex flex-col gap-3 w-[min(19rem,calc(100vw-1rem))]"
+          className="absolute right-0 top-10 z-50 rounded-lg p-3 shadow-lg flex flex-col gap-3 w-[min(19rem,calc(100vw-1rem))] max-h-[calc(100vh-4rem)] overflow-y-auto"
           style={{ background: 'var(--panel)', border: '1px solid var(--line)', color: 'var(--text)' }}
         >
           <div>
@@ -173,9 +224,12 @@ export function AppearanceButton({ className = '' }: { className?: string }) {
           {colorRow('editor', 'SQL editor')}
           {colorRow('panels', 'Panels (top bar, tree, dialogs)')}
           {colorRow('grid', 'Data grid (results, build tables)')}
+          {tintRow('callout', 'Note colour ("New:" callouts)')}
+          {tintRow('accent', 'Accent (buttons, links, active tab)')}
           <div style={{ color: 'var(--muted)', fontSize: 12 }}>Colours are kept separately for the light and dark theme, in this browser.</div>
           <button type="button" className="btn self-start" onClick={() => {
               setLook(NO_LOOK)
+              setTint(NO_TINT)
               setBorders('strong')
               setZoom(1)
             }}>
