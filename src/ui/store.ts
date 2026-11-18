@@ -18,6 +18,8 @@ import { clearFill } from '../db/fill'
 import { DATASETS, datasetById, datasetFromHash, hashWithoutDataset, type Dataset } from '../data/datasets'
 import { loadDataset, removeDataset, type DatasetProgress } from '../db/datasets'
 import { splitCells } from '../core/pyCells'
+import { DM_CYCLE_OPEN_KEY, buildExampleCellInsertion, parseDmCycleOpen } from '../core/dmCycle'
+import { activeCursorPos, replaceActiveAndFocusCursor } from './SqlEditor'
 import type { Walkthrough } from '../data/walkthroughs'
 import { createSchema, listSchemas, moveTables, renameSchema } from '../db/ownDatasets'
 import { catalogSchemaState, datasetName, isOwnSchema, linkedTables } from '../core/ownDatasets'
@@ -230,6 +232,8 @@ interface State {
   python: KernelState
   /** per Python tab, each cell's last run, by its source (for Download as notebook) */
   cellRuns: Record<string, Record<string, CellRun>>
+  /** the Data analysis cycle cheat sheet panel in Python tabs is expanded */
+  dmCycleOpen: boolean
 }
 
 export interface PracticeProgress {
@@ -288,6 +292,14 @@ function firstVisit(): boolean {
 function initialDemoHidden(): boolean {
   try {
     return localStorage.getItem(DEMO_HIDDEN_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function initialDmCycleOpen(): boolean {
+  try {
+    return parseDmCycleOpen(localStorage.getItem(DM_CYCLE_OPEN_KEY))
   } catch {
     return false
   }
@@ -352,6 +364,7 @@ export const useLab = create<State>(() => ({
   checks: {},
   python: { status: 'off' },
   cellRuns: {},
+  dmCycleOpen: initialDmCycleOpen(),
 }))
 
 /** The user's own tables and views (schema main), without the catalog datasets. */
@@ -1720,6 +1733,52 @@ export async function openWalkthrough(w: Walkthrough) {
   set({ guide: null, catalogOpen: false })
   await ensureDemo()
   addTab(w.code, `${w.title} walkthrough`, 'python')
+}
+
+// ------------------------------------------------------------------ data analysis cycle cheat sheet
+
+export function toggleDmCycle(open?: boolean) {
+  const next = open ?? !get().dmCycleOpen
+  set({ dmCycleOpen: next })
+  try {
+    localStorage.setItem(DM_CYCLE_OPEN_KEY, next ? '1' : '0')
+  } catch {
+    /* ignore */
+  }
+}
+
+function ensurePythonTab(): string {
+  const s = get()
+  const active = s.tabs.find((t) => t.id === s.activeTab)
+  if (active && tabDialect(active) === 'python') return active.id
+  const existing = s.tabs.find((t) => tabDialect(t) === 'python')
+  if (existing) {
+    set({ activeTab: existing.id })
+    return existing.id
+  }
+  return newPythonTab()
+}
+
+export function openDmCycleInPython() {
+  ensurePythonTab()
+  set({ guide: null })
+  closeWelcome()
+  toggleDmCycle(true)
+}
+
+export async function runDmCycleExample(stageTitle: string, exampleTitle: string, code: string) {
+  const tabId = ensurePythonTab()
+  try {
+    await ensureKaiyo()
+  } catch {
+    return
+  }
+  const tab = get().tabs.find((t) => t.id === tabId)
+  if (!tab) return
+  const cursorPos = get().activeTab === tabId ? activeCursorPos() : tab.sql.length
+  const { text, cursor, run } = buildExampleCellInsertion(tab.sql, cursorPos, stageTitle, exampleTitle, code)
+  if (!replaceActiveAndFocusCursor(text, cursor)) setTabSql(tabId, text)
+  void runPython(tabId, [run])
 }
 
 // ------------------------------------------------------------------ practice pages on Kaiyo

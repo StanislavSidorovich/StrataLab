@@ -23,6 +23,7 @@ import { BuildPage } from './build/BuildPage'
 import { GuideDialog } from './Guide'
 import { CompareDialog } from './Compare'
 import { DialectBar } from './DialectBar'
+import { DmCyclePanel } from './DmCyclePanel'
 import { checkForUpdates, updateCheckMessage, useUpdateReady } from '../pwa/register'
 import { memoryNote } from '../core/dbLock'
 import { takeDatabaseHere } from '../db/engine'
@@ -163,6 +164,7 @@ export function App() {
         <div ref={main} className="flex-1 min-w-0 flex flex-col">
           <Tabs />
           <DialectBar />
+          <DmCyclePanel />
           <TaskBar />
           <div ref={editorBox} style={{ flex: `${split} 1 0` }} className="min-h-0">
             <SqlEditor />

@@ -3,7 +3,7 @@
 // Content: src/data/guides.ts. Opened from a dataset's card in the catalog and its folder's menu.
 import { useEffect, useState } from 'react'
 import { BookOpen, Check, Copy, GraduationCap, NotebookText, Play, X } from 'lucide-react'
-import { catalogState, openDataset, openGuide, openGuideCode, openWalkthrough, useLab } from './store'
+import { catalogState, openDataset, openDmCycleInPython, openGuide, openGuideCode, openWalkthrough, useLab } from './store'
 import { NewQueryButtons } from './NewQueryButtons'
 import { datasetById, type Dataset } from '../data/datasets'
 import { LEVEL_LABEL, cheatSetup, cheatSheet, guideById, guideNotebook, type Guide } from '../data/guides'
@@ -112,6 +112,14 @@ export function GuideDialog() {
           {view === 'about' && <About d={d} g={g} loaded={loaded} onExamples={() => pickView('examples')} />}
           {view === 'examples' && <Examples d={d} g={g} lang={lang} />}
           {view === 'cheat' && <Cheat d={d} g={g} lang={lang} />}
+        </div>
+        <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 shrink-0" style={{ borderTop: '1px solid var(--line)', background: 'var(--panel-2)' }}>
+          <span className="flex-1 text-xs" style={{ color: 'var(--muted)' }}>
+            Working in Python? Follow the 4-stage workflow from exploration to analysis.
+          </span>
+          <button className="btn btn-ghost shrink-0" style={{ color: 'var(--accent)', fontWeight: 600 }} onClick={openDmCycleInPython}>
+            <BookOpen size={14} /> Open Data analysis cycle cheat sheet
+          </button>
         </div>
       </div>
     </div>

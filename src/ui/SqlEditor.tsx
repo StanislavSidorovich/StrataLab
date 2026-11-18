@@ -48,6 +48,29 @@ function runAll(v: EditorView, id: string) {
 }
 
 let activeView: EditorView | null = null
+let activeTabId: string | null = null
+
+/** Cursor offset in the active editor if it matches the active tab, else 0. */
+export function activeCursorPos(): number {
+  if (!activeView || activeTabId !== useLab.getState().activeTab) return 0
+  return activeView.state.selection.main.head
+}
+
+/** Replaces the active editor's document and moves the cursor/focus when the editor is showing the active tab. */
+export function replaceActiveAndFocusCursor(text: string, cursor: number): boolean {
+  const v = activeView
+  if (!v || activeTabId !== useLab.getState().activeTab) return false
+  const pos = Math.max(0, Math.min(text.length, cursor))
+  v.dispatch({
+    changes: { from: 0, to: v.state.doc.length, insert: text },
+    selection: { anchor: pos },
+    scrollIntoView: true,
+    userEvent: 'input',
+  })
+  v.focus()
+  return true
+}
+
 /** Ctrl+Enter outside the editor: Python = the selection or the cell at the cursor, SQL = the selection or the whole tab. */
 export function runActive() {
   const id = useLab.getState().activeTab
@@ -323,10 +346,12 @@ export function SqlEditor() {
     const v = new EditorView({ state: makeState(tab.id, tab.sql), parent: host.current })
     view.current = v
     activeView = v
+    activeTabId = tab.id
     return () => {
       v.destroy()
       view.current = null
       activeView = null
+      activeTabId = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -344,6 +369,7 @@ export function SqlEditor() {
     v.setState(st)
     v.dispatch({ effects: [language.reconfigure(langExt()), theme.reconfigure(themeExt()), cellBars.reconfigure(barsExt(activeTab))] })
     shownTab.current = activeTab
+    activeTabId = activeTab
     v.focus()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab])

@@ -2,8 +2,8 @@
 // Shown once on a first visit (not to someone arriving with a model or a dataset link: they came
 // for that), and again from the Help (?) menu in the header.
 import { useState } from 'react'
-import { Database, Download, FileUp, GraduationCap, HelpCircle, Library, Play, Store, X } from 'lucide-react'
-import { closeWelcome, enqueueFiles, hasDemoTables, openAndRun, openCatalog, openPracticeBook, showDemo, useLab } from './store'
+import { BookOpen, Database, Download, FileUp, GraduationCap, HelpCircle, Library, Play, Store, X } from 'lucide-react'
+import { closeWelcome, enqueueFiles, hasDemoTables, openAndRun, openCatalog, openDmCycleInPython, openPracticeBook, showDemo, useLab } from './store'
 import { ACCEPT } from './Sidebar'
 import { AuthorLinks } from './AuthorLinks'
 import { WELCOME_SQL } from '../data/demo'
@@ -126,6 +126,15 @@ export function WelcomeDialog() {
                 <button className="btn flex-1 justify-center" onClick={start(() => openPracticeBook('sql'))}>SQL practice</button>
                 <button className="btn flex-1 justify-center" onClick={start(() => openPracticeBook('python'))}>Python practice</button>
               </div>
+            </div>
+            <div className="rounded-lg p-3 mt-2 flex flex-col sm:flex-row sm:items-center gap-2" style={{ border: '1px solid var(--line)', background: 'var(--panel-2)' }}>
+              <div className="flex-1">
+                <div className="flex items-center gap-2 font-semibold"><BookOpen size={18} style={{ color: 'var(--py)' }} /> Data analysis cycle in Python</div>
+                <p style={{ color: 'var(--muted)' }}>Exploration, Preprocessing, Processing (K-means, association rules), and Analysis with runnable pandas examples.</p>
+              </div>
+              <button className="btn shrink-0 justify-center" onClick={openDmCycleInPython}>
+                Open Data analysis cycle cheat sheet
+              </button>
             </div>
           </section>
 

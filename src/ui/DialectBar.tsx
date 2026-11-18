@@ -2,8 +2,8 @@
 // to DuckDB first (sqlglot) and the translation can be seen side by side; PostgreSQL runs on a
 // real PostgreSQL (PGlite), a separate database that tables are copied into.
 import { useEffect, useState } from 'react'
-import { ArrowLeftRight, ChevronDown, Copy, ListTree, Loader2, Play, Plus, Redo2, RotateCcw, Search, Square, SquareSlash, Undo2, WandSparkles, X } from 'lucide-react'
-import { copySchemaToPostgres, explainSql, ownTables, openCompare, openWelcome, restartPython, retryPython, setTabDialect, showTranslation, startPython, stopQuery, tabDialect, useLab } from './store'
+import { ArrowLeftRight, BookOpen, ChevronDown, Copy, ListTree, Loader2, Play, Plus, Redo2, RotateCcw, Search, Square, SquareSlash, Undo2, WandSparkles, X } from 'lucide-react'
+import { copySchemaToPostgres, explainSql, ownTables, openCompare, openWelcome, restartPython, retryPython, setTabDialect, showTranslation, startPython, stopQuery, tabDialect, toggleDmCycle, useLab } from './store'
 import { activeSql, addCell, editorCommand, formatActiveTab, runActive, runActiveAll, runActiveCell } from './SqlEditor'
 import { Menu, type MenuItem } from './Menu'
 import { SQL_DIALECTS, dismissNote, needsNote, noteDismissed, sqlLabel, type SqlDialect } from '../core/dialectNote'
@@ -17,6 +17,7 @@ export function DialectBar() {
   const copying = useLab((s) => s.pgCopy)
   const translation = useLab((s) => (tab ? s.translations[tab.id] : undefined))
   const python = useLab((s) => s.python)
+  const dmCycleOpen = useLab((s) => s.dmCycleOpen)
   const dialect = tabDialect(tab)
   const shown = useSlowLoading(python.status === 'loading')
   // A Python tab starts Python (a download the first time) as soon as it is shown.
@@ -91,6 +92,15 @@ export function DialectBar() {
               <RotateCcw size={13} /> <span className="hidden sm:inline">Restart</span>
             </button>
           )}
+          <button
+            className="btn btn-ghost shrink-0"
+            style={dmCycleOpen ? { background: 'var(--accent-soft)', color: 'var(--accent)', fontWeight: 600 } : undefined}
+            onClick={() => toggleDmCycle()}
+            aria-expanded={dmCycleOpen}
+            title="Data analysis cycle cheat sheet: Exploration, Preprocessing, Processing, Analysis"
+          >
+            <BookOpen size={13} /> Data cycle
+          </button>
         </>
       )}
 
