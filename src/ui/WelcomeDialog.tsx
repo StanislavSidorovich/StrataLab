@@ -179,7 +179,7 @@ export function WelcomeDialog() {
             </p>
             <p>
               <b style={{ color: 'var(--text)' }}>Prefer Python?</b> Open a <b>New Python notebook</b> (the + beside the tabs, File, or a table’s ⋯ menu): pandas, matplotlib and seaborn over the same tables, with{' '}
-              <code className="mono">lab.table("demo.orders")</code> and <code className="mono">lab.sql("SELECT …")</code>. A cell is everything up to the next <code className="mono"># %%</code> line (not up to a semicolon): the bar over each cell has Run cell and Run below, + Cell adds a boundary; Run all (Ctrl+Enter) runs every cell, Run cell (Shift+Enter) the one at the cursor. The first run
+              <code className="mono">lab.table("demo.orders")</code> and <code className="mono">lab.sql("SELECT …")</code>. A cell is everything up to the next <code className="mono"># %%</code> line (not up to a semicolon): the bar over each cell has Run cell and Run below, + Cell adds a boundary; Run all (Ctrl+Shift+Enter or F5) runs every cell, Ctrl+Enter the cell at the cursor, Run cell (Shift+Enter) that cell and then moves on. The first run
               downloads Python (about 20 MB, once, with a progress bar); File → Download as notebook takes the tab to Jupyter or Colab. If Python won’t start and a download manager such as IDM popped up, add lab.quaera.app to its exceptions and press Retry.
             </p>
             <p>

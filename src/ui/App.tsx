@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle, Check, ChevronDown, Database, FileText, GraduationCap, SquareTerminal, HardDrive, HelpCircle, Loader2, Plus, RefreshCw, Share2, Table2, Upload, X, Zap } from 'lucide-react'
 import { InsertMode, Sidebar, pickBackup, pickFilesFor } from './Sidebar'
-import { SqlEditor, runActive, setActiveText } from './SqlEditor'
+import { SqlEditor, runActive, runActiveAll, setActiveText } from './SqlEditor'
 import { downloadNotebook, forgetFile, openSqlFile, openSqlFiles, saveSqlFile } from './sqlFiles'
 import { looksLikeTable, opensAsTab } from '../core/editorFiles'
 import { Results } from './Results'
@@ -71,7 +71,9 @@ export function App() {
       const run = e.key === 'F5' || (mod && e.key === 'Enter')
       if (!run || (e.target as HTMLElement).closest('input, textarea, select')) return
       e.preventDefault()
-      runActive()
+      // Python tabs: F5 and Ctrl+Shift+Enter run every cell, Ctrl+Enter the cell at the cursor (SQL: selection or whole tab).
+      if (e.key === 'F5' || e.shiftKey) runActiveAll()
+      else runActive()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)

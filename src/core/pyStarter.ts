@@ -15,7 +15,7 @@ const HEADER = `# %% [markdown]
 # Python in Quaera Lab: pandas, matplotlib and seaborn over the same tables as SQL.
 # lab.table("name") gives a table as a DataFrame; lab.sql("SELECT …") runs SQL first;
 # lab.save(df, "name") writes a DataFrame back as a table. A cell ends at the next # %% line (not at a semicolon).
-# Run every cell: Ctrl+Enter · this cell, then on to the next: Shift+Enter.
+# This cell: Ctrl+Enter · this cell, then on to the next: Shift+Enter · every cell: Ctrl+Shift+Enter or F5.
 `
 
 /**
@@ -58,7 +58,7 @@ export function pythonTableStarter(name: string, title = name): string {
   const q = JSON.stringify(name)
   return `# %% [markdown]
 # ${title} in Python: lab.table(${q}) gives the table as a pandas DataFrame.
-# Run every cell: Ctrl+Enter · this cell, then on to the next: Shift+Enter.
+# This cell: Ctrl+Enter · this cell, then on to the next: Shift+Enter · every cell: Ctrl+Shift+Enter or F5.
 
 # %%
 df = lab.table(${q})

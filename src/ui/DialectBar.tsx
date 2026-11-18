@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react'
 import { ArrowLeftRight, ChevronDown, Copy, ListTree, Loader2, Play, Plus, Redo2, RotateCcw, Search, Square, SquareSlash, Undo2, WandSparkles, X } from 'lucide-react'
 import { copySchemaToPostgres, explainSql, ownTables, openCompare, openWelcome, restartPython, retryPython, setTabDialect, showTranslation, startPython, stopQuery, tabDialect, useLab } from './store'
-import { activeSql, addCell, editorCommand, formatActiveTab, runActive, runActiveCell } from './SqlEditor'
+import { activeSql, addCell, editorCommand, formatActiveTab, runActive, runActiveAll, runActiveCell } from './SqlEditor'
 import { Menu, type MenuItem } from './Menu'
 import { SQL_DIALECTS, dismissNote, needsNote, noteDismissed, sqlLabel, type SqlDialect } from '../core/dialectNote'
 import { pythonProgressLabel, pythonProgressShare } from '../core/progress'
@@ -66,7 +66,7 @@ export function DialectBar() {
 
       {dialect === 'python' && (
         <>
-          <span className="truncate" style={{ color: python.status === 'error' ? 'var(--danger)' : 'var(--py)', fontWeight: 600 }} title={python.status === 'error' ? python.error : 'A cell ends at the next # %% line (not at a semicolon). Run every cell: Ctrl+Enter · the cell at the cursor: Shift+Enter'}>
+          <span className="truncate" style={{ color: python.status === 'error' ? 'var(--danger)' : 'var(--py)', fontWeight: 600 }} title={python.status === 'error' ? python.error : 'A cell ends at the next # %% line (not at a semicolon). Run the cell at the cursor: Ctrl+Enter · this cell, then the next: Shift+Enter · every cell: Ctrl+Shift+Enter or F5'}>
             {python.status === 'ready' && (
               <>
                 Python {python.version.replace(/^(\d+)\.(\d+).*/, '$1.$2')} · pandas
@@ -204,10 +204,10 @@ function RunButton() {
   if (python)
     return (
       <>
-        <button className="btn btn-primary btn-run shrink-0" onClick={runActive} disabled={disabled} title="Run all: every cell in order, or just the selection (Ctrl+Enter, F5)">
+        <button className="btn btn-primary btn-run shrink-0" onClick={runActiveAll} disabled={disabled} title="Run all: every cell in order (Ctrl+Shift+Enter, F5). Ctrl+Enter runs only the cell at the cursor">
           {spin} Run all
         </button>
-        <button className="btn shrink-0" onClick={runActiveCell} disabled={disabled} title="Run cell: only the cell at the cursor, then move to the next one (Shift+Enter)">
+        <button className="btn shrink-0" onClick={runActiveCell} disabled={disabled} title="Run cell: only the cell at the cursor, then move to the next one (Shift+Enter; Ctrl+Enter stays on the cell)">
           <Play size={13} /> <span className="hidden sm:inline">Run cell</span>
         </button>
       </>

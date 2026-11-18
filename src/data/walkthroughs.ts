@@ -14,7 +14,7 @@ export interface Walkthrough {
 }
 
 const HOW = `# Run one cell with Shift+Enter: it runs and the cursor moves to the next one.
-# Ctrl+Enter runs every cell from the top. Each cell's output appears under Output;
+# Ctrl+Shift+Enter (or F5) runs every cell from the top. Each cell's output appears under Output;
 # "Open in DataFrame view" under a table shows the whole of it on the pane.`
 
 export const WALKTHROUGHS: Walkthrough[] = [

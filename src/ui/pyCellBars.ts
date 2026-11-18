@@ -43,7 +43,7 @@ class CellBar extends WidgetType {
       })
       bar.append(b)
     }
-    if (!this.markdown) button('▶ Run cell', 'Run this cell (Shift+Enter runs the cell at the cursor and moves on)', false)
+    if (!this.markdown) button('▶ Run cell', 'Run this cell (Ctrl+Enter runs the cell at the cursor, Shift+Enter also moves on)', false)
     button('Run below', 'Run this cell and every cell under it, in order', true)
     return bar
   }

@@ -11,7 +11,7 @@ SQL Server Management Studio is a ~2 GB install plus a database server, a licenc
 ## What it does
 
 - **Import** CSV, Excel (any sheet, header row below a title is found), Parquet and JSON — by drag-and-drop. Files saved by a Russian or Portuguese Excel just work: Windows-1251, `;` separators, decimal commas, `31.12.2026` dates.
-- **Query** in tabs with SQL completion; `Ctrl+Enter` or `F5` runs the selection or the whole tab.
+- **Query** in tabs with SQL completion; `Ctrl+Enter` or `F5` runs the selection or the whole tab (in a Python tab: `Ctrl+Enter` the cell at the cursor, `Shift+Enter` it and on to the next, `Ctrl+Shift+Enter` or `F5` every cell).
 - **See** results in a fast grid with column types; copy into Excel, export CSV / Excel, export whole tables as CSV / Parquet (for pandas).
 - **Fill** an existing table from a file (drop it onto the table): columns are matched by name, and every row is checked against the table's types, NOT NULL, keys, foreign keys and CHECKs before anything is written — "row 47: customer_id = 999 is not in customers". Insert the good rows, fix the rest.
 - **Sample datasets** in one click, each in its own schema: Chinook, Northwind, AdventureWorks LT, Sakila and Quaera's Kaiyo Trading. A link like `lab.quaera.app/#ds=northwind` opens one directly.

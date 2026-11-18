@@ -12,7 +12,7 @@ import { isolateHistory, redo, toggleComment, undo } from '@codemirror/commands'
 import { openSearchPanel } from '@codemirror/search'
 import { explainSql, openAsModel, ownTables, runPython, runSql, setTabSql, stopQuery, tabDialect, useLab, type Dialect } from './store'
 import { Menu, useLongPress, type MenuItem } from './Menu'
-import { cellAt, insertCellAfter, splitCells } from '../core/pyCells'
+import { cellRunPlan, insertCellAfter, splitCells } from '../core/pyCells'
 import { pyCellBars } from './pyCellBars'
 import type { TableInfo } from '../db/catalog'
 
@@ -28,24 +28,15 @@ export function currentSql(view: EditorView): string {
 }
 
 /**
- * A Python tab's Run: the selection as one cell, or every code cell in order; with `cell`, only the
- * cell at the cursor, and the cursor moves on to the next one (Shift+Enter, as in Jupyter).
+ * A Python tab's keys, as in Colab / Jupyter: Ctrl+Enter runs the selection or the cell at the cursor; with `move`
+ * (Shift+Enter) the cell at the cursor and the cursor goes on to the next one. Run all is `runAll`.
  */
-function runPythonFrom(v: EditorView, id: string, cell = false) {
-  const sel = v.state.selection.main
+function runPythonFrom(v: EditorView, id: string, move = false) {
   const text = v.state.doc.toString()
-  if (!sel.empty && !cell) return void runPython(id, [{ code: v.state.sliceDoc(sel.from, sel.to), line: v.state.doc.lineAt(sel.from).number, index: -1 }])
-  const cells = splitCells(text)
-  const all = cells.map((c, index) => ({ c, index })).filter(({ c }) => c.kind === 'code')
-  if (!cell) return void runPython(id, all.map(({ c, index }) => ({ code: c.source, line: c.line, index, source: c.source })))
-  const at = cellAt(cells, sel.head)
-  if (at < 0) return
-  const c = cells[at]
-  if (c.kind === 'code') void runPython(id, [{ code: c.source, line: c.line, index: at, source: c.source }])
-  const next = cells[at + 1]
-  // the line after the next cell's `# %%`, or the end of the tab
-  const to = next ? Math.min(text.length, v.state.doc.lineAt(next.from).to + 1) : text.length
-  v.dispatch({ selection: { anchor: to }, scrollIntoView: true })
+  const sel = v.state.selection.main
+  const { run, cursor } = cellRunPlan(text, sel, move, (pos) => v.state.doc.lineAt(pos).number)
+  if (run) void runPython(id, [run])
+  if (cursor !== null) v.dispatch({ selection: { anchor: cursor }, scrollIntoView: true })
 }
 
 /** Every code cell of a Python tab in order, or the whole SQL tab: Run all, whatever is selected. */
@@ -57,10 +48,19 @@ function runAll(v: EditorView, id: string) {
 }
 
 let activeView: EditorView | null = null
+/** Ctrl+Enter outside the editor: Python = the selection or the cell at the cursor, SQL = the selection or the whole tab. */
 export function runActive() {
   const id = useLab.getState().activeTab
   if (!activeView) return
-  if (tabDialect(useLab.getState().tabs.find((t) => t.id === id)) === 'python') runPythonFrom(activeView, id)
+  if (isPython(id)) runPythonFrom(activeView, id)
+  else void runSql(id, currentSql(activeView))
+}
+
+/** F5, Ctrl+Shift+Enter, the Run all button: every code cell of a Python tab; SQL behaves as Ctrl+Enter (selection or whole tab). */
+export function runActiveAll() {
+  const id = useLab.getState().activeTab
+  if (!activeView) return
+  if (isPython(id)) runAll(activeView, id)
   else void runSql(id, currentSql(activeView))
 }
 
@@ -132,9 +132,9 @@ export function setActiveText(text: string) {
 
 const isPython = (id: string) => tabDialect(useLab.getState().tabs.find((t) => t.id === id)) === 'python'
 
-/** Ctrl+Enter, F5: the selection or the whole tab (every cell of a Python tab). */
-function runIn(v: EditorView, id: string) {
-  if (isPython(id)) runPythonFrom(v, id)
+/** Ctrl+Enter: the selection or the whole SQL tab; in a Python tab the selection or the cell at the cursor. F5: SQL as Ctrl+Enter, Python every cell. */
+function runIn(v: EditorView, id: string, all = false) {
+  if (isPython(id)) all ? runAll(v, id) : runPythonFrom(v, id)
   else void runSql(id, currentSql(v))
 }
 
@@ -236,8 +236,9 @@ function EditorMenu({ view, at, close }: { view: EditorView; at: { x: number; y:
   const items: MenuItem[] = [
     ...(python
       ? ([
-          selected ? ['Run selection', () => runPythonFrom(view, id), { disabled: cantRun, keys: `${mod}Enter` }] : ['Run cell', () => runPythonFrom(view, id, true), { disabled: cantRun, keys: 'Shift+Enter' }],
-          ['Run all', () => runAll(view, id), { disabled: cantRun, keys: selected ? undefined : `${mod}Enter` }],
+          selected ? ['Run selection', () => runPythonFrom(view, id), { disabled: cantRun, keys: `${mod}Enter` }] : ['Run cell', () => runPythonFrom(view, id), { disabled: cantRun, keys: `${mod}Enter` }],
+          ['Run cell and go to the next', () => runPythonFrom(view, id, true), { disabled: cantRun, keys: 'Shift+Enter' }],
+          ['Run all', () => runAll(view, id), { disabled: cantRun, keys: `${mod}Shift+Enter` }],
         ] as MenuItem[])
       : ([
           ['Run selection', () => void runSql(id, selected), { disabled: cantRun || !selected, keys: selected ? `${mod}Enter` : undefined }],
@@ -288,7 +289,9 @@ export function SqlEditor() {
         Prec.highest(
           keymap.of([
             { key: 'Mod-Enter', run: (v) => (runIn(v, id), true) },
-            { key: 'F5', run: (v) => (runIn(v, id), true) },
+            { key: 'F5', run: (v) => (runIn(v, id, true), true) },
+            // Python tabs: run all (SQL keeps Ctrl+Shift+Enter unbound here).
+            { key: 'Mod-Shift-Enter', run: (v) => (isPython(id) ? (runAll(v, id), true) : false) },
             // Python tabs: the cell at the cursor, then on to the next (Jupyter's Shift+Enter).
             { key: 'Shift-Enter', run: (v) => (isPython(id) ? (runPythonFrom(v, id, true), true) : false) },
             { key: 'Shift-Alt-f', run: () => (formatActiveTab(), true) },

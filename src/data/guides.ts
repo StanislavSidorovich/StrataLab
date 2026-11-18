@@ -1228,7 +1228,7 @@ export function guideById(id: string): Guide | undefined {
 export function guideNotebook(g: Guide, title: string, lang: 'sql' | 'python'): string {
   if (lang === 'sql')
     return g.examples.map((e, i) => `-- ${i + 1}. ${e.title}: ${e.question}\n${e.sql.trimEnd()}\n`).join('\n')
-  const head = `# %% [markdown]\n# # ${title}: examples\n# Run a cell with Shift+Enter (it moves on to the next), or all of them with Ctrl+Enter.\n`
+  const head = `# %% [markdown]\n# # ${title}: examples\n# Run a cell with Ctrl+Enter, or with Shift+Enter (it moves on to the next); all of them with Ctrl+Shift+Enter.\n`
   const cells = g.examples.map((e, i) => `# %% [markdown]\n# ## ${i + 1}. ${e.title}\n# ${e.question}\n\n# %%\n${e.python.trimEnd()}\n`)
   return [head, ...cells].join('\n')
 }

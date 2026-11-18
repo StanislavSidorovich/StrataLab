@@ -197,3 +197,27 @@ export function tableSql(name: string): string {
   if (!parts.length || parts.length > 3) throw bad()
   return `SELECT * FROM ${parts.join('.')}`
 }
+
+export interface RunPiece { code: string; line: number; index: number; source?: string }
+
+/**
+ * What Ctrl+Enter (`move: false`) and Shift+Enter (`move: true`) run in a Python tab, as in Colab / Jupyter:
+ * Ctrl+Enter runs the selection if there is one, else the cell at the cursor; Shift+Enter always the cell at the
+ * cursor and then moves on. A cursor on a `# %%` line belongs to the cell below it; a tab with no marker is one cell.
+ * `run` is null when there is nothing to run (a markdown cell, an empty cell, an empty tab). `cursor` is where
+ * Shift+Enter puts the cursor: the line after the next cell's marker; on the last cell it goes to the end of the
+ * tab and no cell is added; null for Ctrl+Enter.
+ */
+export function cellRunPlan(text: string, sel: { from: number; to: number; head: number }, move: boolean, lineOf: (pos: number) => number): { run: RunPiece | null; cursor: number | null } {
+  if (!move && sel.from !== sel.to) return { run: { code: text.slice(sel.from, sel.to), line: lineOf(sel.from), index: -1 }, cursor: null }
+  const cells = splitCells(text)
+  const at = cellAt(cells, sel.head)
+  if (at < 0) return { run: null, cursor: null }
+  const c = cells[at]
+  const run = c.kind === 'code' && c.source.trim() ? { code: c.source, line: c.line, index: at, source: c.source } : null
+  if (!move) return { run, cursor: null }
+  const next = cells[at + 1]
+  const eol = next ? text.indexOf('\n', next.from) : -1
+  const cursor = next ? (eol < 0 ? text.length : eol + 1) : text.length
+  return { run, cursor }
+}

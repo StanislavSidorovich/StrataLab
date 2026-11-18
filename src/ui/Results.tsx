@@ -208,7 +208,7 @@ function ResultBody() {
   const translating = useLab((s) => s.translations[s.activeTab]?.status === 'loading')
   if (loading) return <EngineLoading />
   if (dialect === 'python') {
-    if (!res) return <Empty text={'Run the cells to see their output here: Ctrl+Enter runs every cell, Shift+Enter the cell at the cursor. Tables come in with lab.table("name").'} />
+    if (!res) return <Empty text={'Run the cells to see their output here: Ctrl+Enter runs the cell at the cursor, Shift+Enter that cell and moves on, Ctrl+Shift+Enter (or F5) every cell. Tables come in with lab.table("name").'} />
     return <PythonOutput res={res} />
   }
   if (!res) return <Empty text={`Run a query to see its result here — Ctrl+Enter or F5.${dialect === 'tsql' ? ' It is translated to DuckDB first.' : dialect === 'postgres' ? ' It runs on PostgreSQL.' : ''}`} />
