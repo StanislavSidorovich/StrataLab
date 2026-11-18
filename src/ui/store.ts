@@ -35,7 +35,15 @@ import { BOOK_TABLES } from '../data/pyPractice/tables'
 import { duckdbScript, translateTsql, type TranslatedStatement, type TranslatorProgress } from '../dialects/tsql'
 import { copyToPostgres, explainPostgres, getPostgres, postgresCatalog, runPostgres } from '../dialects/postgres'
 import { copyTitle, dialectSwitch, findMatchingTab, rememberClosed } from '../core/tabs'
-import { pythonNotebookForTable, pythonStarter, pythonTableStarter } from '../core/pyStarter'
+import { labName, pythonNotebookForTable, pythonStarter, pythonTableStarter } from '../core/pyStarter'
+import {
+  COPY_CONTEXT_TOAST,
+  buildAiContext,
+  type AiContextCellRun,
+  type AiContextSampleRows,
+  type AiContextTable,
+  type BuiltAiContext,
+} from '../core/aiContext'
 import { backupFileName } from '../core/backup'
 import { backupDatabase, restoreDatabase } from '../db/backup'
 import { download, exportTablesCsv, pickFolder, resultRows } from '../db/export'
@@ -234,6 +242,8 @@ interface State {
   cellRuns: Record<string, Record<string, CellRun>>
   /** the Data analysis cycle cheat sheet panel in Python tabs is expanded */
   dmCycleOpen: boolean
+  /** fallback modal text when clipboard access fails for "Copy context for AI" */
+  copyContextFallback: string | null
 }
 
 export interface PracticeProgress {
@@ -365,6 +375,7 @@ export const useLab = create<State>(() => ({
   python: { status: 'off' },
   cellRuns: {},
   dmCycleOpen: initialDmCycleOpen(),
+  copyContextFallback: null,
 }))
 
 /** The user's own tables and views (schema main), without the catalog datasets. */
@@ -1785,6 +1796,71 @@ export async function runDmCycleExample(stageTitle: string, exampleTitle: string
   const { text, cursor, run } = buildExampleCellInsertion(tab.sql, cursorPos, stageTitle, exampleTitle, code)
   if (!replaceActiveAndFocusCursor(text, cursor)) setTabSql(tabId, text)
   void runPython(tabId, [run])
+}
+
+// ------------------------------------------------------------------ Copy context for AI
+
+export function closeCopyContextFallback() {
+  set({ copyContextFallback: null })
+}
+
+export function gatherTabAiContext(
+  tabId: string,
+  cursorPos: number,
+  extra?: { sampleRows?: AiContextSampleRows | null; instruction?: string },
+): BuiltAiContext {
+  const s = get()
+  const tab = s.tabs.find((t) => t.id === tabId)
+  const tabText = tab?.sql ?? ''
+  const tables: AiContextTable[] = s.tables.map((t) => ({
+    name: labName(t),
+    rows: t.rows,
+    columns: t.columns,
+  }))
+  const cells = splitCells(tabText)
+  const runsMap = s.cellRuns[tabId] ?? {}
+  const matchedSources = new Set<string>()
+  const matchedRuns: AiContextCellRun[] = []
+  for (const c of cells) {
+    const run = runsMap[c.source]
+    if (run) {
+      matchedRuns.push({ source: c.source, outputs: run.outputs })
+      matchedSources.add(c.source)
+    }
+  }
+  const unmatchedRuns: AiContextCellRun[] = []
+  for (const [source, run] of Object.entries(runsMap)) {
+    if (!matchedSources.has(source)) unmatchedRuns.push({ source, outputs: run.outputs })
+  }
+  const cellRuns = [...unmatchedRuns, ...matchedRuns]
+  const lastResultCell = s.results[tabId]?.cells?.at(-1)
+  const fallbackLastOutputs: readonly Output[] | undefined =
+    lastResultCell?.outputs ??
+    (s.results[tabId]?.status === 'error' && s.results[tabId]?.error
+      ? [{ output_type: 'error', ename: 'Error', evalue: s.results[tabId].error!, traceback: [] }]
+      : undefined)
+
+  return buildAiContext({
+    tabTitle: tab?.title ?? 'Python',
+    tabText,
+    cursorPos,
+    tables,
+    cellRuns,
+    fallbackLastOutputs,
+    sampleRows: extra?.sampleRows,
+    instruction: extra?.instruction,
+  })
+}
+
+export async function copyContextForAi(tabId: string, cursorPos: number) {
+  const built = gatherTabAiContext(tabId, cursorPos, { sampleRows: null })
+  try {
+    if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable')
+    await navigator.clipboard.writeText(built.text)
+    set({ notice: COPY_CONTEXT_TOAST })
+  } catch {
+    set({ copyContextFallback: built.text })
+  }
 }
 
 // ------------------------------------------------------------------ practice pages on Kaiyo

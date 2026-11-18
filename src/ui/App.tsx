@@ -22,6 +22,7 @@ import { PipelinePage } from './PipelinePage'
 import { BuildPage } from './build/BuildPage'
 import { GuideDialog } from './Guide'
 import { CompareDialog } from './Compare'
+import { CopyContextDialog } from './CopyContextDialog'
 import { DialectBar } from './DialectBar'
 import { DmCyclePanel } from './DmCyclePanel'
 import { checkForUpdates, updateCheckMessage, useUpdateReady } from '../pwa/register'
@@ -216,6 +217,7 @@ export function App() {
       <PracticeDialog />
       <GuideDialog />
       <CompareDialog />
+      <CopyContextDialog />
     </div>
   )
 }

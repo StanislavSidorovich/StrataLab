@@ -2,9 +2,9 @@
 // to DuckDB first (sqlglot) and the translation can be seen side by side; PostgreSQL runs on a
 // real PostgreSQL (PGlite), a separate database that tables are copied into.
 import { useEffect, useState } from 'react'
-import { ArrowLeftRight, BookOpen, ChevronDown, Copy, ListTree, Loader2, Play, Plus, Redo2, RotateCcw, Search, Square, SquareSlash, Undo2, WandSparkles, X } from 'lucide-react'
-import { copySchemaToPostgres, explainSql, ownTables, openCompare, openWelcome, restartPython, retryPython, setTabDialect, showTranslation, startPython, stopQuery, tabDialect, toggleDmCycle, useLab } from './store'
-import { activeSql, addCell, editorCommand, formatActiveTab, runActive, runActiveAll, runActiveCell } from './SqlEditor'
+import { ArrowLeftRight, BookOpen, ChevronDown, ClipboardCopy, Copy, ListTree, Loader2, Play, Plus, Redo2, RotateCcw, Search, Square, SquareSlash, Undo2, WandSparkles, X } from 'lucide-react'
+import { copyContextForAi, copySchemaToPostgres, explainSql, ownTables, openCompare, openWelcome, restartPython, retryPython, setTabDialect, showTranslation, startPython, stopQuery, tabDialect, toggleDmCycle, useLab } from './store'
+import { activeCursorPos, activeSql, addCell, editorCommand, formatActiveTab, runActive, runActiveAll, runActiveCell } from './SqlEditor'
 import { Menu, type MenuItem } from './Menu'
 import { SQL_DIALECTS, dismissNote, needsNote, noteDismissed, sqlLabel, type SqlDialect } from '../core/dialectNote'
 import { pythonProgressLabel, pythonProgressShare } from '../core/progress'
@@ -100,6 +100,13 @@ export function DialectBar() {
             title="Data analysis cycle cheat sheet: Exploration, Preprocessing, Processing, Analysis"
           >
             <BookOpen size={13} /> Data cycle
+          </button>
+          <button
+            className="btn btn-ghost shrink-0"
+            onClick={() => void copyContextForAi(tab.id, activeCursorPos())}
+            title="Copy table schema, exploration summary, current cell, and last output/error for AI (no raw rows included)"
+          >
+            <ClipboardCopy size={13} /> Copy context for AI
           </button>
         </>
       )}
