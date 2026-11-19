@@ -22,6 +22,7 @@ export const SKILLS: PracticeSkill[] = [
 
   { id: 'add-column', section: 'new-columns', uses: /\.assign\(|\[""\]\s*=(?!=)/ },
   { id: 'if-column', section: 'new-columns', uses: /\bnp\.where\(/ },
+  { id: 'many-outcomes', section: 'new-columns', uses: /\bnp\.select\(/ },
   { id: 'bands', section: 'new-columns', uses: /\bpd\.cut\(/ },
   { id: 'map-values', section: 'new-columns', uses: /\.map\(/ },
   { id: 'name-counts', section: 'new-columns', uses: /\.rename_axis\(|\.reset_index\(name=/ },

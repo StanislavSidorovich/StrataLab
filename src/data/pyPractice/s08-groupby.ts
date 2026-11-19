@@ -20,7 +20,7 @@ export const GROUPBY: PracticeSection = {
     {
       kind: 'task',
       id: 'py-groupby-top-price',
-      title: 'The dearest product of each category',
+      title: 'The most expensive product of each category',
       question: 'What is the highest list_price in each category? Show category and the price.',
       ordered: false,
       skills: ['group-total'],
