@@ -32,7 +32,7 @@ import { activeCursorPos, replaceActiveAndFocusCursor } from './SqlEditor'
 import type { Walkthrough } from '../data/walkthroughs'
 import { createSchema, listSchemas, moveTables, renameSchema } from '../db/ownDatasets'
 import { catalogSchemaState, datasetName, isOwnSchema, linkedTables } from '../core/ownDatasets'
-import { DATASET_AT, choiceKey, qualifyDrops, suggestDatasetName, tablesCreated } from '../core/scriptDataset'
+import { DATASET_AT, choiceKey, qualifyDrops, qualifyReferences, suggestDatasetName, tablesCreated } from '../core/scriptDataset'
 import { schemaForModel, showAsModel } from '../db/modelExport'
 import { planGeneration, type GenPlan, type GenTable } from '../core/generate'
 import { runGeneration, type GenOutcome } from '../db/generate'
@@ -745,7 +745,7 @@ export async function runSql(tabId: string, sql: string, limit?: number) {
       return
     }
     into = answer
-    if (into) statements = statements.map((st) => qualifyDrops(st, into!))
+    if (into) statements = statements.map((st) => qualifyReferences(qualifyDrops(st, into!), into!))
   }
   const t0 = performance.now()
   const isStopped = () => stopped.has(tabId)

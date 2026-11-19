@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DATASET_AT, choiceKey, qualifyDrops, suggestDatasetName, tablesCreated } from '../src/core/scriptDataset'
+import { DATASET_AT, choiceKey, qualifyDrops, qualifyReferences, suggestDatasetName, tablesCreated } from '../src/core/scriptDataset'
 
 describe('which scripts are offered a dataset', () => {
   it('counts the tables a script makes in the default schema', () => {
@@ -46,6 +46,18 @@ describe('DROPs stay in the dataset', () => {
   it('leaves a DROP that already says where, and other statements, as they are', () => {
     const sql = 'DROP TABLE main.orders; DROP TABLE sales.orders; DROP SCHEMA x; SELECT 1'
     expect(qualifyDrops(sql, 'ds')).toBe(sql)
+  })
+})
+
+describe('foreign keys stay in the dataset', () => {
+  it('names the dataset in every plain REFERENCES, inline or as a constraint', () => {
+    expect(qualifyReferences('CREATE TABLE d (m VARCHAR REFERENCES employee (ssn), CONSTRAINT fk FOREIGN KEY (x) REFERENCES "Order Line" (id))', 'ds')).toBe(
+      'CREATE TABLE d (m VARCHAR REFERENCES ds.employee (ssn), CONSTRAINT fk FOREIGN KEY (x) REFERENCES ds."Order Line" (id))',
+    )
+  })
+  it('leaves a REFERENCES that already says where, and other statements, as they are', () => {
+    const sql = 'CREATE TABLE d (m INT REFERENCES main.e (id), n INT REFERENCES sales.o (id)); SELECT 1'
+    expect(qualifyReferences(sql, 'ds')).toBe(sql)
   })
 })
 

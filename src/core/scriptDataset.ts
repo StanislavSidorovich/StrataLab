@@ -44,5 +44,16 @@ export function qualifyDrops(sql: string, schema: string): string {
   return sql.replace(DROP, (_all, head: string, names: string) => head + names.split(',').map((n) => `${schema}.${n.trim()}`).join(', '))
 }
 
+const REFERENCES = new RegExp(String.raw`\b(references\s+)(${IDENT})(?![\w$"]|\s*\.)`, 'gi')
+
+/**
+ * DuckDB looks a foreign key's target up in `main`, not in the schema of the table that has the key, so with
+ * `REFERENCES employee (ssn)` every INSERT into a table of the dataset fails ("Table with name employee does
+ * not exist") although the table is there. Naming the dataset in every plain REFERENCES avoids it.
+ */
+export function qualifyReferences(sql: string, schema: string): string {
+  return sql.replace(REFERENCES, (_all, head: string, name: string) => `${head}${schema}.${name}`)
+}
+
 /** The same script in the same tab keeps its answer, so running it again does not ask again. */
 export const choiceKey = (tabId: string, tables: string[]) => `${tabId}|${[...tables].sort().join(',')}`
