@@ -12,7 +12,8 @@ import { isolateHistory, redo, toggleComment, undo } from '@codemirror/commands'
 import { openSearchPanel } from '@codemirror/search'
 import { explainSql, openAsModel, ownTables, runPython, runSql, setTabSql, stopQuery, tabDialect, useLab, type Dialect } from './store'
 import { Menu, useLongPress, type MenuItem } from './Menu'
-import { cellRunPlan, insertCellAfter, splitCells } from '../core/pyCells'
+import { NO_CHORD, stepChord } from '../core/cellChord'
+import { cellRunPlan, insertCellAfter, insertCellBefore, splitCells } from '../core/pyCells'
 import { pyCellBars } from './pyCellBars'
 import type { TableInfo } from '../db/catalog'
 
@@ -136,11 +137,12 @@ export function insertAtCursor(name: string): boolean {
   return true
 }
 
-/** "+ Cell": a `# %%` line after the cell at the cursor, and the cursor under it. */
-export function addCell() {
+/** "+ Cell" (Ctrl+M B): a `# %%` line after the cell at the cursor, and the cursor under it. Ctrl+M A: a cell above. */
+export function addCell(where: 'below' | 'above' = 'below') {
   const v = activeView
   if (!v) return
-  const { at, insert, cursor } = insertCellAfter(v.state.doc.toString(), v.state.selection.main.head)
+  const head = v.state.selection.main.head
+  const { at, insert, cursor } = (where === 'above' ? insertCellBefore : insertCellAfter)(v.state.doc.toString(), head)
   v.dispatch({ changes: { from: at, insert }, selection: { anchor: cursor }, scrollIntoView: true, userEvent: 'input' })
   v.focus()
 }
@@ -309,6 +311,23 @@ export function SqlEditor() {
     EditorState.create({
       doc,
       extensions: [
+        // Colab's chord in a Python tab: Ctrl+M, then B (cell below) or A (cell above). Lives in the editor,
+        // so it never fires from the AI helper's field or a dialog. Ctrl+M no longer toggles tab-focus mode here.
+        Prec.highest(
+          (() => {
+            let chord = NO_CHORD
+            return EditorView.domEventHandlers({
+              keydown: (e) => {
+                if (!isPython(id)) return false
+                const step = stepChord(chord, e, Date.now())
+                chord = step.state
+                if (step.handled) e.preventDefault()
+                if (step.action) addCell(step.action)
+                return step.handled
+              },
+            })
+          })(),
+        ),
         Prec.highest(
           keymap.of([
             { key: 'Mod-Enter', run: (v) => (runIn(v, id), true) },

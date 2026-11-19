@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { Bool, Float64, Int32, Int64, Table, TimestampMicrosecond, Utf8, vectorFromArray, makeData, makeVector, DateDay, Decimal } from 'apache-arrow'
-import { cellAt, callKey, insertCellAfter, joinCells, labCalls, splitCells, tableSql } from '../src/core/pyCells'
+import { cellAt, callKey, insertCellAfter, insertCellBefore, joinCells, labCalls, splitCells, tableSql } from '../src/core/pyCells'
 import { EXTRA_WHEELS, extraWheelsFor, hasOwnPackages, packageClosure, pyodideCdn, pythonPackageFiles, servedImports, type Lock } from '../src/core/python'
 import { isOnDemand } from '../src/core/pwa'
 import { arrowFromFrame, frameFromArrow, uniqueNames } from '../src/python/columns'
@@ -281,6 +281,33 @@ describe('insertCellAfter (+ Cell)', () => {
     const r = apply('# %%\na = 1', 3)
     expect(r.out).toBe('# %%\na = 1\n\n# %%\n')
     expect(r.cursor).toBe(r.out.length)
+  })
+  it('in an empty tab, starts the first cell', () => {
+    expect(apply('', 0).out).toBe('# %%\n')
+  })
+})
+
+describe('insertCellBefore (Ctrl+M A)', () => {
+  const apply = (text: string, pos: number) => {
+    const { at, insert, cursor } = insertCellBefore(text, pos)
+    return { out: text.slice(0, at) + insert + text.slice(at), cursor }
+  }
+  it('puts an empty cell before the one at the cursor, cursor inside it, the others untouched', () => {
+    const text = '# %%\na = 1\n\n# %%\nb = 2\n'
+    const r = apply(text, 15)
+    expect(r.out).toBe('# %%\na = 1\n\n# %%\n\n# %%\nb = 2\n')
+    expect(r.cursor).toBe(text.indexOf('# %%\nb') + 5)
+    expect(splitCells(r.out).map((c) => c.source)).toEqual(['a = 1', '', 'b = 2'])
+  })
+  it('above the first cell', () => {
+    const r = apply('# %%\na = 1\n', 2)
+    expect(r.out).toBe('# %%\n\n# %%\na = 1\n')
+    expect(r.cursor).toBe(5)
+  })
+  it('text before any marker is not swallowed by the new cell', () => {
+    const r = apply('a = 1\nb = 2\n', 3)
+    expect(r.out).toBe('# %%\n\n# %%\na = 1\nb = 2\n')
+    expect(splitCells(r.out).map((c) => c.source)).toEqual(['', 'a = 1\nb = 2'])
   })
   it('in an empty tab, starts the first cell', () => {
     expect(apply('', 0).out).toBe('# %%\n')

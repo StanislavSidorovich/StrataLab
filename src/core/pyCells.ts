@@ -64,6 +64,19 @@ export function insertCellAfter(text: string, pos: number): { at: number; insert
   return { at, insert, cursor: at + insert.length }
 }
 
+/** "Insert cell above": an empty `# %%` cell before the one at the cursor; the cursor goes into it. */
+export function insertCellBefore(text: string, pos: number): { at: number; insert: string; cursor: number } {
+  const cells = splitCells(text)
+  const i = cellAt(cells, pos)
+  if (i < 0) return insertCellAfter(text, pos)
+  const at = cells[i].from
+  const eol = text.indexOf('\n', at)
+  const firstLine = text.slice(at, eol < 0 ? text.length : eol)
+  // text before the first `# %%` has no marker of its own: give it one, or the new cell would swallow it
+  const insert = MARKER.test(firstLine) ? '# %%\n\n' : '# %%\n\n# %%\n'
+  return { at, insert, cursor: at + '# %%\n'.length }
+}
+
 /** Cells back into a tab's text: `# %%` before each, markdown lines as `# ` comments. */
 export function joinCells(cells: { kind: Cell['kind']; source: string }[]): string {
   return (

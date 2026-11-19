@@ -69,31 +69,6 @@ export function DialectBar() {
 
       {dialect === 'python' && (
         <>
-          <span className="truncate" style={{ color: python.status === 'error' ? 'var(--danger)' : 'var(--py)', fontWeight: 600 }} title={python.status === 'error' ? python.error : 'A cell ends at the next # %% line (not at a semicolon). Run the cell at the cursor: Ctrl+Enter · this cell, then the next: Shift+Enter · every cell: Ctrl+Shift+Enter or F5'}>
-            {python.status === 'ready' && (
-              <>
-                Python {python.version.replace(/^(\d+)\.(\d+).*/, '$1.$2')} · pandas
-              </>
-            )}
-            {python.status === 'off' && 'Python starts on the first run'}
-            {python.status === 'loading' && (
-              <span className="flex items-center gap-1.5">
-                <Loader2 size={13} className="animate-spin" /> {pythonLoading(python, shown)}
-                <span className="hidden lg:inline">{shown && python.bytes ? ' (once, then kept in this browser)' : ''}</span>
-              </span>
-            )}
-            {python.status === 'error' && `Python failed to start: ${python.error}`}
-          </span>
-          {python.status === 'error' && (
-            <button className="btn btn-ghost shrink-0" onClick={retryPython} title="Try starting Python again">
-              <RotateCcw size={13} /> Retry
-            </button>
-          )}
-          {python.status === 'ready' && (
-            <button className="btn btn-ghost shrink-0" onClick={restartPython} title="Restart Python: forget every variable, as a new notebook session">
-              <RotateCcw size={13} /> <span className="hidden sm:inline">Restart</span>
-            </button>
-          )}
           <button
             className="btn btn-ghost shrink-0"
             style={dmCycleOpen ? { background: 'var(--accent-soft)', color: 'var(--accent)', fontWeight: 600 } : undefined}
@@ -129,10 +104,38 @@ export function DialectBar() {
               {aiEnabled ? 'ON' : 'OFF'}
             </span>
           </button>
+          {python.status === 'error' && (
+            <button className="btn btn-ghost shrink-0" onClick={retryPython} title="Try starting Python again">
+              <RotateCcw size={13} /> Retry
+            </button>
+          )}
+          {python.status === 'ready' && (
+            <button className="btn btn-ghost shrink-0" onClick={restartPython} title="Restart Python: forget every variable, as a new notebook session">
+              <RotateCcw size={13} /> <span className="hidden sm:inline">Restart</span>
+            </button>
+          )}
         </>
       )}
 
       <EditorTools python={dialect === 'python'} />
+      {dialect === 'python' && (
+        // a status, not an action: at the right edge, after the actions and the editor's tools
+        <span className="truncate shrink-0 max-w-[16rem] sm:max-w-md" style={{ color: python.status === 'error' ? 'var(--danger)' : 'var(--py)', fontWeight: 600 }} title={python.status === 'error' ? python.error : 'A cell ends at the next # %% line (not at a semicolon). Run the cell at the cursor: Ctrl+Enter · this cell, then the next: Shift+Enter · every cell: Ctrl+Shift+Enter or F5 · new cell below: Ctrl+M B, above: Ctrl+M A'}>
+          {python.status === 'ready' && (
+            <>
+              Python {python.version.replace(/^(\d+)\.(\d+).*/, '$1.$2')} · pandas
+            </>
+          )}
+          {python.status === 'off' && 'Python starts on the first run'}
+          {python.status === 'loading' && (
+            <span className="flex items-center gap-1.5">
+              <Loader2 size={13} className="animate-spin" /> {pythonLoading(python, shown)}
+              <span className="hidden lg:inline">{shown && python.bytes ? ' (once, then kept in this browser)' : ''}</span>
+            </span>
+          )}
+          {python.status === 'error' && `Python failed to start: ${python.error}`}
+        </span>
+      )}
     </div>
     {dialect === 'python' && python.status === 'loading' && shown && <PythonBar bytes={python.bytes} />}
     {needsNote(dialect) && <DialectNote dialect={dialect} />}
@@ -248,6 +251,9 @@ function RunButton() {
         <button className="btn shrink-0" onClick={runActiveCell} disabled={disabled} title="Run cell: only the cell at the cursor, then move to the next one (Shift+Enter; Ctrl+Enter stays on the cell)">
           <Play size={13} /> <span className="hidden sm:inline">Run cell</span>
         </button>
+        <button className="btn shrink-0" onClick={() => addCell()} title="New cell below: a # %% line after the current cell (Ctrl+M B; Ctrl+M A adds one above). A cell ends at the next # %% line, not at a semicolon">
+          <Plus size={13} /> <span className="hidden sm:inline">Cell</span>
+        </button>
       </>
     )
   return (
@@ -289,11 +295,6 @@ function EditorTools({ python }: { python: boolean }) {
   ]
   return (
     <div className="ml-auto flex shrink-0 items-center" role="toolbar" aria-label="Editor">
-      {python && (
-        <button className="btn btn-ghost shrink-0 mr-1" onClick={addCell} title="New cell: a # %% line after the current cell. A cell ends at the next # %% line (not at a semicolon)">
-          <Plus size={13} /> <span className="hidden sm:inline">Cell</span>
-        </button>
-      )}
       {tools.map(([label, keys, icon, run]) => (
         <button key={label} className="p-[3px] sm:p-1.5 rounded hover:bg-[var(--panel-2)]" style={{ color: 'var(--muted)' }} onClick={run} aria-label={label} title={`${label} (${keys})`}>
           {icon}

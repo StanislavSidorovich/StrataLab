@@ -20,6 +20,7 @@ const KEYS: [string, string][] = [
   [`${mod}S · ${isMac ? '⇧⌘S' : 'Ctrl+Shift+S'}`, 'Save the tab (.sql; a Python tab as .py or .ipynb) · save as'],
   [isMac ? '⇧⌥F' : 'Shift+Alt+F', 'Format SQL'],
   ['Shift+Enter', 'Python tab: run the cell at the cursor'],
+  ['Ctrl+M B · Ctrl+M A', 'Python tab: new cell below · above, as in Colab'],
   [`${mod}/`, 'Comment or uncomment the lines'],
   [`${mod}F`, 'Find and replace'],
   [`${mod}Z · ${isMac ? '⇧⌘Z' : 'Ctrl+Y'}`, 'Undo · redo'],
