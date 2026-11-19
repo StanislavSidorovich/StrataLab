@@ -21,10 +21,14 @@ export function tablesCreated(sql: string): string[] {
   return [...new Set(names.map((n) => n.toLowerCase()))]
 }
 
-/** What to offer as the dataset's name: the tab's own name when it has one (a file's), else `my_dataset`; made unique. */
-export function suggestDatasetName(tabTitle: string, existing: string[], catalogIds: string[]): string {
+/**
+ * What to offer as the dataset's name: the database the script itself names (`CREATE DATABASE x`, `USE x`),
+ * else the tab's own name when it has one (a file's), else `my_dataset`; made unique.
+ */
+export function suggestDatasetName(tabTitle: string, existing: string[], catalogIds: string[], database?: string): string {
   const generic = /^(query|sql|python|untitled|new)\b/i.test(tabTitle.trim())
-  const base = generic ? 'my_dataset' : tableNameFrom(tabTitle.replace(/\.sql$/i, ''))
+  const named = database?.trim() ? tableNameFrom(database) : ''
+  const base = named || (generic ? 'my_dataset' : tableNameFrom(tabTitle.replace(/\.sql$/i, '')))
   for (let n = 1; n < 100; n++) {
     const name = n === 1 ? base : `${base}_${n}`
     if (!('problem' in datasetName(name, existing, catalogIds))) return name

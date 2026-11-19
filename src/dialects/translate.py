@@ -10,7 +10,7 @@ from sqlglot import exp
 from sqlglot.errors import ErrorLevel, ParseError
 from sqlglot.tokens import TokenType
 
-GO = re.compile(r"^[ \t]*GO[ \t]*(?:\d+[ \t]*)?$", re.IGNORECASE | re.MULTILINE)
+GO = re.compile(r"^[ \t]*GO[ \t]*(?:\d+[ \t]*)?\r?$", re.IGNORECASE | re.MULTILINE)
 
 
 class _Notes(logging.Handler):
@@ -71,6 +71,17 @@ _GUARDED_FK = re.compile(
 )
 _DESCRIPTION = re.compile(
     r"^declare\s+@CurrentUser\s+sysname\s+select\s+@CurrentUser\s*=\s*user_name\(\)\s+exec(?:ute)?\s+sp_addextendedproperty\s+N?'MS_Description',\s*N?'((?:[^']|'')*)',\s*N?'user',\s*@CurrentUser,\s*N?'table',\s*N?'([^']+)'(?:,\s*N?'column',\s*N?'([^']+)')?$",
+    _FLAGS,
+)
+# SET IDENTITY_INSERT t ON / OFF lines (SSMS writes them around the INSERTs of a table with an IDENTITY column).
+_IDENTITY_LINE = re.compile(r"^[ \t]*set[ \t]+identity_insert[ \t]+[^\n]+?[ \t]+(?:on|off)[ \t]*;?[ \t]*(?:\r?\n|\Z)", re.IGNORECASE | re.MULTILINE)
+_IDENTITY_NOTE = "SET IDENTITY_INSERT is left out: it lets SQL Server accept your own values in an IDENTITY column. Here the column only has a default (a sequence), so a value written in INSERT is kept as it is."
+# CREATE DATABASE x / USE x on a line of their own, at the start of a statement (comments may come before).
+# A name is [x y], "x y" or a plain word. Lab has one database, so they are left out and the name is passed
+# on (as "database") for the dataset a script's tables are offered.
+_DB_NAME = r"(\[[^\]\n]+\]|\"[^\"\n]+\"|[\w$@#]+)"
+_DATABASE_LINE = re.compile(
+    r"\A((?:\s|--[^\n]*(?=\n|\Z)|/\*.*?\*/)*?)(create\s+database|use)\s+" + _DB_NAME + r"([ \t]+[^\n;]*)?[ \t]*;?[ \t]*(?:\r?\n|\Z)",
     _FLAGS,
 )
 _CLUSTERED = re.compile(r"\b(?:non)?clustered\b[ \t]*", re.IGNORECASE)
@@ -226,11 +237,47 @@ def _note(text):
     return known.get(text, text)
 
 
+def _peel_databases(text):
+    """(text without leading CREATE DATABASE / USE lines, names of the databases they named)."""
+    names = []
+    while True:
+        m = _DATABASE_LINE.match(text)
+        if not m or (m.group(2).lower() == "use" and m.group(4)):
+            return text, names
+        names.append((m.group(2), m.group(3).strip("[]\"")))
+        text = m.group(1) + text[m.end():]
+
+
 def translate(script, pretty_multiline=True):
-    """[{source, at, target, notes, error}] per statement; target is None when it could not be read."""
+    """[{source, at, target, notes, error, database?}] per statement; target is None when it could not be read."""
     result = []
     for source, at in _statements(script):
-        text = source.strip()
+        whole = source.strip()
+        text, dbs = _peel_databases(whole)
+        text, identity_lines = _IDENTITY_LINE.subn("", text)
+        first = len(result)
+        if identity_lines and not _has_code(text):
+            result.append({"source": whole, "at": at, "target": "", "notes": [_IDENTITY_NOTE], "error": None})
+            continue
+        if dbs:
+            kw, name = dbs[-1]
+            note = f"Lab has one database, so {kw.upper()} {name} is left out. Its nearest thing is a dataset: when a script makes tables, Lab offers {name} as the dataset's name."
+            if not _has_code(text):
+                result.append({"source": whole, "at": at, "target": "", "notes": [note], "error": None, "database": name})
+                continue
+        result.extend(_translate_one(text.strip(), at + max(0, source.find(text.strip())), pretty_multiline))
+        if len(result) > first:
+            if identity_lines:
+                result[first]["notes"] = [_IDENTITY_NOTE] + result[first]["notes"]
+            if dbs:
+                result[first]["database"] = dbs[-1][1]
+                result[first]["notes"] = [note] + result[first]["notes"]
+    return result
+
+
+def _translate_one(text, at, pretty_multiline):
+    result = []
+    for source, at in [(text, at)]:
         _handler.items = []
         special = _powerdesigner(text)
         if special:

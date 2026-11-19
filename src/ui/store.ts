@@ -715,6 +715,7 @@ export async function runSql(tabId: string, sql: string, limit?: number) {
   if (dialect === 'postgres') return runOnPostgres(tabId, sql, limit)
   let toRun = sql
   let statements: string[] = [sql]
+  let database: string | undefined
   if (dialect === 'tsql') {
     const translated = await translate(tabId, sql)
     if (!translated) return
@@ -729,12 +730,24 @@ export async function runSql(tabId: string, sql: string, limit?: number) {
     // One at a time, so the result shown is the last one that returns rows (as in PostgreSQL
     // tabs), and Stop can end any of them.
     statements = runOrder(translated)
+    database = translated.find((st) => st.database)?.database
+    if (!statements.length) {
+      // Only CREATE DATABASE / USE / comments: nothing for DuckDB to run.
+      const note = translated.flatMap((st) => st.notes)[0]
+      set((s) => {
+        const results = { ...s.results }
+        if (before) results[tabId] = before
+        else delete results[tabId]
+        return { results, notice: note ?? 'Nothing to run in this script.' }
+      })
+      return
+    }
   }
   // Many new tables: into a dataset of their own rather than My tables (asked once per script and tab).
   const made = tablesCreated(toRun)
   let into: string | null = null
   if (made.length >= DATASET_AT) {
-    const answer = await chooseDataset(tabId, made)
+    const answer = await chooseDataset(tabId, made, database)
     if (answer === 'cancel') {
       set((s) => {
         const results = { ...s.results }
@@ -802,7 +815,7 @@ const datasetChoices = new Map<string, string | null>()
 let answerDataset: ((a: string | null | 'cancel') => void) | null = null
 
 /** The dataset a script's tables go into (null: My tables), asking the first time; 'cancel' when the user backed out. */
-async function chooseDataset(tabId: string, tables: string[]): Promise<string | null | 'cancel'> {
+async function chooseDataset(tabId: string, tables: string[], database?: string): Promise<string | null | 'cancel'> {
   const key = choiceKey(tabId, tables)
   if (datasetChoices.has(key)) {
     const chosen = datasetChoices.get(key)!
@@ -810,7 +823,7 @@ async function chooseDataset(tabId: string, tables: string[]): Promise<string | 
     if (chosen === null || get().schemas.includes(chosen)) return chosen
   }
   const title = get().tabs.find((t) => t.id === tabId)?.title ?? ''
-  set({ scriptDataset: { tables, name: suggestDatasetName(title, get().schemas, RESERVED_IDS), problem: null } })
+  set({ scriptDataset: { tables, name: suggestDatasetName(title, get().schemas, RESERVED_IDS, database), problem: null } })
   const answer = await new Promise<string | null | 'cancel'>((resolve) => {
     answerDataset = resolve
   })

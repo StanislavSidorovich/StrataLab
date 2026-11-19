@@ -13,6 +13,8 @@ export interface TranslatedStatement {
   error: string | null
   /** Where it runs when that is not its place in the script (PowerDesigner scripts: see core/pdScript.ts) */
   rank?: number
+  /** The database a CREATE DATABASE / USE in front of it named (Lab has one database: offered as the dataset's name) */
+  database?: string
 }
 
 export type TranslatorProgress = 'download' | 'start'

@@ -6,6 +6,7 @@ import { addTab, renameTab, setTabDecisions, tabDialect, useLab, type QueryTab }
 import { pythonFileKind, tabFileName, tabTitleFromFile } from '../core/editorFiles'
 import { datasetsUsed, fromNotebook, toNotebook } from '../core/ipynb'
 import { splitCells } from '../core/pyCells'
+import { readFileText } from '../core/sqlText'
 import { DATASETS } from '../data/datasets'
 
 // Not in TypeScript's DOM library yet.
@@ -45,7 +46,7 @@ const aborted = (e: unknown) => e instanceof DOMException && e.name === 'AbortEr
 export async function openSqlFile() {
   if (window.showOpenFilePicker) {
     try {
-      for (const h of await window.showOpenFilePicker({ types: OPEN_TYPES, multiple: true })) openSqlText(h.name, await (await h.getFile()).text(), h)
+      for (const h of await window.showOpenFilePicker({ types: OPEN_TYPES, multiple: true })) openSqlText(h.name, await readFileText(await h.getFile()), h)
     } catch (e) {
       if (!aborted(e)) useLab.setState({ importError: `Could not open the file: ${String(e instanceof Error ? e.message : e)}` })
     }
@@ -61,7 +62,7 @@ export async function openSqlFile() {
 
 /** .sql files picked or dropped: each in a new tab. */
 export async function openSqlFiles(files: File[]) {
-  for (const f of files) openSqlText(f.name, await f.text())
+  for (const f of files) openSqlText(f.name, await readFileText(f))
 }
 
 function openSqlText(fileName: string, text: string, handle?: SqlFileHandle) {
