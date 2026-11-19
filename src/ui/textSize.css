@@ -1,0 +1,5 @@
+/* "Text size" under Aa (--practice-zoom, set by Appearance.tsx) also reaches the workbench: the editor's font here,
+   the AI helper panel (zoom on its parts, AiHelper.tsx) and the result grid (DataGrid.tsx). */
+.cm-editor.cm-editor {
+  font-size: calc(13.5px * var(--practice-zoom, 1));
+}

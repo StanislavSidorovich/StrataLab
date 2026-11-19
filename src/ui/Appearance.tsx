@@ -8,6 +8,7 @@ import { parseZoom, ZOOM_KEY, ZOOM_STEPS, zoomLabel } from '../core/practiceZoom
 import { lookColor, lookVars, NO_LOOK, parseLook, setLookColor, SWATCHES, type Look, type LookPart } from '../core/look'
 import { clampTint, hslToHex, lightnessRange, NO_TINT, parseTint, TINT_KEY, tintColor, tintVars, type Hsl, type Tint, type TintPart } from '../core/tint'
 import { toggleTheme, useLab } from './store'
+import { TEXT_ZOOM_EVENT } from './useTextZoom'
 import './appearanceTint.css'
 import './contrast.css'
 
@@ -78,6 +79,7 @@ export function AppearanceButton({ className = '' }: { className?: string }) {
   // The practice pages, the pipeline and the build page read --practice-zoom (PracticeBook.tsx, PipelinePage.tsx, build.css).
   useEffect(() => {
     document.documentElement.style.setProperty('--practice-zoom', String(zoom))
+    window.dispatchEvent(new Event(TEXT_ZOOM_EVENT))
     try {
       localStorage.setItem(ZOOM_KEY, String(zoom))
     } catch {
@@ -210,8 +212,8 @@ export function AppearanceButton({ className = '' }: { className?: string }) {
             </div>
           </div>
           <div>
-            <div className="mb-1.5" style={{ color: 'var(--muted)' }}>Practice text size</div>
-            <div className="inline-flex rounded-md overflow-hidden" role="radiogroup" aria-label="Practice text size" style={{ border: '1px solid var(--line)' }}>
+            <div className="mb-1.5" style={{ color: 'var(--muted)' }}>Text size</div>
+            <div className="inline-flex rounded-md overflow-hidden" role="radiogroup" aria-label="Text size" style={{ border: '1px solid var(--line)' }}>
               {ZOOM_STEPS.map((z) => (
                 <button
                   key={z}

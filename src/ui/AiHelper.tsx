@@ -104,6 +104,7 @@ function saveSpeechLang(lang: AiSpeechLang) {
     /* ignore when localStorage is unavailable */
   }
 }
+import { SidePanelHandle, useSidePanelWidth } from './useSidePanelWidth'
 import {
   askAi,
   cancelAiConsent,
@@ -556,6 +557,7 @@ export function AiConsentDialog() {
 export function AiHelperPanel() {
   const open = useLab((s) => s.aiPanelOpen)
   const tab = useLab((s) => s.tabs.find((t) => t.id === s.activeTab))
+  const panelW = useSidePanelWidth(open && tabDialect(tab) === 'python')
   const settings = useLab((s) => s.aiSettings)
   const keys = useLab((s) => s.aiKeys)
   const req = useLab((s) => s.aiRequest)
@@ -671,13 +673,15 @@ export function AiHelperPanel() {
 
   return (
     <aside
+      ref={panelW.ref}
       aria-label="AI helper panel"
-      className="w-full md:w-80 lg:w-96 shrink-0 flex flex-col min-h-0 max-h-[46vh] md:max-h-none border-t md:border-t-0 md:border-l"
-      style={{ background: 'var(--panel)', borderColor: 'var(--line)' }}
+      className="relative w-full md:w-[var(--ai-w)] shrink-0 flex flex-col min-h-0 max-h-[46vh] md:max-h-none border-t md:border-t-0 md:border-l"
+      style={{ background: 'var(--panel)', borderColor: 'var(--line)', ['--ai-w' as string]: `${panelW.width}px` }}
     >
+      <SidePanelHandle width={panelW.width} max={panelW.max} row={panelW.row} onWidth={panelW.setWidth} />
       <div
         className="shrink-0 flex items-center gap-2 px-3 py-2"
-        style={{ background: 'var(--panel-2)', borderBottom: '1px solid var(--line)', fontSize: 12.5 }}
+        style={{ background: 'var(--panel-2)', borderBottom: '1px solid var(--line)', fontSize: 12.5, zoom: 'var(--practice-zoom, 1)' }}
       >
         <Sparkles size={14} style={{ color: 'var(--accent)' }} className="shrink-0" />
         <span className="font-semibold flex-1 truncate">AI helper (optional)</span>
@@ -702,7 +706,7 @@ export function AiHelperPanel() {
         </button>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3" style={{ fontSize: 12.5 }}>
+      <div className="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden p-3 space-y-3" style={{ fontSize: 12.5, zoom: 'var(--practice-zoom, 1)' }}>
         {!ready ? (
           <div
             className="rounded-lg p-3 space-y-2.5"
@@ -948,7 +952,7 @@ export function AiHelperPanel() {
 
       <div
         className="shrink-0 flex items-center justify-between gap-2 px-3 py-1.5"
-        style={{ background: 'var(--panel-2)', borderTop: '1px solid var(--line)', color: 'var(--muted)', fontSize: 11 }}
+        style={{ background: 'var(--panel-2)', borderTop: '1px solid var(--line)', color: 'var(--muted)', fontSize: 11, zoom: 'var(--practice-zoom, 1)' }}
       >
         <span className="truncate">
           {providerLabel} · <span className="mono">{activeModel || 'no model set'}</span> · no rows unless ticked

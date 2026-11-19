@@ -209,7 +209,7 @@ function PreviewPane({ preview, error, loading }: { preview: Preview | null; err
         </div>
       )}
       {error && <ErrorBox text={error} />}
-      {preview && !error && <DataGrid table={preview.rows} compact />}
+      {preview && !error && <DataGrid table={preview.rows} compact scaled={false} />}
     </>
   )
 }

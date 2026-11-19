@@ -358,7 +358,7 @@ const SCROLLBAR_H = 16
 function Grid({ table }: { table: Table }) {
   return (
     <div className="rounded-md overflow-hidden" style={{ height: Math.min(table.numRows, SHOWN_ROWS) * ROW_H + HEAD_H + 2 + (table.numRows <= SHOWN_ROWS ? SCROLLBAR_H : 0), border: '1px solid var(--line)' }}>
-      <DataGrid table={table} compact />
+      <DataGrid table={table} compact scaled={false} />
     </div>
   )
 }
