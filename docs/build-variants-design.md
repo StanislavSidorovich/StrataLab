@@ -228,3 +228,11 @@ Phase 1 is the safety net: if the manifest gives today's numbers on the canonica
 1. **When does variant 2 open: only after variant 1's Answer, or from the start?** Default: after Answer of variant 1 (the first pass teaches with the canonical texts the five people already saw; a fresh learner who starts on a random variant meets numbers no one has checked by hand).
 2. **Does the trainer count variants?** Default: no new keys; a variant sends the same `build:kaiyo-sales` keys, Lab shows "Variants done: 2 of 3". If the owner wants "practised 3 times" in the trainer, that is a separate key (`build:kaiyo-sales-v2`, allowed by `KEY_RE`) and a change in `quaera/`, a later commit there first (it receives).
 3. **Is month-first slash dates in a variant fair to a beginner?** It reverses the canonical lesson ("Kaiyo's distributors put the day first"). Default: yes, in variant 3 only and in Another variant, with the hint pointing at a date whose first part is above 12; variant 2 keeps day first.
+
+### Owner's answers (2026-11-19)
+
+1. Variant 2 opens only after Answer of variant 1. The canonical case is polished first.
+2. The trainer does not count variants for now: same `build:kaiyo-sales` keys, Lab shows "Variants done: N of 3". A separate trainer key may come later.
+3. Month-first slash dates: yes, in variant 3 only (and Another variant), and the problem card must make it visible: the hint points at a date whose first part is above 12.
+
+Versions: Lab reached v0.62.0 (AI helper), so phase 1 starts at v0.63.0.
