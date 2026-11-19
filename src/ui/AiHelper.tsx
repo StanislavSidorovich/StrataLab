@@ -23,8 +23,12 @@ import {
   X,
 } from 'lucide-react'
 import {
+  AI_ENDPOINT_TEMPLATES,
   AI_KEY_HELP,
   AI_QUICK_ACTIONS,
+  CLAUDE_MODEL_CHOICES,
+  isLocalBaseUrl,
+  normalizeBaseUrl,
   AI_SPEECH_LANG_KEY,
   DEFAULT_AI_MODELS,
   appendDictatedText,
@@ -111,6 +115,7 @@ import {
   replaceAiCodeCell,
   requestEnableAi,
   setAiApiKey,
+  setAiBaseUrl,
   setAiModel,
   setAiProvider,
   tabDialect,
@@ -121,11 +126,13 @@ import {
 const PROVIDER_LABELS: Record<AiProvider, string> = {
   gemini: 'Gemini',
   claude: 'Claude',
+  openai: 'OpenAI-compatible',
 }
 
 const PROVIDER_FULL_LABELS: Record<AiProvider, string> = {
   gemini: 'Google Gemini',
   claude: 'Anthropic Claude',
+  openai: 'Ollama, LM Studio, OpenRouter',
 }
 
 function CopyCodeButton({ code }: { code: string }) {
@@ -164,6 +171,11 @@ export function AiSettingsDialog() {
   const settings = useLab((s) => s.aiSettings)
   const keys = useLab((s) => s.aiKeys)
   const storageAvailable = useLab((s) => s.aiStorageAvailable)
+  const [baseDraft, setBaseDraft] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!open) setBaseDraft(null)
+  }, [open])
 
   useEffect(() => {
     if (!open) return
@@ -181,6 +193,15 @@ export function AiSettingsDialog() {
   const currentKey = keys[provider]
   const currentModel = settings.models[provider]
   const defaultModel = DEFAULT_AI_MODELS[provider]
+  const isServer = provider === 'openai'
+  const baseValue = baseDraft ?? settings.baseUrl
+  const baseCheck = isServer && baseDraft !== null ? normalizeBaseUrl(baseDraft) : null
+  const baseError = baseCheck && !baseCheck.ok ? baseCheck.reason : null
+  const onBaseChange = (raw: string) => {
+    setBaseDraft(raw)
+    setAiBaseUrl(raw)
+  }
+  const template = isServer ? AI_ENDPOINT_TEMPLATES.find((t) => t.baseUrl === settings.baseUrl) : undefined
 
   return (
     <div
@@ -247,8 +268,8 @@ export function AiSettingsDialog() {
             <div className="font-semibold" style={{ fontSize: 12.5 }}>
               Provider
             </div>
-            <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="AI provider">
-              {(['gemini', 'claude'] as const).map((p) => {
+            <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="AI provider">
+              {(['gemini', 'claude', 'openai'] as const).map((p) => {
                 const active = provider === p
                 return (
                   <button
@@ -267,17 +288,62 @@ export function AiSettingsDialog() {
                     <div className="font-semibold" style={{ color: active ? 'var(--accent)' : 'var(--text)' }}>
                       {PROVIDER_LABELS[p]}
                     </div>
-                    <div style={{ fontSize: 11.5 }}>{PROVIDER_FULL_LABELS[p]}</div>
+                    <div style={{ fontSize: 11.5, overflowWrap: 'anywhere' }}>{PROVIDER_FULL_LABELS[p]}</div>
                   </button>
                 )
               })}
             </div>
           </div>
 
+          {isServer && (
+            <div className="space-y-1.5">
+              <label htmlFor="ai-base-url-input" className="font-semibold block" style={{ fontSize: 12.5 }}>
+                Base URL
+              </label>
+              <div className="flex flex-wrap gap-1.5" role="group" aria-label="Server templates">
+                {AI_ENDPOINT_TEMPLATES.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    className="btn"
+                    style={{ fontSize: 12 }}
+                    onClick={() => onBaseChange(t.baseUrl)}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+              <input
+                id="ai-base-url-input"
+                type="url"
+                autoComplete="off"
+                spellCheck={false}
+                className="field w-full mono"
+                style={{ fontSize: 12.5 }}
+                placeholder="http://localhost:11434/v1"
+                value={baseValue}
+                aria-invalid={baseError ? true : undefined}
+                onChange={(e) => onBaseChange(e.target.value)}
+              />
+              {baseError ? (
+                <div role="alert" style={{ color: 'var(--danger, #c0392b)', fontSize: 12 }}>
+                  {baseError} The last valid address stays saved{settings.baseUrl ? `: ${settings.baseUrl}` : ' (none yet)'}.
+                </div>
+              ) : (
+                <div style={{ color: 'var(--muted)', fontSize: 12, lineHeight: 1.45 }}>
+                  Requests go to <span className="mono">{settings.baseUrl || '<Base URL>'}/chat/completions</span> in the OpenAI format.
+                  {template ? ` ${template.hint}` : ''}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="space-y-1.5">
             <label htmlFor="ai-api-key-input" className="font-semibold flex items-center gap-1.5" style={{ fontSize: 12.5 }}>
               <KeyRound size={13} style={{ color: 'var(--muted)' }} />
-              <span>{PROVIDER_LABELS[provider]} API key (stored only on this device)</span>
+              <span>
+                {PROVIDER_LABELS[provider]} API key{isServer ? ' (optional)' : ''} (stored only on this device)
+              </span>
             </label>
             <div className="flex gap-2">
               <input
@@ -287,7 +353,7 @@ export function AiSettingsDialog() {
                 spellCheck={false}
                 className="field flex-1 min-w-0 mono"
                 style={{ fontSize: 12.5 }}
-                placeholder={provider === 'gemini' ? 'AIza…' : 'sk-ant-…'}
+                placeholder={provider === 'gemini' ? 'AIza…' : provider === 'claude' ? 'sk-ant-…' : 'leave empty for a local server'}
                 value={currentKey}
                 onChange={(e) => setAiApiKey(provider, e.target.value)}
               />
@@ -302,7 +368,7 @@ export function AiSettingsDialog() {
               </button>
             </div>
             <div style={{ color: 'var(--muted)', fontSize: 12, lineHeight: 1.45 }}>
-              Get a key from{' '}
+              {isServer ? 'OpenRouter keys come from' : 'Get a key from'}{' '}
               <a className="underline" href={help.url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>
                 {help.label} <ExternalLink size={11} className="inline" />
               </a>{' '}
@@ -322,21 +388,47 @@ export function AiSettingsDialog() {
                 spellCheck={false}
                 className="field flex-1 min-w-0 mono"
                 style={{ fontSize: 12.5 }}
-                placeholder={defaultModel}
+                placeholder={isServer ? (template?.modelHint ?? 'model name on your server') : defaultModel}
                 value={currentModel}
                 onChange={(e) => setAiModel(provider, e.target.value)}
               />
-              <button
-                type="button"
-                className="btn shrink-0"
-                disabled={currentModel.trim() === defaultModel}
-                onClick={() => setAiModel(provider, defaultModel)}
-              >
-                Reset default
-              </button>
+              {!isServer && (
+                <button
+                  type="button"
+                  className="btn shrink-0"
+                  disabled={currentModel.trim() === defaultModel}
+                  onClick={() => setAiModel(provider, defaultModel)}
+                >
+                  Reset default
+                </button>
+              )}
             </div>
+            {provider === 'claude' && (
+              <div className="flex flex-wrap gap-1.5" role="group" aria-label="Claude models">
+                {CLAUDE_MODEL_CHOICES.map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    className="btn mono"
+                    style={{ fontSize: 12 }}
+                    aria-pressed={currentModel.trim() === m}
+                    disabled={currentModel.trim() === m}
+                    onClick={() => setAiModel('claude', m)}
+                  >
+                    {m}
+                  </button>
+                ))}
+              </div>
+            )}
             <div style={{ color: 'var(--muted)', fontSize: 11.5 }}>
-              Default: <code className="mono">{defaultModel}</code>
+              {isServer ? (
+                'The name your server uses, for example the one shown by "ollama list".'
+              ) : (
+                <>
+                  Default: <code className="mono">{defaultModel}</code>
+                  {provider === 'claude' ? ' (cheaper); claude-sonnet-5-5 is stronger and costs more.' : ''}
+                </>
+              )}
             </div>
           </div>
 
@@ -372,7 +464,17 @@ export function AiConsentDialog() {
 
   if (!prompt) return null
 
-  const providerName = PROVIDER_FULL_LABELS[prompt.provider]
+  const isServer = prompt.provider === 'openai'
+  const serverUrl = prompt.baseUrl ?? ''
+  const local = isServer && isLocalBaseUrl(serverUrl)
+  const serverHost = (() => {
+    try {
+      return new URL(serverUrl).host
+    } catch {
+      return serverUrl
+    }
+  })()
+  const providerName = isServer ? serverHost || 'your server' : PROVIDER_FULL_LABELS[prompt.provider]
 
   return (
     <div
@@ -404,14 +506,28 @@ export function AiConsentDialog() {
             <i>&ldquo;Also send the first 20 rows for this request&rdquo;</i> for a single question.
           </p>
           <p>
-            <b>Direct to {providerName}:</b> requests go directly from your browser to {providerName} using your API key. The owner of Quaera Lab sees nothing.
+            {local ? (
+              <>
+                <b>Stays on this computer:</b> the server at {serverHost} runs on this computer, so the request goes from your browser to it and the data does not leave your device. The owner of Quaera Lab sees nothing.
+              </>
+            ) : isServer ? (
+              <>
+                <b>Direct to {providerName}:</b> requests go from your browser to {serverHost}, a server that is not this computer, with your key if you entered one. Whoever runs it can see what you send. The owner of Quaera Lab sees nothing.
+              </>
+            ) : (
+              <>
+                <b>Direct to {providerName}:</b> requests go directly from your browser to {providerName} using your API key. The owner of Quaera Lab sees nothing.
+              </>
+            )}
           </p>
-          <div
-            className="rounded-lg p-2.5"
-            style={{ background: 'var(--warn-soft)', color: 'var(--warn-text)', fontSize: 12.5 }}
-          >
-            Do not send company, confidential, or personal data.
-          </div>
+          {!local && (
+            <div
+              className="rounded-lg p-2.5"
+              style={{ background: 'var(--warn-soft)', color: 'var(--warn-text)', fontSize: 12.5 }}
+            >
+              Do not send company, confidential, or personal data.
+            </div>
+          )}
 
           <div className="flex justify-end gap-2 pt-1">
             <button type="button" className="btn" onClick={cancelAiConsent}>
@@ -466,7 +582,8 @@ export function AiHelperPanel() {
   const provider = settings.provider
   const providerLabel = PROVIDER_LABELS[provider]
   const activeModel = settings.models[provider].trim() || DEFAULT_AI_MODELS[provider]
-  const hasKey = keys[provider].trim().length > 0
+  const isServer = provider === 'openai'
+  const hasKey = isServer ? settings.baseUrl !== '' && activeModel !== '' : keys[provider].trim().length > 0
   const ready = settings.enabled && hasKey
   const loading = req.status === 'loading'
 
@@ -582,12 +699,18 @@ export function AiHelperPanel() {
             style={{ background: 'var(--panel-2)', border: '1px solid var(--line)' }}
           >
             <div className="font-semibold">
-              {!settings.enabled ? 'AI helper is OFF by default' : `No ${providerLabel} API key stored`}
+              {!settings.enabled
+                ? 'AI helper is OFF by default'
+                : isServer
+                  ? 'No server address or model saved'
+                  : `No ${providerLabel} API key stored`}
             </div>
             <p style={{ color: 'var(--muted)', lineHeight: 1.45 }}>
               {!settings.enabled
                 ? 'Quaera Lab never connects to any AI service unless you turn on this optional bring-your-own-key helper and click Send.'
-                : `Add your ${providerLabel} API key in settings to ask questions directly from your browser.`}
+                : isServer
+                  ? 'Add the Base URL and the model name of your server in settings.'
+                  : `Add your ${providerLabel} API key in settings to ask questions directly from your browser.`}
             </p>
             <button type="button" className="btn btn-primary" onClick={() => openAiSettings(true)}>
               <Settings size={13} /> Open AI helper settings…
@@ -818,7 +941,7 @@ export function AiHelperPanel() {
         style={{ background: 'var(--panel-2)', borderTop: '1px solid var(--line)', color: 'var(--muted)', fontSize: 11 }}
       >
         <span className="truncate">
-          {providerLabel} · <span className="mono">{activeModel}</span> · no rows unless ticked
+          {providerLabel} · <span className="mono">{activeModel || 'no model set'}</span> · no rows unless ticked
         </span>
         <button type="button" className="hover:underline shrink-0" style={{ color: 'var(--accent)' }} onClick={() => openAiSettings(true)}>
           Settings…

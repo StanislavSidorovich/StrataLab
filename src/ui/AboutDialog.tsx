@@ -197,7 +197,7 @@ function Privacy() {
         </li>
         <li>
           The optional bring-your-own-key <b>AI helper</b> (OFF by default) is the only feature that can send table schema, computed summary statistics, the current cell, and the
-          last error out of the browser — only when you click Send, after you confirm consent, and directly to the provider you chose (Google Gemini or Anthropic Claude). Raw
+          last error out of the browser — only when you click Send, after you confirm consent, and directly to the provider you chose (Google Gemini, Anthropic Claude, or a server you name: Ollama or LM Studio on your computer, or OpenRouter). Raw
           rows are never included unless you explicitly tick <i>&ldquo;Also send the first 20 rows for this request&rdquo;</i> for a single question.
         </li>
       </ul>

@@ -65,6 +65,9 @@ import {
   insertCodeAtCursor,
   insertCodeCellBelow,
   parseAiConsent,
+  hasAiConsent,
+  normalizeBaseUrl,
+  type NormalizedBaseUrl,
   parseAiSettings,
   parseProviderReply,
   replaceCurrentCodeCell,
@@ -298,6 +301,8 @@ export interface AiAskOptions {
 
 export interface AiConsentPrompt {
   provider: AiProvider
+  /** OpenAI-compatible server this consent is for, as saved when the prompt opened */
+  baseUrl?: string
   pendingEnable: boolean
   pendingAsk?: AiAskOptions
 }
@@ -421,6 +426,7 @@ function loadAiKeys(): Record<AiProvider, string> {
   return {
     gemini: readKey('gemini'),
     claude: readKey('claude'),
+    openai: readKey('openai'),
   }
 }
 
@@ -561,6 +567,7 @@ useLab.subscribe((s, prev) => {
         enabled: s.aiSettings.enabled,
         provider: s.aiSettings.provider,
         models: s.aiSettings.models,
+        baseUrl: s.aiSettings.baseUrl,
       }
       localStorage.setItem(AI_SETTINGS_KEY, JSON.stringify(safeSettings))
     } catch {
@@ -2082,6 +2089,20 @@ export function setAiModel(provider: AiProvider, model: string) {
   }))
 }
 
+/** Saves a valid Base URL; an empty or odd one is refused and the saved one stays. */
+export function setAiBaseUrl(raw: string): NormalizedBaseUrl {
+  const res = normalizeBaseUrl(raw)
+  if (!res.ok) return res
+  if (res.url !== get().aiSettings.baseUrl) {
+    abortActiveAiRequest()
+    set((s) => ({
+      aiSettings: { ...s.aiSettings, baseUrl: res.url },
+      aiRequest: s.aiRequest.status === 'loading' ? { status: 'idle' } : s.aiRequest,
+    }))
+  }
+  return res
+}
+
 export function setAiApiKey(provider: AiProvider, key: string) {
   try {
     if (key.trim()) localStorage.setItem(AI_API_KEY_STORAGE[provider], key)
@@ -2117,8 +2138,12 @@ export function requestEnableAi(enable: boolean) {
     return
   }
   const provider = s.aiSettings.provider
-  if (!s.aiConsent[provider]) {
-    set({ aiConsentPrompt: { provider, pendingEnable: true } })
+  if (provider === 'openai' && !s.aiSettings.baseUrl) {
+    set({ aiSettingsOpen: true, notice: 'Enter the Base URL of your server first.' })
+    return
+  }
+  if (!hasAiConsent(s.aiConsent, s.aiSettings)) {
+    set({ aiConsentPrompt: { provider, baseUrl: s.aiSettings.baseUrl, pendingEnable: true } })
     return
   }
   set({ aiSettings: { ...s.aiSettings, enabled: true } })
@@ -2128,7 +2153,11 @@ export function confirmAiConsent() {
   const prompt = get().aiConsentPrompt
   if (!prompt) return
   set((s) => ({
-    aiConsent: { ...s.aiConsent, [prompt.provider]: true },
+    aiConsent: {
+      ...s.aiConsent,
+      [prompt.provider]: true,
+      ...(prompt.provider === 'openai' ? { openaiOrigin: new URL(prompt.baseUrl || s.aiSettings.baseUrl).origin } : {}),
+    },
     aiConsentPrompt: null,
     ...(prompt.pendingEnable ? { aiSettings: { ...s.aiSettings, enabled: true } } : {}),
   }))
@@ -2179,8 +2208,20 @@ export async function askAi(opts: AiAskOptions) {
     return
   }
 
-  if (!s.aiConsent[provider]) {
-    set({ aiConsentPrompt: { provider, pendingEnable: false, pendingAsk: opts } })
+  if (provider === 'openai' && !s.aiSettings.baseUrl) {
+    set({
+      aiRequest: {
+        status: 'error',
+        kind: 'bad_url',
+        message: 'No Base URL saved. Enter the address of your server in AI helper settings.',
+        promptLabel: opts.question?.trim().slice(0, 80) || 'AI helper',
+      },
+      aiSettingsOpen: true,
+    })
+    return
+  }
+  if (!hasAiConsent(s.aiConsent, s.aiSettings)) {
+    set({ aiConsentPrompt: { provider, baseUrl: s.aiSettings.baseUrl, pendingEnable: false, pendingAsk: opts } })
     return
   }
 
@@ -2190,7 +2231,8 @@ export async function askAi(opts: AiAskOptions) {
 
   const promptLabel = quick ? quick.label : userQuestion.slice(0, 80)
   const apiKey = s.aiKeys[provider].trim()
-  if (!apiKey) {
+  // A local Ollama or LM Studio takes no key; the other providers cannot work without one.
+  if (!apiKey && provider !== 'openai') {
     const label = provider === 'gemini' ? 'Gemini' : 'Claude'
     set({
       aiRequest: {
@@ -2232,12 +2274,25 @@ export async function askAi(opts: AiAskOptions) {
     const built = gatherTabAiContext(tabId, cursorPos, { sampleRows, instruction })
     const currentSettings = get().aiSettings
     const model = currentSettings.models[provider].trim() || DEFAULT_AI_MODELS[provider]
+    if (provider === 'openai' && !model) {
+      set({
+        aiRequest: {
+          status: 'error',
+          kind: 'no_model',
+          message: 'No model name saved. Enter the model your server runs (for Ollama, for example llama3.2) in AI helper settings.',
+          promptLabel,
+        },
+        aiSettingsOpen: true,
+      })
+      return
+    }
     const req = buildProviderRequest({
       provider,
       apiKey,
       model,
       systemPrompt: buildTutorSystemPrompt(),
       userPrompt: built.text,
+      baseUrl: currentSettings.baseUrl,
     })
 
     const res = await fetch(req.url, {
@@ -2249,7 +2304,7 @@ export async function askAi(opts: AiAskOptions) {
     const rawBody = await res.text()
     if (gen !== activeAiGen) return
 
-    const outcome = parseProviderReply(provider, res.status, rawBody, [apiKey])
+    const outcome = parseProviderReply(provider, res.status, rawBody, apiKey ? [apiKey] : [])
     if (outcome.ok) {
       set({
         aiRequest: {
@@ -2274,7 +2329,10 @@ export async function askAi(opts: AiAskOptions) {
   } catch (err) {
     if (gen !== activeAiGen) return
     const online = typeof navigator !== 'undefined' ? navigator.onLine : true
-    const outcome = classifyFetchError(err, online, [apiKey])
+    const outcome = classifyFetchError(err, online, apiKey ? [apiKey] : [], {
+      provider,
+      baseUrl: get().aiSettings.baseUrl,
+    })
     if (outcome.kind === 'aborted') {
       set({ aiRequest: { status: 'idle' } })
     } else {

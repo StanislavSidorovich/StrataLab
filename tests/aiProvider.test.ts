@@ -3,6 +3,11 @@ import { describe, expect, it } from 'vitest'
 import {
   AI_API_KEY_STORAGE,
   AI_CONSENT_KEY,
+  AI_ENDPOINT_TEMPLATES,
+  CLAUDE_MODEL_CHOICES,
+  hasAiConsent,
+  isLocalBaseUrl,
+  normalizeBaseUrl,
   AI_KEY_HELP,
   AI_QUICK_ACTIONS,
   AI_SETTINGS_KEY,
@@ -32,13 +37,19 @@ describe('AI settings and consent parsing', () => {
     expect(AI_API_KEY_STORAGE).toEqual({
       gemini: 'stratalab.ai.key.gemini',
       claude: 'stratalab.ai.key.claude',
+      openai: 'stratalab.ai.key.openai',
     })
     expect(DEFAULT_AI_MODELS).toEqual({
       gemini: 'gemini-3.8-flash',
-      claude: 'claude-sonnet-4-6',
+      claude: 'claude-haiku-5-5',
+      openai: '',
     })
+    expect(CLAUDE_MODEL_CHOICES).toEqual(['claude-haiku-5-5', 'claude-sonnet-5-5'])
     expect(AI_KEY_HELP.gemini.url).toBe('https://aistudio.google.com/apikey')
     expect(AI_KEY_HELP.claude.url).toBe('https://console.anthropic.com')
+    expect(AI_KEY_HELP.claude.note).toMatch(/Pro or Max subscription does not connect/)
+    expect(AI_KEY_HELP.claude.note).toMatch(/no free tier/)
+    expect(AI_KEY_HELP.claude.note).toContain('console.anthropic.com')
     expect(AI_QUICK_ACTIONS.map((a) => a.id)).toEqual([
       'explain-stage',
       'why-failed',
@@ -49,12 +60,14 @@ describe('AI settings and consent parsing', () => {
     expect(parseAiSettings(null)).toEqual({
       enabled: false,
       provider: 'gemini',
-      models: { gemini: 'gemini-3.8-flash', claude: 'claude-sonnet-4-6' },
+      models: { gemini: 'gemini-3.8-flash', claude: 'claude-haiku-5-5', openai: '' },
+      baseUrl: '',
     })
     expect(parseAiSettings('{not json')).toEqual({
       enabled: false,
       provider: 'gemini',
-      models: { gemini: 'gemini-3.8-flash', claude: 'claude-sonnet-4-6' },
+      models: { gemini: 'gemini-3.8-flash', claude: 'claude-haiku-5-5', openai: '' },
+      baseUrl: '',
     })
     expect(
       parseAiSettings(
@@ -68,7 +81,8 @@ describe('AI settings and consent parsing', () => {
     ).toEqual({
       enabled: true,
       provider: 'claude',
-      models: { gemini: 'gemini-3.8-flash', claude: 'claude-sonnet-4-6' },
+      models: { gemini: 'gemini-3.8-flash', claude: 'claude-haiku-5-5', openai: '' },
+      baseUrl: '',
     })
     expect(
       parseAiSettings(
@@ -81,7 +95,8 @@ describe('AI settings and consent parsing', () => {
     ).toEqual({
       enabled: true,
       provider: 'gemini',
-      models: { gemini: 'gemini-3.8-flash', claude: 'claude-sonnet-4-6' },
+      models: { gemini: 'gemini-3.8-flash', claude: 'claude-haiku-5-5', openai: '' },
+      baseUrl: '',
     })
     expect(
       parseAiSettings(
@@ -94,8 +109,34 @@ describe('AI settings and consent parsing', () => {
     ).toEqual({
       enabled: true,
       provider: 'gemini',
-      models: { gemini: 'gemini-2.5-pro', claude: 'claude-opus-4-6' },
+      models: { gemini: 'gemini-2.5-pro', claude: 'claude-opus-4-6', openai: '' },
+      baseUrl: '',
     })
+  })
+
+  it('moves a saved claude-sonnet-4-6 to claude-sonnet-5-5 and keeps other saved ids', () => {
+    const saved = (claude: string) =>
+      parseAiSettings(JSON.stringify({ enabled: true, provider: 'claude', models: { claude } })).models.claude
+    expect(saved('claude-sonnet-4-6')).toBe('claude-sonnet-5-5')
+    expect(saved(' claude-sonnet-4-6 ')).toBe('claude-sonnet-5-5')
+    expect(saved('claude-sonnet-5-5')).toBe('claude-sonnet-5-5')
+    expect(saved('claude-opus-4-6')).toBe('claude-opus-4-6')
+    expect(saved('')).toBe('claude-haiku-5-5')
+  })
+
+  it('saves only a valid Base URL for the OpenAI-compatible provider', () => {
+    const parse = (baseUrl: unknown, model = 'llama3.2') =>
+      parseAiSettings(JSON.stringify({ enabled: true, provider: 'openai', baseUrl, models: { openai: model } }))
+    expect(parse('http://localhost:11434/v1/')).toMatchObject({
+      provider: 'openai',
+      baseUrl: 'http://localhost:11434/v1',
+      models: { openai: 'llama3.2' },
+    })
+    expect(parse('  https://openrouter.ai/api/v1  ').baseUrl).toBe('https://openrouter.ai/api/v1')
+    expect(parse('').baseUrl).toBe('')
+    expect(parse('localhost:11434/v1').baseUrl).toBe('')
+    expect(parse('ftp://host/v1').baseUrl).toBe('')
+    expect(parse(42).baseUrl).toBe('')
   })
 
   it('parses speech language and appends dictated text cleanly', () => {
@@ -111,13 +152,28 @@ describe('AI settings and consent parsing', () => {
   })
 
   it('parses per-provider consent strictly', () => {
-    expect(parseAiConsent(null)).toEqual({ gemini: false, claude: false })
-    expect(parseAiConsent('bad')).toEqual({ gemini: false, claude: false })
-    expect(parseAiConsent(JSON.stringify({ gemini: true }))).toEqual({ gemini: true, claude: false })
-    expect(parseAiConsent(JSON.stringify({ gemini: 'yes', claude: true }))).toEqual({
-      gemini: false,
-      claude: true,
+    const none = { gemini: false, claude: false, openai: false, openaiOrigin: '' }
+    expect(parseAiConsent(null)).toEqual(none)
+    expect(parseAiConsent('bad')).toEqual(none)
+    expect(parseAiConsent(JSON.stringify({ gemini: true }))).toEqual({ ...none, gemini: true })
+    expect(parseAiConsent(JSON.stringify({ gemini: 'yes', claude: true }))).toEqual({ ...none, claude: true })
+    // consent for a server without a remembered address counts for nothing
+    expect(parseAiConsent(JSON.stringify({ openai: true }))).toEqual(none)
+    expect(parseAiConsent(JSON.stringify({ openai: true, openaiOrigin: 'http://localhost:11434' }))).toEqual({
+      ...none,
+      openai: true,
+      openaiOrigin: 'http://localhost:11434',
     })
+  })
+
+  it('asks consent again when the server address changes', () => {
+    const consent = parseAiConsent(JSON.stringify({ openai: true, openaiOrigin: 'http://localhost:11434' }))
+    const at = (baseUrl: string) => ({ provider: 'openai' as const, baseUrl })
+    expect(hasAiConsent(consent, at('http://localhost:11434/v1'))).toBe(true)
+    expect(hasAiConsent(consent, at('http://localhost:11434/other'))).toBe(true)
+    expect(hasAiConsent(consent, at('https://openrouter.ai/api/v1'))).toBe(false)
+    expect(hasAiConsent(consent, at(''))).toBe(false)
+    expect(hasAiConsent(consent, { provider: 'claude', baseUrl: '' })).toBe(false)
   })
 })
 
@@ -137,6 +193,20 @@ describe('Tutor system prompt and request builders', () => {
     expect(prompt).toContain('Replace current cell')
     expect(prompt).toContain('Insert at cursor')
     expect(prompt).toContain('```python')
+  })
+
+  it('mentor prompt offers 2-3 options with pros and cons, asks which one, and writes code only after the choice', () => {
+    const prompt = buildTutorSystemPrompt()
+    expect(prompt).toContain('mentor')
+    expect(prompt).toContain('2 or 3 options')
+    expect(prompt).toContain('pros')
+    expect(prompt).toContain('cons')
+    expect(prompt).toContain('which option the learner picks')
+    expect(prompt).toContain('write no code in that reply')
+    expect(prompt).toContain('only after the learner has chosen')
+    const next = AI_QUICK_ACTIONS.find((a) => a.id === 'suggest-next')
+    expect(next?.instruction).toContain('2 or 3 options')
+    expect(next?.instruction).toContain('write no code until they choose')
   })
 
   it('builds Gemini request with x-goog-api-key header and never puts key in URL', () => {
@@ -171,7 +241,7 @@ describe('Tutor system prompt and request builders', () => {
     const req = buildProviderRequest({
       provider: 'claude',
       apiKey: secret,
-      model: 'claude-sonnet-4-6',
+      model: 'claude-haiku-5-5',
       systemPrompt: 'sys',
       userPrompt: 'usr',
     })
@@ -190,11 +260,137 @@ describe('Tutor system prompt and request builders', () => {
       messages: { role: string; content: string }[]
     }
     expect(body).toEqual({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-haiku-5-5',
       max_tokens: 1024,
       system: 'sys',
       messages: [{ role: 'user', content: 'usr' }],
     })
+  })
+})
+
+describe('OpenAI-compatible provider', () => {
+  const base = { provider: 'openai' as const, systemPrompt: 'sys', userPrompt: 'usr', model: 'llama3.2' }
+
+  it('normalizes the Base URL and refuses empty or odd ones', () => {
+    expect(normalizeBaseUrl('http://localhost:11434/v1/')).toEqual({ ok: true, url: 'http://localhost:11434/v1' })
+    expect(normalizeBaseUrl('  https://openrouter.ai/api/v1///  ')).toEqual({ ok: true, url: 'https://openrouter.ai/api/v1' })
+    expect(normalizeBaseUrl('HTTP://127.0.0.1:1234/v1')).toMatchObject({ ok: true })
+    for (const bad of ['', '   ', 'localhost:11434/v1', '//host/v1', 'ftp://host/v1', 'http://', 'https://user:pw@host/v1', 'http://host/v1?x=1']) {
+      expect(normalizeBaseUrl(bad), bad).toMatchObject({ ok: false })
+    }
+    expect(AI_ENDPOINT_TEMPLATES.map((t) => t.baseUrl)).toEqual([
+      'http://localhost:11434/v1',
+      'http://localhost:1234/v1',
+      'https://openrouter.ai/api/v1',
+    ])
+    for (const t of AI_ENDPOINT_TEMPLATES) expect(normalizeBaseUrl(t.baseUrl)).toMatchObject({ ok: true })
+    expect(AI_ENDPOINT_TEMPLATES[0].hint).toContain('OLLAMA_ORIGINS=https://lab.quaera.app')
+  })
+
+  it('knows which addresses are on this computer', () => {
+    expect(isLocalBaseUrl('http://localhost:11434/v1')).toBe(true)
+    expect(isLocalBaseUrl('http://127.0.0.1:1234/v1')).toBe(true)
+    expect(isLocalBaseUrl('http://[::1]:8080/v1')).toBe(true)
+    expect(isLocalBaseUrl('http://ollama.localhost/v1')).toBe(true)
+    expect(isLocalBaseUrl('https://openrouter.ai/api/v1')).toBe(false)
+    expect(isLocalBaseUrl('http://localhost.evil.com/v1')).toBe(false)
+    expect(isLocalBaseUrl('http://192.168.1.5:11434/v1')).toBe(false)
+    expect(isLocalBaseUrl('not a url')).toBe(false)
+  })
+
+  it('builds POST {base}/chat/completions in the OpenAI format, with the key only when given', () => {
+    const noKey = buildProviderRequest({ ...base, apiKey: '', baseUrl: 'http://localhost:11434/v1/' })
+    expect(noKey.method).toBe('POST')
+    expect(noKey.url).toBe('http://localhost:11434/v1/chat/completions')
+    expect(noKey.headers).toEqual({ 'Content-Type': 'application/json' })
+    expect(JSON.parse(noKey.body)).toEqual({
+      model: 'llama3.2',
+      messages: [
+        { role: 'system', content: 'sys' },
+        { role: 'user', content: 'usr' },
+      ],
+      max_tokens: 1024,
+      temperature: 0.3,
+      stream: false,
+    })
+    const secret = 'sk-or-v1-DummySecretKey1234567890'
+    const keyed = buildProviderRequest({ ...base, apiKey: ` ${secret} `, baseUrl: 'https://openrouter.ai/api/v1' })
+    expect(keyed.url).toBe('https://openrouter.ai/api/v1/chat/completions')
+    expect(keyed.headers.Authorization).toBe(`Bearer ${secret}`)
+    expect(keyed.url).not.toContain(secret)
+    expect(keyed.body).not.toContain(secret)
+  })
+
+  it('refuses to build a request without a usable Base URL or model', () => {
+    expect(() => buildProviderRequest({ ...base, apiKey: '', baseUrl: '' })).toThrow(/Base URL/)
+    expect(() => buildProviderRequest({ ...base, apiKey: '', baseUrl: 'localhost:11434' })).toThrow(/http/)
+    expect(() => buildProviderRequest({ ...base, apiKey: '', model: '  ', baseUrl: 'http://localhost:11434/v1' })).toThrow(/model/)
+  })
+
+  it('reads a reply, whether content is text or a list of parts', () => {
+    const ok = parseProviderReply('openai', 200, JSON.stringify({ choices: [{ message: { content: ' Pick **one**. ' }, finish_reason: 'stop' }] }))
+    expect(ok).toEqual({ ok: true, text: 'Pick **one**.', truncated: false })
+    const parts = parseProviderReply(
+      'openai',
+      200,
+      JSON.stringify({ choices: [{ message: { content: [{ type: 'text', text: 'a' }, { type: 'text', text: 'b' }] } }] }),
+    )
+    expect(parts).toMatchObject({ ok: true, text: 'ab' })
+    const long = parseProviderReply('openai', 200, JSON.stringify({ choices: [{ message: { content: 'x'.repeat(MAX_AI_REPLY_CHARS + 10) } }] }))
+    expect(long).toMatchObject({ ok: true, truncated: true })
+    const redacted = parseProviderReply(
+      'openai',
+      200,
+      JSON.stringify({ choices: [{ message: { content: 'your key is local-secret-key-1' } }] }),
+      ['local-secret-key-1'],
+    )
+    expect(redacted).toMatchObject({ ok: true, text: 'your key is [REDACTED_KEY]' })
+  })
+
+  it('names what went wrong: empty, filtered, 404 address, 404 model, key, limit, unreadable', () => {
+    expect(parseProviderReply('openai', 200, JSON.stringify({ choices: [{ message: { content: '  ' } }] }))).toMatchObject({ ok: false, kind: 'empty' })
+    expect(parseProviderReply('openai', 200, JSON.stringify({ choices: [] }))).toMatchObject({ ok: false, kind: 'empty' })
+    expect(parseProviderReply('openai', 200, JSON.stringify({ choices: [{ message: { content: null }, finish_reason: 'content_filter' }] }))).toMatchObject({ ok: false, kind: 'filtered' })
+    expect(parseProviderReply('openai', 200, '<html>proxy</html>')).toMatchObject({ ok: false, kind: 'api' })
+
+    const wrongUrl = parseProviderReply('openai', 404, '404 page not found')
+    expect(wrongUrl).toMatchObject({ ok: false, kind: 'bad_url' })
+    if (!wrongUrl.ok) expect(wrongUrl.message).toContain('/chat/completions')
+    expect(parseProviderReply('openai', 404, JSON.stringify({ error: { message: 'Not Found' } }))).toMatchObject({ ok: false, kind: 'bad_url' })
+
+    // Ollama: error is a plain string; OpenAI and OpenRouter: an object
+    const ollama = parseProviderReply('openai', 404, JSON.stringify({ error: "model 'llama9' not found" }))
+    expect(ollama).toMatchObject({ ok: false, kind: 'no_model' })
+    if (!ollama.ok) expect(ollama.message).toContain('ollama pull')
+    expect(parseProviderReply('openai', 404, JSON.stringify({ error: { message: 'The model `x` does not exist' } }))).toMatchObject({ ok: false, kind: 'no_model' })
+
+    const auth = parseProviderReply('openai', 401, JSON.stringify({ error: { message: 'Bad key local-secret-key-1' } }), ['local-secret-key-1'])
+    expect(auth).toMatchObject({ ok: false, kind: 'auth' })
+    if (!auth.ok) {
+      expect(auth.message).toContain('The server API key was rejected')
+      expect(auth.message).not.toContain('local-secret-key-1')
+    }
+    expect(parseProviderReply('openai', 429, '{}')).toMatchObject({ ok: false, kind: 'rate_limit' })
+    expect(parseProviderReply('openai', 500, '{"error":"boom"}')).toMatchObject({ ok: false, kind: 'api' })
+    // a 404 from Gemini or Claude is still a plain API error, not an address problem
+    expect(parseProviderReply('gemini', 404, JSON.stringify({ error: { message: 'model not found' } }))).toMatchObject({ ok: false, kind: 'api' })
+  })
+
+  it('explains CORS and Private Network Access for a local server, and only then', () => {
+    const net = new TypeError('Failed to fetch')
+    const local = classifyFetchError(net, true, [], { provider: 'openai', baseUrl: 'http://localhost:11434/v1' })
+    expect(local).toMatchObject({ ok: false, kind: 'network' })
+    expect(local.message).toContain('OLLAMA_ORIGINS=https://lab.quaera.app')
+    expect(local.message).toContain('http://localhost:11434/v1')
+    // a local server works offline: the offline message would be wrong
+    expect(classifyFetchError(net, false, [], { provider: 'openai', baseUrl: 'http://127.0.0.1:1234/v1' }).kind).toBe('network')
+    const remote = classifyFetchError(net, true, [], { provider: 'openai', baseUrl: 'https://openrouter.ai/api/v1' })
+    expect(remote).toMatchObject({ kind: 'network' })
+    expect(remote.message).toContain('https://openrouter.ai/api/v1')
+    expect(remote.message).not.toContain('OLLAMA_ORIGINS')
+    expect(classifyFetchError(net, false, [], { provider: 'openai', baseUrl: 'https://openrouter.ai/api/v1' }).kind).toBe('offline')
+    const abort = Object.assign(new Error('x'), { name: 'AbortError' })
+    expect(classifyFetchError(abort, true, [], { provider: 'openai', baseUrl: 'http://localhost:11434/v1' }).kind).toBe('aborted')
   })
 })
 

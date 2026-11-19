@@ -1,20 +1,28 @@
 // Pure TypeScript helpers for Feature D (optional bring-your-own-key AI helper):
-// settings/consent parsing, secret redaction, Gemini/Claude request & reply adapters,
+// settings/consent parsing, secret redaction, Gemini/Claude/OpenAI-compatible request & reply adapters,
 // reply block splitting, and `# %%` cell insertion. No React, DuckDB, or fetch.
 import { cellAt, splitCells } from './pyCells'
 
-export type AiProvider = 'gemini' | 'claude'
+export type AiProvider = 'gemini' | 'claude' | 'openai'
 
 export const DEFAULT_AI_MODELS: Record<AiProvider, string> = {
   gemini: 'gemini-3.8-flash',
-  claude: 'claude-sonnet-4-6',
+  claude: 'claude-haiku-5-5',
+  // no default: the model names belong to the user's own server (Ollama, LM Studio, OpenRouter)
+  openai: '',
 }
+
+/** Claude ids offered next to the text field: the cheap default first, then the stronger one. */
+export const CLAUDE_MODEL_CHOICES: readonly string[] = ['claude-haiku-5-5', 'claude-sonnet-5-5']
+/** A saved id that Anthropic replaced, and what it becomes. */
+const CLAUDE_MODEL_MIGRATIONS: Record<string, string> = { 'claude-sonnet-4-6': 'claude-sonnet-5-5' }
 
 export const AI_SETTINGS_KEY = 'stratalab.ai.settings.v1'
 export const AI_CONSENT_KEY = 'stratalab.ai.consent.v1'
 export const AI_API_KEY_STORAGE: Record<AiProvider, string> = {
   gemini: 'stratalab.ai.key.gemini',
   claude: 'stratalab.ai.key.claude',
+  openai: 'stratalab.ai.key.openai',
 }
 
 export const MAX_AI_REPLY_CHARS = 8000
@@ -29,8 +37,87 @@ export const AI_KEY_HELP: Record<AiProvider, { label: string; url: string; note:
   claude: {
     label: 'Anthropic Console',
     url: 'https://console.anthropic.com',
-    note: 'Requires a separate paid API account with prepaid credit (not a Claude.ai subscription).',
+    note: 'You need an API key from console.anthropic.com and prepaid credit. A Claude Pro or Max subscription does not connect here, and there is no free tier.',
   },
+  openai: {
+    label: 'OpenRouter',
+    url: 'https://openrouter.ai/keys',
+    note: 'The key is optional: a local Ollama or LM Studio needs none. OpenRouter needs a key, and some of its models are free.',
+  },
+}
+
+export interface AiEndpointTemplate {
+  id: 'ollama' | 'lmstudio' | 'openrouter'
+  label: string
+  baseUrl: string
+  /** a model name that is usually there, shown as a hint only */
+  modelHint: string
+  hint: string
+}
+
+export const AI_ENDPOINT_TEMPLATES: readonly AiEndpointTemplate[] = [
+  {
+    id: 'ollama',
+    label: 'Ollama',
+    baseUrl: 'http://localhost:11434/v1',
+    modelHint: 'llama3.2',
+    hint: 'Ollama must allow this site: set the environment variable OLLAMA_ORIGINS=https://lab.quaera.app and restart Ollama.',
+  },
+  {
+    id: 'lmstudio',
+    label: 'LM Studio',
+    baseUrl: 'http://localhost:1234/v1',
+    modelHint: 'the model name shown in LM Studio',
+    hint: 'In LM Studio start the local server and turn on "Enable CORS".',
+  },
+  {
+    id: 'openrouter',
+    label: 'OpenRouter',
+    baseUrl: 'https://openrouter.ai/api/v1',
+    modelHint: 'meta-llama/llama-3.3-70b-instruct:free',
+    hint: 'Needs a key from openrouter.ai. Models marked :free cost nothing but are rate limited.',
+  },
+]
+
+export type NormalizedBaseUrl = { ok: true; url: string } | { ok: false; reason: string }
+
+/** A Base URL as it is saved: trimmed, http(s) only, no trailing slash. Empty or odd values are refused. */
+export function normalizeBaseUrl(raw: string): NormalizedBaseUrl {
+  const text = raw.trim()
+  if (!text) return { ok: false, reason: 'Enter the Base URL of the server.' }
+  if (!/^https?:\/\//i.test(text)) return { ok: false, reason: 'The Base URL must start with http:// or https://.' }
+  let parsed: URL
+  try {
+    parsed = new URL(text)
+  } catch {
+    return { ok: false, reason: 'This is not a valid web address.' }
+  }
+  if (!parsed.hostname) return { ok: false, reason: 'This is not a valid web address.' }
+  if (parsed.username || parsed.password) return { ok: false, reason: 'Put the key in the key field, not in the address.' }
+  if (parsed.search || parsed.hash) return { ok: false, reason: 'The address has no ? or # part.' }
+  return { ok: true, url: text.replace(/\/+$/, '') }
+}
+
+/** The server is on this computer: nothing leaves it. */
+export function isLocalBaseUrl(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.toLowerCase()
+    return host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || host === '::1' || host.endsWith('.localhost')
+  } catch {
+    return false
+  }
+}
+
+function originOf(url: string): string {
+  try {
+    return new URL(url).origin
+  } catch {
+    return ''
+  }
+}
+
+export function providerLabel(provider: AiProvider): string {
+  return provider === 'gemini' ? 'Gemini' : provider === 'claude' ? 'Claude' : 'The server'
 }
 
 export type AiQuickAction = 'explain-stage' | 'why-failed' | 'suggest-next' | 'what-odd'
@@ -52,7 +139,7 @@ export const AI_QUICK_ACTIONS: readonly { id: AiQuickAction; label: string; inst
     id: 'suggest-next',
     label: 'Suggest the next cell for this table',
     instruction:
-      'Suggest the single most useful next data-mining step and short pandas cell for this table based on its schema and summaries so far.',
+      'Offer 2 or 3 options for the next data-mining step for this table, based on its schema and summaries so far, with one line of pros and one of cons for each. Ask which one the learner wants and write no code until they choose.',
   },
   {
     id: 'what-odd',
@@ -66,12 +153,20 @@ export interface AiSettings {
   enabled: boolean
   provider: AiProvider
   models: Record<AiProvider, string>
+  /** the OpenAI-compatible server, normalized; '' until a valid one is saved */
+  baseUrl: string
 }
 
-export type AiConsent = Record<AiProvider, boolean>
+/** `openai` is true only for the server whose origin is `openaiOrigin`: a new address asks again. */
+export type AiConsent = Record<AiProvider, boolean> & { openaiOrigin: string }
+
+export function hasAiConsent(consent: AiConsent, settings: Pick<AiSettings, 'provider' | 'baseUrl'>): boolean {
+  if (settings.provider !== 'openai') return consent[settings.provider]
+  return consent.openai && consent.openaiOrigin !== '' && consent.openaiOrigin === originOf(settings.baseUrl)
+}
 
 function isAiProvider(v: unknown): v is AiProvider {
-  return v === 'gemini' || v === 'claude'
+  return v === 'gemini' || v === 'claude' || v === 'openai'
 }
 
 function stripGeminiModelsPrefix(raw: string): string {
@@ -83,6 +178,7 @@ export function parseAiSettings(raw: string | null): AiSettings {
     enabled: false,
     provider: 'gemini',
     models: { ...DEFAULT_AI_MODELS },
+    baseUrl: '',
   }
   if (!raw) return defaults
   try {
@@ -96,14 +192,15 @@ export function parseAiSettings(raw: string | null): AiSettings {
     // Google retired gemini-2.5-flash for new users (404), so saved settings must not keep the dead id.
     const geminiModel =
       rawGemini && rawGemini !== 'gemini-2.5-flash' ? rawGemini : DEFAULT_AI_MODELS.gemini
-    const claudeModel =
-      typeof rawModels.claude === 'string' && rawModels.claude.trim()
-        ? rawModels.claude.trim()
-        : DEFAULT_AI_MODELS.claude
+    const rawClaude = typeof rawModels.claude === 'string' ? rawModels.claude.trim() : ''
+    const claudeModel = rawClaude ? (CLAUDE_MODEL_MIGRATIONS[rawClaude] ?? rawClaude) : DEFAULT_AI_MODELS.claude
+    const openaiModel = typeof rawModels.openai === 'string' ? rawModels.openai.trim() : ''
+    const base = typeof parsed.baseUrl === 'string' ? normalizeBaseUrl(parsed.baseUrl) : null
     return {
       enabled: parsed.enabled === true,
       provider,
-      models: { gemini: geminiModel, claude: claudeModel },
+      models: { gemini: geminiModel, claude: claudeModel, openai: openaiModel },
+      baseUrl: base?.ok ? base.url : '',
     }
   } catch {
     return defaults
@@ -111,14 +208,17 @@ export function parseAiSettings(raw: string | null): AiSettings {
 }
 
 export function parseAiConsent(raw: string | null): AiConsent {
-  const defaults: AiConsent = { gemini: false, claude: false }
+  const defaults: AiConsent = { gemini: false, claude: false, openai: false, openaiOrigin: '' }
   if (!raw) return defaults
   try {
     const parsed = JSON.parse(raw) as Record<string, unknown> | null
     if (!parsed || typeof parsed !== 'object') return defaults
+    const origin = typeof parsed.openaiOrigin === 'string' ? parsed.openaiOrigin : ''
     return {
       gemini: parsed.gemini === true,
       claude: parsed.claude === true,
+      openai: parsed.openai === true && origin !== '',
+      openaiOrigin: parsed.openai === true ? origin : '',
     }
   } catch {
     return defaults
@@ -144,8 +244,11 @@ export function buildTutorSystemPrompt(): string {
   return [
     'You are a patient, practical data-mining tutor inside Quaera Lab (a browser-based SQL + Python workbench).',
     'Reply in the same language as the learner\'s question (for example Russian or English), while keeping Python and pandas code identifiers in English.',
-    'Guide the learner step by step through Exploration, Preprocessing, Processing, and Analysis.',
-    'Explain the analytical decision and reasoning first before writing code, and ask the learner a brief check-in question about what they think or want to verify when sensible.',
+    'Guide the learner step by step through Exploration, Preprocessing, Processing, and Analysis. You are a mentor: the learner takes every step, you do not hand over a finished notebook.',
+    'When the learner asks what to do next, or which approach to take, first offer 2 or 3 options for the next step of the cycle (for example, in Exploration: look at distributions, check missing values, or compare groups; in Preprocessing: drop, fill, or flag missing values). Give each option one short line of pros and one of cons.',
+    'Then ask which option the learner picks, and stop there: write no code in that reply.',
+    'Write the code only after the learner has chosen an option, or when they ask for code for a specific thing. Then explain the decision briefly first and give a short, ready-to-apply block for that one step only.',
+    'If the learner only asks you to explain something or to fix an error, answer that question directly without the options.',
     'Every fenced ```python code block you return has one-click UI buttons in the panel: "Insert as new cell", "Replace current cell", and "Insert at cursor".',
     'When asked to write, edit, comment, fix, or offer alternatives for code, provide ready-to-apply ```python code blocks and explain the change rather than claiming you cannot edit the notebook.',
     'Keep code snippets short, clear, and runnable using pandas and Quaera Lab helpers:',
@@ -164,12 +267,37 @@ export function buildProviderRequest(opts: {
   model: string
   systemPrompt: string
   userPrompt: string
+  /** OpenAI-compatible only: the server's Base URL, as saved */
+  baseUrl?: string
 }): { url: string; method: 'POST'; headers: Record<string, string>; body: string } {
   const key = opts.apiKey.trim()
   const model =
     opts.provider === 'gemini'
       ? stripGeminiModelsPrefix(opts.model) || DEFAULT_AI_MODELS.gemini
-      : opts.model.trim() || DEFAULT_AI_MODELS.claude
+      : opts.model.trim() || DEFAULT_AI_MODELS[opts.provider]
+
+  if (opts.provider === 'openai') {
+    const base = normalizeBaseUrl(opts.baseUrl ?? '')
+    if (!base.ok) throw new Error(base.reason)
+    if (!model) throw new Error('Enter the model name for this server.')
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (key) headers.Authorization = `Bearer ${key}`
+    return {
+      url: `${base.url}/chat/completions`,
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: opts.systemPrompt },
+          { role: 'user', content: opts.userPrompt },
+        ],
+        max_tokens: 1024,
+        temperature: 0.3,
+        stream: false,
+      }),
+    }
+  }
 
   if (opts.provider === 'gemini') {
     return {
@@ -209,7 +337,7 @@ export type AiReplyOutcome =
   | { ok: true; text: string; truncated: boolean }
   | {
       ok: false
-      kind: 'auth' | 'rate_limit' | 'filtered' | 'empty' | 'network' | 'offline' | 'aborted' | 'api'
+      kind: 'auth' | 'rate_limit' | 'filtered' | 'empty' | 'network' | 'offline' | 'aborted' | 'api' | 'bad_url' | 'no_model'
       message: string
     }
 
@@ -232,6 +360,8 @@ function tryParseJson(raw: string): Record<string, unknown> | null {
 
 function apiErrorMessage(parsed: Record<string, unknown> | null): string | null {
   const err = parsed?.error
+  // Ollama answers {"error": "model 'x' not found"}
+  if (typeof err === 'string' && err.trim()) return err.trim()
   if (err && typeof err === 'object') {
     const msg = (err as Record<string, unknown>).message
     if (typeof msg === 'string' && msg.trim()) return msg.trim()
@@ -254,9 +384,30 @@ export function parseProviderReply(
   rawBody: string,
   keys: readonly string[] = [],
 ): AiReplyOutcome {
-  const label = provider === 'gemini' ? 'Gemini' : 'Claude'
+  const label = providerLabel(provider)
   const parsed = tryParseJson(rawBody)
   const errMsg = apiErrorMessage(parsed)
+
+  if (provider === 'openai' && status === 404) {
+    const noModel = errMsg !== null && /model/i.test(errMsg)
+    return noModel
+      ? {
+          ok: false,
+          kind: 'no_model',
+          message: redactSecrets(
+            `The server does not have this model (${errMsg}). Check the model name in settings; for Ollama, run "ollama pull <name>" first.`,
+            keys,
+          ),
+        }
+      : {
+          ok: false,
+          kind: 'bad_url',
+          message: redactSecrets(
+            'Nothing answers at this address (404). Check the Base URL in settings: it usually ends in /v1, and the request goes to <Base URL>/chat/completions.',
+            keys,
+          ),
+        }
+  }
 
   if (status === 401 || status === 403) {
     const detail = errMsg ? ` (${errMsg})` : ''
@@ -264,7 +415,7 @@ export function parseProviderReply(
       ok: false,
       kind: 'auth',
       message: redactSecrets(
-        `Your ${label} API key was rejected (${status})${detail}. Check or re-enter your key in AI helper settings.`,
+        `${provider === 'openai' ? 'The server' : `Your ${label}`} API key was rejected (${status})${detail}. Check or re-enter your key in AI helper settings.`,
         keys,
       ),
     }
@@ -301,7 +452,26 @@ export function parseProviderReply(
 
   let rawText = ''
 
-  if (provider === 'gemini') {
+  if (provider === 'openai') {
+    const choices = Array.isArray(parsed.choices) ? (parsed.choices as Record<string, unknown>[]) : []
+    const first = choices[0]
+    if (first?.finish_reason === 'content_filter') {
+      return {
+        ok: false,
+        kind: 'filtered',
+        message: 'The server filtered the reply. Try rephrasing your question.',
+      }
+    }
+    const message = first?.message as Record<string, unknown> | undefined
+    const content = message?.content
+    if (typeof content === 'string') rawText = content.trim()
+    else if (Array.isArray(content)) {
+      rawText = (content as Record<string, unknown>[])
+        .map((p) => (typeof p?.text === 'string' ? p.text : ''))
+        .join('')
+        .trim()
+    }
+  } else if (provider === 'gemini') {
     const promptFeedback = parsed.promptFeedback as Record<string, unknown> | undefined
     if (promptFeedback && typeof promptFeedback.blockReason === 'string' && promptFeedback.blockReason) {
       return {
@@ -365,12 +535,24 @@ export function classifyFetchError(
   err: unknown,
   online: boolean,
   keys: readonly string[] = [],
+  server?: { provider: AiProvider; baseUrl: string },
 ): Extract<AiReplyOutcome, { ok: false }> {
   const isAbort =
     (err instanceof Error && err.name === 'AbortError') ||
     (typeof err === 'object' && err !== null && (err as { name?: unknown }).name === 'AbortError')
   if (isAbort) {
     return { ok: false, kind: 'aborted', message: 'Request cancelled.' }
+  }
+  if (server?.provider === 'openai' && isLocalBaseUrl(server.baseUrl)) {
+    // A refused connection and a CORS or Private Network Access block look the same to a page.
+    return {
+      ok: false,
+      kind: 'network',
+      message: redactSecrets(
+        `Could not reach ${server.baseUrl}. Check that the server is running. If it is, the browser is blocking this site from reaching your computer: Ollama needs the environment variable OLLAMA_ORIGINS=https://lab.quaera.app (restart it afterwards), LM Studio needs "Enable CORS", and if the browser asks to allow access to devices on your network, allow it.`,
+        keys,
+      ),
+    }
   }
   if (!online) {
     return {
@@ -383,7 +565,9 @@ export function classifyFetchError(
     ok: false,
     kind: 'network',
     message: redactSecrets(
-      'The AI provider could not be reached. A browser extension, CORS policy, or network block may be preventing the request.',
+      server?.provider === 'openai'
+        ? `Could not reach ${server.baseUrl}. The address may be wrong, or the server does not allow requests from this site (CORS). A browser extension or network block can also stop it.`
+        : 'The AI provider could not be reached. A browser extension, CORS policy, or network block may be preventing the request.',
       keys,
     ),
   }
