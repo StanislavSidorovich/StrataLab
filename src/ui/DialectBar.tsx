@@ -257,7 +257,7 @@ function RunButton() {
       </>
     )
   return (
-    <button className="btn btn-primary btn-run shrink-0" onClick={runActive} disabled={disabled} title="Run the selection, or the whole tab (Ctrl+Enter, F5)">
+    <button className="btn btn-primary btn-run shrink-0" onClick={runActive} disabled={disabled} title="Run the selection, or the statement at the cursor (Ctrl+Enter). F5 runs the whole tab">
       {spin} Run
     </button>
   )

@@ -211,7 +211,7 @@ function ResultBody() {
     if (!res) return <Empty text={'Run the cells to see their output here: Ctrl+Enter runs the cell at the cursor, Shift+Enter that cell and moves on, Ctrl+Shift+Enter (or F5) every cell. Tables come in with lab.table("name").'} />
     return <PythonOutput res={res} />
   }
-  if (!res) return <Empty text={`Run a query to see its result here — Ctrl+Enter or F5.${dialect === 'tsql' ? ' It is translated to DuckDB first.' : dialect === 'postgres' ? ' It runs on PostgreSQL.' : ''}`} />
+  if (!res) return <Empty text={`Run a query to see its result here — Ctrl+Enter runs the statement at the cursor, F5 the whole tab.${dialect === 'tsql' ? ' It is translated to DuckDB first.' : dialect === 'postgres' ? ' It runs on PostgreSQL.' : ''}`} />
   if (res.status === 'running')
     return (
       <div className="h-full flex items-center justify-center gap-2 p-6 text-center" style={{ color: 'var(--muted)' }}>

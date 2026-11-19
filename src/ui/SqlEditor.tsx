@@ -13,6 +13,7 @@ import { openSearchPanel } from '@codemirror/search'
 import { explainSql, openAsModel, ownTables, runPython, runSql, setTabSql, stopQuery, tabDialect, useLab, type Dialect } from './store'
 import { Menu, useLongPress, type MenuItem } from './Menu'
 import { NO_CHORD, stepChord } from '../core/cellChord'
+import { statementAt } from '../core/statementAt'
 import { cellRunPlan, insertCellAfter, insertCellBefore, splitCells } from '../core/pyCells'
 import { pyCellBars } from './pyCellBars'
 import type { TableInfo } from '../db/catalog'
@@ -26,6 +27,14 @@ const states = new Map<string, EditorState>()
 export function currentSql(view: EditorView): string {
   const sel = view.state.selection.main
   return sel.empty ? view.state.doc.toString() : view.state.sliceDoc(sel.from, sel.to)
+}
+
+/** Ctrl+Enter and Run: the selection if there is one, else the statement the cursor is in (the whole editor when none is found). */
+export function runnableSql(view: EditorView): string {
+  const sel = view.state.selection.main
+  if (!sel.empty) return view.state.sliceDoc(sel.from, sel.to)
+  const r = statementAt(view.state.doc.toString(), sel.head)
+  return r ? view.state.sliceDoc(r.from, r.to) : view.state.doc.toString()
 }
 
 /**
@@ -72,15 +81,15 @@ export function replaceActiveAndFocusCursor(text: string, cursor: number): boole
   return true
 }
 
-/** Ctrl+Enter outside the editor: Python = the selection or the cell at the cursor, SQL = the selection or the whole tab. */
+/** Ctrl+Enter outside the editor: Python = the selection or the cell at the cursor, SQL = the selection or the statement at the cursor. */
 export function runActive() {
   const id = useLab.getState().activeTab
   if (!activeView) return
   if (isPython(id)) runPythonFrom(activeView, id)
-  else void runSql(id, currentSql(activeView))
+  else void runSql(id, runnableSql(activeView))
 }
 
-/** F5, Ctrl+Shift+Enter, the Run all button: every code cell of a Python tab; SQL behaves as Ctrl+Enter (selection or whole tab). */
+/** F5, Ctrl+Shift+Enter, the Run all button: every code cell of a Python tab; SQL runs the selection or the whole tab. */
 export function runActiveAll() {
   const id = useLab.getState().activeTab
   if (!activeView) return
@@ -157,10 +166,10 @@ export function setActiveText(text: string) {
 
 const isPython = (id: string) => tabDialect(useLab.getState().tabs.find((t) => t.id === id)) === 'python'
 
-/** Ctrl+Enter: the selection or the whole SQL tab; in a Python tab the selection or the cell at the cursor. F5: SQL as Ctrl+Enter, Python every cell. */
+/** Ctrl+Enter: the selection or the statement at the cursor; in a Python tab the selection or the cell at the cursor. F5: SQL the selection or the whole tab, Python every cell. */
 function runIn(v: EditorView, id: string, all = false) {
   if (isPython(id)) all ? runAll(v, id) : runPythonFrom(v, id)
-  else void runSql(id, currentSql(v))
+  else void runSql(id, all ? currentSql(v) : runnableSql(v))
 }
 
 const FORMATTER_LANGUAGE = { duckdb: 'duckdb', tsql: 'transactsql', postgres: 'postgresql' } as const
@@ -266,8 +275,8 @@ function EditorMenu({ view, at, close }: { view: EditorView; at: { x: number; y:
           ['Run all', () => runAll(view, id), { disabled: cantRun, keys: `${mod}Shift+Enter` }],
         ] as MenuItem[])
       : ([
-          ['Run selection', () => void runSql(id, selected), { disabled: cantRun || !selected, keys: selected ? `${mod}Enter` : undefined }],
-          ['Run all', () => runAll(view, id), { disabled: cantRun, keys: selected ? undefined : `${mod}Enter` }],
+          [selected ? 'Run selection' : 'Run statement', () => void runSql(id, runnableSql(view)), { disabled: cantRun, keys: `${mod}Enter` }],
+          ['Run all', () => runAll(view, id), { disabled: cantRun, keys: 'F5' }],
           ['Explain', () => void explainSql(id, currentSql(view)), { disabled: cantRun }],
           ['Format SQL', formatActiveTab, { keys: isMac ? '⇧⌥F' : 'Shift+Alt+F' }],
         ] as MenuItem[])),

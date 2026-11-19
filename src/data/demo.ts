@@ -101,7 +101,7 @@ WHERE n = 1 OR random() < 0.45;
 `
 
 export const WELCOME_SQL = `-- Welcome to Quaera Lab: DuckDB in your browser, nothing to install.
--- Run the query: Ctrl+Enter (runs the selection, or the whole tab).
+-- Run the query: Ctrl+Enter (runs the selection, or the statement at the cursor; F5 runs the whole tab).
 -- Bring your own data: drop CSV / Excel files anywhere on the page.
 
 SELECT
