@@ -26,7 +26,10 @@ export const AI_API_KEY_STORAGE: Record<AiProvider, string> = {
   openai: 'stratalab.ai.key.openai',
 }
 
-export const MAX_AI_REPLY_CHARS = 8000
+export const MAX_AI_REPLY_CHARS = 16000
+// Output budget per request. Gemini 2.5 counts its hidden "thinking" tokens in this budget too.
+export const MAX_AI_OUTPUT_TOKENS = 4096
+const REPLY_LIMIT_NOTICE = '\n\n[Reply cut off: the model hit its output limit. Ask it to continue, or to answer in parts.]'
 const REPLY_TRUNCATION_NOTICE = '\n\n[Reply truncated to keep the panel readable]'
 
 export const AI_KEY_HELP: Record<AiProvider, { label: string; url: string; note: string }> = {
@@ -303,7 +306,7 @@ export function buildProviderRequest(opts: {
           ...history.map((m) => ({ role: m.role, content: m.text })),
           { role: 'user', content: opts.userPrompt },
         ],
-        max_tokens: 1024,
+        max_tokens: MAX_AI_OUTPUT_TOKENS,
         temperature: 0.3,
         stream: false,
       }),
@@ -325,7 +328,7 @@ export function buildProviderRequest(opts: {
           ...history.map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.text }] })),
           { role: 'user', parts: [{ text: opts.userPrompt }] },
         ],
-        generationConfig: { maxOutputTokens: 1024, temperature: 0.3 },
+        generationConfig: { maxOutputTokens: MAX_AI_OUTPUT_TOKENS, temperature: 0.3 },
       }),
     }
   }
@@ -341,7 +344,7 @@ export function buildProviderRequest(opts: {
     },
     body: JSON.stringify({
       model,
-      max_tokens: 1024,
+      max_tokens: MAX_AI_OUTPUT_TOKENS,
       system: opts.systemPrompt,
       messages: [...history.map((m) => ({ role: m.role, content: m.text })), { role: 'user', content: opts.userPrompt }],
     }),
@@ -469,6 +472,7 @@ export function parseProviderReply(
   }
 
   let rawText = ''
+  let hitLimit = false
 
   if (provider === 'openai') {
     const choices = Array.isArray(parsed.choices) ? (parsed.choices as Record<string, unknown>[]) : []
@@ -480,6 +484,7 @@ export function parseProviderReply(
         message: 'The server filtered the reply. Try rephrasing your question.',
       }
     }
+    hitLimit = first?.finish_reason === 'length'
     const message = first?.message as Record<string, unknown> | undefined
     const content = message?.content
     if (typeof content === 'string') rawText = content.trim()
@@ -514,6 +519,7 @@ export function parseProviderReply(
         ),
       }
     }
+    hitLimit = finishReason === 'MAX_TOKENS'
     const content = first?.content as Record<string, unknown> | undefined
     const parts = Array.isArray(content?.parts) ? (content.parts as Record<string, unknown>[]) : []
     rawText = parts
@@ -528,6 +534,7 @@ export function parseProviderReply(
         message: 'Claude declined to answer this request. Try rephrasing your question.',
       }
     }
+    hitLimit = parsed.stop_reason === 'max_tokens'
     const blocks = Array.isArray(parsed.content) ? (parsed.content as Record<string, unknown>[]) : []
     rawText = blocks
       .filter((b) => b?.type === 'text' && typeof b?.text === 'string')
@@ -540,12 +547,17 @@ export function parseProviderReply(
     return {
       ok: false,
       kind: 'empty',
-      message: `${label} returned an empty reply. Try asking again or switching models.`,
+      message: hitLimit
+        ? `${label} used its whole output limit before writing an answer (a thinking model can spend it all on thinking). Try a shorter question or another model.`
+        : `${label} returned an empty reply. Try asking again or switching models.`,
     }
   }
 
   const redacted = redactSecrets(rawText, keys)
   const capped = capReplyText(redacted)
+  if (hitLimit && !capped.truncated) {
+    return { ok: true, text: capped.text + REPLY_LIMIT_NOTICE, truncated: true }
+  }
   return { ok: true, text: capped.text, truncated: capped.truncated }
 }
 

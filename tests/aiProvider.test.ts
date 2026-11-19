@@ -14,6 +14,7 @@ import {
   AI_SETTINGS_KEY,
   DEFAULT_AI_MODELS,
   MAX_AI_REPLY_CHARS,
+  MAX_AI_OUTPUT_TOKENS,
   buildProviderRequest,
   buildTutorSystemPrompt,
   classifyFetchError,
@@ -236,7 +237,7 @@ describe('Tutor system prompt and request builders', () => {
     }
     expect(body.systemInstruction.parts[0].text).toBe('sys')
     expect(body.contents[0]).toEqual({ role: 'user', parts: [{ text: 'usr' }] })
-    expect(body.generationConfig).toEqual({ maxOutputTokens: 1024, temperature: 0.3 })
+    expect(body.generationConfig).toEqual({ maxOutputTokens: MAX_AI_OUTPUT_TOKENS, temperature: 0.3 })
   })
 
   it('builds Claude request with x-api-key, anthropic-version, and direct browser header', () => {
@@ -264,7 +265,7 @@ describe('Tutor system prompt and request builders', () => {
     }
     expect(body).toEqual({
       model: 'claude-haiku-5-5',
-      max_tokens: 1024,
+      max_tokens: MAX_AI_OUTPUT_TOKENS,
       system: 'sys',
       messages: [{ role: 'user', content: 'usr' }],
     })
@@ -312,7 +313,7 @@ describe('OpenAI-compatible provider', () => {
         { role: 'system', content: 'sys' },
         { role: 'user', content: 'usr' },
       ],
-      max_tokens: 1024,
+      max_tokens: MAX_AI_OUTPUT_TOKENS,
       temperature: 0.3,
       stream: false,
     })
@@ -715,5 +716,35 @@ describe('conversation history in each provider format (v0.62.0)', () => {
     const p = buildTutorSystemPrompt()
     expect(p).toContain('"Decision: <one short sentence')
     expect(p).toContain('refer to cells by their number')
+  })
+})
+
+describe('output limit detection', () => {
+  const cut = (provider: 'gemini' | 'openai' | 'claude', body: unknown) =>
+    parseProviderReply(provider, 200, JSON.stringify(body))
+
+  it('flags Gemini MAX_TOKENS with a notice', () => {
+    const o = cut('gemini', { candidates: [{ finishReason: 'MAX_TOKENS', content: { parts: [{ text: 'partial' }] } }] })
+    expect(o.ok && o.truncated && o.text.startsWith('partial') && o.text.includes('output limit')).toBe(true)
+  })
+  it('flags OpenAI finish_reason length', () => {
+    const o = cut('openai', { choices: [{ finish_reason: 'length', message: { content: 'partial' } }] })
+    expect(o.ok && o.truncated && o.text.includes('output limit')).toBe(true)
+  })
+  it('flags Claude stop_reason max_tokens', () => {
+    const o = cut('claude', { stop_reason: 'max_tokens', content: [{ type: 'text', text: 'partial' }] })
+    expect(o.ok && o.truncated && o.text.includes('output limit')).toBe(true)
+  })
+  it('leaves a normal STOP reply untouched', () => {
+    const o = cut('gemini', { candidates: [{ finishReason: 'STOP', content: { parts: [{ text: 'done' }] } }] })
+    expect(o).toEqual({ ok: true, text: 'done', truncated: false })
+  })
+  it('explains an empty reply cut by the limit', () => {
+    const o = cut('gemini', { candidates: [{ finishReason: 'MAX_TOKENS', content: { parts: [] } }] })
+    expect(!o.ok && o.kind === 'empty' && o.message.includes('output limit')).toBe(true)
+  })
+  it('keeps a missing finishReason as a normal reply', () => {
+    const o = cut('gemini', { candidates: [{ content: { parts: [{ text: 'hi' }] } }] })
+    expect(o).toEqual({ ok: true, text: 'hi', truncated: false })
   })
 })
