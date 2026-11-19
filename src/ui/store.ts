@@ -37,6 +37,7 @@ import { schemaForModel, showAsModel } from '../db/modelExport'
 import { planGeneration, type GenPlan, type GenTable } from '../core/generate'
 import { runGeneration, type GenOutcome } from '../db/generate'
 import { runOrder } from '../core/pdScript'
+import { identitySyncSql } from '../core/identitySync'
 import { hashWithPractice, hashWithoutPractice, practiceFromHash, readableError, type PracticeKind } from '../core/sqlPractice'
 import { buildFromHash, hashWithBuild, hashWithoutBuild } from '../core/build'
 import { hashWithPipeline, hashWithoutPipeline, pipelineFromHash } from '../core/pipeline'
@@ -716,6 +717,7 @@ export async function runSql(tabId: string, sql: string, limit?: number) {
   let toRun = sql
   let statements: string[] = [sql]
   let database: string | undefined
+  let syncIdentity: string[] = []
   if (dialect === 'tsql') {
     const translated = await translate(tabId, sql)
     if (!translated) return
@@ -731,6 +733,7 @@ export async function runSql(tabId: string, sql: string, limit?: number) {
     // tabs), and Stop can end any of them.
     statements = runOrder(translated)
     database = translated.find((st) => st.database)?.database
+    syncIdentity = identitySyncSql(translated)
     if (!statements.length) {
       // Only CREATE DATABASE / USE / comments: nothing for DuckDB to run.
       const note = translated.flatMap((st) => st.notes)[0]
@@ -773,6 +776,14 @@ export async function runSql(tabId: string, sql: string, limit?: number) {
     for (const st of statements.slice(1)) {
       const next = await queryLimited(st, tabId, isStopped, limit)
       if (next.table.numCols > 0) ({ table, more } = next)
+    }
+    // IDENTITY columns loaded with their own ids: the next INSERT without an id goes on after the highest one.
+    for (const st of syncIdentity) {
+      try {
+        await query(st)
+      } catch {
+        /* a sequence that is not where it was expected stays as it is */
+      }
     }
     const ms = performance.now() - t0
     set((s) => ({ results: { ...s.results, [tabId]: { status: 'done', table, ms, sql, limit, more } } }))

@@ -10,6 +10,7 @@ import { SQLGLOT_VERSION, type TranslatedStatement } from '../src/dialects/tsql'
 import { foldKeys, runOrder } from '../src/core/pdScript'
 import { qualifyDrops, qualifyReferences, suggestDatasetName } from '../src/core/scriptDataset'
 import { decodeSqlText } from '../src/core/sqlText'
+import { identitySyncSql } from '../src/core/identitySync'
 
 const require = createRequire(import.meta.url)
 let py: PyodideInterface
@@ -132,5 +133,62 @@ describe('reading a .sql file', () => {
     expect(decodeSqlText(bytes(0xff, 0xfe, 0x61, 0x00, 0xe3, 0x00))).toEqual({ text: 'aã', encoding: 'utf-16le' })
     expect(decodeSqlText(bytes(0x43, 0x61, 0x70, 0x69, 0x74, 0xe3, 0x6f, 0x20, 0x80))).toEqual({ text: 'Capitão €', encoding: 'windows-1252' })
     expect(decodeSqlText(bytes())).toEqual({ text: '', encoding: 'utf-8' })
+  })
+})
+
+describe('IDENTITY sequences after the data is loaded', () => {
+  const runAll = (st: TranslatedStatement[], into: string) => {
+    for (const s of runOrder(st)) duck.query(qualifyReferences(qualifyDrops(s, into), into))
+    for (const s of identitySyncSql(st)) duck.query(s)
+  }
+  const next = (table: string, col: string) => rows(`insert into ${table} (name) values ('next') returning cast(${col} as int) as id`)[0].id
+
+  it('moves each sequence past the highest id, so an INSERT without an id does not collide', () => {
+    duck.query('CREATE SCHEMA sync1')
+    duck.query("SET search_path = 'sync1'")
+    const st = translate(SCRIPT)
+    expect(identitySyncSql(st)).toHaveLength(2)
+    runAll(st, 'sync1')
+    expect(next('sync1.ARTISTS', 'IDARTIST')).toBe(8)
+    // Run again: the table is dropped and refilled, and the sequence is back where the ids put it.
+    runAll(st, 'sync1')
+    expect(next('sync1.ARTISTS', 'IDARTIST')).toBe(8)
+    // Syncing again, with nothing new, moves nothing.
+    expect(rows(identitySyncSql(st)[0])).toEqual([{ moved: 0n }])
+    expect(next('sync1.ARTISTS', 'IDARTIST')).toBe(9)
+  })
+
+  it('leaves no gap after ids the sequence gave itself, and starts at 1 for an empty table', () => {
+    duck.query('CREATE SCHEMA sync2')
+    duck.query("SET search_path = 'sync2'")
+    const st = translate(`create table T (id numeric identity, name varchar(20))
+go
+insert into T (name) values ('a')
+insert into T (name) values ('b')
+go
+create table E (id numeric identity, name varchar(20))
+go`)
+    runAll(st, 'sync2')
+    expect(next('sync2.T', 'id')).toBe(3)
+    expect(next('sync2.E', 'id')).toBe(1)
+  })
+
+  it('does not touch an IDENTITY with its own start or step, nor a column that has none', () => {
+    expect(identitySyncSql(translate('create table T (id int identity(10, 5), name varchar(20))'))).toEqual([])
+    expect(identitySyncSql(translate('create table T (id int, name varchar(20))'))).toEqual([])
+    expect(identitySyncSql(translate('select 1'))).toEqual([])
+  })
+
+  it('leaves a very high id alone', () => {
+    duck.query('CREATE SCHEMA sync3')
+    duck.query("SET search_path = 'sync3'")
+    const st = translate(`create table T (id numeric identity, name varchar(20))
+go
+SET IDENTITY_INSERT T ON
+insert into T (id, name) values (5000000, 'a')
+SET IDENTITY_INSERT T OFF
+go`)
+    runAll(st, 'sync3')
+    expect(next('sync3.T', 'id')).toBe(1)
   })
 })

@@ -134,7 +134,7 @@ def _text_length(dt):
 IDENTITY = (exp.AutoIncrementColumnConstraint, exp.GeneratedAsIdentityColumnConstraint)
 
 
-def _sequences(tree, notes):
+def _sequences(tree, notes, identity):
     """IDENTITY columns: DuckDB has none, so each gets a sequence as its default. Returns the CREATE SEQUENCE statements."""
     out = []
     if not isinstance(tree, exp.Create) or tree.args.get("kind") != "TABLE" or not isinstance(tree.this, exp.Schema):
@@ -149,6 +149,12 @@ def _sequences(tree, notes):
             generated = isinstance(kind, exp.GeneratedAsIdentityColumnConstraint)
             start = kind.args.get("start") if generated else None
             step = kind.args.get("increment") if generated else None
+            if (start is None or start.name == "1") and (step is None or step.name == "1"):
+                # The table, as the translated script names it (dbo. is left out as in _fix).
+                name = tree.this.this.copy()
+                if name.args.get("db") and name.db.lower() == "dbo" and not name.args.get("catalog"):
+                    name.set("db", None)
+                identity.append({"sequence": seq, "table": name.sql(dialect="duckdb"), "column": col.this.sql(dialect="duckdb")})
             out.append(f"CREATE OR REPLACE SEQUENCE {seq} START {start.name if start is not None else 1} INCREMENT {step.name if step is not None else 1}")
             c.replace(exp.ColumnConstraint(kind=exp.DefaultColumnConstraint(this=exp.func("nextval", exp.Literal.string(seq)))))
             notes.append(f"{col.name}: IDENTITY becomes the sequence {seq}, used as the column's default (DuckDB has no identity columns).")
@@ -295,7 +301,8 @@ def _translate_one(text, at, pretty_multiline):
                 _handler.items = []
             try:
                 pretty = pretty_multiline and "\n" in piece
-                before = [seq for t in trees for seq in _sequences(t, notes)]
+                identity = []
+                before = [seq for t in trees for seq in _sequences(t, notes, identity)]
                 target = ";\n".join(before + [_fix(t, notes).sql(dialect="duckdb", pretty=pretty, unsupported_level=ErrorLevel.WARN) for t in trees])
                 error = None
             except Exception as e:
@@ -305,7 +312,10 @@ def _translate_one(text, at, pretty_multiline):
                 target, error = None, notes.pop(0) if notes else "This statement has no DuckDB counterpart."
             # The statement as written, not as it was made readable for sqlglot.
             shown = text if piece == readable else piece
-            result.append({"source": shown, "at": at + max(0, source.find(shown)), "target": target, "notes": notes, "error": error})
+            entry = {"source": shown, "at": at + max(0, source.find(shown)), "target": target, "notes": notes, "error": error}
+            if error is None and identity:
+                entry["identity"] = identity
+            result.append(entry)
     return result
 
 

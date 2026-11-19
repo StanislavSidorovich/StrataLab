@@ -15,6 +15,8 @@ export interface TranslatedStatement {
   rank?: number
   /** The database a CREATE DATABASE / USE in front of it named (Lab has one database: offered as the dataset's name) */
   database?: string
+  /** IDENTITY columns (start 1, step 1) this CREATE TABLE turned into sequences: see core/identitySync.ts */
+  identity?: { sequence: string; table: string; column: string }[]
 }
 
 export type TranslatorProgress = 'download' | 'start'
