@@ -8,7 +8,7 @@ export const FIRST_LOOK: PracticeSection = {
     {
       kind: 'note',
       topic: 'the size and types of a table',
-      text: 'Before any question, find out how big a table is and what its columns hold. `shape` gives the number of rows and columns, `len(sellout)` gives only the rows, and `dtypes` gives the type of each column. `shape` and `dtypes` take no brackets.',
+      text: 'Before any question, find out how big a table is and what its columns hold. `shape` gives the number of rows and columns, `len(sellout)` gives only the rows, and `dtypes` gives the type of each column. `shape` and `dtypes` take no parentheses `()`.',
     },
     {
       kind: 'example',
@@ -90,7 +90,7 @@ products["division"].nunique()`,
     {
       kind: 'note',
       topic: 'the spread of a column',
-      text: '`describe` shows the spread of a column of numbers in one go, which is the quickest way to spot a strange value. A single number comes from `max`, `min`, `mean` or `median`, and on a date column `min` and `max` show the period a table covers.',
+      text: '`describe` shows the spread of a column of numbers at once, which is the quickest way to notice an unusual value. A single number comes from `max`, `min`, `mean` or `median`, and on a date column `min` and `max` show the period a table covers.',
     },
     {
       kind: 'example',

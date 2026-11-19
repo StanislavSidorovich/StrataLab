@@ -50,7 +50,7 @@ y.merge(products[["product_id", "brand"]], on="product_id").groupby("brand", as_
     },
     {
       kind: 'note',
-      text: 'When the key has a different name in each table, give `left_on` for the left table and `right_on` for the right one. A shipment’s distributor is a customer, so `sellin.distributor_id` matches `customers.customer_id`. A role in the name hides the target (The data lists them), and `(~sellin["distributor_id"].isin(customers["customer_id"])).sum()` giving 0 proves a guess.',
+      text: 'When the key has a different name in each table, give `left_on` for the left table and `right_on` for the right one. A shipment’s distributor is a customer, so `sellin.distributor_id` matches `customers.customer_id`. A column name may show a role, not the table it points to (see The data); if `(~sellin["distributor_id"].isin(customers["customer_id"])).sum()` gives 0, every key has a match, so the guess was right.',
       syntax: 'a.merge(b, left_on="distributor_id", right_on="customer_id")',
     },
     {
@@ -181,7 +181,7 @@ gone[["distributor_id", "product_id", "product_name"]].sort_values(["distributor
     },
     {
       kind: 'note',
-      text: 'If a key repeats in the right table, every left row is repeated once for each match, and the totals grow. Check `len` before and after, and merge at the grain you mean.',
+      text: 'If a key repeats in the right table, every left row is repeated once for each match, and the totals grow. Check `len` before and after, and group the right table first if its key repeats.',
       syntax: 'len(a), len(a.merge(b, on="k"))',
       trap: 'Two tables that merely share a column, such as `region_id` in customers and reps, match every pair in that region.',
     },

@@ -8,7 +8,7 @@ export const CHARTS: PracticeSection = {
   blocks: [
     {
       kind: 'note',
-      text: 'A chart is a table first: build the table, plot it, and end the cell with the table. Check compares the table, and you judge the chart by eye.',
+      text: 'A chart is a table first: build the table, plot it, and end the cell with the table. Check compares only the table; you judge the chart yourself by looking at it.',
       syntax: 'import matplotlib.pyplot as plt\ndf.plot(x="month_start", y="revenue", title="…")',
     },
     {
@@ -72,7 +72,7 @@ table`,
     },
     {
       kind: 'note',
-      text: '`plot.barh` draws horizontal bars with the first row at the bottom, so `iloc[::-1]` turns the table over. `plt.xlabel` names the axis.',
+      text: '`plot.barh` draws horizontal bars with the first row at the bottom, so `iloc[::-1]` reverses the row order. `plt.xlabel` names the axis.',
       syntax: 'df.iloc[::-1].plot.barh(x="brand", y="revenue", legend=False)   plt.xlabel("revenue")',
     },
     {
@@ -109,7 +109,7 @@ table`,
     },
     {
       kind: 'note',
-      text: 'Two lines on one chart need one table per chart: a column for each line, or `ax=` to draw the second on the axes of the first. When the lines are on different scales, a shared axis flattens the smaller one, so check before you read a gap.',
+      text: 'Two lines on one chart need one table per chart: a column for each line, or `ax=` to draw the second on the axes of the first. When the lines have very different value ranges, a shared axis makes the smaller one look almost flat, so check the numbers before you judge a gap.',
       syntax: 'ax = a.plot(x="m", y="units", label="a")\nb.plot(x="m", y="units", label="b", ax=ax)\ndf.rename(columns={"units": "shipped"})',
     },
     {

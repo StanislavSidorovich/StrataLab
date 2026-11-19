@@ -320,7 +320,7 @@ ORDER BY month_start;`,
     },
     {
       kind: 'note',
-      text: 'A frame limits the window to nearby rows: `ROWS BETWEEN 2 PRECEDING AND CURRENT ROW` is the row and the two before it. Used with AVG it gives a moving average that smooths out single odd months.',
+      text: 'A frame limits the window to nearby rows: `ROWS BETWEEN 2 PRECEDING AND CURRENT ROW` is the row and the two before it. Used with AVG, it gives a moving average that reduces the effect of unusual single months.',
       syntax: 'AVG(x) OVER (ORDER BY b ROWS BETWEEN 2 PRECEDING AND CURRENT ROW)',
     },
     {

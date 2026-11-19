@@ -7,7 +7,7 @@ export const INNER_JOIN: PracticeSection = {
   blocks: [
     {
       kind: 'note',
-      text: 'A fact table holds ids and numbers; the names are in the dimensions. `JOIN … ON` puts columns of two tables on one row wherever the keys match, and rows with no match are dropped. A key may carry a role in its name (`fact_sellin.distributor_id` is `dim_customer.customer_id`; The data lists them), and `SELECT COUNT(*) FROM quaera.fact_sellin WHERE distributor_id NOT IN (SELECT customer_id FROM quaera.dim_customer)` returning 0 proves a guess.',
+      text: 'A fact table holds ids and numbers; the names are in the dimensions. `JOIN … ON` puts columns of two tables on one row wherever the keys match, and rows with no match are dropped. A key name may show a role, not the table it points to (`fact_sellin.distributor_id` matches `dim_customer.customer_id`; see The data); if `SELECT COUNT(*) FROM quaera.fact_sellin WHERE distributor_id NOT IN (SELECT customer_id FROM quaera.dim_customer)` gives 0, every key has a match, so the guess was right.',
       syntax: 'FROM quaera.fact_sellout AS s JOIN quaera.dim_product AS p ON p.product_id = s.product_id',
       trap: 'Give every table an alias and write it before every column: a name that is in both tables stops the query.',
     },
@@ -73,7 +73,7 @@ ORDER BY revenue DESC;`,
       kind: 'task',
       id: 'join-team-outlets',
       title: 'Outlets per team',
-      question: 'How many customers does each sales team look after? Show team and customers, the most customers first.',
+      question: 'How many customers does each sales team have? Show team and customers, the most customers first.',
       ordered: true,
       skills: ['join', 'count', 'group-by', 'order-by'],
       hints: ['The team is in dim_rep, the link to a customer is its rep_id.', 'Join dim_customer to dim_rep on rep_id and count the customers in each team.', 'COUNT(*) AS customers, GROUP BY r.team, ORDER BY customers DESC.'],

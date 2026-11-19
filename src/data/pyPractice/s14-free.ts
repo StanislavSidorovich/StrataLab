@@ -37,7 +37,7 @@ table[["customer_name", "months_cover"]].sort_values(["months_cover", "customer_
     },
     {
       kind: 'note',
-      text: 'The last task is a whole small project: a director asks whether FMCG met its 2025 plan, and if not, when it fell behind. Read the answer after you have it: the point is what the numbers allow you to say.',
+      text: 'The last task is a whole small project: a director asks whether FMCG met its 2025 plan, and if not, when it dropped below plan. Check your answer after you have it: what matters is what the numbers allow you to say.',
     },
     {
       kind: 'task',
@@ -56,7 +56,7 @@ table[["month_start", "target_units", "units", "pct_of_plan"]].sort_values("pct_
     },
     {
       kind: 'note',
-      text: 'FMCG ended 2025 at 95.6% of plan, and the months stay close together, so no single month explains the gap. A good answer says so, rather than naming a culprit the data does not show.',
+      text: 'FMCG ended 2025 at 95.6% of plan, and the months stay close together, so no single month explains the gap. A good answer says so, rather than guessing one cause that the data does not show.',
     },
   ],
 }

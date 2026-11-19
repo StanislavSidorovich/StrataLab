@@ -162,7 +162,7 @@ WHERE week_start >= '2025-01-01' AND week_start < '2026-01-01';`,
     },
     {
       kind: 'note',
-      text: 'On Fabric whole numbers divide whole (`7 / 2` is 3) and `AVG` of a whole-number column is whole. Write `1.0 *` in front: `AVG(1.0 * units)`, `1.0 * a / b`.',
+      text: 'In Fabric, dividing two whole numbers gives a whole number (`7 / 2` is 3), and `AVG` of an integer column also drops the decimals. Write `1.0 *` in front: `AVG(1.0 * units)`, `1.0 * a / b`.',
       syntax: 'SELECT AVG(1.0 * units), 1.0 * COUNT(promo_id) / COUNT(*) FROM quaera.fact_sellout',
       trap: '`AVG(net_amount / units)` is the average of row prices: a shipment of 1 unit weighs as much as one of 500. For a price per unit, divide the totals.',
     },

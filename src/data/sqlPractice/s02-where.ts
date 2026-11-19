@@ -187,7 +187,7 @@ WHERE order_date BETWEEN '2026-01-01' AND '2026-03-31'
     },
     {
       kind: 'note',
-      text: "`LIKE` matches a pattern, which finds names when you only remember a part of them. `%` stands for any run of characters and `_` for exactly one, and the letters must have the case the data has.",
+      text: "`LIKE` matches a pattern, which finds names when you only remember a part of them. `%` stands for any number of characters (also none) and `_` for exactly one, and uppercase and lowercase letters must match the data.",
       syntax: "WHERE product_name LIKE 'Fruvia%'",
       trap: "`LIKE '%kids%'` finds nothing when the data says `Kids`.",
     },

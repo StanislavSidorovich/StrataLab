@@ -27,6 +27,7 @@ import {
   AI_KEY_HELP,
   AI_QUICK_ACTIONS,
   CLAUDE_MODEL_CHOICES,
+  GEMINI_TERMS_URL,
   isLocalBaseUrl,
   normalizeBaseUrl,
   AI_SPEECH_LANG_KEY,
@@ -520,6 +521,15 @@ export function AiConsentDialog() {
               </>
             )}
           </p>
+          {prompt.provider === 'gemini' && (
+            <p>
+              <b>Free tier:</b> the limits are per Google project and show in AI Studio under Rate Limits; past them you get a 429 message. Outside the EEA, UK and Switzerland (for example in Kazakhstan), Google may use free-tier requests to improve its products, and people there may read them. In the EEA (for example Portugal) and on a paid project it does not. See{' '}
+              <a className="underline" href={GEMINI_TERMS_URL} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>
+                Google&rsquo;s terms <ExternalLink size={11} className="inline" />
+              </a>
+              .
+            </p>
+          )}
           {!local && (
             <div
               className="rounded-lg p-2.5"

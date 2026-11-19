@@ -104,7 +104,7 @@ d.sort_values(["change_pct", "distributor_id", "month_start"]).head(5)`,
     },
     {
       kind: 'note',
-      text: '`rolling(4).mean()` smooths a noisy series: it averages a row with the three before it, and is NaN until there are four rows.',
+      text: '`rolling(4).mean()` smooths out big ups and downs: it averages a row with the three before it, and is NaN for the first three rows.',
       syntax: 'df["units"].rolling(4).mean()',
       trap: 'Filter after the window, not before: a table cut to 2026 has no earlier weeks for the first rows to look back on.',
     },

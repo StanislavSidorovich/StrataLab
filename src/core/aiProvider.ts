@@ -32,7 +32,7 @@ export const AI_KEY_HELP: Record<AiProvider, { label: string; url: string; note:
   gemini: {
     label: 'Google AI Studio',
     url: 'https://aistudio.google.com/apikey',
-    note: 'Free tier available with no card required; Google may use free-tier requests to improve its products.',
+    note: 'The free tier needs no card. Outside the EEA, UK and Switzerland Google may use free-tier requests to improve its products, and people may read them; on a paid project, and in the EEA, it does not.',
   },
   claude: {
     label: 'Anthropic Console',
@@ -119,6 +119,9 @@ function originOf(url: string): string {
 export function providerLabel(provider: AiProvider): string {
   return provider === 'gemini' ? 'Gemini' : provider === 'claude' ? 'Claude' : 'The server'
 }
+
+/** Google's terms: the free tier ("Unpaid Services") and how it uses data. */
+export const GEMINI_TERMS_URL = 'https://ai.google.dev/gemini-api/docs/terms'
 
 export type AiQuickAction = 'explain-stage' | 'why-failed' | 'suggest-next' | 'what-odd'
 
@@ -423,13 +426,16 @@ export function parseProviderReply(
 
   if (status === 429) {
     const detail = errMsg ? ` (${errMsg})` : ''
+    const advice =
+      provider === 'gemini'
+        ? 'The free limit of your Google project is used up (limits are per project, not per key). Wait a minute and try again; if it keeps happening, check AI Studio, Rate Limits, or try later.'
+        : provider === 'claude'
+          ? 'Either you are sending too fast, or your Anthropic credit has run out. Wait a minute and try again, and check the credit in console.anthropic.com.'
+          : 'The server or OpenRouter is limiting requests (or a free model is busy). Wait a minute and try again, or pick another model.'
     return {
       ok: false,
       kind: 'rate_limit',
-      message: redactSecrets(
-        `${label} rate limit or credit/quota limit reached (429)${detail}. Wait a moment before retrying, check your account quota/credit, or try the other provider.`,
-        keys,
-      ),
+      message: redactSecrets(`${label} says too many requests (429)${detail}. ${advice}`, keys),
     }
   }
 

@@ -101,7 +101,7 @@ sellout[sellout["units"] > 100].head()`,
     {
       kind: 'note',
       topic: 'two conditions at once',
-      text: 'Join two conditions with `&` when both must hold, or with `|` when either is enough. Each condition goes in its own round brackets.',
+      text: 'Join two conditions with `&` when both must be true, or with `|` when at least one must be true. Put each condition in its own parentheses `()`.',
       trap: '`and` and `or` raise an error on columns, and without brackets `&` binds before `>`.',
     },
     {
@@ -279,7 +279,7 @@ sellout[sellout["units"] > 100][["week_start", "customer_id", "units"]].head()`,
     {
       kind: 'note',
       topic: 'how to write a long query',
-      text: 'Do not write it in one go: name each condition, look at it, and join them last. Square brackets pick (a column, the rows, `.loc[rows, columns]`, a list of names), and round brackets call (`.notna()`, `.head(5)`) or group (each condition in `( )` around `&` and `|`, because `&` binds tighter than `==`). Python may break a line inside open brackets, so wrap the whole chain in `( )` and start each line with `.method`.',
+      text: 'Do not write it in one go: name each condition, look at it, and join them last. Square brackets `[]` select (a column, rows, `.loc[rows, columns]`, a list of names), and parentheses `()` call methods (`.notna()`, `.head(5)`) or group each condition around `&` and `|`, because Python evaluates `&` before `==`. Python may break a line inside open brackets, so wrap the whole chain in `( )` and start each line with `.method`.',
       syntax: `on_promo = sellout["promo_id"].notna()
 in_year = sellout["week_start"].dt.year == 2026
 sellout.loc[on_promo & in_year, cols]      # then sort, then head

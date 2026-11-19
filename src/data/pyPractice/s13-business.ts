@@ -7,7 +7,7 @@ export const BUSINESS: PracticeSection = {
   blocks: [
     {
       kind: 'note',
-      text: 'Pareto asks how few items make most of a total: sort from the largest, take the running share, and count until it passes the line.',
+      text: 'Pareto asks how few items make most of a total: sort from the largest, take the running share, and count until it reaches the target percentage.',
       syntax: 'share = s.sort_values(ascending=False).cumsum() / s.sum()',
     },
     {
@@ -20,7 +20,7 @@ export const BUSINESS: PracticeSection = {
     {
       kind: 'task',
       id: 'py-business-pareto-outlets',
-      title: 'How few outlets carry the business',
+      title: 'How few outlets make most of the revenue',
       question: 'Taking all of sellout, how many outlets, counted from the largest, does it take to reach 80% of revenue? Give the number: the first outlet at or above 80% counts.',
       ordered: false,
       hints: ['Total revenue by customer_id, largest first.', 'The running share is cumsum() / sum().', 'Count the outlets below 0.8, then add 1 for the one that crosses it: len(share[share < 0.8]) + 1.'],
@@ -38,7 +38,7 @@ len(share[share < 0.8]) + 1`,
     },
     {
       kind: 'note',
-      text: 'Compare like with like. The data ends in June 2026, so a whole 2025 against 2026 so far says nothing: put the same months of each year side by side.',
+      text: 'Compare equal periods. The data ends in June 2026, so a whole 2025 against 2026 so far is misleading: put the same months of each year side by side.',
       trap: 'A year-on-year fall of 50% for every brand means the periods differ, not that the business halved.',
     },
     {
@@ -68,7 +68,7 @@ table.sort_values("change_pct")`,
     },
     {
       kind: 'note',
-      text: 'What a promotion gave away is the list value of the units minus the revenue received. `prices` holds the list price of each month, so merge on the month as well as the product, and do not use its `promo_price`.',
+      text: 'The discount a promotion gave is the list value of the units minus the revenue received. `prices` holds the list price of each month, so merge on the month as well as the product, and do not use its `promo_price`.',
       syntax: 'sold.merge(prices[["month_start", "product_id", "list_price"]], on=["month_start", "product_id"])',
     },
     {
@@ -86,7 +86,7 @@ sold.groupby("brand", as_index=False)["discount_given"].sum().round(0).sort_valu
     },
     {
       kind: 'note',
-      text: 'Plans exist by rep and division, and sales by outlet and product, so neither table can answer alone. Bring sales up to the plan’s grain before merging: a merge at the wrong grain repeats the plan on every sale.',
+      text: 'Plans exist by rep and division, and sales by outlet and product, so neither table can answer alone. Group sales to the same level of detail as the plan (rep and division) before merging: if you merge first, the plan numbers repeat on every sale row.',
     },
     {
       kind: 'task',

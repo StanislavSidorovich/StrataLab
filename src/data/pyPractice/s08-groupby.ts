@@ -8,7 +8,7 @@ export const GROUPBY: PracticeSection = {
   blocks: [
     {
       kind: 'note',
-      text: '`groupby` splits the rows by the values of a key, and a total or an average is then worked out for each group. The key becomes the index of the result; `as_index=False` keeps it as a column. `size` counts the rows of each group.',
+      text: '`groupby` splits the rows by the values of a key, and a total or an average is then calculated for each group. The key becomes the index of the result; `as_index=False` keeps it as a column. `size` counts the rows of each group.',
       syntax: 'df.groupby("distributor_id")["units"].sum()   df.groupby(["a", "b"], as_index=False)["units"].sum()   df.groupby("brand").size()',
     },
     {
@@ -171,7 +171,7 @@ g[g["units"] > 50000].sort_values(["units", "distributor_id"], ascending=[False,
       question: 'Which products had an average above 13 units per sellout line in 2025 only (week_start from 2025-01-01 to 2025-12-31)? Show product_id, lines and avg_units (1 decimal), the highest average first, then by product_id.',
       ordered: true,
       skills: ['date-part', 'group-total', 'group-agg', 'filter-groups'],
-      hints: ['The average comes from all the lines of 2025 of a product; the condition is on the average.', 'Group the lines of 2025 by product_id, work out lines and the mean, then keep the groups above 13.', 'Round avg_units after the filter, and sort_values(["avg_units", "product_id"], ascending=[False, True]).'],
+      hints: ['The average comes from all the lines of 2025 of a product; the condition is on the average.', 'Group the lines of 2025 by product_id, calculate lines and the mean, then keep the groups above 13.', 'Round avg_units after the filter, and sort_values(["avg_units", "product_id"], ascending=[False, True]).'],
       solution: `y = sellout[sellout["week_start"].dt.year == 2025]
 g = y.groupby("product_id", as_index=False).agg(lines=("sellout_id", "size"), avg_units=("units", "mean"))
 g = g[g["avg_units"] > 13]

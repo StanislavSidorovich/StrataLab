@@ -850,7 +850,7 @@ long.sort_values(["length", "title"], ascending=[False, True])[["title", "length
       },
       {
         title: 'Films by rating',
-        question: 'How many films per rating, and how long and dear are they on average?',
+        question: 'How many films per rating, and how long and expensive are they on average?',
         level: 'group',
         sql: `SELECT rating,
        count(*) AS films,

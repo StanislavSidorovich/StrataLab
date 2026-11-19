@@ -9,6 +9,7 @@ import {
   isLocalBaseUrl,
   normalizeBaseUrl,
   AI_KEY_HELP,
+  GEMINI_TERMS_URL,
   AI_QUICK_ACTIONS,
   AI_SETTINGS_KEY,
   DEFAULT_AI_MODELS,
@@ -47,6 +48,8 @@ describe('AI settings and consent parsing', () => {
     expect(CLAUDE_MODEL_CHOICES).toEqual(['claude-haiku-5-5', 'claude-sonnet-5-5'])
     expect(AI_KEY_HELP.gemini.url).toBe('https://aistudio.google.com/apikey')
     expect(AI_KEY_HELP.claude.url).toBe('https://console.anthropic.com')
+    expect(AI_KEY_HELP.gemini.note).toMatch(/EEA, UK and Switzerland/)
+    expect(GEMINI_TERMS_URL).toBe('https://ai.google.dev/gemini-api/docs/terms')
     expect(AI_KEY_HELP.claude.note).toMatch(/Pro or Max subscription does not connect/)
     expect(AI_KEY_HELP.claude.note).toMatch(/no free tier/)
     expect(AI_KEY_HELP.claude.note).toContain('console.anthropic.com')
@@ -461,7 +464,17 @@ describe('Provider reply parsing and error classification', () => {
 
     const r429 = parseProviderReply('claude', 429, JSON.stringify({ error: { message: 'Credit balance low' } }))
     expect(r429.ok).toBe(false)
-    if (!r429.ok) expect(r429.kind).toBe('rate_limit')
+    if (!r429.ok) {
+      expect(r429.kind).toBe('rate_limit')
+      expect(r429.message).toContain('credit')
+    }
+    const g429 = parseProviderReply('gemini', 429, JSON.stringify({ error: { message: 'RESOURCE_EXHAUSTED' } }))
+    expect(g429.ok).toBe(false)
+    if (!g429.ok) {
+      expect(g429.kind).toBe('rate_limit')
+      expect(g429.message).toContain('per project')
+      expect(g429.message).toContain('Rate Limits')
+    }
 
     const r500 = parseProviderReply('gemini', 500, JSON.stringify({ error: { message: 'Backend down' } }))
     expect(r500.ok).toBe(false)

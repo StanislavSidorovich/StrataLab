@@ -7,14 +7,14 @@ export const CLEAN_EXPORT: PracticeSection = {
   blocks: [
     {
       kind: 'note',
-      text: '`raw` is an export nobody tidied: every column is text, and the same thing is written in several ways. Look at the real values first, then fix one column at a time. `str.upper` makes capitals and `str.lower` makes small letters, so two spellings of one code become one.',
+      text: '`raw` is an export nobody cleaned: every column is text, and the same thing is written in several ways. Look at the real values first, then fix one column at a time. `str.upper` makes all letters uppercase and `str.lower` makes them lowercase, so two spellings of one code become one.',
       syntax: 'raw["sku_code"].value_counts()   raw["sale_date"].sample(10)   raw["units"].isna().sum()   raw["sku_code"].str.upper()',
     },
     {
       kind: 'task',
       id: 'py-clean-export-sku-case',
       title: 'Codes without the case',
-      question: 'How many different sku_code values does the export have when capitals and small letters are not told apart? Give the number.',
+      question: 'How many different sku_code values does the export have if you ignore the difference between uppercase and lowercase? Give the number.',
       ordered: false,
       skills: ['clean-text'],
       hints: ['Count the distinct codes of the column, after the case is the same everywhere.', 'str.upper() (or str.lower()) makes every code one case, then nunique() counts.', 'raw["sku_code"].str.upper().nunique()'],
@@ -45,7 +45,7 @@ export const CLEAN_EXPORT: PracticeSection = {
       kind: 'task',
       id: 'py-clean-export-names',
       title: 'One code, one spelling',
-      question: 'After removing stray spaces and making codes upper case, how many different sku_code and how many different customer_name does the export have? One row: skus (sku_code in capitals) and customers (customer_name without the spaces around it).',
+      question: 'After removing extra spaces at the start and end and making codes uppercase, how many different sku_code and how many different customer_name does the export have? One row: skus (sku_code in capitals) and customers (customer_name without the spaces around it).',
       ordered: false,
       skills: ['clean-text', 'distinct'],
       hints: ['Compare a column\'s value_counts() before and after cleaning.', 'str.strip() removes spaces at both ends, str.upper() makes capitals.', 'pd.DataFrame({"skus": [raw["sku_code"].str.strip().str.upper().nunique()], "customers": [raw["customer_name"].str.strip().nunique()]})'],

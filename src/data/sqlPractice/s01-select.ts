@@ -37,7 +37,7 @@ FROM quaera.dim_region;`,
     {
       kind: 'example',
       id: 'select-products-by-brand',
-      title: 'Products by brand, the dearest first',
+      title: 'Products by brand, most expensive first',
       code: `SELECT brand, product_name, list_price
 FROM quaera.dim_product
 ORDER BY brand, list_price DESC, product_id;`,

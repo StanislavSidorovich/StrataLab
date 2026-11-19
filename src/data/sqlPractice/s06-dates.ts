@@ -145,7 +145,7 @@ WHERE order_date >= '2025-01-01' AND order_date < '2026-01-01';`,
           code: `SELECT MAX(DATEDIFF(day, ship_date, order_date)) AS longest_wait
 FROM quaera.fact_sellin
 WHERE order_date >= '2025-01-01' AND order_date < '2026-01-01';`,
-          says: 'With the dates the wrong way round every wait is negative, and MAX gives the shortest one as a minus number. The earlier date, order_date, goes first.',
+          says: 'If the dates are in the wrong order, every wait is negative, and MAX gives the negative number closest to 0. The earlier date, order_date, goes first.',
         },
       ],
     },
@@ -255,7 +255,7 @@ WHERE order_date >= '2025-01-01' AND order_date < '2026-01-01'
   AND ship_date > DATEADD(day, 7, order_date)
 GROUP BY distributor_id
 ORDER BY slow_shipments DESC, distributor_id;`,
-          says: 'The dates in DATEDIFF are the wrong way round, so the waits are negative. The earlier date, order_date, goes first.',
+          says: 'The two dates in DATEDIFF are in the wrong order, so the waits are negative. The earlier date, order_date, goes first.',
         },
       ],
     },
