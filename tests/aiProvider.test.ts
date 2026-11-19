@@ -657,3 +657,63 @@ describe('Reply block parsing and cell insertion', () => {
     expect(outOfBoundsHigh.text).toBe('a = 1\nb = 2')
   })
 })
+
+describe('conversation history in each provider format (v0.62.0)', () => {
+  const history = [
+    { role: 'user' as const, text: 'first question' },
+    { role: 'assistant' as const, text: 'first answer' },
+    { role: 'user' as const, text: 'second question' },
+    { role: 'assistant' as const, text: 'second answer' },
+  ]
+  const base = { apiKey: 'k', systemPrompt: 'SYS', userPrompt: 'NOW', history }
+
+  it('OpenAI-compatible: system, then every message, then the new one', () => {
+    const body = JSON.parse(buildProviderRequest({ ...base, provider: 'openai', model: 'm', baseUrl: 'http://localhost:11434/v1' }).body)
+    expect(body.messages.map((m: { role: string }) => m.role)).toEqual(['system', 'user', 'assistant', 'user', 'assistant', 'user'])
+    expect(body.messages[2]).toEqual({ role: 'assistant', content: 'first answer' })
+    expect(body.messages.at(-1)).toEqual({ role: 'user', content: 'NOW' })
+  })
+  it('Gemini: contents with the role "model" for the helper', () => {
+    const body = JSON.parse(buildProviderRequest({ ...base, provider: 'gemini', model: 'gemini-3.8-flash' }).body)
+    expect(body.contents.map((c: { role: string }) => c.role)).toEqual(['user', 'model', 'user', 'model', 'user'])
+    expect(body.contents[1].parts[0].text).toBe('first answer')
+    expect(body.contents.at(-1).parts[0].text).toBe('NOW')
+    expect(body.systemInstruction.parts[0].text).toBe('SYS')
+  })
+  it('Claude: system on top, messages start with the learner and alternate', () => {
+    const body = JSON.parse(buildProviderRequest({ ...base, provider: 'claude', model: 'claude-haiku-5-5' }).body)
+    expect(body.system).toBe('SYS')
+    expect(body.messages.map((m: { role: string }) => m.role)).toEqual(['user', 'assistant', 'user', 'assistant', 'user'])
+    expect(body.messages[3].content).toBe('second answer')
+  })
+  it('without history the body is the single message it was before', () => {
+    const body = JSON.parse(buildProviderRequest({ provider: 'claude', apiKey: 'k', model: 'm', systemPrompt: 'S', userPrompt: 'U' }).body)
+    expect(body.messages).toEqual([{ role: 'user', content: 'U' }])
+  })
+  it('the same history moves to another provider: switching mid-conversation keeps it', () => {
+    const g = JSON.parse(buildProviderRequest({ ...base, provider: 'gemini', model: 'x' }).body).contents.length
+    const c = JSON.parse(buildProviderRequest({ ...base, provider: 'claude', model: 'x' }).body).messages.length
+    expect(g).toBe(5)
+    expect(c).toBe(5)
+  })
+  it('a mangled history is repaired, not sent as is', () => {
+    const body = JSON.parse(
+      buildProviderRequest({
+        ...base,
+        provider: 'claude',
+        model: 'x',
+        history: [
+          { role: 'assistant', text: 'stray' },
+          { role: 'user', text: 'a' },
+          { role: 'user', text: 'b' },
+        ],
+      }).body,
+    )
+    expect(body.messages).toEqual([{ role: 'user', content: 'NOW' }])
+  })
+  it('the mentor prompt asks for a closing Decision line and talks about cell numbers', () => {
+    const p = buildTutorSystemPrompt()
+    expect(p).toContain('"Decision: <one short sentence')
+    expect(p).toContain('refer to cells by their number')
+  })
+})

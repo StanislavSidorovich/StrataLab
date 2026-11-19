@@ -2,6 +2,7 @@
 // run, to an .ipynb (nbformat 4.5) that runs in Jupyter or Colab, and an .ipynb back to a tab.
 // Outputs already have Jupyter's shape (src/python/lab.py makes them), so they go in unchanged.
 import { joinCells, type Cell } from './pyCells'
+import { DECISIONS_TAG, decisionsCellSource, decisionsFromCellSource } from './aiChat'
 
 /** Jupyter's MIME bundle: Lab shows text/plain and image/png (base64), never the HTML. */
 export interface MimeBundle {
@@ -115,10 +116,19 @@ export interface NotebookInput {
   /** per cell, its last run (code cells only) */
   runs: (CellRun | null | undefined)[]
   datasets: NotebookDataset[]
+  /** the AI helper's "Decisions so far" note: a markdown cell right after the setup cell */
+  decisions?: string
 }
 
+const decisionsCell = (note: string) => ({
+  cell_type: 'markdown',
+  id: 'lab-decisions',
+  metadata: { tags: [DECISIONS_TAG] },
+  source: lines(decisionsCellSource(note)),
+})
+
 /** The notebook's JSON, as Jupyter writes it (one-space indent, a newline at the end). */
-export function toNotebook({ cells, runs, datasets }: NotebookInput): string {
+export function toNotebook({ cells, runs, datasets, decisions }: NotebookInput): string {
   const setup = { cell_type: 'code', id: 'lab-setup', metadata: { tags: [SETUP_TAG] }, execution_count: null, source: lines(setupSource(datasets)), outputs: [] }
   const body = cells.map((c, i) => {
     const id = `lab-${i + 1}`
@@ -133,7 +143,7 @@ export function toNotebook({ cells, runs, datasets }: NotebookInput): string {
       kernelspec: { name: 'python3', display_name: 'Python 3', language: 'python' },
       language_info: { name: 'python' },
     },
-    cells: [setup, ...body],
+    cells: [setup, ...(decisions?.trim() ? [decisionsCell(decisions)] : []), ...body],
   }
   return JSON.stringify(nb, null, 1) + '\n'
 }
@@ -144,6 +154,8 @@ export interface OpenedNotebook {
   cells: number
   /** what was left out or changed, in plain words */
   notes: string[]
+  /** the "Decisions so far" cell written by Save, taken back out of the cells */
+  decisions?: string
 }
 
 const textOf = (source: unknown): string => (Array.isArray(source) ? source.join('') : typeof source === 'string' ? source : '')
@@ -165,6 +177,7 @@ export function fromNotebook(json: string): OpenedNotebook {
   let setup = 0
   let raw = 0
   let outputs = false
+  let decisions: string | undefined
   for (const c of nb.cells as { cell_type?: unknown; source?: unknown; metadata?: { tags?: unknown }; outputs?: unknown }[]) {
     if (!c || typeof c !== 'object') continue
     const tags = Array.isArray(c.metadata?.tags) ? c.metadata.tags : []
@@ -173,6 +186,10 @@ export function fromNotebook(json: string): OpenedNotebook {
       continue
     }
     const source = textOf(c.source).replace(/\s+$/, '')
+    if (tags.includes(DECISIONS_TAG) && c.cell_type === 'markdown' && decisions === undefined) {
+      decisions = decisionsFromCellSource(source)
+      continue
+    }
     if (Array.isArray(c.outputs) && c.outputs.length) outputs = true
     if (c.cell_type === 'code') cells.push({ kind: 'code', source })
     else if (c.cell_type === 'markdown') cells.push({ kind: 'markdown', source })
@@ -184,5 +201,5 @@ export function fromNotebook(json: string): OpenedNotebook {
   if (setup) notes.push('The Quaera Lab setup cell was left out: in Lab, `lab` is already there.')
   if (raw) notes.push(`${raw} raw cell(s) became text cells.`)
   if (outputs) notes.push('Outputs saved in the notebook are not shown: run the cells to see them.')
-  return { text: cells.length ? joinCells(cells) : '# %%\n', cells: cells.length, notes }
+  return { text: cells.length ? joinCells(cells) : '# %%\n', cells: cells.length, notes, ...(decisions ? { decisions } : {}) }
 }

@@ -80,3 +80,30 @@ describe('The setup cell (lab outside Lab)', () => {
     expect(src).toMatch(/^lab = Lab\(\)$/m)
   })
 })
+
+describe('Decisions so far in a notebook (v0.62.0)', () => {
+  const cells = splitCells(tab)
+  const note = '- dropped 12 rows with price 0: test orders\n- kept NULL status as its own group'
+
+  it('writes the note as a markdown cell right after the setup cell, and not at all when empty', () => {
+    const nb = JSON.parse(toNotebook({ cells, runs: [], datasets: [], decisions: note }))
+    expect(nb.cells[0].metadata.tags).toEqual([SETUP_TAG])
+    expect(nb.cells[1].cell_type).toBe('markdown')
+    expect(nb.cells[1].source.join('')).toBe(`## Decisions so far\n\n${note}`)
+    expect(nb.cells).toHaveLength(1 + 1 + cells.length)
+    for (const none of [undefined, '', '  \n ']) {
+      expect(JSON.parse(toNotebook({ cells, runs: [], datasets: [], decisions: none })).cells).toHaveLength(1 + cells.length)
+    }
+  })
+
+  it('opens it back as the tab’s note, not as a cell', () => {
+    const opened = fromNotebook(toNotebook({ cells, runs: [], datasets: [], decisions: note }))
+    expect(opened.decisions).toBe(note)
+    expect(opened.cells).toBe(cells.length)
+    expect(opened.text).not.toContain('Decisions so far')
+  })
+
+  it('a notebook without the cell has no decisions', () => {
+    expect(fromNotebook(toNotebook({ cells, runs: [], datasets: [] })).decisions).toBeUndefined()
+  })
+})

@@ -610,3 +610,106 @@ describe('describe() content detection and precedence', () => {
     expect(summaries.describeSummary).toContain('[... summary truncated]')
   })
 })
+
+describe('notebook code in the context (v0.62.0)', () => {
+  const nb = (cells: string[]) => cells.map((c) => `# %%\n${c}`).join('\n\n') + '\n'
+  // a position inside cell number `cellIndex` (0-based): just after its marker line
+  const at = (text: string, cellIndex: number) => text.split('# %%').slice(0, cellIndex + 1).join('# %%').length + 10
+  const ctx = (text: string, cell: number, extra: object = {}) =>
+    buildAiContext({ tabTitle: 'T', tabText: text, cursorPos: at(text, cell), tables: [SAMPLE_TABLE], cellRuns: [], ...extra })
+
+  const FOUR = nb([
+    '# exploration\ndf = lab.table("demo.orders")',
+    'df.isna().sum()',
+    '# preprocessing\ndf = df.dropna()',
+    'df.groupby("status").size()',
+  ])
+
+  it('sends the code of earlier cells in order, numbered, with their stage', () => {
+    const built = ctx(FOUR, 3)
+    const t = built.text
+    const i1 = t.indexOf('--- Cell 1 (code, stage: exploration) ---')
+    const i2 = t.indexOf('--- Cell 2 (code, stage: exploration) ---')
+    const i3 = t.indexOf('--- Cell 3 (code, stage: preprocessing) ---')
+    expect(i1).toBeGreaterThan(-1)
+    expect(i2).toBeGreaterThan(i1)
+    expect(i3).toBeGreaterThan(i2)
+    expect(t).toContain('df = df.dropna()')
+    expect(t).toContain('(Cell 4 is the current cell, below.)')
+    expect(t).toContain('Cell 4 of 4')
+    expect(built.notebookCells).toBe(3)
+    // the current cell is not repeated in the notebook section
+    const section = t.slice(t.indexOf('=== Notebook code'), t.indexOf('=== Current Cell'))
+    expect(section).not.toContain('groupby')
+  })
+
+  it('leaves outputs out of the notebook section', () => {
+    const runs = [{ source: 'df.isna().sum()', outputs: [{ output_type: 'stream', name: 'stdout', text: 'SECRET_OUTPUT_ROW' } as Output] }]
+    const built = ctx(FOUR, 3, { cellRuns: runs })
+    const section = built.text.slice(built.text.indexOf('=== Notebook code'), built.text.indexOf('=== Current Cell'))
+    expect(section).not.toContain('SECRET_OUTPUT_ROW')
+  })
+
+  it('with the switch off, only the current cell goes in', () => {
+    const built = ctx(FOUR, 3, { sendNotebook: false })
+    expect(built.text).not.toContain('=== Notebook code')
+    expect(built.text).not.toContain('--- Cell 1')
+    expect(built.text).toContain('groupby')
+    expect(built.notebookCells).toBe(0)
+  })
+
+  it('handles an empty notebook and the cursor in the first cell', () => {
+    expect(buildAiContext({ tabTitle: 'T', tabText: '', cursorPos: 0, tables: [], cellRuns: [] }).text).toContain('(empty notebook)')
+    const first = ctx(FOUR, 0)
+    expect(first.text).toContain('(no earlier cells: the cursor is in the first cell)')
+    expect(first.notebookCells).toBe(0)
+  })
+
+  it('keeps a comments-only cell', () => {
+    const text = nb(['# just a note\n# more words', 'x = 1', 'y = 2', 'z = 3'])
+    expect(ctx(text, 3).text).toContain('# just a note')
+  })
+
+  it('shortens the oldest cells first when over budget and keeps the two nearest whole', () => {
+    const body = (tag: string) => `# ${tag} title\n` + Array.from({ length: 300 }, (_, i) => `${tag}_line_${i} = ${i}`).join('\n')
+    const text = nb([body('aaa'), body('bbb'), body('ccc'), body('ddd'), 'current = 1'])
+    const built = ctx(text, 4)
+    const t = built.text
+    expect(t).toContain('--- Cell 1 (code) ---\n# aaa title\n[301 lines]')
+    expect(t).not.toContain('aaa_line_50')
+    expect(t).toContain('ccc_line_5 = 5')
+    expect(t).toContain('ddd_line_5 = 5')
+    expect(built.notebookShortened).toBeGreaterThan(0)
+    expect(built.text.length).toBeLessThanOrEqual(MAX_AI_CONTEXT_CHARS)
+  })
+
+  it('leaves the oldest cells out with a note when even titles do not fit', () => {
+    const cells = Array.from({ length: 400 }, (_, i) => `# step ${i} ${'w'.repeat(80)}\nv${i} = ${i}`)
+    const built = ctx(nb([...cells, 'current = 1']), 400)
+    expect(built.text).toMatch(/\[\d+ earlier cells? left out to fit the size limit\]/)
+    expect(built.text).toContain('v399 = 399')
+    expect(built.text.length).toBeLessThanOrEqual(MAX_AI_CONTEXT_CHARS)
+  })
+
+  it('cuts one huge cell with a mark and never drops the question', () => {
+    const huge = 'big = [' + '1,'.repeat(20000) + ']'
+    const text = nb([huge, 'a = 1', 'current = 2'])
+    const built = ctx(text, 2, { instruction: 'MY QUESTION' })
+    expect(built.text).toContain('[... cell truncated]')
+    expect(built.text.endsWith('=== Instruction ===\nMY QUESTION')).toBe(true)
+    expect(built.text.length).toBeLessThanOrEqual(MAX_AI_CONTEXT_CHARS)
+  })
+
+  it('puts the decisions in their own section, only when there are some', () => {
+    const none = ctx(FOUR, 3)
+    expect(none.text).not.toContain('Decisions so far')
+    expect(none.hasDecisions).toBe(false)
+    const some = ctx(FOUR, 3, { decisions: '- dropped 12 rows with price 0' })
+    expect(some.text).toContain('=== Decisions so far (written by the learner) ===\n- dropped 12 rows with price 0')
+    expect(some.hasDecisions).toBe(true)
+  })
+
+  it('raised the total limit', () => {
+    expect(MAX_AI_CONTEXT_CHARS).toBe(24000)
+  })
+})

@@ -2,6 +2,7 @@
 // settings/consent parsing, secret redaction, Gemini/Claude/OpenAI-compatible request & reply adapters,
 // reply block splitting, and `# %%` cell insertion. No React, DuckDB, or fetch.
 import { cellAt, splitCells } from './pyCells'
+import { normalizeHistory, type AiChatMessage } from './aiChat'
 
 export type AiProvider = 'gemini' | 'claude' | 'openai'
 
@@ -247,7 +248,10 @@ export function buildTutorSystemPrompt(): string {
   return [
     'You are a patient, practical data-mining tutor inside Quaera Lab (a browser-based SQL + Python workbench).',
     'Reply in the same language as the learner\'s question (for example Russian or English), while keeping Python and pandas code identifiers in English.',
-    'Guide the learner step by step through Exploration, Preprocessing, Processing, and Analysis. You are a mentor: the learner takes every step, you do not hand over a finished notebook.',
+    'Guide the learner step by step through Exploration, Preprocessing, Processing, and Analysis. You are a mentor: the learner takes every step and every decision, you do not hand over a finished notebook.',
+    'Each request carries the notebook\'s earlier code (cells are numbered, with the stage found for each), the learner\'s "Decisions so far" note, and the last messages of this conversation. Use them: do not suggest what the notebook already does or what a decision already settled, refer to cells by their number ("in cell 3 you dropped..."), and never ask again for something already said.',
+    'When a new stage begins (the stage of the current cell differs from the one before it), start with one or two sentences on which of the decisions so far affect this stage.',
+    'When the learner has made a decision (for example chose an option, or confirmed how to treat missing values), end the reply with one separate last line in this exact form: "Decision: <one short sentence with the choice and the reason>". Write that line only when a decision was made in this exchange, never while you are still offering options.',
     'When the learner asks what to do next, or which approach to take, first offer 2 or 3 options for the next step of the cycle (for example, in Exploration: look at distributions, check missing values, or compare groups; in Preprocessing: drop, fill, or flag missing values). Give each option one short line of pros and one of cons.',
     'Then ask which option the learner picks, and stop there: write no code in that reply.',
     'Write the code only after the learner has chosen an option, or when they ask for code for a specific thing. Then explain the decision briefly first and give a short, ready-to-apply block for that one step only.',
@@ -270,10 +274,13 @@ export function buildProviderRequest(opts: {
   model: string
   systemPrompt: string
   userPrompt: string
+  /** the tab's earlier messages, oldest first; the same list works for all three providers */
+  history?: readonly AiChatMessage[]
   /** OpenAI-compatible only: the server's Base URL, as saved */
   baseUrl?: string
 }): { url: string; method: 'POST'; headers: Record<string, string>; body: string } {
   const key = opts.apiKey.trim()
+  const history = normalizeHistory(opts.history ?? [])
   const model =
     opts.provider === 'gemini'
       ? stripGeminiModelsPrefix(opts.model) || DEFAULT_AI_MODELS.gemini
@@ -293,6 +300,7 @@ export function buildProviderRequest(opts: {
         model,
         messages: [
           { role: 'system', content: opts.systemPrompt },
+          ...history.map((m) => ({ role: m.role, content: m.text })),
           { role: 'user', content: opts.userPrompt },
         ],
         max_tokens: 1024,
@@ -312,7 +320,11 @@ export function buildProviderRequest(opts: {
       },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: opts.systemPrompt }] },
-        contents: [{ role: 'user', parts: [{ text: opts.userPrompt }] }],
+        // Gemini calls the assistant's side "model".
+        contents: [
+          ...history.map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.text }] })),
+          { role: 'user', parts: [{ text: opts.userPrompt }] },
+        ],
         generationConfig: { maxOutputTokens: 1024, temperature: 0.3 },
       }),
     }
@@ -331,7 +343,7 @@ export function buildProviderRequest(opts: {
       model,
       max_tokens: 1024,
       system: opts.systemPrompt,
-      messages: [{ role: 'user', content: opts.userPrompt }],
+      messages: [...history.map((m) => ({ role: m.role, content: m.text })), { role: 'user', content: opts.userPrompt }],
     }),
   }
 }

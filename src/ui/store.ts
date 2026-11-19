@@ -54,6 +54,16 @@ import {
   type BuiltAiContext,
 } from '../core/aiContext'
 import {
+  AI_CHAT_KEY_PREFIX,
+  AI_SEND_NOTEBOOK_KEY,
+  appendDecision,
+  formatRequestPreview,
+  parseChat,
+  parseSendNotebook,
+  pushExchange,
+  type AiChatMessage,
+} from '../core/aiChat'
+import {
   AI_API_KEY_STORAGE,
   AI_CONSENT_KEY,
   AI_QUICK_ACTIONS,
@@ -101,6 +111,8 @@ export interface QueryTab {
   dialect?: Dialect
   /** a practice task's tab: the task's id (src/data/practice.ts) */
   task?: string
+  /** a Python tab: the learner's "Decisions so far" note for the AI helper (kept with the tab, sent with each request, written into the notebook) */
+  decisions?: string
 }
 
 /** A T-SQL tab's translation to DuckDB: being made, made, or failed. */
@@ -290,6 +302,10 @@ interface State {
   aiConsentPrompt: AiConsentPrompt | null
   aiPanelOpen: boolean
   aiRequest: AiRequestState
+  /** per Python tab, the last messages of the AI conversation (memory, and localStorage per tab); never in backups, links or notebooks */
+  aiChats: Record<string, AiChatMessage[]>
+  /** send the code of the cells above the cursor with each request (default on) */
+  aiSendNotebook: boolean
 }
 
 export interface AiAskOptions {
@@ -310,7 +326,7 @@ export interface AiConsentPrompt {
 export type AiRequestState =
   | { status: 'idle' }
   | { status: 'loading'; promptLabel: string }
-  | { status: 'done'; text: string; truncated: boolean; provider: AiProvider; model: string; promptLabel: string }
+  | { status: 'done'; text: string; truncated: boolean; provider: AiProvider; model: string; promptLabel: string; tabId: string }
   | { status: 'error'; kind: string; message: string; promptLabel: string }
 
 export interface PracticeProgress {
@@ -407,6 +423,14 @@ function loadAiSettings(): AiSettings {
   }
 }
 
+function loadSendNotebook(): boolean {
+  try {
+    return parseSendNotebook(localStorage.getItem(AI_SEND_NOTEBOOK_KEY))
+  } catch {
+    return true
+  }
+}
+
 function loadAiConsent(): AiConsent {
   try {
     return parseAiConsent(localStorage.getItem(AI_CONSENT_KEY))
@@ -500,6 +524,8 @@ export const useLab = create<State>(() => ({
   aiConsentPrompt: null,
   aiPanelOpen: false,
   aiRequest: { status: 'idle' },
+  aiChats: {},
+  aiSendNotebook: loadSendNotebook(),
 }))
 
 /** The user's own tables and views (schema main), without the catalog datasets. */
@@ -1178,11 +1204,18 @@ export function closeTabs(ids: string[]) {
     const activeTab = gone.has(s.activeTab) ? (left ?? tabs[0]).id : s.activeTab
     const results = { ...s.results }
     const translations = { ...s.translations }
+    const aiChats = { ...s.aiChats }
     for (const id of ids) {
       delete results[id]
       delete translations[id]
+      delete aiChats[id]
+      try {
+        localStorage.removeItem(AI_CHAT_KEY_PREFIX + id)
+      } catch {
+        /* no storage */
+      }
     }
-    return { tabs, activeTab, results, translations, closedTabs: rememberClosed(s.closedTabs, s.tabs.filter((t) => gone.has(t.id))) }
+    return { tabs, activeTab, results, translations, aiChats, closedTabs: rememberClosed(s.closedTabs, s.tabs.filter((t) => gone.has(t.id))) }
   })
 }
 
@@ -1191,7 +1224,8 @@ export function reopenClosedTab() {
   const tab = get().closedTabs.at(-1)
   if (!tab) return
   set((s) => ({ closedTabs: s.closedTabs.slice(0, -1) }))
-  addTab(tab.sql, tab.title, tab.dialect)
+  const id = addTab(tab.sql, tab.title, tab.dialect)
+  if (tab.decisions) setTabDecisions(id, tab.decisions)
 }
 
 /** A copy of a tab next to it: same SQL and dialect, “(copy)” in its title. */
@@ -1208,6 +1242,10 @@ export function duplicateTab(id: string) {
 
 export function setTabSql(id: string, sql: string) {
   set((s) => ({ tabs: s.tabs.map((t) => (t.id === id ? { ...t, sql } : t)) }))
+}
+
+export function setTabDecisions(id: string, decisions: string) {
+  set((s) => ({ tabs: s.tabs.map((t) => (t.id === id ? { ...t, decisions: decisions || undefined } : t)) }))
 }
 
 export function renameTab(id: string, title: string) {
@@ -1984,7 +2022,7 @@ export function closeCopyContextFallback() {
 export function gatherTabAiContext(
   tabId: string,
   cursorPos: number,
-  extra?: { sampleRows?: AiContextSampleRows | null; instruction?: string },
+  extra?: { sampleRows?: AiContextSampleRows | null; instruction?: string; sendNotebook?: boolean },
 ): BuiltAiContext {
   const s = get()
   const tab = s.tabs.find((t) => t.id === tabId)
@@ -2026,6 +2064,8 @@ export function gatherTabAiContext(
     fallbackLastOutputs,
     sampleRows: extra?.sampleRows,
     instruction: extra?.instruction,
+    sendNotebook: extra?.sendNotebook ?? s.aiSendNotebook,
+    decisions: tab?.decisions,
   })
 }
 
@@ -2198,14 +2238,79 @@ async function fetchSampleRowsForAi(tableName: string | undefined): Promise<AiCo
   }
 }
 
-export async function askAi(opts: AiAskOptions) {
-  if (get().aiRequest.status === 'loading') return
+// --- the conversation of a tab (v0.62.0)
+
+/** A tab's messages: memory first, then its own localStorage key (read once, try/catch). */
+export function getAiChat(tabId: string): AiChatMessage[] {
+  const known = get().aiChats[tabId]
+  if (known) return known
+  let loaded: AiChatMessage[] = []
+  try {
+    loaded = parseChat(localStorage.getItem(AI_CHAT_KEY_PREFIX + tabId))
+  } catch {
+    /* no storage: memory only */
+  }
+  if (loaded.length) set((s) => ({ aiChats: { ...s.aiChats, [tabId]: loaded } }))
+  return loaded
+}
+
+function setAiChat(tabId: string, chat: AiChatMessage[]) {
+  set((s) => ({ aiChats: { ...s.aiChats, [tabId]: chat } }))
+  try {
+    if (chat.length) localStorage.setItem(AI_CHAT_KEY_PREFIX + tabId, JSON.stringify(chat))
+    else localStorage.removeItem(AI_CHAT_KEY_PREFIX + tabId)
+  } catch {
+    /* quota or no storage: the conversation lives in memory */
+  }
+}
+
+/** "New conversation": the tab's messages go; its decisions stay. */
+export function clearAiConversation(tabId: string) {
+  abortActiveAiRequest()
+  set((s) => ({ aiRequest: s.aiRequest.status === 'idle' ? s.aiRequest : { status: 'idle' } }))
+  setAiChat(tabId, [])
+}
+
+/**
+ * What the next request would carry, built the way askAi builds it: for the "Sees" line and
+ * "Show exactly what is sent". Works without a key. A question still being typed is the instruction.
+ */
+export function previewAiRequest(tabId: string, cursorPos: number, question: string) {
+  const built = gatherTabAiContext(tabId, cursorPos, { instruction: question.trim() || '(your question goes here)' })
+  const history = getAiChat(tabId)
+  return {
+    built,
+    messages: history.length,
+    hasSchema: get().tables.length > 0,
+    text: formatRequestPreview(buildTutorSystemPrompt(), history, built.text),
+  }
+}
+
+export function setAiSendNotebook(on: boolean) {
+  set({ aiSendNotebook: on })
+  try {
+    localStorage.setItem(AI_SEND_NOTEBOOK_KEY, on ? '1' : '0')
+  } catch {
+    /* ignore */
+  }
+}
+
+/** "Add to decisions": the reply's `Decision:` line goes into the tab's note (once). */
+export function addAiDecision(tabId: string, decision: string) {
+  const tab = get().tabs.find((t) => t.id === tabId)
+  if (!tab) return
+  setTabDecisions(tabId, appendDecision(tab.decisions ?? '', decision))
+}
+
+/** Resolves true when a reply was stored (the panel then clears its input); false on any early stop or failure. */
+export async function askAi(opts: AiAskOptions): Promise<boolean> {
+  if (get().aiRequest.status === 'loading') return false
   const s = get()
   const provider = s.aiSettings.provider
 
   if (!s.aiSettings.enabled) {
     set({ aiSettingsOpen: true })
-    return
+    return false
   }
 
   if (provider === 'openai' && !s.aiSettings.baseUrl) {
@@ -2218,16 +2323,16 @@ export async function askAi(opts: AiAskOptions) {
       },
       aiSettingsOpen: true,
     })
-    return
+    return false
   }
   if (!hasAiConsent(s.aiConsent, s.aiSettings)) {
     set({ aiConsentPrompt: { provider, baseUrl: s.aiSettings.baseUrl, pendingEnable: false, pendingAsk: opts } })
-    return
+    return false
   }
 
   const quick = opts.action ? AI_QUICK_ACTIONS.find((a) => a.id === opts.action) : undefined
   const userQuestion = opts.question?.trim() ?? ''
-  if (!quick && !userQuestion) return
+  if (!quick && !userQuestion) return false
 
   const promptLabel = quick ? quick.label : userQuestion.slice(0, 80)
   const apiKey = s.aiKeys[provider].trim()
@@ -2243,7 +2348,7 @@ export async function askAi(opts: AiAskOptions) {
       },
       aiSettingsOpen: true,
     })
-    return
+    return false
   }
 
   const baseInstruction = quick
@@ -2268,10 +2373,11 @@ export async function askAi(opts: AiAskOptions) {
     if (opts.includeSampleRows) {
       const preContext = gatherTabAiContext(tabId, cursorPos, { sampleRows: null })
       sampleRows = await fetchSampleRowsForAi(preContext.referencedTables[0])
-      if (gen !== activeAiGen || !get().aiSettings.enabled) return
+      if (gen !== activeAiGen || !get().aiSettings.enabled) return false
     }
 
     const built = gatherTabAiContext(tabId, cursorPos, { sampleRows, instruction })
+    const history = getAiChat(tabId)
     const currentSettings = get().aiSettings
     const model = currentSettings.models[provider].trim() || DEFAULT_AI_MODELS[provider]
     if (provider === 'openai' && !model) {
@@ -2284,7 +2390,7 @@ export async function askAi(opts: AiAskOptions) {
         },
         aiSettingsOpen: true,
       })
-      return
+      return false
     }
     const req = buildProviderRequest({
       provider,
@@ -2292,6 +2398,7 @@ export async function askAi(opts: AiAskOptions) {
       model,
       systemPrompt: buildTutorSystemPrompt(),
       userPrompt: built.text,
+      history,
       baseUrl: currentSettings.baseUrl,
     })
 
@@ -2302,10 +2409,15 @@ export async function askAi(opts: AiAskOptions) {
       signal: controller.signal,
     })
     const rawBody = await res.text()
-    if (gen !== activeAiGen) return
+    if (gen !== activeAiGen) return false
 
     const outcome = parseProviderReply(provider, res.status, rawBody, apiKey ? [apiKey] : [])
     if (outcome.ok) {
+      // Only a reply that arrived goes into the history: an error leaves it as it was.
+      const learnerText = [quick ? `[${quick.label}]` : '', userQuestion, opts.errorOverride ? `Error: ${opts.errorOverride.slice(0, 400)}` : '']
+        .filter(Boolean)
+        .join(' ')
+      setAiChat(tabId, pushExchange(getAiChat(tabId), learnerText, outcome.text))
       set({
         aiRequest: {
           status: 'done',
@@ -2314,8 +2426,10 @@ export async function askAi(opts: AiAskOptions) {
           provider,
           model,
           promptLabel,
+          tabId,
         },
       })
+      return true
     } else {
       set({
         aiRequest: {
@@ -2326,8 +2440,9 @@ export async function askAi(opts: AiAskOptions) {
         },
       })
     }
+    return false
   } catch (err) {
-    if (gen !== activeAiGen) return
+    if (gen !== activeAiGen) return false
     const online = typeof navigator !== 'undefined' ? navigator.onLine : true
     const outcome = classifyFetchError(err, online, apiKey ? [apiKey] : [], {
       provider,
@@ -2345,6 +2460,7 @@ export async function askAi(opts: AiAskOptions) {
         },
       })
     }
+    return false
   } finally {
     if (activeAiController === controller) activeAiController = null
   }

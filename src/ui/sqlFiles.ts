@@ -2,7 +2,7 @@
 // file the user picked (Chrome, Edge: File System Access API), Save writes back to the same
 // file; elsewhere Open reads a copy and Save downloads the tab as a .sql file. Python tabs
 // (stage 7) open from and save to .py (cells as `# %%`) and Jupyter notebooks (.ipynb).
-import { addTab, renameTab, tabDialect, useLab, type QueryTab } from './store'
+import { addTab, renameTab, setTabDecisions, tabDialect, useLab, type QueryTab } from './store'
 import { pythonFileKind, tabFileName, tabTitleFromFile } from '../core/editorFiles'
 import { datasetsUsed, fromNotebook, toNotebook } from '../core/ipynb'
 import { splitCells } from '../core/pyCells'
@@ -76,6 +76,7 @@ function openSqlText(fileName: string, text: string, handle?: SqlFileHandle) {
       return
     }
     id = addTab(nb.text, tabTitleFromFile(fileName), 'python')
+    if (nb.decisions) setTabDecisions(id, nb.decisions)
     useLab.setState({ notice: [`${fileName}: ${nb.cells} cell${nb.cells === 1 ? '' : 's'} opened as a Python tab.`, ...nb.notes].join(' ') })
   } else id = addTab(text, tabTitleFromFile(fileName), kind === 'py' ? 'python' : undefined)
   if (handle) handles.set(id, handle)
@@ -88,6 +89,7 @@ export function notebookText(tab: QueryTab): string {
   return toNotebook({
     cells,
     runs: cells.map((c) => (c.kind === 'code' ? runs[c.source] : null)),
+    decisions: tab.decisions,
     datasets: datasetsUsed(tab.sql, DATASETS).map((d) => ({ id: d.id, tables: d.tables.map((t) => ({ name: t.name, file: t.file })) })),
   })
 }

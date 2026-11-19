@@ -105,6 +105,7 @@ function saveSpeechLang(lang: AiSpeechLang) {
   }
 }
 import { SidePanelHandle, useSidePanelWidth } from './useSidePanelWidth'
+import { AddDecisionButton, AiDecisions, AiSees, NewConversationButton } from './AiConversation'
 import {
   askAi,
   cancelAiConsent,
@@ -120,6 +121,7 @@ import {
   setAiBaseUrl,
   setAiModel,
   setAiProvider,
+  setAiSendNotebook,
   tabDialect,
   toggleAiPanel,
   useLab,
@@ -501,7 +503,7 @@ export function AiConsentDialog() {
         <div className="px-4 py-3 space-y-3" style={{ fontSize: 13, lineHeight: 1.5 }}>
           <p>
             <b>What is sent when you click Send:</b> your table schema, column types, computed summary statistics (
-            <code className="mono">isna().sum()</code> and <code className="mono">describe()</code>), the current cell, and the last error.
+            <code className="mono">isna().sum()</code> and <code className="mono">describe()</code>), the current cell, and the last error. With the switch <i>&ldquo;Send the notebook&rsquo;s code&rdquo;</i> on (it is on by default), also the code and text of the cells above the current one (never their outputs), your &ldquo;Decisions so far&rdquo; note, and the last messages of this conversation. Your code is not personal data, but it goes to the provider too, so keep anything confidential out of your cells. &ldquo;Show exactly what is sent&rdquo; under the input shows the whole request.
           </p>
           <p>
             <b>No raw rows by default:</b> table rows are never sent unless you explicitly tick{' '}
@@ -561,6 +563,7 @@ export function AiHelperPanel() {
   const settings = useLab((s) => s.aiSettings)
   const keys = useLab((s) => s.aiKeys)
   const req = useLab((s) => s.aiRequest)
+  const sendNotebook = useLab((s) => s.aiSendNotebook)
 
   const [question, setQuestion] = useState('')
   const [includeSampleRows, setIncludeSampleRows] = useState(false)
@@ -655,20 +658,25 @@ export function AiHelperPanel() {
     saveSpeechLang(next)
   }
 
-  const sendQuick = (action: AiQuickAction) => {
+  // A reply clears the field; an error (429, a dropped connection) leaves the question where it was.
+  const submit = async (opts: Parameters<typeof askAi>[0], sent: string) => {
     stopListening()
     const withRows = includeSampleRows
     setIncludeSampleRows(false)
-    void askAi({ action, question, includeSampleRows: withRows })
+    const ok = await askAi({ ...opts, includeSampleRows: withRows })
+    if (ok) setQuestion((now) => (now === sent ? '' : now))
+    else if (withRows) setIncludeSampleRows(true)
+  }
+
+  const sendQuick = (action: AiQuickAction) => {
+    if (loading) return
+    void submit({ action, question }, question)
   }
 
   const sendQuestion = () => {
     const q = question.trim()
     if (!q || loading) return
-    stopListening()
-    const withRows = includeSampleRows
-    setIncludeSampleRows(false)
-    void askAi({ question: q, includeSampleRows: withRows })
+    void submit({ question: q }, question)
   }
 
   return (
@@ -708,6 +716,7 @@ export function AiHelperPanel() {
 
       <div className="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden p-3 space-y-3" style={{ fontSize: 12.5, zoom: 'var(--practice-zoom, 1)' }}>
         {!ready ? (
+          <>
           <div
             className="rounded-lg p-3 space-y-2.5"
             style={{ background: 'var(--panel-2)', border: '1px solid var(--line)' }}
@@ -730,6 +739,8 @@ export function AiHelperPanel() {
               <Settings size={13} /> Open AI helper settings…
             </button>
           </div>
+            {tab && <AiSees tabId={tab.id} question="" includeRows={false} />}
+          </>
         ) : (
           <>
             <div className="flex flex-wrap gap-1.5">
@@ -772,6 +783,16 @@ export function AiHelperPanel() {
                   onChange={(e) => setIncludeSampleRows(e.target.checked)}
                 />
                 <span>Also send the first 20 rows for this request</span>
+              </label>
+
+              <label className="flex items-start gap-2 cursor-pointer select-none" style={{ fontSize: 11.5, color: 'var(--muted)' }}>
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={sendNotebook}
+                  onChange={(e) => setAiSendNotebook(e.target.checked)}
+                />
+                <span>Send the notebook&rsquo;s code (the cells above this one, no outputs)</span>
               </label>
 
               <div className="flex flex-wrap items-center gap-1.5">
@@ -829,6 +850,7 @@ export function AiHelperPanel() {
                     Cancel
                   </button>
                 )}
+                {tab && <NewConversationButton tabId={tab.id} />}
               </div>
               {speechError && (
                 <div style={{ fontSize: 11, color: 'var(--danger)' }} role="status">
@@ -841,6 +863,9 @@ export function AiHelperPanel() {
                 </div>
               )}
             </div>
+
+            {tab && <AiSees tabId={tab.id} question={question} includeRows={includeSampleRows} />}
+            {tab && <AiDecisions tabId={tab.id} />}
 
             {req.status === 'loading' && (
               <div
@@ -944,6 +969,11 @@ export function AiHelperPanel() {
                     ),
                   )}
                 </div>
+                {tab && req.tabId === tab.id && (
+                  <div className="flex">
+                    <AddDecisionButton tabId={tab.id} reply={req.text} />
+                  </div>
+                )}
               </div>
             )}
           </>

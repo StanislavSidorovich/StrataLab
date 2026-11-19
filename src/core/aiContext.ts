@@ -2,6 +2,7 @@
 // builds a schema + summary + current-cell + last-output/error prompt without leaking raw DataFrame rows.
 import { cellAt, labCalls, splitCells } from './pyCells'
 import type { Output } from './ipynb'
+import { decisionsForRequest } from './aiChat'
 
 export const COPY_CONTEXT_TOAST = 'Copied: schema and summary, no rows'
 export const DEFAULT_AI_INSTRUCTION =
@@ -9,7 +10,12 @@ export const DEFAULT_AI_INSTRUCTION =
 export const MAX_AI_CONTEXT_COLS = 60
 export const MAX_AI_CELL_CHARS = 4000
 export const MAX_AI_SUMMARY_CHARS = 1500
-export const MAX_AI_CONTEXT_CHARS = 12000
+export const MAX_AI_CONTEXT_CHARS = 24000
+/** The share of the budget for the code of earlier cells (the current cell has its own section). */
+export const MAX_AI_NOTEBOOK_CHARS = 14000
+/** The cells just above the current one that always go in full. */
+export const AI_FULL_PREVIOUS_CELLS = 2
+export const MAX_AI_OUTCOME_CHARS = 3000
 
 export type DmStageName = 'exploration' | 'preprocessing' | 'processing' | 'analysis'
 
@@ -39,6 +45,10 @@ export interface AiContextOptions {
   fallbackLastOutputs?: readonly Output[]
   sampleRows?: AiContextSampleRows | null
   instruction?: string
+  /** send the code of the cells above the cursor (default true); false: the current cell only */
+  sendNotebook?: boolean
+  /** the learner's "Decisions so far" note */
+  decisions?: string
 }
 
 export interface BuiltAiContext {
@@ -48,6 +58,11 @@ export interface BuiltAiContext {
   lastError: string | null
   stage: DmStageName | null
   referencedTables: string[]
+  /** earlier cells whose code went in (0 when the switch is off or the cursor is in the first cell) */
+  notebookCells: number
+  /** of those, how many were cut down to a title line */
+  notebookShortened: number
+  hasDecisions: boolean
 }
 
 const NOT_COMPUTED_MESSAGE =
@@ -465,6 +480,77 @@ function formatTableSchema(t: AiContextTable): string {
   return lines.join('\n')
 }
 
+function firstMeaningfulLine(source: string): string {
+  const lines = source.split('\n').map((l) => l.trim())
+  const line = lines.find((l) => l !== '') ?? ''
+  return line.length > 100 ? line.slice(0, 97) + '...' : line
+}
+
+interface NotebookEntry {
+  n: number
+  kind: 'code' | 'markdown'
+  stage: DmStageName | null
+  source: string
+}
+
+function entryHeader(e: NotebookEntry): string {
+  return `--- Cell ${e.n} (${e.kind}${e.stage ? `, stage: ${e.stage}` : ''}) ---`
+}
+
+function renderFullEntry(e: NotebookEntry): string {
+  const body = truncateBlock(e.source || '(empty cell)', MAX_AI_CELL_CHARS, '\n[... cell truncated]')
+  return `${entryHeader(e)}\n${body}`
+}
+
+function renderShortEntry(e: NotebookEntry): string {
+  const lineCount = e.source === '' ? 0 : e.source.split('\n').length
+  return `${entryHeader(e)}\n${firstMeaningfulLine(e.source)}\n[${lineCount} lines]`
+}
+
+/**
+ * The code and markdown of the cells above the cursor, in order, each with its number and stage
+ * (no outputs). Over budget, the oldest cells shrink to their first line and "[N lines]", and when
+ * even that is too much the oldest are left out with a note. The two cells just above the current
+ * one always stay whole (each cut at MAX_AI_CELL_CHARS).
+ */
+export function buildNotebookSection(
+  tabText: string,
+  cursorPos: number,
+  budget = MAX_AI_NOTEBOOK_CHARS,
+): { text: string; cells: number; shortened: number } {
+  const cells = splitCells(tabText)
+  const idx = cellAt(cells, cursorPos)
+  if (cells.length === 0) return { text: '(empty notebook)', cells: 0, shortened: 0 }
+  if (idx <= 0) return { text: '(no earlier cells: the cursor is in the first cell)', cells: 0, shortened: 0 }
+  const entries: NotebookEntry[] = cells.slice(0, idx).map((c, i) => ({
+    n: i + 1,
+    kind: c.kind,
+    stage: detectCellStage(tabText, c.to),
+    source: c.source,
+  }))
+  const protectedFrom = Math.max(0, entries.length - AI_FULL_PREVIOUS_CELLS)
+  const rendered = entries.map((e) => renderFullEntry(e))
+  const shortFlags = entries.map(() => false)
+  const total = () => rendered.reduce((n, r) => n + r.length + 2, 0)
+  for (let i = 0; i < protectedFrom && total() > budget; i++) {
+    rendered[i] = renderShortEntry(entries[i])
+    shortFlags[i] = true
+  }
+  let omitted = 0
+  while (omitted < protectedFrom && total() > budget) {
+    omitted++
+    rendered[omitted - 1] = ''
+  }
+  const parts = rendered.filter((r) => r !== '')
+  if (omitted > 0) parts.unshift(`[${omitted} earlier cell${omitted === 1 ? '' : 's'} left out to fit the size limit]`)
+  parts.push(`(Cell ${idx + 1} is the current cell, below.)`)
+  return {
+    text: parts.join('\n\n'),
+    cells: entries.length - omitted,
+    shortened: shortFlags.filter(Boolean).length - omitted,
+  }
+}
+
 function findCurrentCellRun(
   cellRuns: readonly AiContextCellRun[],
   cellSource: string,
@@ -524,16 +610,29 @@ export function buildAiContext(opts: AiContextOptions): BuiltAiContext {
   const outcomeOutputs = matchedRun?.outputs ?? opts.fallbackLastOutputs ?? []
   const outcomeSource = matchedRun ? currentCell!.source : (currentCell?.source ?? '')
   const outcome = formatLastCellOutcome(outcomeOutputs, outcomeSource)
-  const outcomeBody = outcome.lastError ?? outcome.outputText ?? '(none yet)'
+  const outcomeBody = truncateBlock(
+    outcome.lastError ?? outcome.outputText ?? '(none yet)',
+    MAX_AI_OUTCOME_CHARS,
+    '\n[... output truncated]',
+  )
+
+  // 4b. Earlier cells' code (no outputs) and the learner's decisions
+  const sendNotebook = opts.sendNotebook !== false
+  const notebook = sendNotebook ? buildNotebookSection(opts.tabText, opts.cursorPos) : null
+  const decisions = decisionsForRequest(opts.decisions ?? '')
 
   // 5. Optional Sample Rows (Part D opt-in only)
   const sections: string[] = [
     `Tab: ${opts.tabTitle}`,
     `=== Table & Schema ===\n${schemaBody}`,
     `=== Exploration Summary (no raw rows) ===\n${summaryBody}`,
-    `=== Current Cell ===\n${currentCellBody}`,
-    `=== Last Error / Output ===\n${outcomeBody}`,
   ]
+  if (decisions) sections.push(`=== Decisions so far (written by the learner) ===\n${decisions}`)
+  if (notebook) sections.push(`=== Notebook code above the current cell (no outputs) ===\n${notebook.text}`)
+  sections.push(
+    `=== Current Cell ===\n${currentCell ? `Cell ${idx + 1} of ${cells.length}\n` : ''}${currentCellBody}`,
+    `=== Last Error / Output ===\n${outcomeBody}`,
+  )
 
   if (opts.sampleRows) {
     const sampleLines = [
@@ -552,10 +651,13 @@ export function buildAiContext(opts: AiContextOptions): BuiltAiContext {
       : DEFAULT_AI_INSTRUCTION)
   sections.push(`=== Instruction ===\n${instruction}`)
 
-  const rawText = sections.join('\n\n')
+  // The size limit cuts the middle, never the question at the end.
+  const instructionSection = sections.pop() as string
+  const head = sections.join('\n\n')
   const limitSuffix = '\n[Context truncated to fit size limit]'
-  const truncated = rawText.length > MAX_AI_CONTEXT_CHARS
-  const text = truncated ? truncateBlock(rawText, MAX_AI_CONTEXT_CHARS, limitSuffix) : rawText
+  const headRoom = Math.max(0, MAX_AI_CONTEXT_CHARS - instructionSection.length - 2)
+  const truncated = head.length > headRoom
+  const text = `${truncated ? truncateBlock(head, headRoom, limitSuffix) : head}\n\n${instructionSection}`
 
   return {
     text,
@@ -564,5 +666,8 @@ export function buildAiContext(opts: AiContextOptions): BuiltAiContext {
     lastError: outcome.lastError,
     stage,
     referencedTables,
+    notebookCells: notebook?.cells ?? 0,
+    notebookShortened: notebook?.shortened ?? 0,
+    hasDecisions: decisions !== '',
   }
 }

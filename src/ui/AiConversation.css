@@ -1,0 +1,59 @@
+/* The AI helper's conversation bits (v0.62.0): the "Sees" line, the exact request, the decisions note. */
+.ai-sees,
+.ai-decisions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.ai-sees-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.ai-sees-line svg {
+  margin-top: 2px;
+}
+.ai-sees-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  padding: 2px 0;
+  font-size: 11.5px;
+  color: var(--accent);
+  text-align: left;
+}
+.ai-sees-toggle:hover {
+  text-decoration: underline;
+}
+.ai-sees-box {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.ai-sees-note,
+.ai-sees-count {
+  line-height: 1.45;
+  color: var(--muted);
+}
+.ai-sees-pre {
+  margin: 0;
+  max-height: 260px;
+  min-width: 0;
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--code-bg);
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
