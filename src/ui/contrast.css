@@ -1,0 +1,22 @@
+/* Text contrast (Aa menu, src/core/contrast.ts): <html data-contrast="darker|maximum"> moves the text colours
+   --text and --muted, which the practice pages, the "New:" notes and the rest of the app read.
+   Standard is the family kit's own value (src/family/tokens.css) and sets nothing.
+   Ratios against --bg / --panel / --panel-2 / the note background (measured, see ROADMAP v0.60.1):
+   light  muted  Standard 5.06 / 5.42 / 4.88 / 4.92   Darker 7.40 / 7.93 / 7.13 / 7.19   Maximum 12.12 / 12.99 / 11.69 / 11.79
+   dark   muted  Standard 6.85 / 6.30 / 5.86 / 5.35   Darker 9.74 / 8.96 / 8.33 / 7.61   Maximum 13.08 / 12.03 / 11.19 / 10.21 */
+:root[data-contrast='darker'] {
+  --text: #10141d;
+  --muted: #4a5163;
+}
+:root[data-contrast='maximum'] {
+  --text: #000000;
+  --muted: #2b3140;
+}
+:root.dark[data-contrast='darker'] {
+  --text: #f2f4f9;
+  --muted: #b8bfcf;
+}
+:root.dark[data-contrast='maximum'] {
+  --text: #ffffff;
+  --muted: #d8dce6;
+}

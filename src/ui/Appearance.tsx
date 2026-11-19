@@ -3,11 +3,13 @@
 import { Moon, Sun } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { applyBorders, readBorders, type Borders } from '../core/borders'
+import { chooseContrast, CONTRAST_LEVELS, contrastLabel, readContrast, showContrast } from '../core/contrast'
 import { parseZoom, ZOOM_KEY, ZOOM_STEPS, zoomLabel } from '../core/practiceZoom'
 import { lookColor, lookVars, NO_LOOK, parseLook, setLookColor, SWATCHES, type Look, type LookPart } from '../core/look'
 import { clampTint, hslToHex, lightnessRange, NO_TINT, parseTint, TINT_KEY, tintColor, tintVars, type Hsl, type Tint, type TintPart } from '../core/tint'
 import { toggleTheme, useLab } from './store'
 import './appearanceTint.css'
+import './contrast.css'
 
 const LOOK_KEY = 'stratalab.look'
 
@@ -30,6 +32,7 @@ export function AppearanceButton({ className = '' }: { className?: string }) {
       return 1
     }
   })
+  const [contrast, setContrast] = useState(readContrast)
   const [tint, setTint] = useState<Tint>(() => {
     try {
       return parseTint(localStorage.getItem(TINT_KEY))
@@ -68,6 +71,9 @@ export function AppearanceButton({ className = '' }: { className?: string }) {
   }, [tint, theme])
 
   useEffect(() => applyBorders(borders), [borders])
+
+  // Shown, not saved: only a click remembers a level, so a system asking for more contrast stays a default.
+  useEffect(() => showContrast(contrast), [contrast])
 
   // The practice pages, the pipeline and the build page read --practice-zoom (PracticeBook.tsx, PipelinePage.tsx, build.css).
   useEffect(() => {
@@ -217,6 +223,27 @@ export function AppearanceButton({ className = '' }: { className?: string }) {
                   onClick={() => setZoom(z)}
                 >
                   {zoomLabel(z)}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <div className="mb-1.5" style={{ color: 'var(--muted)' }}>Text contrast</div>
+            <div className="inline-flex rounded-md overflow-hidden" role="radiogroup" aria-label="Text contrast" style={{ border: '1px solid var(--line)' }}>
+              {CONTRAST_LEVELS.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  role="radio"
+                  aria-checked={contrast === c}
+                  className="px-3 py-1"
+                  style={contrast === c ? { background: 'var(--accent-soft)', color: 'var(--accent)', fontWeight: 600 } : { color: 'var(--muted)' }}
+                  onClick={() => {
+                    chooseContrast(c)
+                    setContrast(c)
+                  }}
+                >
+                  {contrastLabel(c)}
                 </button>
               ))}
             </div>

@@ -24,6 +24,12 @@
       try {
         if (localStorage.getItem('stratalab.borders') === 'soft') document.documentElement.setAttribute('data-borders', 'soft')
       } catch (e) {}
+      try {
+        var c = null
+        try { c = localStorage.getItem('stratalab.contrast') } catch (e) {}
+        if (c !== 'standard' && c !== 'darker' && c !== 'maximum') c = matchMedia('(prefers-contrast: more)').matches ? 'darker' : 'standard'
+        if (c !== 'standard') document.documentElement.setAttribute('data-contrast', c)
+      } catch (e) {}
     </script>
     <!-- Cloudflare Web Analytics: cookieless page-view counts, on the live site only (not local runs). -->
     <script>
