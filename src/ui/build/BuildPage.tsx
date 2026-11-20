@@ -3,7 +3,7 @@
 // page is the "Open on a laptop" screen, as on the pipeline page.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowRight, Check, Copy, Hammer, Laptop, Lock, RotateCcw, Share2, Wand2 } from 'lucide-react'
-import { BUILD_ID, BUILD_KEY, MORE_STEP, REFRESH_STEP, isOptional, STEP_IDS, STEP_LABEL, STRIP_IDS, type StepId, demoFromHash, emptyBuild, goNext, hashWithDemo, isUnlocked, markDone, modelDone, nextStep, openStep, saveBuild, statusOf } from '../../core/build'
+import { BUILD_ID, BUILD_KEY, MORE_STEP, modelLockWhy, type StripId, REFRESH_STEP, isOptional, STEP_IDS, STEP_LABEL, STRIP_IDS, type StepId, demoFromHash, emptyBuild, goNext, hashWithDemo, isUnlocked, markDone, modelDone, nextStep, openStep, saveBuild, statusOf } from '../../core/build'
 import { canFillBefore, fillBefore, fillBeforeTouchesTables, fillUnit, touchesTables, type FillUnit } from '../../core/buildFill'
 import { DEMO_KEY, isEmptyRun, loadSaved, loadSlot, restoreNeedsConfirm, restoreSaved, startOver, writeSaved, type Saved } from '../../core/buildProgress'
 import type { Link } from '../../core/buildLinks'
@@ -29,6 +29,7 @@ import './clean.css'
 import './cleanCanvas.css'
 import './progress.css'
 import './hintMark.css'
+import './buildFixes.css'
 import { DemoContext } from './DemoContext'
 import { SliceContext } from './SliceContext'
 import { ProgressMenu } from './ProgressMenu'
@@ -265,6 +266,23 @@ function Shell() {
 
   const open = state.open
   const next = nextStep(state)
+  /** the star's two links are made: Next step in the footer does what Continue does on the screen */
+  const modelReady = open === 'model' && modelDone(state) && !state.done.includes('model')
+  const continueModel = () => setState((x) => (modelDone(x) ? goNext(markDone(x, 'model')) : x))
+  /** the Dashboard was opened from More or Refresh (K6, R1): the footer takes the learner back there */
+  const [dashFrom, setDashFrom] = useState<typeof MORE_STEP | typeof REFRESH_STEP | null>(null)
+  useEffect(() => {
+    if (open !== 'dashboard') setDashFrom(null)
+  }, [open])
+  const dashboardFrom = (from: typeof MORE_STEP | typeof REFRESH_STEP) => () => {
+    setDashFrom(from)
+    setState((s) => openStep(s, 'dashboard'))
+  }
+  /** Refresh is a new file arriving: the slicers set on the Dashboard in K6 would colour its numbers, so they go */
+  const openStrip = (step: StripId) => {
+    if (step === REFRESH_STEP) setFilter(NO_SLICE)
+    setState((s) => openStep(s, step))
+  }
   const stillOpen = open === 'clean' && activeCard(work.passed) ? CLEAN_CARDS.find((c) => c.id === activeCard(work.passed)) : undefined
   /** Finish on the Answer step: the run is already complete (Answer done); this brings the done card with Count in Quaera into view */
   const finish = () => {
@@ -334,7 +352,7 @@ function Shell() {
                     className={`build-chip is-${st}${s === open ? ' is-open' : ''}`}
                     disabled={st === 'locked'}
                     aria-current={s === open ? 'step' : undefined}
-                    onClick={() => setState(openStep(state, s))}
+                    onClick={() => openStrip(s)}
                     title={st === 'locked' ? (isOptional(s) ? 'Finish Answer first' : 'Finish the step before it first') : s === MORE_STEP ? 'Optional: six more questions' : s === REFRESH_STEP ? 'Optional: a new file arrives' : STEP_LABEL[s]}
                   >
                     <span className="build-chip-n">{st === 'done' ? <Check size={13} /> : st === 'locked' ? <Lock size={12} /> : i + 1}</span>
@@ -375,7 +393,7 @@ function Shell() {
                   onLinks={setLinks}
                   onStar={markStar}
                   onTryIt={tryIt}
-                  onContinue={() => setState((x) => (modelDone(x) ? goNext(markDone(x, 'model')) : x))}
+                  onContinue={continueModel}
                   onFixRegions={() => toClean('regions', 'p7')}
                   onFixNames={() => toClean('sales', 'p4')}
                   onBackToClean={(source) => toClean(source, null)}
@@ -385,9 +403,9 @@ function Shell() {
               ) : open === 'answer' ? (
                 <AnswerScreen work={work} setWork={setWork} ready={ready} links={state.links} errors={state.errors} onMore={() => setState((s) => openStep(s, MORE_STEP))} />
               ) : open === REFRESH_STEP ? (
-                <RefreshScreen work={work} setWork={setWork} ready={ready} model={{ links: state.links, star: state.star }} onRan={afterRun} onOpen={openFromJournal} onDashboard={() => setState((s) => openStep(s, 'dashboard'))} />
+                <RefreshScreen work={work} setWork={setWork} ready={ready} model={{ links: state.links, star: state.star }} onRan={afterRun} onOpen={openFromJournal} onDashboard={dashboardFrom(REFRESH_STEP)} />
               ) : (
-                <MoreScreen work={work} setWork={setWork} ready={ready} onDashboard={() => setState((s) => openStep(s, 'dashboard'))} />
+                <MoreScreen work={work} setWork={setWork} ready={ready} onDashboard={dashboardFrom(MORE_STEP)} />
               )}
             </section>
           </main>
@@ -408,7 +426,7 @@ function Shell() {
                   Optional:{' '}
                   <button className="bf-link" onClick={() => setState((s) => openStep(s, MORE_STEP))} data-testid="foot-more">More</button>
                   {' · '}
-                  <button className="bf-link" onClick={() => setState((s) => openStep(s, REFRESH_STEP))} data-testid="foot-refresh">Refresh</button>
+                  <button className="bf-link" onClick={() => openStrip(REFRESH_STEP)} data-testid="foot-refresh">Refresh</button>
                 </span>
                 <button className="btn btn-primary" onClick={finish} data-testid="build-finish">
                   <Check size={14} /> Finish
@@ -423,10 +441,15 @@ function Shell() {
               </>
             ) : (
               <>
-                {!next && !(open === 'clean' && stillOpen) && (
-                  <span className="bf-why" data-testid="next-locked">Next step unlocks when {LOCK_WHY[open]}</span>
+                {!next && !modelReady && !(open === 'clean' && stillOpen) && (
+                  <span className="bf-why" data-testid="next-locked">Next step unlocks when {open === 'model' ? modelLockWhy(state) : LOCK_WHY[open]}</span>
                 )}
-                <button className={`btn${next ? ' btn-primary' : ''}`} disabled={!next} onClick={() => setState(goNext(state))} data-testid="build-next">
+                {open === 'dashboard' && dashFrom && (
+                  <button className="btn" onClick={() => openStrip(dashFrom)} data-testid="build-back-from">
+                    ← Back to {dashFrom === MORE_STEP ? 'More' : 'Refresh'}
+                  </button>
+                )}
+                <button className={`btn${next || modelReady ? ' btn-primary' : ''}`} disabled={!next && !modelReady} onClick={() => (modelReady ? continueModel() : setState(goNext(state)))} data-testid="build-next">
                   Next step <ArrowRight size={14} />
                 </button>
               </>

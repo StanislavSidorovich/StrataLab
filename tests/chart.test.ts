@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { chartData, clip, compactNumber, isAscending, labelEvery, niceTicks, pickChart, timeTicks, toggleSeries, valueRange, withType, type ChartColumn } from '../src/core/chart'
+import { chartData, clip, compactNumber, edgeAnchor, isAscending, labelEvery, niceTicks, pickChart, timeTicks, toggleSeries, valueRange, withType, type ChartColumn } from '../src/core/chart'
 
 const n = (name: string, ascending = false): ChartColumn => ({ name, kind: 'number', ascending })
 const t = (name: string): ChartColumn => ({ name, kind: 'text' })
@@ -117,5 +117,14 @@ describe('axes', () => {
     expect(labelEvery(80, 35)).toBe(1)
     expect(clip('Electronics', 6)).toBe('Elect…')
     expect(clip('TV', 6)).toBe('TV')
+  })
+})
+
+describe('edgeAnchor', () => {
+  it('centres a label inside the frame and leans the edge ones inward', () => {
+    expect(edgeAnchor(300, 7, 600)).toBe('middle')
+    expect(edgeAnchor(10, 7, 600)).toBe('start')
+    // the last month of a line chart, 7 characters wide, 12 px from the right frame: it was cut ("2026-0...")
+    expect(edgeAnchor(588, 7, 600)).toBe('end')
   })
 })

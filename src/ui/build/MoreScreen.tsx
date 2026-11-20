@@ -35,6 +35,16 @@ const SHOWN_ROWS = 100
 export function MoreScreen({ work, setWork, ready, onDashboard }: Props) {
   const more = work.more
   const [sel, setSel] = useState<MoreId>(() => MORE_IDS.find((id) => !more.done.includes(id)) ?? 'K1')
+  /** the chosen question opens below the list: bring it into view, but not on the first draw */
+  const workRef = useRef<HTMLDivElement>(null)
+  const firstDraw = useRef(true)
+  useEffect(() => {
+    if (firstDraw.current) {
+      firstDraw.current = false
+      return
+    }
+    workRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }, [sel])
   const setMore = (f: (m: MoreWork) => MoreWork) => setWork((w) => ({ ...w, more: f(w.more) }))
   // in demo mode a question filled in moves on to the next one that is open
   const { demo } = useDemo()
@@ -69,7 +79,9 @@ export function MoreScreen({ work, setWork, ready, onDashboard }: Props) {
             )
           })}
         </ol>
+        <div ref={workRef} style={{ scrollMarginTop: 8 }}>
         <Work key={sel} id={sel} work={work} ready={ready} setMore={setMore} noRegion={noRegion} onDashboard={onDashboard} />
+        </div>
       </div>
       {moreDone(more) && (
         <div className="build-quick" data-testid="more-done">

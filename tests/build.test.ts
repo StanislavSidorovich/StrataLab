@@ -9,6 +9,7 @@ import {
   hashWithoutBuild,
   isUnlocked,
   markDone,
+  modelLockWhy,
   nextStep,
   openStep,
   readBuild,
@@ -83,5 +84,20 @@ describe('build storage', () => {
   it('keeps a good state', () => {
     const s = readBuild(JSON.stringify({ done: ['connect', 'clean'], open: 'connect' }))
     expect(s).toEqual({ ...emptyBuild(), done: ['connect', 'clean'], open: 'connect' })
+  })
+})
+
+describe('modelLockWhy: the footer follows the Model screen', () => {
+  const link = (id: string) => ({ id }) as never
+  it('names the star before it exists, not F1 and F2 alone', () => {
+    const t = modelLockWhy({ links: [], star: false })
+    expect(t).toContain('built the star')
+  })
+  it('counts the star links once the star is there', () => {
+    expect(modelLockWhy({ links: [], star: true })).toContain('0 of 2')
+    expect(modelLockWhy({ links: [link('F1')], star: true })).toContain('1 of 2')
+  })
+  it('says Continue when both are made', () => {
+    expect(modelLockWhy({ links: [link('F1'), link('F2')], star: true })).toContain('Continue')
   })
 })

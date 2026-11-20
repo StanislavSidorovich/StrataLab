@@ -61,6 +61,9 @@ test('build it by hand: Connect to Answer', async ({ page, browserName }) => {
   }
   await clean.getByTestId('watch-now-you').click()
 
+  // P4 and P7 are not in the list yet (the Model step asks for them): the screen says so instead of skipping the numbers
+  await expect(clean.getByTestId('clean-later')).toContainText('2 more appear')
+
   // P1: Trim then Uppercase on products.sku_code
   await expect(task).toHaveAttribute('data-card', 'P1')
   // the column profile shows the problem before anything is pressed: three SKUs in lowercase, four with spaces
@@ -114,6 +117,8 @@ test('build it by hand: Connect to Answer', async ({ page, browserName }) => {
   // ---- Model
   await step('Model').click()
   const model = page.getByTestId('build-model')
+  // the footer speaks of the star first, not of F1 and F2 that do not exist yet
+  await expect(page.getByTestId('next-locked')).toContainText('built the star')
   const link = async (many: string, one: string) => {
     await model.getByTestId(`link-col-${many}`).click()
     await model.getByTestId(`link-col-${one}`).click()
@@ -176,6 +181,8 @@ test('build it by hand: Connect to Answer', async ({ page, browserName }) => {
   await create()
   await link('gold_fact_sales-product_id', 'gold_dim_product-product_id')
   await create()
+  // Continue on the screen and Next step in the footer are both open once F1 and F2 are made
+  await expect(page.getByTestId('build-next')).toBeEnabled()
   await model.getByTestId('model-continue').click()
 
   // ---- Dashboard

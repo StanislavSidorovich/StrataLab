@@ -9,6 +9,7 @@ import {
   chartData,
   clip,
   compactNumber,
+  edgeAnchor,
   isAscending,
   labelEvery,
   niceTicks,
@@ -98,7 +99,7 @@ export function ChartView({ table, tabId, fileName }: { table: Table; tabId: str
   const xName = spec.x < 0 ? 'Row' : cols[spec.x].name
   const yNames = spec.ys.map((y) => cols[y].name)
   const numberCols = cols.flatMap((c, i) => (c.kind === 'number' ? [i] : []))
-  const notes = [data.cut && (scale === 'band' ? `First ${MAX_BARS} bars of ${(data.cut + data.labels.length).toLocaleString()} rows.` : `First ${data.xs.length.toLocaleString()} points of ${(data.cut + data.xs.length).toLocaleString()} rows.`), data.blank && `${data.blank.toLocaleString()} row${data.blank === 1 ? '' : 's'} with an empty ${xName} left out.`].filter(Boolean)
+  const notes = [data.cut && (scale === 'band' ? `First ${MAX_BARS} bars of ${(data.cut + data.labels.length).toLocaleString('en-US')} rows.` : `First ${data.xs.length.toLocaleString('en-US')} points of ${(data.cut + data.xs.length).toLocaleString('en-US')} rows.`), data.blank && `${data.blank.toLocaleString('en-US')} row${data.blank === 1 ? '' : 's'} with an empty ${xName} left out.`].filter(Boolean)
 
   return (
     <div className="h-full flex flex-col">
@@ -193,7 +194,8 @@ function SeriesPicker({ spec, cols, numberCols, onChange }: { spec: ChartSpec; c
 }
 
 const FONT = 'var(--q-font-sans)'
-const fmtValue = (v: number | null) => (v == null ? '—' : v.toLocaleString(undefined, { maximumFractionDigits: 4 }))
+// en-US like every other number in Lab: a tooltip must not turn 64,592.75 into 64 592,75 on a Russian or German browser
+const fmtValue = (v: number | null) => (v == null ? '—' : v.toLocaleString('en-US', { maximumFractionDigits: 4 }))
 
 /** The rounded data end of a bar from `base` to `top` (either way up): square at the baseline. */
 function barPath(x: number, w: number, base: number, top: number): string {
@@ -368,14 +370,14 @@ function Plot({ spec, data, xKind, xName, yNames, ref }: PlotProps) {
           {band
             ? data.labels.map((l, i) =>
                 i % every === 0 ? (
-                  <text key={i} x={sx(i)} y={top + ph + 16} textAnchor="middle" style={{ fill: 'var(--muted)' }}>
+                  <text key={i} x={sx(i)} y={top + ph + 16} textAnchor={edgeAnchor(sx(i), Math.min(l.length, maxChars), W)} style={{ fill: 'var(--muted)' }}>
                     <title>{l}</title>
                     {clip(l, maxChars)}
                   </text>
                 ) : null,
               )
             : xTicks.map((t, i) => (
-                <text key={i} x={sx(t)} y={top + ph + 16} textAnchor="middle" style={{ fill: 'var(--muted)' }}>{xLabel(t)}</text>
+                <text key={i} x={sx(t)} y={top + ph + 16} textAnchor={edgeAnchor(sx(t), xLabel(t).length, W)} style={{ fill: 'var(--muted)' }}>{xLabel(t)}</text>
               ))}
           <text x={left + pw / 2} y={H - 6} textAnchor="middle" style={{ fill: 'var(--muted)' }}>{clip(xName, Math.floor(pw / 7))}</text>
 

@@ -247,7 +247,7 @@ export function ModelScreen(p: Props) {
       ) : (
         <div className={`lk-grid${panelOn ? '' : ' is-wide'}`}>
           <div className="lk-board">
-            {live && !pair && <p className="lk-caption">{pass === 2 ? LINK_TEXT.idleStar : LINK_TEXT.idle}</p>}
+            {live && !pair && <p className="lk-caption">{pass === 2 ? LINK_TEXT.idleStar : LINK_TEXT.idleFor(links.map((l) => l.id))}</p>}
             <LinkCanvas pass={pass} tables={tables} links={legacy ? legacyLinks() : links} labels={legacy ? {} : labels} pending={pending} picked={{ many: filled(many) ? many : null, one: filled(one) ? one : null }} onPick={live ? pick : undefined} onDrag={live ? drop : undefined} />
             {!legacy && (
               <ul className="lk-links" aria-label="Links" data-testid="link-list">

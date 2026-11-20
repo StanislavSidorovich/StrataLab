@@ -96,6 +96,20 @@ export function CleanScreen({ work, setWork, ready, rebuild, rev, focus, onBackT
     setHintOpen(false)
   }, [cur])
 
+  // what the learner has to read next comes into view: the card the Model step asked for (P4, P7), and the "Clean is done" note
+  const askedNow = (work.p4 === 'asked' ? 1 : 0) + (work.p7 === 'asked' ? 1 : 0)
+  useEffect(() => {
+    if (askedNow === 0) return
+    const id = requestAnimationFrame(() => document.querySelector('[data-testid="clean-card-P4"], [data-testid="clean-card-P7"]')?.scrollIntoView({ block: 'start' }))
+    return () => cancelAnimationFrame(id)
+  }, [askedNow, source])
+  const isDone = cleanDone(work.passed)
+  useEffect(() => {
+    if (!isDone || askedNow > 0) return
+    const id = requestAnimationFrame(() => document.querySelector('[data-testid="clean-done"]')?.scrollIntoView({ block: 'nearest' }))
+    return () => cancelAnimationFrame(id)
+  }, [isDone, askedNow])
+
   const pass = (id: CleanId) => {
     // Next problem: the card was counted when its Check passed (onReport); W and the rest are counted here
     if (!work.passed.includes(id)) setWork((w) => ({ ...w, passed: passCard(w, id) }))
@@ -175,6 +189,10 @@ export function CleanScreen({ work, setWork, ready, rebuild, rev, focus, onBackT
   const level = cur ? hints[cur] ?? 0 : 0
   /** the current problem has just passed its Check: the bar says so and offers the way on */
   const justPassed = lingering && !!last?.ok
+  /** P4 and P7 are asked for by the Model step: until then they are not in the list, and the screen says so */
+  const later = (work.p4 ? 0 : 1) + (work.p7 ? 0 : 1)
+  /** cards the Model step asked for and the learner has not finished */
+  const asked = (work.p4 === 'asked' ? 1 : 0) + (work.p7 === 'asked' ? 1 : 0)
   const finishes = !!card && problems.every((c) => c.id === card.id || work.passed.includes(c.id))
   // everything that used to sit above the canvas: the task, its verdict, the done note, the chips and the cards of P4, P7, P8.
   // On a laptop (wide) it goes into the left column under the Queries list; below 1100 px it stays above the canvas.
@@ -196,7 +214,7 @@ export function CleanScreen({ work, setWork, ready, rebuild, rev, focus, onBackT
               </span>
             </>
           ) : (
-            <span className="cc-task-title"><b>All problems solved</b></span>
+            <span className="cc-task-title"><b data-testid="clean-title-done">{asked > 0 ? `Back from Model: ${asked === 1 ? 'one more card' : `${asked} more cards`} to finish` : 'All problems solved'}</b></span>
           )}
           {justPassed && (
             <span className="cc-passed" role="status" data-testid="clean-passed">
@@ -204,7 +222,7 @@ export function CleanScreen({ work, setWork, ready, rebuild, rev, focus, onBackT
             </span>
           )}
           <span className="cc-spacer" />
-          <span className="build-left" data-testid="clean-left">{left === 0 ? 'All problems solved' : `${left} of ${total} problems left`}</span>
+          <span className="build-left" data-testid="clean-left">{left > 0 ? `${left} of ${total} problems left` : asked > 0 ? `${asked} asked by Model` : card ? 'All problems solved' : ''}</span>
           {card && card.id !== 'W' && card.id !== 'P2' && <CheckButton card={card} work={work} ready={ready} quiet={justPassed} onReport={onReport(card.id)} />}
           {card && lingering && (
             <button className="btn btn-primary" onClick={() => pass(card.id)} data-testid={`clean-pass-${card.id}`}>
@@ -232,8 +250,13 @@ export function CleanScreen({ work, setWork, ready, rebuild, rev, focus, onBackT
           )}
           {card && <FillButton unit={{ step: 'clean', card: card.id }} hidden={passed} />}
         </div>
-        {card && card.id !== 'W' && <ActionText action={card.action} text={card.text} />}
+        {card && card.id !== 'W' && !justPassed && <ActionText action={card.action} text={card.text} />}
         {card && card.id === 'W' && <p className="build-muted" style={{ margin: 0 }}>{card.text}</p>}
+        {later > 0 && !justPassed && (
+          <p className="build-muted cc-later" data-testid="clean-later">
+            {later === 2 ? 'P4 and P7 are not missing: 2 more appear when you link the tables in Model.' : `${later} more appears when you link the tables in Model.`}
+          </p>
+        )}
         {card?.id === 'P1' && (
           <div className="build-skus" aria-label="The six SKUs as they are in the file">
             {P1_SKUS.map((s) => (
@@ -248,8 +271,8 @@ export function CleanScreen({ work, setWork, ready, rebuild, rev, focus, onBackT
             <AffectedRows card={card.id} ready={ready} rev={rev} />
           </details>
         )}
-        {card?.id === 'P6' && <NumberNote work={work} errs={errs} />}
-        {card && hintOpen && <Hints card={card} level={Math.max(level, 1)} onMore={() => setHints((h) => ({ ...h, [card.id]: Math.max(level, 1) + 1 }))} />}
+        {card?.id === 'P6' && !justPassed && <NumberNote work={work} errs={errs} />}
+        {card && hintOpen && !justPassed && <Hints card={card} level={Math.max(level, 1)} onMore={() => setHints((h) => ({ ...h, [card.id]: Math.max(level, 1) + 1 }))} />}
       </section>
       {card && last && !closed[card.id] && (
         <div className="cc-verdict">
@@ -447,19 +470,23 @@ function SalesBlank({ work, setWork, ready, rebuild, fails, onReport }: { work: 
     <div className="space-y-2">
       <pre className="pl-code" data-testid="clean-p2-sql">
         {before}
-        <input
-          className="pl-blank"
+        <textarea
+          className="pl-blank pl-blank-wrap"
           aria-label="The blank: what makes two rows the same sale"
           spellCheck={false}
           autoComplete="off"
           value={blank}
           placeholder="____"
-          size={Math.max(8, Math.min(60, blank.length + 1))}
+          rows={Math.min(4, Math.max(1, Math.ceil(blank.length / 30)))}
           onChange={(e) => {
             const v = e.target.value.replace(/\r?\n/g, ' ')
             setWork((w) => ({ ...w, blank: v }))
           }}
-          onKeyDown={(e) => e.key === 'Enter' && ready && !busy && void apply()}
+          onKeyDown={(e) => {
+            if (e.key !== 'Enter') return
+            e.preventDefault()
+            if (ready && !busy) void apply()
+          }}
         />
         {after}
       </pre>

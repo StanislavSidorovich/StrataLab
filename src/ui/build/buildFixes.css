@@ -1,0 +1,19 @@
+/* v0.65.0, from Gemini's walk of the build (2026-11-20). Imported last in BuildPage so these rules win over the older files. Tokens only. */
+
+/* Below 1100 px the task bar of Clean sits above the canvas. A sticky bar there (up to 45vh) covered the ribbon, the column headers and the
+   top of the cards on a laptop at 150% scaling (about 920 x 600), so it scrolls with the page; Check and Next problem stay next to the ribbon. */
+@media (max-width: 1099px) {
+  .cc-root .cc-task { position: static; max-height: none; overflow: visible; box-shadow: none; }
+}
+
+/* "P4 and P7 are not missing": one quiet line under the task, not a second counter */
+.cc-later { margin: 0; font-size: 12.5px; }
+
+/* P2's blank wraps its columns instead of scrolling inside a narrow field */
+.pl-blank.pl-blank-wrap { display: block; width: 100%; min-width: 22ch; max-width: 100%; box-sizing: border-box; margin: 2px 0; resize: vertical; line-height: 1.4; overflow: hidden; }
+
+/* Model: New link beside the drawing from 860 px, so the names and types stay in sight while a link is made (it was below the drawing under 1024 px) */
+@media (min-width: 860px) and (max-width: 1023px) {
+  .lk-grid:not(.is-wide) { grid-template-columns: minmax(0, 1fr) 300px; }
+  .lk-grid:not(.is-wide) .lk-panel { position: sticky; top: 0; }
+}

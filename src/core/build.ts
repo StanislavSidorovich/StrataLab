@@ -86,6 +86,17 @@ export const emptyBuild = (): BuildState => ({ done: [], open: 'connect', work: 
 /** The Model step can be marked done: F1 and F2 are made. */
 export const modelDone = (state: BuildState) => modelLinked(state.links)
 
+/**
+ * What the footer says the Model step waits for. It follows the screen: F1 and F2 do not exist until the star is built, so before
+ * that the line names the star, and after it the two links with how many are made.
+ */
+export function modelLockWhy(state: Pick<BuildState, 'links' | 'star'>): string {
+  if (modelLinked(state.links)) return 'you press Continue.'
+  if (!state.star) return 'you have linked the three tables and built the star, then made its two links (F1 and F2).'
+  const made = (['F1', 'F2'] as const).filter((id) => state.links.some((l) => l.id === id)).length
+  return `both star links are made (F1 and F2): ${made} of 2.`
+}
+
 const isStep = (v: unknown): v is StepId => typeof v === 'string' && (STEP_IDS as readonly string[]).includes(v)
 const isStrip = (v: unknown): v is StripId => isStep(v) || v === MORE_STEP || v === REFRESH_STEP
 

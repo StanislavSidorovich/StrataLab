@@ -257,7 +257,7 @@ export const CLEAN_CARDS: readonly CleanCard[] = [
     text: 'revenue and units are text too, and some are written with a comma (381,99).',
     hints: [
       'Look at the rows in error: 381,99 is written with a comma, and a number with a comma is not a number to the computer.',
-      'Set decimal separator to comma (3,5) next to Change type, then press it again on revenue and on units.',
+      'Open Change type and set its decimal separator to comma (3,5) inside the menu, then press Decimal on revenue and Whole number on units again.',
     ],
   },
 ]
@@ -617,7 +617,7 @@ export const MORE_QUESTIONS: readonly MoreQuestion[] = [
   {
     id: 'K3',
     title: 'Units returned in 2025',
-    question: 'How many units came back as returns in 2025?',
+    question: 'How many units came back as returns in 2025? Enter it as a positive number: in the table a return is a negative number of units, the answer is how many came back.',
     practises: 'WHERE on negative units, SUM',
     start: '-- Returns are sales with negative units.\n',
     numberLabel: 'Units',

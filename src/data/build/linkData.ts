@@ -76,6 +76,15 @@ export const LINK_TEXT = {
   lead1: 'Link the tables yourself. Sales name a store and a product by text; the reference tables have the ids. First link each text column to the table that describes it.',
   lead2: 'Now link the fact to its dimensions by id: that is the relationship a dashboard joins on.',
   idle: 'Click the column that names something, then the column it names. Sales name a store: start there.',
+  /** the first pass by what is made: L1 the store, L2 the product, L3 the region of the customer; the hint names the next one left */
+  idleFor: (made: readonly string[]) =>
+    !made.includes('L1')
+      ? 'Click the column that names something, then the column it names. Sales name a store: start there.'
+      : !made.includes('L2')
+        ? 'The store is linked. Now the product: click sku_code in sales, then sku_code in products.'
+        : !made.includes('L3')
+          ? 'The product is linked. Last one: customers name a region, so link region_id in customers to regions.'
+          : 'Click the column that names something, then the column it names.',
   idleStar: 'Click an id in fact_sales, then the same id in its dimension.',
   bridge: 'You linked by name to look the ids up. A store renamed tomorrow would break a link by name, so the star links by id. Your turn: link the fact to its dimensions.',
   lookupNote: 'Linked by name: fine for looking the id up. The star will link by id.',
@@ -90,13 +99,13 @@ export const LINK_TEXT = {
     title: 'Names that find no customer',
     action: 'Press Trim on `customer_name`, then Replace values: find Itiba, with Ichiba.',
     text: 'Some store names in the sales find no customer: spaces at the edges, and one chain written two ways. Then link again.',
-    hints: ['Group the sales by customer_name and look at the ones that start or end with a space, and at Itiba against Ichiba.', 'Pick customer_name in the column box next to Trim; Replace values uses the same box, and its find and with boxes are case-sensitive.'],
+    hints: ['Group the sales by customer_name and look at the ones that start or end with a space, and at Itiba against Ichiba.', 'Click the header of customer_name in the grid first; Trim and Replace values work on the column you clicked, and the find and with boxes are case-sensitive.'],
   },
   p7: {
     title: 'Region ids as numbers',
     action: 'Press Extract number with `region_id` chosen.',
     text: 'region_id is R-01 … R-16 here and 1 … 16 in customers, so the two cannot be linked.',
-    hints: ['The number is inside the text: R-03 is region 3.', 'Choose region_id in the column box next to Trim first. Example: R-03 becomes 3, R-16 becomes 16.'],
+    hints: ['The number is inside the text: R-03 is region 3.', 'Click the header of region_id in the grid first, then press Extract number. Example: R-03 becomes 3, R-16 becomes 16.'],
   },
 } as const
 

@@ -204,3 +204,9 @@ export function labelEvery(bandWidth: number, labelWidth: number): number {
 export function clip(text: string, max: number): string {
   return text.length > max ? `${text.slice(0, Math.max(1, max - 1))}…` : text
 }
+
+/** The anchor of an axis label centred on x: the first and the last one lean inward so the browser does not cut them at the frame. */
+export const edgeAnchor = (x: number, chars: number, width: number): 'start' | 'middle' | 'end' => {
+  const half = (chars * 6.5) / 2
+  return x - half < 2 ? 'start' : x + half > width - 2 ? 'end' : 'middle'
+}

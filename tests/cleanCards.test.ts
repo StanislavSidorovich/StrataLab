@@ -14,3 +14,23 @@ describe('Clean cards: the action comes first', () => {
     if (c.hints.length > 1) expect(c.hints[1]).not.toBe(c.action)
   })
 })
+
+describe('texts name buttons where the screen has them', () => {
+  const all = [...CLEAN_CARDS, { id: 'P4', ...LINK_TEXT.p4 }, { id: 'P7', ...LINK_TEXT.p7 }]
+  it('no hint sends the learner to a column box next to a button: the column is the header clicked in the grid', () => {
+    for (const c of all) for (const h of c.hints) expect(h, c.id).not.toMatch(/column box|next to (Trim|Change type)/i)
+  })
+  it('the decimal separator is said to be inside the Change type menu', () => {
+    const p6 = CLEAN_CARDS.find((c) => c.id === 'P6')!
+    expect(p6.hints.join(' ')).toMatch(/inside the menu/)
+  })
+})
+
+describe('the linking hint follows the links made', () => {
+  it('starts with the store, then the product, then the region', () => {
+    expect(LINK_TEXT.idleFor([])).toMatch(/store: start there/)
+    expect(LINK_TEXT.idleFor(['L1'])).toMatch(/product/)
+    expect(LINK_TEXT.idleFor(['L1']) ).not.toMatch(/start there/)
+    expect(LINK_TEXT.idleFor(['L1', 'L2'])).toMatch(/region/)
+  })
+})
