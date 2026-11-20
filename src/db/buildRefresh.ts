@@ -5,7 +5,7 @@ import { TILE_IDS, TILE_TABLE, T, GOLD_SQL, sourceById, type SalesMode } from '.
 import { FOLDER_FILES, JULY_FILE, REFRESH_TEXT } from '../data/build/refreshData'
 import { tileRunSql } from '../core/buildDashboard'
 import { starStatements, type Link } from '../core/buildLinks'
-import { nextRunNumber, type JournalRow, type RunSummary } from '../core/buildRefresh'
+import { isTest, nextRunNumber, type JournalRow, type RunSummary } from '../core/buildRefresh'
 import { SOURCE_IDS, countsSql, fileCountsSql, stepsOf, typedColumn, type BuildWork } from '../core/buildSteps'
 import { readableError } from '../core/sqlPractice'
 import { applySteps, connect, salesLock, stepErrors } from './buildRun'
@@ -15,6 +15,27 @@ const num = async (port: SqlPort, sql: string) => Number((await port.query(sql))
 const msg = (e: unknown) => readableError(String(e instanceof Error ? e.message : e)).split('\n')[0]
 const rowsOf = (port: SqlPort, table: string): Promise<number | null> => num(port, `SELECT count(*) FROM ${T(table)}`).catch(() => null)
 const strings = async (port: SqlPort, sql: string) => (await port.query(sql)).rows.map((r) => String(r[0]))
+
+const F = T('gold_fact_sales')
+const DC = T('gold_dim_customer')
+const DP = T('gold_dim_product')
+/** The four checks after the star. Each returns one number: 0 = pass. */
+export const STAR_TESTS: readonly { label: string; unit: string; sql: string; sample?: string }[] = [
+  {
+    label: 'every sale finds its customer (relationships)',
+    unit: 'orphan rows',
+    sql: `SELECT count(*) FROM ${F} f WHERE NOT EXISTS (SELECT 1 FROM ${DC} c WHERE c.customer_id = f.customer_id)`,
+    sample: `SELECT DISTINCT s.customer_name FROM ${T('clean_sales')} s WHERE NOT EXISTS (SELECT 1 FROM ${DC} c WHERE c.customer_name = s.customer_name) LIMIT 1`,
+  },
+  {
+    label: 'every sale finds its product (relationships)',
+    unit: 'orphan rows',
+    sql: `SELECT count(*) FROM ${F} f WHERE NOT EXISTS (SELECT 1 FROM ${DP} p WHERE p.product_id = f.product_id)`,
+    sample: `SELECT DISTINCT s.sku_code FROM ${T('clean_sales')} s WHERE NOT EXISTS (SELECT 1 FROM ${DP} p WHERE p.sku_code = s.sku_code) LIMIT 1`,
+  },
+  { label: 'each customer once (unique customer_id)', unit: 'repeated rows', sql: `SELECT count(*) - count(DISTINCT customer_id) FROM ${DC}` },
+  { label: 'each product once (unique sku_code)', unit: 'repeated rows', sql: `SELECT count(*) - count(DISTINCT sku_code) FROM ${DP}` },
+]
 
 export interface RefreshModel {
   links: readonly Link[]
@@ -127,8 +148,30 @@ export async function runRefresh(port: SqlPort, work: BuildWork, model: RefreshM
     }
   }
 
-  // ---- the dashboard tiles the learner built
   const starOk = !stop && rows.every((r) => r.status !== 'error')
+
+  // ---- tests on every run (dbt: relationships and unique): simple COUNT queries on the star just built. A failing check is a warning,
+  // a check that cannot run is one red line; neither stops the run.
+  for (const t of STAR_TESTS) {
+    const step = `Test: ${t.label}`
+    if (!starOk) {
+      add({ stage: 'model', source: null, step, rowsIn: null, rowsOut: null, status: 'skipped', count: 0, note: stop ? why : 'Not run: the star failed.', ms: 0 })
+      continue
+    }
+    try {
+      const [bad, ms] = await timed(() => num(port, t.sql))
+      let note = `${bad.toLocaleString('en-US')} ${t.unit}`
+      if (bad > 0 && t.sample) {
+        const s = await strings(port, t.sample).catch(() => [])
+        if (s.length) note += `, like '${s[0]}'`
+      }
+      add({ stage: 'model', source: null, step, rowsIn: null, rowsOut: null, status: bad > 0 ? 'warning' : 'ok', count: bad, note, ms })
+    } catch (e) {
+      add({ stage: 'model', source: null, step, rowsIn: null, rowsOut: null, status: 'error', count: 0, note: msg(e), ms: 0 })
+    }
+  }
+
+  // ---- the dashboard tiles the learner built
   for (const id of TILE_IDS) {
     const step = `Tile ${id}`
     if (!starOk) {
@@ -150,7 +193,7 @@ export async function runRefresh(port: SqlPort, work: BuildWork, model: RefreshM
     bronze: (await rowsOf(port, 'bronze_sales')) ?? 0,
     clean: (await rowsOf(port, 'clean_sales')) ?? 0,
     errors: rows.filter((r) => r.status === 'error').reduce((a, r) => a + r.count, 0) || (rows.some((r) => r.status === 'error') ? 1 : 0),
-    warnings: rows.filter((r) => r.status === 'warning').length,
+    warnings: rows.filter((r) => r.status === 'warning' && !isTest(r)).length,
   }
   return { rows, summary }
 }

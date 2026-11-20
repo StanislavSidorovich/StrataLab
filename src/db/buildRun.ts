@@ -278,6 +278,9 @@ export interface OddValues {
   noRevenue: number
   noUnits: number
   returns: number
+  /** of the returns, the ones with a positive revenue (the sign the text may not promise) */
+  returnsPositive: number
+  returnsNegative: number
 }
 
 /** P8: counted in the clean sales as they are now; null when units or revenue are not numbers yet. */
@@ -285,8 +288,8 @@ export async function oddValues(port: SqlPort): Promise<OddValues | null> {
   const cols = await describeTable(port, 'clean_sales')
   const family = (c: string) => typeFamily(cols.find((x) => x.name === c)?.type ?? '')
   if (family('units') !== 'number' || family('revenue') !== 'number') return null
-  const r = (await port.query(`SELECT count(*) FILTER (WHERE revenue IS NULL), count(*) FILTER (WHERE units IS NULL), count(*) FILTER (WHERE units < 0) FROM ${T('clean_sales')}`)).rows[0]
-  return { noRevenue: Number(r[0]), noUnits: Number(r[1]), returns: Number(r[2]) }
+  const r = (await port.query(`SELECT count(*) FILTER (WHERE revenue IS NULL), count(*) FILTER (WHERE units IS NULL), count(*) FILTER (WHERE units < 0), count(*) FILTER (WHERE units < 0 AND revenue > 0), count(*) FILTER (WHERE units < 0 AND revenue < 0) FROM ${T('clean_sales')}`)).rows[0]
+  return { noRevenue: Number(r[0]), noUnits: Number(r[1]), returns: Number(r[2]), returnsPositive: Number(r[3]), returnsNegative: Number(r[4]) }
 }
 
 /** Rows with at least one [Error] cell. */

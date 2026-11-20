@@ -6,7 +6,8 @@ import { resolve } from 'node:path'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { emptyBuild, isUnlocked, markDone, nextStep, openStep, readBuild, statusOf, STEP_IDS } from '../src/core/build'
 import { RIGHT_BLANKS, fillBefore, fillUnit, touchesTables, unitsOf } from '../src/core/buildFill'
-import { checkR1, emptyRefresh, nextRunNumber, pushRun, readRefresh, runGreen, runLine, statusText } from '../src/core/buildRefresh'
+import { oddText } from '../src/core/buildOdd'
+import { checkR1, emptyRefresh, isTest, testProblems, nextRunNumber, pushRun, readRefresh, runGreen, runLine, statusText } from '../src/core/buildRefresh'
 import { datesSql, emptyWork, makeStep, readWork, type BuildWork } from '../src/core/buildSteps'
 import { BUILD_SOURCES, CONNECT_SQL, SALES_PATTERN, sourceById } from '../src/data/build/kaiyoSales'
 import { EXPECTED_LINKS } from '../src/data/build/linkData'
@@ -253,7 +254,7 @@ describe('Refresh on the real engine', () => {
   it('P8: 174 revenues, 82 units and 106 returns in the clean sales of the 30 months', async () => {
     const w = rightWork()
     await applySteps(port, 'sales', w.steps.sales)
-    expect(await oddValues(port)).toEqual({ noRevenue: 174, noUnits: 82, returns: 106 })
+    expect(await oddValues(port)).toMatchObject({ noRevenue: 174, noUnits: 82, returns: 106 })
   })
 
   it('P8 needs typed columns: with the sales still text there is nothing to count', async () => {
@@ -265,14 +266,14 @@ describe('Refresh on the real engine', () => {
     const w = rightWork()
     const run = await runRefresh(port, w, { links, star: true })
     const r = run.rows
-    expect(r).toHaveLength(22)
-    expect(r.map((x) => x.n)).toEqual(Array.from({ length: 22 }, (_, i) => i + 1))
+    expect(r).toHaveLength(26)
+    expect(r.map((x) => x.n)).toEqual(Array.from({ length: 26 }, (_, i) => i + 1))
     expect(r[0]).toMatchObject({ stage: 'bronze', source: 'sales', rowsIn: 3110, rowsOut: 3110, status: 'warning', count: 1 })
     expect(r[0].note).toMatch(/the new file was not read/)
     expect(r.slice(1, 4).every((x) => x.stage === 'bronze' && x.status === 'ok')).toBe(true)
     const dedup = r.find((x) => x.step === 'Removed sales sent twice')!
     expect([dedup.rowsIn, dedup.rowsOut]).toEqual([3110, 3000])
-    expect(r.filter((x) => x.stage === 'model').map((x) => x.rowsOut)).toEqual([144, 47, 3000])
+    expect(r.filter((x) => x.stage === 'model' && x.step.startsWith('Build')).map((x) => x.rowsOut)).toEqual([144, 47, 3000])
     expect(r.filter((x) => x.stage === 'dashboard').map((x) => [x.rowsOut, x.status])).toEqual([[1, 'ok'], [30, 'ok'], [5, 'ok']])
     expect(run.summary).toEqual({ n: 1, bronze: 3110, clean: 3000, errors: 0, warnings: 1 })
     expect(runGreen(r)).toBe(false)
@@ -308,10 +309,10 @@ describe('Refresh on the real engine', () => {
     w.steps.sales = w.steps.sales.map((s) => (s.kind === 'dates' ? { ...s, params: { ...s.params, format2: '%Y/%m/%d' } } : s))
     const run = await runRefresh(port, w, { links, star: true })
     expect(runGreen(run.rows)).toBe(true)
-    expect(run.rows.map((x) => x.status)).toEqual(Array(22).fill('ok'))
+    expect(run.rows.map((x) => x.status)).toEqual(Array(26).fill('ok'))
     expect(run.summary).toEqual({ n: 1, bronze: 3222, clean: 3104, errors: 0, warnings: 0 })
     expect(await salesLock(port)).toBe(0)
-    expect(run.rows.filter((x) => x.stage === 'model').map((x) => x.rowsOut)).toEqual([144, 47, 3104])
+    expect(run.rows.filter((x) => x.stage === 'model' && x.step.startsWith('Build')).map((x) => x.rowsOut)).toEqual([144, 47, 3104])
     expect(run.rows.filter((x) => x.stage === 'dashboard').map((x) => x.rowsOut)).toEqual([1, 31, 5])
     // the KPI says H1 because its WHERE says H1
     expect(String((await q('SELECT * FROM build_kaiyo.tile_kpi'))[0][0])).toBe('314906.13')
@@ -346,7 +347,7 @@ describe('Refresh on the real engine', () => {
 
   it('P8 in the state with July is recounted, not copied from the 30 months', async () => {
     const odd = await oddValues(port)
-    expect(odd).toEqual({ noRevenue: 175, noUnits: 83, returns: 109 })
+    expect(odd).toMatchObject({ noRevenue: 175, noUnits: 83, returns: 109 })
   })
 
   it('a wrong format in the blank leaves the dates in error and the run red again', async () => {
@@ -356,5 +357,102 @@ describe('Refresh on the real engine', () => {
     const run = await runRefresh(port, w, { links, star: true })
     expect(run.rows.find((x) => x.step.startsWith('Converted sale_date'))!.status).toBe('error')
     expect(runGreen(run.rows)).toBe(false)
+  })
+
+  // ---- v0.66.0: the tests after the star, on every run (dbt relationships and unique)
+  const patternWork = () => {
+    const w = rightWork()
+    w.refresh.mode = 'pattern'
+    w.steps.sales = w.steps.sales.map((s) => (s.kind === 'dates' ? { ...s, params: { ...s.params, format2: '%Y/%m/%d' } } : s))
+    return w
+  }
+  type Rows = Awaited<ReturnType<typeof runRefresh>>['rows']
+  const tests = (rows: Rows) => rows.filter(isTest)
+  /** a port that runs `after` right after a statement that matches `re` */
+  const tamper = (re: RegExp, after: string): SqlPort => ({
+    ...port,
+    query: async (sql) => {
+      const r = await port.query(sql)
+      if (re.test(sql)) await port.query(after)
+      return r
+    },
+  })
+
+  it('Refresh runs four tests after the star; on the real data all pass with "0 orphan rows"', async () => {
+    const run = await runRefresh(port, patternWork(), { links, star: true })
+    const t = tests(run.rows)
+    expect(t).toHaveLength(4)
+    expect(t.map((x) => x.status)).toEqual(['ok', 'ok', 'ok', 'ok'])
+    expect(t.map((x) => x.note)).toEqual(['0 orphan rows', '0 orphan rows', '0 repeated rows', '0 repeated rows'])
+    const at = (name: string) => run.rows.findIndex((x) => x.step.startsWith(name))
+    expect(at('Test:')).toBeGreaterThan(at('Build gold_fact_sales'))
+    expect(at('Test:')).toBeLessThan(at('Tile'))
+    expect(testProblems(run.rows)).toBe(0)
+    expect(runGreen(run.rows)).toBe(true)
+  })
+
+  it('running twice leaves one block of four lines, not eight (the journal is the run, replaced)', async () => {
+    const a = await runRefresh(port, patternWork(), { links, star: true })
+    const b = await runRefresh(port, patternWork(), { links, star: true })
+    expect(tests(a.rows)).toHaveLength(4)
+    expect(tests(b.rows)).toHaveLength(4)
+    expect(b.rows.map((x) => x.n)).toEqual(b.rows.map((_, i) => i + 1))
+  })
+
+  it('a sale with a customer nobody has is a warning with a count, and the run still finishes', async () => {
+    const broken = tamper(/CREATE OR REPLACE TABLE \S+gold_fact_sales/, `INSERT INTO build_kaiyo.gold_fact_sales VALUES (DATE '2026-01-05', 99999, 1, 1, 10.00)`)
+    const run = await runRefresh(broken, patternWork(), { links, star: true })
+    const t = tests(run.rows)
+    expect(t.map((x) => x.status)).toEqual(['warning', 'ok', 'ok', 'ok'])
+    expect(t[0].count).toBe(1)
+    expect(t[0].note).toMatch(/^1 orphan rows/)
+    expect(statusText(t[0])).toBe('warning: 1 row')
+    expect(run.rows.some((x) => x.status === 'error')).toBe(false)
+    expect(run.rows.filter((x) => x.stage === 'dashboard').every((x) => x.status === 'ok')).toBe(true)
+    expect(testProblems(run.rows)).toBe(1)
+    expect(runGreen(run.rows)).toBe(true)
+    expect(run.summary.warnings).toBe(0)
+  })
+
+  it('a product listed twice is caught by the unique test', async () => {
+    const broken = tamper(/CREATE OR REPLACE TABLE \S+gold_dim_product/, `INSERT INTO build_kaiyo.gold_dim_product SELECT * FROM build_kaiyo.gold_dim_product LIMIT 2`)
+    const t = tests((await runRefresh(broken, patternWork(), { links, star: true })).rows)
+    expect(t.map((x) => x.status)).toEqual(['ok', 'ok', 'ok', 'warning'])
+    expect(t[3].count).toBe(2)
+  })
+
+  it('a check that throws is one red line with the error text; the other tests and the tiles go on', async () => {
+    const broken: SqlPort = {
+      ...port,
+      query: async (sql) => {
+        if (sql.includes('count(DISTINCT customer_id) FROM')) throw new Error('Catalog Error: boom')
+        return port.query(sql)
+      },
+    }
+    const run = await runRefresh(broken, patternWork(), { links, star: true })
+    const t = tests(run.rows)
+    expect(t.map((x) => x.status)).toEqual(['ok', 'ok', 'error', 'ok'])
+    expect(t[2].note).toContain('boom')
+    expect(run.rows.filter((x) => x.stage === 'dashboard').every((x) => x.status === 'ok')).toBe(true)
+    expect(runGreen(run.rows)).toBe(false)
+  })
+
+  it('with the star not built (a red clean step) the four tests are "not run", not errors', async () => {
+    const w = patternWork()
+    w.steps.sales = w.steps.sales.map((s) => (s.kind === 'dates' ? { ...s, params: { ...s.params, format2: '' } } : s))
+    const run = await runRefresh(port, w, { links, star: true })
+    expect(tests(run.rows).map((x) => x.status)).toEqual(['skipped', 'skipped', 'skipped', 'skipped'])
+  })
+
+  it('P8 text: the count comes from the data, and the revenue sign claim is true on it', async () => {
+    const w = rightWork()
+    await connect(port, 'sales', 'list')
+    await applySteps(port, 'sales', w.steps.sales)
+    const odd = (await oddValues(port))!
+    expect(odd.returns).toBe(106)
+    // checked on the data: no return has a negative revenue; 102 have a positive one, 4 have none
+    expect(odd.returnsNegative).toBe(0)
+    expect(odd.returnsPositive).toBe(102)
+    expect(oddText(odd)).toContain('106 have negative units (returns). Where there is a revenue (102 of them) it came positive')
   })
 })

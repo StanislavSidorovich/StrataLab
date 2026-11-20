@@ -1,0 +1,4 @@
+/* v0.66.0: the Test lines of the Refresh journal and the note under them */
+.rf-testnote { margin: 0; font-size: 13px; }
+.rf-testwarn { margin: 0; padding: 8px 10px; border-left: 3px solid var(--warn-text); background: var(--bg-soft, transparent); font-size: 13px; color: var(--warn-text); }
+.rf-row[data-test="1"] .rf-step { font-weight: 500; }

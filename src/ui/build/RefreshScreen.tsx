@@ -1,11 +1,11 @@
 // The optional step Refresh (spec docs/build-kaiyo-sales-spec.md, 5.7): a new file arrives in the sales folder, the learner runs the
 // whole chain again and reads the journal. Three moments: the source reads a fixed list and misses the file (switch it to a pattern),
 // the run shows the known dirt cleaned by the learner's own steps, and a new date spelling fails the date step (fix it, run again).
-import { FABRIC_REFRESH } from '../../data/build/fabricNotes'
+import { FABRIC_REFRESH, REFRESH_HONESTY, TEST_NOTE } from '../../data/build/fabricNotes'
 import './fabric.css'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowRight, Check, CheckCircle2, FolderOpen, Lightbulb, Loader2, Play } from 'lucide-react'
-import { checkR1, nextRunNumber, pushRun, runGreen, runLine, statusText, STAGE_LABEL, type JournalRow } from '../../core/buildRefresh'
+import { checkR1, isTest, nextRunNumber, testProblems, pushRun, runGreen, runLine, statusText, STAGE_LABEL, type JournalRow } from '../../core/buildRefresh'
 import { CLEAN_COLUMNS, checkFormat, datesSql, type BuildWork } from '../../core/buildSteps'
 import type { ResultData } from '../../core/check'
 import { CONNECT_SQL, REFRESH_RETURN_URL, SALES_PATTERN, sourceById, type SalesMode } from '../../data/build/kaiyoSales'
@@ -18,6 +18,7 @@ import { CountInQuaera } from './CountInQuaera'
 import { FillButton, useDemo } from './DemoContext'
 import './more.css'
 import './refresh.css'
+import './topFive.css'
 
 interface Props {
   work: BuildWork
@@ -67,8 +68,10 @@ export function RefreshScreen({ work, setWork, ready, model, onRan, onOpen, onDa
   const dates = work.steps.sales.find((s) => s.kind === 'dates')
   const showFix = !!dates && r.mode === 'pattern' && (dateRowBad || !!dates.params.format2)
 
+  const busy = useRef(false)
   const run = async (w: BuildWork) => {
-    if (!ready || running) return
+    if (!ready || running || busy.current) return
+    busy.current = true
     setRunning(true)
     setLive([])
     setError(null)
@@ -79,6 +82,7 @@ export function RefreshScreen({ work, setWork, ready, model, onRan, onOpen, onDa
     } catch (e) {
       setError(String(e instanceof Error ? e.message : e))
     } finally {
+      busy.current = false
       setRunning(false)
     }
   }
@@ -112,6 +116,7 @@ export function RefreshScreen({ work, setWork, ready, model, onRan, onOpen, onDa
     <div className="space-y-4" data-testid="build-refresh">
       <p className="build-lead">{REFRESH_TEXT.lead}</p>
       <p className="build-muted build-fabric" data-testid="fabric-refresh">{FABRIC_REFRESH}</p>
+      <p className="build-muted build-fabric" data-testid="refresh-honesty">{REFRESH_HONESTY}</p>
 
       <section className="rf-card" data-testid="refresh-folder">
         <header className="rf-head">
@@ -149,6 +154,16 @@ export function RefreshScreen({ work, setWork, ready, model, onRan, onOpen, onDa
         </div>
         {error && <div className="build-error" role="alert">{error}</div>}
         {journal.length > 0 && <Journal rows={journal} onOpen={onOpen} />}
+        {!running && journal.some(isTest) && (
+          <>
+            {testProblems(journal) > 0 && (
+              <div className="rf-testwarn" role="status" data-testid="refresh-test-warning">
+                A check found something: read the Test lines of the journal. The run went on, the numbers below include these rows.
+              </div>
+            )}
+            <p className="build-muted rf-testnote" data-testid="refresh-test-note">{TEST_NOTE}</p>
+          </>
+        )}
         {!running && r.runs.length > 0 && (
           <div data-testid="refresh-history">
             <div className="build-muted">{REFRESH_TEXT.history}</div>
@@ -276,7 +291,7 @@ function Journal({ rows, onOpen }: { rows: JournalRow[]; onOpen: (row: JournalRo
         </thead>
         <tbody>
           {rows.map((x) => (
-            <tr key={x.n} className={`rf-row is-${x.status}`} data-status={x.status} data-testid={`journal-row-${x.n}`}>
+            <tr key={x.n} className={`rf-row is-${x.status}`} data-status={x.status} data-test={isTest(x) ? '1' : undefined} data-testid={`journal-row-${x.n}`}>
               <td>{x.n}</td>
               <td>{STAGE_LABEL[x.stage]}{x.source ? <span className="rf-src"> · {x.source}</span> : null}</td>
               <td>

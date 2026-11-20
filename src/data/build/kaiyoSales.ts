@@ -183,7 +183,7 @@ LIMIT 1`,
 
 export const QUICK_LOOK_TEXT = {
   title: 'Quick look',
-  lead: 'All four files are in. Before cleaning anything, a first look at the sales as they came: two numbers for the Head of Sales.',
+  lead: 'All four files are in. A first look at the sales before the real fixes: Lab read the dates, commas and names the quick way (the SQL is below), but the copies and the stale customers are still in. Two numbers for the Head of Sales.',
   kpiLabel: 'Revenue, January to June 2026',
   chainLabel: 'First chain, January to June 2026',
   remember: 'Remember these numbers. After the cleaning you will see them again.',
@@ -202,6 +202,8 @@ export interface CleanCard {
   action: string
   /** the second line: what is wrong in the data and why it matters */
   text: string
+  /** an optional third line: the name of what the card does in data-engineering words */
+  note?: string
   /** first: what to look at; second: the setting or an example (never the action line again) */
   hints: readonly string[]
 }
@@ -233,6 +235,7 @@ export const CLEAN_CARDS: readonly CleanCard[] = [
     title: 'Stores twice in customers.csv',
     action: 'Press Keep latest row per key: key `customer_id`, order by `updated_at`, Newest.',
     text: '4 stores are in customers.csv twice. Every sale of theirs would be counted twice.',
+    note: 'Keeping the latest row is called SCD Type 1: past sales move to the current city of the store. Keeping both rows with dates is Type 2.',
     hints: [
       'Look at the two rows of Nagisa #1045: the city differs, and so does updated_at. Which one is the store today?',
       'Remove duplicates does not work here: the two rows differ in city and date. The rule is "the newest row of each customer_id stays".',

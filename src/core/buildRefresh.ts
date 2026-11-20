@@ -93,7 +93,7 @@ export function readRefresh(raw: unknown): RefreshWork {
   if (r.mode === 'pattern') w.mode = 'pattern'
   if (typeof r.format2 === 'string') w.format2 = r.format2.slice(0, 30)
   if (Array.isArray(r.runs)) w.runs = r.runs.map(readRun).filter((x): x is RunSummary => !!x).slice(-3)
-  if (Array.isArray(r.journal)) w.journal = r.journal.map(readRow).filter((x): x is JournalRow => !!x).slice(0, 60)
+  if (Array.isArray(r.journal)) w.journal = r.journal.map(readRow).filter((x): x is JournalRow => !!x).slice(0, 80)
   const a = r.answer as Partial<AnswerInput> | undefined
   if (a && typeof a.number === 'string') w.answer.number = a.number.slice(0, 40)
   if (r.done === true) w.done = true
@@ -107,7 +107,14 @@ export const nextRunNumber = (runs: readonly RunSummary[]): number => (runs.leng
 export const pushRun = (runs: readonly RunSummary[], run: RunSummary): RunSummary[] => [...runs, run].slice(-3)
 
 /** The run is green: nothing in the journal but ok lines. A warning is not green: something was left out. */
-export const runGreen = (rows: readonly JournalRow[]): boolean => rows.length > 0 && rows.every((r) => r.status === 'ok')
+/** A line of the tests after the star (dbt: relationships, unique). */
+export const isTest = (r: Pick<JournalRow, 'step'>): boolean => r.step.startsWith('Test: ')
+
+/** A failing test is a warning to read, not a reason to hide R1: only the other lines decide whether the run is green. */
+export const runGreen = (rows: readonly JournalRow[]): boolean => rows.length > 0 && rows.every((r) => r.status === 'ok' || (r.status === 'warning' && isTest(r)))
+
+/** Test lines that did not pass: warnings (rows found) and errors (the check could not run). */
+export const testProblems = (rows: readonly JournalRow[]): number => rows.filter((r) => isTest(r) && (r.status === 'warning' || r.status === 'error')).length
 
 export const runHasErrors = (rows: readonly JournalRow[]): boolean => rows.some((r) => r.status === 'error')
 
@@ -120,11 +127,12 @@ export function runLine(r: RunSummary): string {
 }
 
 /** How a status reads in the journal. */
-export function statusText(row: Pick<JournalRow, 'status' | 'count'>): string {
+export function statusText(row: Pick<JournalRow, 'status' | 'count'> & { step?: string }): string {
   switch (row.status) {
     case 'ok':
       return 'ok'
     case 'warning':
+      if (row.step && isTest(row as Pick<JournalRow, 'step'>)) return `warning: ${n(row.count)} ${row.count === 1 ? 'row' : 'rows'}`
       return row.count > 0 ? `warning: ${n(row.count)} ${row.count === 1 ? 'file' : 'files'} not read` : 'warning'
     case 'error':
       return row.count > 0 ? `error: ${n(row.count)} rows [Error]` : 'error'

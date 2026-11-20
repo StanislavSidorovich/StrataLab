@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ArrowRight, Check, ExternalLink, Hammer, Loader2, RotateCcw, X } from 'lucide-react'
 import { acceptedLabel, addLink, canBuildStar, diagnoseLink, dragPair, linksOfPass, modelLinked, removeLink, sameLink, slotName, starSql, type Fix, type Link, type LinkDiagnosis, type Slot } from '../../core/buildLinks'
 import type { BuildSourceId } from '../../data/build/kaiyoSales'
+import { GRAIN_NOTE } from '../../data/build/fabricNotes'
 import { LINK_TEXT, PASS_TABLES, type Pass } from '../../data/build/linkData'
 import { buildStar, describeTable, linkFacts, linkPeek, starFacts, type ChainPeek, type StarFacts } from '../../db/buildRun'
 import { checkpoint } from '../../db/engine'
@@ -16,6 +17,7 @@ import { LinkCanvas, type PendingLine, type TableView } from './LinkCanvas'
 import { LinkPanel, type Run, type SlotState } from './LinkPanel'
 import { FillButton } from './DemoContext'
 import { OpenStarInModel } from './OpenStarInModel'
+import './fabric.css'
 import './dashboard.css'
 import './linking.css'
 
@@ -218,6 +220,7 @@ export function ModelScreen(p: Props) {
   return (
     <div className="lk" data-testid="build-model" onKeyDown={(e) => e.key === 'Escape' && (setMany(EMPTY), setOne(EMPTY))}>
       <p className="build-lead">{legacy ? 'The cleaned tables are linked into a star: sales in the middle, customers and products around them.' : pass === 1 ? LINK_TEXT.lead1 : LINK_TEXT.lead2}</p>
+      <p className="build-muted build-fabric" data-testid="model-grain">{GRAIN_NOTE}</p>
       <FillButton unit={{ step: 'model' }} hidden={done} />
       {error && <div className="build-error" role="alert">{error}</div>}
       {legacy && (

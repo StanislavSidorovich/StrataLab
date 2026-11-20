@@ -1,7 +1,8 @@
 // Step 2 of the build page: Clean (spec section 3). Four cards open one after the other (W watched, P1 products by
 // buttons, P2 sales by a blank, P3 customers by a button with settings); the panel under them shows any source with its
 // toolbar and applied steps, so the learner chooses the tool and the check judges the table.
-import { FABRIC_CLEAN } from '../../data/build/fabricNotes'
+import { oddText } from '../../core/buildOdd'
+import { FABRIC_CLEAN, VOCAB_CLEAN } from '../../data/build/fabricNotes'
 import './fabric.css'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { ArrowRight, Check, CheckCircle2, Lightbulb, Loader2, X, XCircle } from 'lucide-react'
@@ -250,7 +251,7 @@ export function CleanScreen({ work, setWork, ready, rebuild, rev, focus, onBackT
           )}
           {card && <FillButton unit={{ step: 'clean', card: card.id }} hidden={passed} />}
         </div>
-        {card && card.id !== 'W' && !justPassed && <ActionText action={card.action} text={card.text} />}
+        {card && card.id !== 'W' && !justPassed && <ActionText action={card.action} text={card.text} note={card.note} />}
         {card && card.id === 'W' && <p className="build-muted" style={{ margin: 0 }}>{card.text}</p>}
         {later > 0 && !justPassed && (
           <p className="build-muted cc-later" data-testid="clean-later">
@@ -312,6 +313,7 @@ export function CleanScreen({ work, setWork, ready, rebuild, rev, focus, onBackT
       <details className="cc-notes" data-testid="clean-notes">
         <summary>Notes: this list in Power BI and Fabric · what Lab already typed for you</summary>
         <p className="build-muted build-fabric" data-testid="fabric-clean">{FABRIC_CLEAN}</p>
+        <p className="build-muted build-fabric" data-testid="vocab-clean">{VOCAB_CLEAN}</p>
         <p className="build-muted" style={{ margin: '0 0 4px' }}>{GIVEN_NOTE} It is the first step in the list of sales, marked “given”. Pick sales in the Queries list and look at Applied steps.</p>
       </details>
       {!wide && stack}
@@ -363,13 +365,14 @@ function ExtraChips({ chips, onOpen }: { chips: ExtraChip[]; onOpen: (c: ExtraCh
 }
 
 /** The first line says what to press (a `name` in backticks is a button label or a column), the second what is wrong. */
-function ActionText({ action, text }: { action: string; text: string }) {
+function ActionText({ action, text, note }: { action: string; text: string; note?: string }) {
   return (
     <div className="build-action">
       <p className="build-action-do" data-testid="clean-action">
         {action.split('`').map((part, i) => (i % 2 ? <code key={i}>{part}</code> : part))}
       </p>
       <p className="build-action-why">{text}</p>
+      {note && <p className="build-action-why build-muted" data-testid="clean-note">{note}</p>}
     </div>
   )
 }
@@ -668,7 +671,7 @@ function NumberNote({ work, errs }: { work: BuildWork; errs: Record<ErrorColumn,
   )
 }
 
-/** P8 (spec 3.0): an info card, nothing to fix. Odd values that are not errors: an empty revenue stays NULL, a return stays negative. */
+/** P8 (spec 3.0): an info card, nothing to fix. Odd values that are not errors: an empty revenue stays NULL, a return stays as sent. */
 function OddCard({ work, setWork, ready, rev }: { work: BuildWork; setWork: Props['setWork']; ready: boolean; rev: number }) {
   const [odd, setOdd] = useState<OddValues | null>(null)
   useEffect(() => {
@@ -691,9 +694,9 @@ function OddCard({ work, setWork, ready, rev }: { work: BuildWork; setWork: Prop
           <div className="build-muted">sales · nothing to fix</div>
         </div>
       </div>
-      <ActionText action={work.p8 ? 'Nothing to change here.' : 'Read the three numbers, then press Got it.'} text="Not every odd value is an error: an empty revenue stays NULL, a return stays negative." />
+      <ActionText action={work.p8 ? 'Nothing to change here.' : 'Read the three numbers, then press Got it.'} text="Not every odd value is an error: an empty revenue stays NULL, a return stays as it was sent." />
       <p style={{ margin: 0 }} data-testid="clean-p8-numbers">
-        {fmtN(odd.noRevenue)} sales have no revenue, {fmtN(odd.noUnits)} have no units, and {fmtN(odd.returns)} have negative units (returns).
+        {oddText(odd)}
       </p>
       {!work.p8 && (
         <div>
