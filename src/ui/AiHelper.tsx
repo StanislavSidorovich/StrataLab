@@ -5,20 +5,15 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   AlertTriangle,
-  Check,
-  Copy,
   ExternalLink,
   KeyRound,
   Loader2,
   Mic,
   MicOff,
-  PlusSquare,
-  Replace,
   Send,
   Settings,
   ShieldAlert,
   Sparkles,
-  TextCursorInput,
   Trash2,
   X,
 } from 'lucide-react'
@@ -34,7 +29,6 @@ import {
   DEFAULT_AI_MODELS,
   appendDictatedText,
   nextAiSpeechLang,
-  parseAiReplyBlocks,
   parseAiSpeechLang,
   type AiProvider,
   type AiQuickAction,
@@ -105,17 +99,15 @@ function saveSpeechLang(lang: AiSpeechLang) {
   }
 }
 import { SidePanelHandle, useSidePanelWidth } from './useSidePanelWidth'
-import { AddDecisionButton, AiDecisions, AiSees, NewConversationButton } from './AiConversation'
+import { AiDecisions, AiSees, NewConversationButton } from './AiConversation'
+import { AiFeed } from './AiFeed'
 import {
   askAi,
   cancelAiConsent,
   cancelAiRequest,
   confirmAiConsent,
-  insertAiCodeAtCursor,
-  insertAiCodeCell,
   openAiSettings,
   removeAiApiKey,
-  replaceAiCodeCell,
   requestEnableAi,
   setAiApiKey,
   setAiBaseUrl,
@@ -137,37 +129,6 @@ const PROVIDER_FULL_LABELS: Record<AiProvider, string> = {
   gemini: 'Google Gemini',
   claude: 'Anthropic Claude',
   openai: 'Ollama, LM Studio, OpenRouter',
-}
-
-function CopyCodeButton({ code }: { code: string }) {
-  const [status, setStatus] = useState<'idle' | 'copied' | 'unavailable'>('idle')
-  const onCopy = async () => {
-    try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(code)
-        setStatus('copied')
-        setTimeout(() => setStatus('idle'), 1200)
-        return
-      }
-    } catch {
-      /* fallback notice below */
-    }
-    setStatus('unavailable')
-    useLab.setState({ notice: 'Clipboard is unavailable in this browser. Select the code block and copy it manually.' })
-    setTimeout(() => setStatus('idle'), 2400)
-  }
-  return (
-    <button
-      type="button"
-      className="btn btn-ghost shrink-0"
-      style={{ padding: '2px 6px', fontSize: 11.5 }}
-      onClick={() => void onCopy()}
-      title="Copy code"
-    >
-      {status === 'copied' ? <Check size={12} /> : <Copy size={12} />}
-      <span>{status === 'copied' ? 'Copied' : status === 'unavailable' ? 'Copy manually' : 'Copy'}</span>
-    </button>
-  )
 }
 
 export function AiSettingsDialog() {
@@ -875,12 +836,13 @@ export function AiHelperPanel() {
               >
                 <Loader2 size={14} className="animate-spin shrink-0" />
                 <span className="truncate">
-                  Asking {providerLabel}: {req.promptLabel}…
+                  Asking {providerLabel}: {req.promptLabel}
+                  {req.tabId && tab && req.tabId !== tab.id ? ' (in another tab)' : ''}…
                 </span>
               </div>
             )}
 
-            {req.status === 'error' && (
+            {req.status === 'error' && (!req.tabId || !tab || req.tabId === tab.id) && (
               <div
                 className="rounded-lg p-3 space-y-2"
                 style={{ background: 'var(--danger-soft)', color: 'var(--danger)' }}
@@ -903,79 +865,7 @@ export function AiHelperPanel() {
               </div>
             )}
 
-            {req.status === 'done' && (
-              <div
-                className="rounded-lg p-3 space-y-2.5"
-                style={{ background: 'var(--panel-2)', border: '1px solid var(--line)' }}
-              >
-                <div className="flex items-center justify-between gap-2" style={{ color: 'var(--muted)', fontSize: 11 }}>
-                  <span className="truncate">
-                    {PROVIDER_LABELS[req.provider]} · <code className="mono">{req.model}</code>
-                  </span>
-                  <span className="truncate">{req.promptLabel}</span>
-                </div>
-                <div className="space-y-2.5">
-                  {parseAiReplyBlocks(req.text).map((block, idx) =>
-                    block.kind === 'text' ? (
-                      <div key={idx} className="whitespace-pre-wrap leading-relaxed" style={{ color: 'var(--text)' }}>
-                        {block.text}
-                      </div>
-                    ) : (
-                      <div
-                        key={idx}
-                        className="rounded-md overflow-hidden"
-                        style={{ border: '1px solid var(--line)', background: 'var(--code-bg)' }}
-                      >
-                        <div
-                          className="flex flex-wrap items-center gap-1 px-2 py-1"
-                          style={{ background: 'var(--panel)', borderBottom: '1px solid var(--line)', fontSize: 11 }}
-                        >
-                          <span className="mono mr-auto min-w-0 truncate" style={{ color: 'var(--muted)' }}>
-                            {block.lang || 'code'}
-                          </span>
-                          <CopyCodeButton code={block.code} />
-                          <button
-                            type="button"
-                            className="btn btn-ghost shrink-0"
-                            style={{ padding: '2px 6px', fontSize: 11.5, color: 'var(--accent)' }}
-                            onClick={() => insertAiCodeCell(block.code)}
-                            title="Insert below current cell without running it"
-                          >
-                            <PlusSquare size={12} /> Insert as new cell
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-ghost shrink-0"
-                            style={{ padding: '2px 6px', fontSize: 11.5, color: 'var(--accent)' }}
-                            onClick={() => replaceAiCodeCell(block.code)}
-                            title="Replace current cell content (preserving # %% boundary; Ctrl+Z to undo)"
-                          >
-                            <Replace size={12} /> Replace current cell
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-ghost shrink-0"
-                            style={{ padding: '2px 6px', fontSize: 11.5, color: 'var(--accent)' }}
-                            onClick={() => insertAiCodeAtCursor(block.code)}
-                            title="Insert code at current cursor position (Ctrl+Z to undo)"
-                          >
-                            <TextCursorInput size={12} /> Insert at cursor
-                          </button>
-                        </div>
-                        <pre className="mono p-2 overflow-x-auto whitespace-pre" style={{ fontSize: 11.5 }}>
-                          {block.code}
-                        </pre>
-                      </div>
-                    ),
-                  )}
-                </div>
-                {tab && req.tabId === tab.id && (
-                  <div className="flex">
-                    <AddDecisionButton tabId={tab.id} reply={req.text} />
-                  </div>
-                )}
-              </div>
-            )}
+            {tab && <AiFeed tabId={tab.id} />}
           </>
         )}
       </div>

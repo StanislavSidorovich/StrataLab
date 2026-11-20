@@ -1,4 +1,4 @@
-// What the AI helper remembers and what it sees (v0.62.0): the "Sees" line with the exact request,
+// What the AI helper remembers and what it sees (v0.62.0, feed v0.63.0): the "Sees" line with the exact request,
 // the tab's "Decisions so far" note, "New conversation", and "Add to decisions" under a reply.
 import { useMemo, useState } from 'react'
 import { BookMarked, Check, ChevronDown, ChevronRight, Copy, Eye, MessageSquarePlus } from 'lucide-react'
@@ -39,7 +39,7 @@ export function AiSees({ tabId, question, includeRows }: { tabId: string; questi
   const sees = describeSees({
     hasSchema: preview.hasSchema,
     sendNotebook,
-    notebookCells: preview.built.notebookCells,
+    notebookCodeCells: preview.built.notebookCodeCells,
     messages: preview.messages,
     hasDecisions: preview.built.hasDecisions,
     sampleRows: includeRows,
@@ -132,7 +132,7 @@ export function AiDecisions({ tabId }: { tabId: string }) {
 }
 
 /** Under a reply that ends with a `Decision:` line: one click puts that line into the note. */
-export function AddDecisionButton({ tabId, reply }: { tabId: string; reply: string }) {
+export function AddDecisionButton({ tabId, reply, emphasis = true }: { tabId: string; reply: string; emphasis?: boolean }) {
   const note = useLab((s) => s.tabs.find((t) => t.id === tabId)?.decisions ?? '')
   const decision = extractDecision(reply)
   if (!decision) return null
@@ -140,11 +140,13 @@ export function AddDecisionButton({ tabId, reply }: { tabId: string; reply: stri
   return (
     <button
       type="button"
-      className="btn"
+      className={`btn${emphasis ? ' ai-decision-btn' : ''}`}
       style={{ padding: '3px 8px', fontSize: 11.5, alignSelf: 'flex-start' }}
       disabled={added}
       onClick={() => addAiDecision(tabId, decision)}
-      title={decision}
+      title={`${decision}
+
+Saved in "Decisions so far" and sent with every question.`}
     >
       {added ? <Check size={12} /> : <BookMarked size={12} />} {added ? 'In decisions' : 'Add to decisions'}
     </button>

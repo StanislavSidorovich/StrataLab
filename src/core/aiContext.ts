@@ -60,6 +60,8 @@ export interface BuiltAiContext {
   referencedTables: string[]
   /** earlier cells whose code went in (0 when the switch is off or the cursor is in the first cell) */
   notebookCells: number
+  /** of those, how many are code (not markdown notes) */
+  notebookCodeCells: number
   /** of those, how many were cut down to a title line */
   notebookShortened: number
   hasDecisions: boolean
@@ -73,17 +75,31 @@ const CODE_STAGE_RE =
 const MD_HEADING_STAGE_RE =
   /^\s*(?:#+\s*)?(?:\d+[.)]\s*|stage\s*\d*[:.\-\s]*)?(preprocessing|exploration|processing|analysis)\b/i
 
-function matchStageInLine(line: string, isMarkdown: boolean): DmStageName | null {
-  if (isMarkdown) {
-    const heading = MD_HEADING_STAGE_RE.exec(line)
+function looseStageIn(line: string): DmStageName | null {
+  // Check preprocessing before processing so substring cannot collide.
+  if (/\bpreprocessing\b/i.test(line)) return 'preprocessing'
+  if (/\bexploration\b/i.test(line)) return 'exploration'
+  if (/\bprocessing\b/i.test(line)) return 'processing'
+  if (/\banalysis\b/i.test(line)) return 'analysis'
+  return null
+}
+
+/**
+ * The stage a markdown cell names. Only its title says so: the last heading line that starts with a
+ * stage word, else the first non-empty line read loosely. A word like "analysis" in the body text
+ * ("... to answer your analysis question") is not a stage change.
+ */
+function markdownCellStage(lines: readonly string[]): DmStageName | null {
+  for (let j = lines.length - 1; j >= 0; j--) {
+    if (!/^\s*#/.test(lines[j]) && !/^\s*(?:\d+[.)]|stage\b)/i.test(lines[j])) continue
+    const heading = MD_HEADING_STAGE_RE.exec(lines[j])
     if (heading) return heading[1].toLowerCase() as DmStageName
-    // Check preprocessing before processing so substring cannot collide.
-    if (/\bpreprocessing\b/i.test(line)) return 'preprocessing'
-    if (/\bexploration\b/i.test(line)) return 'exploration'
-    if (/\bprocessing\b/i.test(line)) return 'processing'
-    if (/\banalysis\b/i.test(line)) return 'analysis'
-    return null
   }
+  const first = lines.find((l) => l.trim() !== '')
+  return first ? looseStageIn(first) : null
+}
+
+function matchStageInLine(line: string): DmStageName | null {
   const m = CODE_STAGE_RE.exec(line)
   return m ? (m[1].toLowerCase() as DmStageName) : null
 }
@@ -108,8 +124,13 @@ export function detectCellStage(tabText: string, cursorPos: number): DmStageName
       const relCount = Math.max(1, cursorLine - cell.line + 1)
       lines = lines.slice(0, relCount)
     }
+    if (cell.kind === 'markdown') {
+      const stage = markdownCellStage(lines)
+      if (stage) return stage
+      continue
+    }
     for (let j = lines.length - 1; j >= 0; j--) {
-      const stage = matchStageInLine(lines[j], cell.kind === 'markdown')
+      const stage = matchStageInLine(lines[j])
       if (stage) return stage
     }
   }
@@ -517,11 +538,11 @@ export function buildNotebookSection(
   tabText: string,
   cursorPos: number,
   budget = MAX_AI_NOTEBOOK_CHARS,
-): { text: string; cells: number; shortened: number } {
+): { text: string; cells: number; codeCells: number; shortened: number } {
   const cells = splitCells(tabText)
   const idx = cellAt(cells, cursorPos)
-  if (cells.length === 0) return { text: '(empty notebook)', cells: 0, shortened: 0 }
-  if (idx <= 0) return { text: '(no earlier cells: the cursor is in the first cell)', cells: 0, shortened: 0 }
+  if (cells.length === 0) return { text: '(empty notebook)', cells: 0, codeCells: 0, shortened: 0 }
+  if (idx <= 0) return { text: '(no earlier cells: the cursor is in the first cell)', cells: 0, codeCells: 0, shortened: 0 }
   const entries: NotebookEntry[] = cells.slice(0, idx).map((c, i) => ({
     n: i + 1,
     kind: c.kind,
@@ -547,6 +568,7 @@ export function buildNotebookSection(
   return {
     text: parts.join('\n\n'),
     cells: entries.length - omitted,
+    codeCells: entries.slice(omitted).filter((e) => e.kind === 'code').length,
     shortened: shortFlags.filter(Boolean).length - omitted,
   }
 }
@@ -667,6 +689,7 @@ export function buildAiContext(opts: AiContextOptions): BuiltAiContext {
     stage,
     referencedTables,
     notebookCells: notebook?.cells ?? 0,
+    notebookCodeCells: notebook?.codeCells ?? 0,
     notebookShortened: notebook?.shortened ?? 0,
     hasDecisions: decisions !== '',
   }

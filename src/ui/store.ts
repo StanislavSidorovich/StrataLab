@@ -61,7 +61,8 @@ import {
   formatRequestPreview,
   parseChat,
   parseSendNotebook,
-  pushExchange,
+  pushFeedExchange,
+  normalizeHistory,
   type AiChatMessage,
 } from '../core/aiChat'
 import {
@@ -326,9 +327,9 @@ export interface AiConsentPrompt {
 
 export type AiRequestState =
   | { status: 'idle' }
-  | { status: 'loading'; promptLabel: string }
+  | { status: 'loading'; promptLabel: string; tabId?: string }
   | { status: 'done'; text: string; truncated: boolean; provider: AiProvider; model: string; promptLabel: string; tabId: string }
-  | { status: 'error'; kind: string; message: string; promptLabel: string }
+  | { status: 'error'; kind: string; message: string; promptLabel: string; tabId?: string }
 
 export interface PracticeProgress {
   solved: string[]
@@ -2304,7 +2305,7 @@ export function previewAiRequest(tabId: string, cursorPos: number, question: str
   const history = getAiChat(tabId)
   return {
     built,
-    messages: history.length,
+    messages: normalizeHistory(history).length,
     hasSchema: get().tables.length > 0,
     text: formatRequestPreview(buildTutorSystemPrompt(), history, built.text),
   }
@@ -2387,9 +2388,9 @@ export async function askAi(opts: AiAskOptions): Promise<boolean> {
   const controller = new AbortController()
   const gen = ++activeAiGen
   activeAiController = controller
-  set({ aiRequest: { status: 'loading', promptLabel } })
-
   const tabId = s.activeTab
+  set({ aiRequest: { status: 'loading', promptLabel, tabId } })
+
   const cursorPos = activeCursorPos()
 
   try {
@@ -2441,7 +2442,7 @@ export async function askAi(opts: AiAskOptions): Promise<boolean> {
       const learnerText = [quick ? `[${quick.label}]` : '', userQuestion, opts.errorOverride ? `Error: ${opts.errorOverride.slice(0, 400)}` : '']
         .filter(Boolean)
         .join(' ')
-      setAiChat(tabId, pushExchange(getAiChat(tabId), learnerText, outcome.text))
+      setAiChat(tabId, pushFeedExchange(getAiChat(tabId), learnerText, outcome.text))
       set({
         aiRequest: {
           status: 'done',
@@ -2461,6 +2462,7 @@ export async function askAi(opts: AiAskOptions): Promise<boolean> {
           kind: outcome.kind,
           message: outcome.message,
           promptLabel,
+          tabId,
         },
       })
     }
@@ -2481,6 +2483,7 @@ export async function askAi(opts: AiAskOptions): Promise<boolean> {
           kind: outcome.kind,
           message: outcome.message,
           promptLabel,
+          tabId,
         },
       })
     }

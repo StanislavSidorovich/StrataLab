@@ -14,6 +14,8 @@ import {
   type AiContextTable,
 } from '../src/core/aiContext'
 import type { Output } from '../src/core/ipynb'
+import { splitCells } from '../src/core/pyCells'
+import { generateTableNotebook } from '../src/core/tableNotebook'
 
 const SAMPLE_TABLE: AiContextTable = {
   name: 'demo.orders',
@@ -64,6 +66,48 @@ describe('detectCellStage', () => {
     expect(detectCellStage(nb, nb.indexOf('clean = df.copy()'))).toBe('preprocessing')
     expect(detectCellStage(nb, nb.indexOf('grouped ='))).toBe('processing')
     expect(detectCellStage(nb, nb.indexOf('clean.corr('))).toBe('analysis')
+  })
+
+  it('gives every cell of a generated 4-stage notebook its own stage (body words like "analysis" do not count)', () => {
+    const nb = generateTableNotebook({
+      schema: 'demo',
+      name: 'orders',
+      rows: 1500,
+      columns: [
+        { name: 'order_id', type: 'INTEGER' },
+        { name: 'customer_id', type: 'INTEGER' },
+        { name: 'ordered_at', type: 'TIMESTAMP' },
+        { name: 'status', type: 'VARCHAR' },
+      ],
+    })
+    const cells = splitCells(nb)
+    const order = ['exploration', 'preprocessing', 'processing', 'analysis']
+    let expected: string | null = null
+    let seen = 0
+    for (const c of cells) {
+      const heading = c.kind === 'markdown' ? /^##\s*\d\.\s*(\w+)/.exec(c.source) : null
+      if (heading) {
+        expected = heading[1].toLowerCase()
+        seen++
+      }
+      // the same call the notebook section uses: the stage at the end of the cell
+      expect(detectCellStage(nb, c.to), `${c.kind} cell: ${c.source.slice(0, 40)}`).toBe(expected)
+    }
+    expect(seen).toBe(4)
+    expect(order).toContain(expected as string)
+    // the cell after "## 3. Processing" is processing, not analysis
+    const ctx = buildAiContext({
+      tabTitle: 't',
+      tabText: nb + '\n',
+      cursorPos: nb.length,
+      tables: [],
+      cellRuns: [],
+    })
+    const stagesInText = [...ctx.text.matchAll(/--- Cell \d+ \((?:code|markdown), stage: (\w+)\)/g)].map((m) => m[1])
+    expect(stagesInText.length).toBeGreaterThan(8)
+    const rank = stagesInText.map((s) => order.indexOf(s))
+    expect(rank).toEqual([...rank].sort((a, b) => a - b))
+    expect(stagesInText.filter((s) => s === 'processing').length).toBeGreaterThanOrEqual(2)
   })
 
   it('detects inline stage comments inside code cells and returns null when none exist', () => {

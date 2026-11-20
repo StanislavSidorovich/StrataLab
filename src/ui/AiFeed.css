@@ -1,0 +1,129 @@
+/* The AI helper's message feed and the Markdown in replies (v0.63.0). Colours come from the theme tokens,
+   so light and dark need no rules of their own. Nothing here may widen the panel: long words wrap,
+   code blocks scroll inside themselves. */
+.ai-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.ai-msg {
+  min-width: 0;
+  border-radius: 8px;
+  padding: 8px 10px;
+  overflow-wrap: anywhere;
+}
+.ai-msg-user {
+  background: var(--accent-soft, var(--panel));
+  border: 1px solid var(--line);
+  margin-left: 14px;
+}
+.ai-msg-helper {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-right: 6px;
+}
+.ai-msg-who {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 3px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+.ai-msg-helper > .ai-msg-who {
+  margin-bottom: 0;
+}
+.ai-msg-who .mono {
+  font-weight: 400;
+}
+.ai-msg-text {
+  white-space: pre-wrap;
+  line-height: 1.45;
+  color: var(--text);
+}
+
+.ai-reply {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.ai-md {
+  min-width: 0;
+  color: var(--text);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.ai-md-p,
+.ai-md-h {
+  margin: 0 0 6px;
+  white-space: pre-wrap;
+}
+.ai-md > :last-child {
+  margin-bottom: 0;
+}
+.ai-md-h {
+  font-weight: 700;
+}
+.ai-md-list {
+  margin: 0 0 6px;
+  padding-left: 18px;
+  list-style: disc;
+}
+.ai-md-ol {
+  list-style: decimal;
+}
+.ai-md-list li {
+  margin: 0 0 3px;
+  white-space: pre-wrap;
+}
+.ai-md-code {
+  padding: 0 4px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: var(--code-bg);
+  font-size: 0.92em;
+  overflow-wrap: anywhere;
+}
+
+.ai-code {
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--code-bg);
+}
+.ai-code-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+  font-size: 11px;
+}
+.ai-code-pre {
+  margin: 0;
+  padding: 8px;
+  overflow-x: auto;
+  white-space: pre;
+  font-size: 11.5px;
+}
+
+/* "Add to decisions": the step that makes the helper remember, so it is not styled as a spare link */
+.ai-decision-btn {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+.ai-decision-btn:disabled {
+  border-color: var(--line);
+  color: var(--muted);
+  font-weight: 400;
+}

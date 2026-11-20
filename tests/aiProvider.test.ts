@@ -199,6 +199,16 @@ describe('Tutor system prompt and request builders', () => {
     expect(prompt).toContain('```python')
   })
 
+  it('stage rules: name the stage from the labels, check the stage is done, no repeats, sum up at the end', () => {
+    const prompt = buildTutorSystemPrompt()
+    expect(prompt).toContain('"stage:" labels')
+    expect(prompt).toContain('does not mean the stage is finished')
+    expect(prompt).toContain('code above already contains')
+    expect(prompt).toContain('Analysis is the last stage')
+    expect(prompt).toContain('sum up what was found')
+    expect(prompt).toContain('light Markdown')
+  })
+
   it('mentor prompt offers 2-3 options with pros and cons, asks which one, and writes code only after the choice', () => {
     const prompt = buildTutorSystemPrompt()
     expect(prompt).toContain('mentor')

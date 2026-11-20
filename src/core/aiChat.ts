@@ -116,9 +116,53 @@ export function normalizeHistory(messages: readonly AiChatMessage[]): AiChatMess
   return list
 }
 
-/** One finished exchange added to a tab's history. */
+/** One finished exchange added to a tab's history (what a request carries: shortened, within budget). */
 export function pushExchange(history: readonly AiChatMessage[], userText: string, reply: string): AiChatMessage[] {
   return normalizeHistory([...history, { role: 'user', text: userText }, { role: 'assistant', text: reply }])
+}
+
+/** Messages the panel keeps and shows per tab (10 exchanges); a request still carries only the last 8. */
+export const MAX_AI_FEED_MESSAGES = 20
+/** One kept message: a reply is at most 8 000 characters already, a question is cut like in the history. */
+const MAX_AI_FEED_USER_CHARS = 2000
+/** All kept messages together, so one tab never fills the browser's storage. */
+export const MAX_AI_FEED_CHARS = 60000
+
+/**
+ * The messages as the panel shows them: the same alternating, learner-first list as the history,
+ * but the replies stay whole (the request shortens them itself, `normalizeHistory`), and up to
+ * 20 messages are kept. The oldest exchanges go first when the text is too big.
+ */
+export function normalizeFeed(messages: readonly AiChatMessage[]): AiChatMessage[] {
+  const out: AiChatMessage[] = []
+  for (const m of messages) {
+    if (!m || (m.role !== 'user' && m.role !== 'assistant') || typeof m.text !== 'string') continue
+    const text = m.role === 'user' && m.text.trim().length > MAX_AI_FEED_USER_CHARS
+      ? m.text.trim().slice(0, MAX_AI_FEED_USER_CHARS - SHORTENED.length).trimEnd() + SHORTENED
+      : m.text.trim()
+    if (!text) continue
+    const last = out.at(-1)
+    if (!last && m.role !== 'user') continue
+    if (last && last.role === m.role) {
+      last.text = `${last.text}
+
+${text}`
+      continue
+    }
+    out.push({ role: m.role, text })
+  }
+  let list = out.slice(-MAX_AI_FEED_MESSAGES)
+  while (list.length && list[0].role !== 'user') list = list.slice(1)
+  const size = (l: readonly AiChatMessage[]) => l.reduce((n, m) => n + m.text.length, 0)
+  while (list.length > 2 && size(list) > MAX_AI_FEED_CHARS) list = list.slice(2)
+  if (list.length && size(list) > MAX_AI_FEED_CHARS) list = []
+  if (list.length && list.at(-1)!.role === 'user') list = list.slice(0, -1)
+  return list
+}
+
+/** One finished exchange added to a tab's feed. */
+export function pushFeedExchange(feed: readonly AiChatMessage[], userText: string, reply: string): AiChatMessage[] {
+  return normalizeFeed([...feed, { role: 'user', text: userText }, { role: 'assistant', text: reply }])
 }
 
 export function parseChat(raw: string | null): AiChatMessage[] {
@@ -126,7 +170,7 @@ export function parseChat(raw: string | null): AiChatMessage[] {
   try {
     const v = JSON.parse(raw) as unknown
     if (!Array.isArray(v)) return []
-    return normalizeHistory(
+    return normalizeFeed(
       v.filter(
         (m): m is AiChatMessage =>
           !!m &&
@@ -147,19 +191,21 @@ export function parseSendNotebook(raw: string | null): boolean {
 export interface AiSeesInput {
   hasSchema: boolean
   sendNotebook: boolean
-  notebookCells: number
+  /** earlier cells that hold code and went in (notes are not counted) */
+  notebookCodeCells: number
+  /** messages of the conversation that the request carries */
   messages: number
   hasDecisions: boolean
   sampleRows?: boolean
 }
 
-/** The line under the input: what the next request will carry. */
+/** The line under the input: what the next request will carry. The current cell always goes in. */
 export function describeSees(i: AiSeesInput): string {
   const parts: string[] = []
   if (i.hasSchema) parts.push('schema')
-  if (i.sendNotebook)
-    parts.push(i.notebookCells === 0 ? 'no code yet' : `${i.notebookCells} cell${i.notebookCells === 1 ? '' : 's'} of code`)
-  else parts.push('current cell only')
+  if (i.sendNotebook && i.notebookCodeCells > 0)
+    parts.push(`${i.notebookCodeCells} code cell${i.notebookCodeCells === 1 ? '' : 's'} above + the current cell`)
+  else parts.push(i.sendNotebook ? 'the current cell (no code above)' : 'the current cell only')
   if (i.messages > 0) parts.push(`${i.messages} message${i.messages === 1 ? '' : 's'}`)
   if (i.hasDecisions) parts.push('decisions')
   if (i.sampleRows) parts.push('first 20 rows')

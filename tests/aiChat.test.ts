@@ -15,6 +15,8 @@ import {
   parseChat,
   parseSendNotebook,
   pushExchange,
+  pushFeedExchange,
+  MAX_AI_FEED_MESSAGES,
   shortenReply,
   type AiChatMessage,
 } from '../src/core/aiChat'
@@ -116,15 +118,31 @@ describe('history', () => {
 })
 
 describe('describeSees and the request preview', () => {
-  it('lists what the next request carries', () => {
-    expect(describeSees({ hasSchema: true, sendNotebook: true, notebookCells: 4, messages: 6, hasDecisions: true })).toBe(
-      'Sees: schema, 4 cells of code, 6 messages, decisions',
+  it('lists what the next request carries: code cells only, and says the current cell is in', () => {
+    expect(describeSees({ hasSchema: true, sendNotebook: true, notebookCodeCells: 4, messages: 6, hasDecisions: true })).toBe(
+      'Sees: schema, 4 code cells above + the current cell, 6 messages, decisions',
     )
-    expect(describeSees({ hasSchema: false, sendNotebook: false, notebookCells: 4, messages: 0, hasDecisions: false })).toBe('Sees: current cell only')
-    expect(describeSees({ hasSchema: true, sendNotebook: true, notebookCells: 1, messages: 1, hasDecisions: false })).toBe('Sees: schema, 1 cell of code, 1 message')
-    expect(describeSees({ hasSchema: true, sendNotebook: true, notebookCells: 0, messages: 0, hasDecisions: false, sampleRows: true })).toBe(
-      'Sees: schema, no code yet, first 20 rows',
+    expect(describeSees({ hasSchema: false, sendNotebook: false, notebookCodeCells: 4, messages: 0, hasDecisions: false })).toBe(
+      'Sees: the current cell only',
     )
+    expect(describeSees({ hasSchema: true, sendNotebook: true, notebookCodeCells: 1, messages: 1, hasDecisions: false })).toBe(
+      'Sees: schema, 1 code cell above + the current cell, 1 message',
+    )
+    expect(describeSees({ hasSchema: true, sendNotebook: true, notebookCodeCells: 0, messages: 0, hasDecisions: false, sampleRows: true })).toBe(
+      'Sees: schema, the current cell (no code above), first 20 rows',
+    )
+  })
+  it('the feed keeps replies whole and up to 20 messages, while the history for a request stays at 8 and shortened', () => {
+    const big = 'w'.repeat(3000)
+    let feed: AiChatMessage[] = []
+    for (let i = 1; i <= 12; i++) feed = pushFeedExchange(feed, `q${i}`, `a${i} ${big}`)
+    expect(feed).toHaveLength(MAX_AI_FEED_MESSAGES)
+    expect(feed[0].text).toBe('q3')
+    expect(feed[1].text.length).toBe(3000 + 3)
+    const sent = normalizeHistory(feed)
+    expect(sent.length).toBeLessThanOrEqual(8)
+    expect(sent.every((m) => m.text.length <= 1200)).toBe(true)
+    expect(parseChat(JSON.stringify(feed))).toEqual(feed)
   })
   it('prints the system prompt, the earlier messages, then the new one', () => {
     const text = formatRequestPreview('SYS', ex(1), 'NOW')
