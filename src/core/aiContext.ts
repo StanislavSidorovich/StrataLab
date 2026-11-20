@@ -137,7 +137,7 @@ export function detectCellStage(tabText: string, cursorPos: number): DmStageName
   return null
 }
 
-function truncateBlock(text: string, maxChars: number, suffix: string): string {
+export function truncateBlock(text: string, maxChars: number, suffix: string): string {
   if (text.length <= maxChars) return text
   return text.slice(0, Math.max(0, maxChars - suffix.length)) + suffix
 }
@@ -481,7 +481,7 @@ function resolveReferencedTables(tabText: string, tables: readonly AiContextTabl
   return []
 }
 
-function formatTableSchema(t: AiContextTable): string {
+export function formatTableSchema(t: AiContextTable): string {
   const rowLabel =
     t.rows === null ? 'row count unknown' : `${t.rows.toLocaleString('en-US')} rows`
   const colCountLabel = `${t.columns.length} column${t.columns.length === 1 ? '' : 's'}`
@@ -588,6 +588,15 @@ function findCurrentCellRun(
   return undefined
 }
 
+/** The size limit cuts the middle, never the question at the end. */
+export function assembleAiContext(head: readonly string[], instructionSection: string): { text: string; truncated: boolean } {
+  const joined = head.join('\n\n')
+  const limitSuffix = '\n[Context truncated to fit size limit]'
+  const headRoom = Math.max(0, MAX_AI_CONTEXT_CHARS - instructionSection.length - 2)
+  const truncated = joined.length > headRoom
+  return { text: `${truncated ? truncateBlock(joined, headRoom, limitSuffix) : joined}\n\n${instructionSection}`, truncated }
+}
+
 /**
  * Builds the structured prompt context for AI assistance from a Python tab's schema, computed
  * exploration summaries, current cell, and last error/output — without raw rows by default.
@@ -673,13 +682,8 @@ export function buildAiContext(opts: AiContextOptions): BuiltAiContext {
       : DEFAULT_AI_INSTRUCTION)
   sections.push(`=== Instruction ===\n${instruction}`)
 
-  // The size limit cuts the middle, never the question at the end.
   const instructionSection = sections.pop() as string
-  const head = sections.join('\n\n')
-  const limitSuffix = '\n[Context truncated to fit size limit]'
-  const headRoom = Math.max(0, MAX_AI_CONTEXT_CHARS - instructionSection.length - 2)
-  const truncated = head.length > headRoom
-  const text = `${truncated ? truncateBlock(head, headRoom, limitSuffix) : head}\n\n${instructionSection}`
+  const { text, truncated } = assembleAiContext(sections, instructionSection)
 
   return {
     text,

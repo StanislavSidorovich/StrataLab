@@ -7,7 +7,7 @@ import { parseAiReplyBlocks, type AiProvider } from '../core/aiProvider'
 import { parseMarkdown, type AiInline, type AiMdBlock } from '../core/aiMarkdown'
 import type { AiChatMessage } from '../core/aiChat'
 import { AddDecisionButton } from './AiConversation'
-import { getAiChat, insertAiCodeAtCursor, insertAiCodeCell, replaceAiCodeCell, useLab } from './store'
+import { getAiChat, insertAiCodeAtCursor, insertAiCodeCell, replaceAiCodeCell, replaceAiSqlStatement, tabDialect, useLab } from './store'
 import './AiFeed.css'
 
 const NO_MESSAGES: AiChatMessage[] = []
@@ -81,6 +81,7 @@ export function AiMarkdown({ text }: { text: string }) {
 
 /** A reply: its text as Markdown, its code blocks as cards with the insert buttons. */
 export function AiReplyView({ text }: { text: string }) {
+  const sql = useLab((s) => tabDialect(s.tabs.find((t) => t.id === s.activeTab)) !== 'python')
   return (
     <div className="ai-reply">
       {parseAiReplyBlocks(text).map((block, idx) =>
@@ -93,24 +94,38 @@ export function AiReplyView({ text }: { text: string }) {
                 {block.lang || 'code'}
               </span>
               <CopyCodeButton code={block.code} />
-              <button
-                type="button"
-                className="btn btn-ghost shrink-0"
-                style={{ padding: '2px 6px', fontSize: 11.5, color: 'var(--accent)' }}
-                onClick={() => insertAiCodeCell(block.code)}
-                title="Insert below current cell without running it"
-              >
-                <PlusSquare size={12} /> Insert as new cell
-              </button>
-              <button
-                type="button"
-                className="btn btn-ghost shrink-0"
-                style={{ padding: '2px 6px', fontSize: 11.5, color: 'var(--accent)' }}
-                onClick={() => replaceAiCodeCell(block.code)}
-                title="Replace current cell content (preserving # %% boundary; Ctrl+Z to undo)"
-              >
-                <Replace size={12} /> Replace current cell
-              </button>
+              {sql ? (
+                <button
+                  type="button"
+                  className="btn btn-ghost shrink-0"
+                  style={{ padding: '2px 6px', fontSize: 11.5, color: 'var(--accent)' }}
+                  onClick={() => replaceAiSqlStatement(block.code)}
+                  title="Replace the selection, or the statement the cursor is in (Ctrl+Z to undo)"
+                >
+                  <Replace size={12} /> Replace current statement
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="btn btn-ghost shrink-0"
+                    style={{ padding: '2px 6px', fontSize: 11.5, color: 'var(--accent)' }}
+                    onClick={() => insertAiCodeCell(block.code)}
+                    title="Insert below current cell without running it"
+                  >
+                    <PlusSquare size={12} /> Insert as new cell
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-ghost shrink-0"
+                    style={{ padding: '2px 6px', fontSize: 11.5, color: 'var(--accent)' }}
+                    onClick={() => replaceAiCodeCell(block.code)}
+                    title="Replace current cell content (preserving # %% boundary; Ctrl+Z to undo)"
+                  >
+                    <Replace size={12} /> Replace current cell
+                  </button>
+                </>
+              )}
               <button
                 type="button"
                 className="btn btn-ghost shrink-0"
@@ -146,13 +161,18 @@ export function AiFeed({ tabId }: { tabId: string }) {
   }, [tabId, messages.length])
 
   if (messages.length === 0) return null
-  const lastAssistant = messages.length - 1
+  let lastAssistant = messages.length - 1
+  while (lastAssistant > 0 && messages[lastAssistant].role !== 'assistant') lastAssistant--
   const meta = req.status === 'done' && req.tabId === tabId ? req : null
 
   return (
     <section className="ai-feed" aria-label="Conversation in this tab" aria-live="polite">
       {messages.map((m, i) =>
-        m.role === 'user' ? (
+        m.role === 'note' ? (
+          <div key={i} className="ai-msg-note" role="separator">
+            {m.text}
+          </div>
+        ) : m.role === 'user' ? (
           <div key={i} className="ai-msg ai-msg-user">
             <div className="ai-msg-who">You</div>
             <div className="ai-msg-text">{m.text}</div>

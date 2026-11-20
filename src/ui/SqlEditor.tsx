@@ -66,6 +66,13 @@ export function activeCursorPos(): number {
   return activeView.state.selection.main.head
 }
 
+/** The active editor's non-empty selection (offsets), else null: the AI helper sends it instead of the statement. */
+export function activeSelection(): { from: number; to: number } | null {
+  if (!activeView || activeTabId !== useLab.getState().activeTab) return null
+  const sel = activeView.state.selection.main
+  return sel.empty ? null : { from: sel.from, to: sel.to }
+}
+
 /** Replaces the active editor's document and moves the cursor/focus when the editor is showing the active tab. */
 export function replaceActiveAndFocusCursor(text: string, cursor: number): boolean {
   const v = activeView

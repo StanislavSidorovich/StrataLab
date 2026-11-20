@@ -48,7 +48,7 @@ export function App() {
   const theme = useLab((s) => s.theme)
   const importError = useLab((s) => s.importError)
   const notice = useLab((s) => s.notice)
-  const aiBottomDockOpen = useLab((s) => s.aiPanelOpen && tabDialect(s.tabs.find((t) => t.id === s.activeTab)) === 'python')
+  const aiBottomDockOpen = useLab((s) => s.aiPanelOpen)
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
   }, [theme])

@@ -4,7 +4,8 @@ import { useMemo, useState } from 'react'
 import { BookMarked, Check, ChevronDown, ChevronRight, Copy, Eye, MessageSquarePlus } from 'lucide-react'
 import { describeSees, extractDecision, hasDecision, MAX_AI_DECISIONS_CHARS } from '../core/aiChat'
 import { activeCursorPos } from './SqlEditor'
-import { addAiDecision, clearAiConversation, previewAiRequest, setTabDecisions, useLab } from './store'
+import { addAiDecision, clearAiConversation, previewAiRequest, setTabDecisions, tabDialect, useLab } from './store'
+import { SQL_DIALECT_NAMES, type SqlScope } from '../core/aiSqlContext'
 import './AiConversation.css'
 
 async function copyText(text: string): Promise<boolean> {
@@ -30,12 +31,18 @@ export function AiSees({ tabId, question, includeRows }: { tabId: string; questi
   const tables = useLab((s) => s.tables)
   const cellRuns = useLab((s) => s.cellRuns[tabId])
   const results = useLab((s) => s.results[tabId])
+  const pgTables = useLab((s) => s.pgTables)
+  const translation = useLab((s) => s.translations[tabId])
+  const dialect = useLab((s) => tabDialect(s.tabs.find((t) => t.id === tabId)))
+  const isSql = dialect !== 'python'
 
   const preview = useMemo(
-    () => previewAiRequest(tabId, activeCursorPos(), open ? question : ''),
+    () => previewAiRequest(tabId, activeCursorPos(), open ? question : '', includeRows),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [tabId, sql, decisions, chat, sendNotebook, tables, cellRuns, results, tick, open ? question : ''],
+    [tabId, sql, decisions, chat, sendNotebook, tables, pgTables, translation, dialect, cellRuns, results, tick, includeRows, open ? question : ''],
   )
+  const built = preview.built as typeof preview.built & { scope?: SqlScope; earlierStatements?: number }
+  const outcome: 'error' | 'result' | 'none' = built.lastError ? 'error' : results?.status === 'done' && results.table && results.table.numCols > 0 ? 'result' : 'none'
   const sees = describeSees({
     hasSchema: preview.hasSchema,
     sendNotebook,
@@ -43,6 +50,15 @@ export function AiSees({ tabId, question, includeRows }: { tabId: string; questi
     messages: preview.messages,
     hasDecisions: preview.built.hasDecisions,
     sampleRows: includeRows,
+    sql: isSql
+      ? {
+          dialect: SQL_DIALECT_NAMES[dialect as keyof typeof SQL_DIALECT_NAMES],
+          scope: built.scope ?? 'statement',
+          earlier: built.earlierStatements ?? 0,
+          tables: built.referencedTables,
+          outcome,
+        }
+      : undefined,
   })
 
   const copy = async () => {
@@ -73,10 +89,10 @@ export function AiSees({ tabId, question, includeRows }: { tabId: string; questi
         <div className="ai-sees-box">
           <div className="ai-sees-note">
             This is the whole request, in the order the provider reads it. Nothing is sent until you click Send. Your code goes to the
-            provider you chose; it is not personal data, but do not paste anything confidential into a cell. Works without a key, too: copy
+            provider you chose; it is not personal data, but do not paste anything confidential into {isSql ? 'a query' : 'a cell'}. Works without a key, too: copy
             it into any chat.
             {preview.built.truncated ? ' The context was cut to fit the size limit.' : ''}
-            {preview.built.notebookShortened > 0
+            {!isSql && preview.built.notebookShortened > 0
               ? ` ${preview.built.notebookShortened} older cell${preview.built.notebookShortened === 1 ? ' is' : 's are'} shortened to a title line.`
               : ''}
           </div>
@@ -100,7 +116,8 @@ export function AiSees({ tabId, question, includeRows }: { tabId: string; questi
 export function AiDecisions({ tabId }: { tabId: string }) {
   const [open, setOpen] = useState(false)
   const note = useLab((s) => s.tabs.find((t) => t.id === tabId)?.decisions ?? '')
-  const lines = note.split('\n').filter((l) => l.trim()).length
+  const isPython = useLab((s) => tabDialect(s.tabs.find((t) => t.id === tabId)) === 'python')
+  const lines =note.split('\n').filter((l) => l.trim()).length
   return (
     <div className="ai-decisions">
       <button type="button" className="ai-sees-toggle" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
@@ -120,7 +137,7 @@ export function AiDecisions({ tabId }: { tabId: string }) {
             onChange={(e) => setTabDecisions(tabId, e.target.value)}
           />
           <div className="ai-sees-note">
-            Kept with this tab, sent with every question, and written as the first cell of the notebook when you save it as .ipynb.
+            Kept with this tab and sent with every question{isPython ? ', and written as the first cell of the notebook when you save it as .ipynb' : ''}.
             {note.length > MAX_AI_DECISIONS_CHARS
               ? ` Only the newest ${MAX_AI_DECISIONS_CHARS.toLocaleString('en-US')} characters are sent.`
               : ''}

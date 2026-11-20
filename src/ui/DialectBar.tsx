@@ -18,8 +18,6 @@ export function DialectBar() {
   const translation = useLab((s) => (tab ? s.translations[tab.id] : undefined))
   const python = useLab((s) => s.python)
   const dmCycleOpen = useLab((s) => s.dmCycleOpen)
-  const aiPanelOpen = useLab((s) => s.aiPanelOpen)
-  const aiEnabled = useLab((s) => s.aiSettings.enabled)
   const dialect = tabDialect(tab)
   const shown = useSlowLoading(python.status === 'loading')
   // A Python tab starts Python (a download the first time) as soon as it is shown.
@@ -85,25 +83,7 @@ export function DialectBar() {
           >
             <ClipboardCopy size={13} /> Copy context for AI
           </button>
-          <button
-            className="btn btn-ghost shrink-0"
-            style={aiPanelOpen ? { background: 'var(--accent-soft)', color: 'var(--accent)', fontWeight: 600 } : undefined}
-            onClick={() => toggleAiPanel()}
-            aria-expanded={aiPanelOpen}
-            title="Optional bring-your-own-key AI helper (OFF by default)"
-          >
-            <Sparkles size={13} /> AI helper
-            <span
-              className="px-1 py-0.2 rounded text-[10px] font-semibold"
-              style={
-                aiEnabled
-                  ? { background: 'var(--accent-soft)', color: 'var(--accent)' }
-                  : { background: 'var(--panel-2)', color: 'var(--muted)' }
-              }
-            >
-              {aiEnabled ? 'ON' : 'OFF'}
-            </span>
-          </button>
+          <AiHelperButton />
           {python.status === 'error' && (
             <button className="btn btn-ghost shrink-0" onClick={retryPython} title="Try starting Python again">
               <RotateCcw size={13} /> Retry
@@ -117,6 +97,7 @@ export function DialectBar() {
         </>
       )}
 
+      {dialect !== 'python' && <AiHelperButton />}
       <EditorTools python={dialect === 'python'} />
       {dialect === 'python' && (
         // a status, not an action: at the right edge, after the actions and the editor's tools
@@ -212,6 +193,29 @@ export function useSlowLoading(loading: boolean, ms = 500) {
 }
 
 /** The line for a Python download: with bytes and percent once it is slow enough to see. */
+/** The optional bring-your-own-key helper: the same button in every kind of tab. */
+function AiHelperButton() {
+  const aiPanelOpen = useLab((s) => s.aiPanelOpen)
+  const aiEnabled = useLab((s) => s.aiSettings.enabled)
+  return (
+    <button
+      className="btn btn-ghost shrink-0"
+      style={aiPanelOpen ? { background: 'var(--accent-soft)', color: 'var(--accent)', fontWeight: 600 } : undefined}
+      onClick={() => toggleAiPanel()}
+      aria-expanded={aiPanelOpen}
+      title="Optional bring-your-own-key AI helper (OFF by default)"
+    >
+      <Sparkles size={13} /> AI helper
+      <span
+        className="px-1 py-0.2 rounded text-[10px] font-semibold"
+        style={aiEnabled ? { background: 'var(--accent-soft)', color: 'var(--accent)' } : { background: 'var(--panel-2)', color: 'var(--muted)' }}
+      >
+        {aiEnabled ? 'ON' : 'OFF'}
+      </span>
+    </button>
+  )
+}
+
 export function pythonLoading(k: { text: string; bytes?: { loaded: number; total: number | null } }, slow: boolean) {
   return slow && k.bytes ? pythonProgressLabel(k.text, k.bytes) : `${k.text}…`
 }

@@ -127,7 +127,7 @@ export function providerLabel(provider: AiProvider): string {
 /** Google's terms: the free tier ("Unpaid Services") and how it uses data. */
 export const GEMINI_TERMS_URL = 'https://ai.google.dev/gemini-api/docs/terms'
 
-export type AiQuickAction = 'explain-stage' | 'why-failed' | 'suggest-next' | 'what-odd'
+export type AiQuickAction = 'explain-stage' | 'why-failed' | 'suggest-next' | 'what-odd' | 'sql-why-failed' | 'sql-explain' | 'sql-next'
 
 export const AI_QUICK_ACTIONS: readonly { id: AiQuickAction; label: string; instruction: string }[] = [
   {
@@ -155,6 +155,37 @@ export const AI_QUICK_ACTIONS: readonly { id: AiQuickAction; label: string; inst
       'Point out potential data quality traps, type mismatches, missing-value patterns, or anomalies to inspect next based on the schema and summary.',
   },
 ]
+
+/** The buttons of a SQL tab (v0.64.0): no data-mining stages there. */
+export const SQL_QUICK_ACTIONS: readonly { id: AiQuickAction; label: string; instruction: string }[] = [
+  {
+    id: 'sql-why-failed',
+    label: 'Why did this fail?',
+    instruction:
+      'Explain why the current statement failed using the last error and the dialect: what the engine did not understand, which name, type or syntax broke, and how to fix it in a short corrected statement.',
+  },
+  {
+    id: 'sql-explain',
+    label: 'Explain this query',
+    instruction:
+      'Explain the current statement clause by clause in the order the engine runs it (FROM, WHERE, GROUP BY, HAVING, SELECT, ORDER BY), what each part does to the rows, and what the result looks like. Do not rewrite it unless something is wrong.',
+  },
+  {
+    id: 'sql-next',
+    label: 'What to check next in this data?',
+    instruction:
+      'Based on the tables, the statement and the last result, offer 2 or 3 things worth checking next in this data (duplicates, NULLs, join row counts, odd values), each with one line on why and one on how to check it. Ask which one the learner wants and write no query until they choose.',
+  },
+]
+
+/** The quick buttons for a tab's dialect. */
+export function quickActionsFor(dialect: AiDialect): readonly { id: AiQuickAction; label: string; instruction: string }[] {
+  return dialect === 'python' ? AI_QUICK_ACTIONS : SQL_QUICK_ACTIONS
+}
+
+export function findQuickAction(id: AiQuickAction | undefined) {
+  return id ? [...AI_QUICK_ACTIONS, ...SQL_QUICK_ACTIONS].find((a) => a.id === id) : undefined
+}
 
 export interface AiSettings {
   enabled: boolean
@@ -247,7 +278,38 @@ export function redactSecrets(text: string, keys: readonly string[] = []): strin
   return out
 }
 
-export function buildTutorSystemPrompt(): string {
+export type AiDialect = 'python' | 'duckdb' | 'tsql' | 'postgres'
+
+const SQL_DIALECT_RULES: Record<'duckdb' | 'tsql' | 'postgres', string[]> = {
+  duckdb: [
+    'The tab runs DuckDB SQL as written. DuckDB is close to PostgreSQL: use `||` for text, `LIMIT n`, `CAST(x AS type)` or `x::type`, `strftime` and `date_trunc` for dates, `QUALIFY`, `GROUP BY ALL`, `SELECT * EXCLUDE (col)`, `list_agg`/`string_agg`, `read_csv`. Not T-SQL: no `TOP`, no `ISNULL`, no `[brackets]`, no `GETDATE()`.',
+  ],
+  tsql: [
+    'The tab holds T-SQL (SQL Server syntax). Quaera Lab translates it to DuckDB before it runs, so most of it works but not everything: stored procedures, `OPENROWSET`, `sp_*`, linked servers, `WITH (NOLOCK)` hints and most server-only features do not exist here. Answer in T-SQL (`TOP`, `ISNULL`, `GETDATE()`, `[brackets]`, `DATEDIFF`, `CONVERT`). When the error comes from the translation or the translated DuckDB text is shown, say which of the two broke and what to write instead.',
+  ],
+  postgres: [
+    'The tab runs real PostgreSQL (PGlite in the browser). It is a separate database from the DuckDB tables: only tables copied into it exist there. Use PostgreSQL syntax (`LIMIT`, `::type`, `ILIKE`, `generate_series`, `DISTINCT ON`, `FILTER (WHERE ...)`, `string_agg`, `date_trunc`). Not T-SQL: no `TOP`, no `ISNULL`, no `[brackets]`.',
+  ],
+}
+
+function buildSqlTutorSystemPrompt(dialect: 'duckdb' | 'tsql' | 'postgres'): string {
+  return [
+    'You are a patient, practical SQL tutor inside Quaera Lab (a browser-based SQL + Python workbench).',
+    'Reply in the same language as the learner\'s question (for example Russian or English), while keeping SQL keywords, table and column names in English.',
+    ...SQL_DIALECT_RULES[dialect],
+    'Each request starts with "Dialect:" (it can change during a conversation: always follow the latest one), then the tables the current statement uses with their columns, the statements just above it, the current statement or selection, and the last error or the shape of the last result. You never see the whole tab, and you see result rows only when they are listed under "First ... Rows". Do not invent tables or columns that are not listed; if you need one, say so and ask.',
+    'You are a mentor: the learner writes the queries. Explain the idea first, then show the smallest change that works. Do not repeat what the earlier messages or the statements above already did, and do not repeat options you already gave.',
+    'When the learner asks why something failed, read the error text and the statement, name the exact cause (a wrong name, a type mismatch, a missing GROUP BY column, a dialect difference), and give a corrected statement.',
+    'When the learner asks what to check or do next, offer 2 or 3 options with one short line of pros and one of cons, ask which they pick, and write no query in that reply.',
+    'Write in light Markdown only: **bold**, *italic*, `code`, short bullet or numbered lists, and fenced code blocks. No tables, no headings, no HTML, no links.',
+    'When the learner has made a decision (for example chose how to treat NULLs or which join to use), end the reply with one separate last line in this exact form: "Decision: <one short sentence with the choice and the reason>". Write that line only when a decision was made in this exchange.',
+    'Put each query you return in a fenced ```sql code block, one statement per block, ending with a semicolon. The panel has buttons for them: "Insert at cursor" and "Replace current statement". Keep queries short and runnable on the tables listed.',
+    'Quaera Lab has no Python in this tab and no pandas: do not answer with Python code here.',
+  ].join('\n')
+}
+
+export function buildTutorSystemPrompt(dialect: AiDialect = 'python'): string {
+  if (dialect !== 'python') return buildSqlTutorSystemPrompt(dialect)
   return [
     'You are a patient, practical data-mining tutor inside Quaera Lab (a browser-based SQL + Python workbench).',
     'Reply in the same language as the learner\'s question (for example Russian or English), while keeping Python and pandas code identifiers in English.',

@@ -1,12 +1,12 @@
 import { useState } from 'react'
-import { AlertTriangle, ArrowLeftRight, ChartColumn, ChevronDown, ClipboardCopy, Download, History, Lightbulb, ListTree, Loader2, MessageSquareText, Search, TableProperties, Trash2, X } from 'lucide-react'
+import { AlertTriangle, ArrowLeftRight, ChartColumn, ChevronDown, ClipboardCopy, Download, History, Lightbulb, ListTree, Loader2, MessageSquareText, Search, Sparkles, TableProperties, Trash2, X } from 'lucide-react'
 import { ChartView } from './Chart'
 import { DataGrid } from './DataGrid'
 import { PlanView } from './PlanView'
 import { PythonOutput } from './PythonOutput'
 import { EngineLoading } from './EngineLoading'
 import { Menu, type MenuItem } from './Menu'
-import { STOPPED, clearHistory, setNextRowLimit, openFromHistory, ownTables, runSql, saveResultAsTable, setResultView, setTabDialect, tabDialect, useLab } from './store'
+import { STOPPED, aiIsReady, askAiFromError, clearHistory, setNextRowLimit, openFromHistory, ownTables, runSql, saveResultAsTable, setResultView, setTabDialect, tabDialect, useLab } from './store'
 import { historyDay, searchHistory } from '../core/history'
 import { TranslationView } from './TranslationView'
 import { sideBySide } from '../core/diff'
@@ -298,6 +298,7 @@ function GridWithMenu({ table }: { table: Table }) {
 function ErrorBox({ error, hints }: { error: string; hints: { id: string; found: string; use: string }[] }) {
   const { kind, text } = splitError(error)
   const tab = useLab((s) => s.tabs.find((t) => t.id === s.activeTab))
+  const aiReady = useLab(aiIsReady)
   // The hints said “this is T-SQL”: run the tab as T-SQL, translated to DuckDB.
   const runAsTsql = () => {
     if (!tab) return
@@ -312,6 +313,17 @@ function ErrorBox({ error, hints }: { error: string; hints: { id: string; found:
         <div>
           <div className="font-semibold mb-1">{kind}</div>
           <pre className="mono whitespace-pre-wrap" style={{ fontSize: 12.5 }}>{text}</pre>
+          {aiReady && error !== STOPPED && (
+            <button
+              type="button"
+              className="btn mt-2"
+              style={{ color: 'var(--text)', background: 'var(--panel)' }}
+              onClick={() => askAiFromError(error)}
+              title="Open the AI helper and ask why this statement failed"
+            >
+              <Sparkles size={13} style={{ color: 'var(--accent)' }} /> Ask AI why this failed
+            </button>
+          )}
         </div>
       </div>
       {hints.length > 0 && (

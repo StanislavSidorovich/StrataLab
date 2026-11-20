@@ -2,7 +2,8 @@
 // the "Decisions so far" note, the `Decision:` line a reply may end with, and the "Sees" summary.
 // No React, no fetch, no storage calls (the store reads and writes localStorage).
 
-export type AiChatRole = 'user' | 'assistant'
+/** `note` is a line the app adds to the feed ("Dialect changed to …"); a request never carries it. */
+export type AiChatRole = 'user' | 'assistant' | 'note'
 
 export interface AiChatMessage {
   role: AiChatRole
@@ -135,13 +136,22 @@ export const MAX_AI_FEED_CHARS = 60000
  */
 export function normalizeFeed(messages: readonly AiChatMessage[]): AiChatMessage[] {
   const out: AiChatMessage[] = []
+  const lastTurn = () => {
+    for (let i = out.length - 1; i >= 0; i--) if (out[i].role !== 'note') return out[i]
+    return undefined
+  }
   for (const m of messages) {
-    if (!m || (m.role !== 'user' && m.role !== 'assistant') || typeof m.text !== 'string') continue
+    if (!m || (m.role !== 'user' && m.role !== 'assistant' && m.role !== 'note') || typeof m.text !== 'string') continue
+    if (m.role === 'note') {
+      const t = m.text.trim().slice(0, 200)
+      if (t && lastTurn()) out.push({ role: 'note', text: t })
+      continue
+    }
     const text = m.role === 'user' && m.text.trim().length > MAX_AI_FEED_USER_CHARS
       ? m.text.trim().slice(0, MAX_AI_FEED_USER_CHARS - SHORTENED.length).trimEnd() + SHORTENED
       : m.text.trim()
     if (!text) continue
-    const last = out.at(-1)
+    const last = lastTurn()
     if (!last && m.role !== 'user') continue
     if (last && last.role === m.role) {
       last.text = `${last.text}
@@ -154,9 +164,18 @@ ${text}`
   let list = out.slice(-MAX_AI_FEED_MESSAGES)
   while (list.length && list[0].role !== 'user') list = list.slice(1)
   const size = (l: readonly AiChatMessage[]) => l.reduce((n, m) => n + m.text.length, 0)
-  while (list.length > 2 && size(list) > MAX_AI_FEED_CHARS) list = list.slice(2)
+  const turns = (l: readonly AiChatMessage[]) => l.filter((m) => m.role !== 'note').length
+  // The oldest exchange (a question, its reply and the notes between) goes first.
+  const dropOldest = (l: AiChatMessage[]) => {
+    let i = 1
+    while (i < l.length && l[i].role !== 'user') i++
+    return l.slice(i)
+  }
+  while (turns(list) > 2 && size(list) > MAX_AI_FEED_CHARS) list = dropOldest(list)
   if (list.length && size(list) > MAX_AI_FEED_CHARS) list = []
-  if (list.length && list.at(-1)!.role === 'user') list = list.slice(0, -1)
+  let lt = list.length - 1
+  while (lt >= 0 && list[lt].role === 'note') lt--
+  if (lt >= 0 && list[lt].role === 'user') list = list.slice(0, lt)
   return list
 }
 
@@ -175,7 +194,7 @@ export function parseChat(raw: string | null): AiChatMessage[] {
         (m): m is AiChatMessage =>
           !!m &&
           typeof m === 'object' &&
-          ((m as AiChatMessage).role === 'user' || (m as AiChatMessage).role === 'assistant') &&
+          ((m as AiChatMessage).role === 'user' || (m as AiChatMessage).role === 'assistant' || (m as AiChatMessage).role === 'note') &&
           typeof (m as AiChatMessage).text === 'string',
       ),
     )
@@ -197,10 +216,13 @@ export interface AiSeesInput {
   messages: number
   hasDecisions: boolean
   sampleRows?: boolean
+  /** a SQL tab: what the request is made of (v0.64.0) */
+  sql?: { dialect: string; scope: 'selection' | 'statement' | 'empty'; earlier: number; tables: readonly string[]; outcome: 'error' | 'result' | 'none' }
 }
 
 /** The line under the input: what the next request will carry. The current cell always goes in. */
 export function describeSees(i: AiSeesInput): string {
+  if (i.sql) return describeSqlSees(i, i.sql)
   const parts: string[] = []
   if (i.hasSchema) parts.push('schema')
   if (i.sendNotebook && i.notebookCodeCells > 0)
@@ -230,4 +252,18 @@ export function formatRequestPreview(systemPrompt: string, history: readonly AiC
   for (const m of normalizeHistory(history)) parts.push(`[${m.role === 'user' ? 'you, earlier' : 'helper, earlier'}]\n${m.text}`)
   parts.push(`[you, now]\n${userPrompt}`)
   return parts.join('\n\n----------\n\n')
+}
+
+function describeSqlSees(i: AiSeesInput, q: NonNullable<AiSeesInput['sql']>): string {
+  const parts = [q.dialect]
+  parts.push(q.scope === 'selection' ? 'the selection' : q.scope === 'statement' ? 'the current statement' : 'an empty tab')
+  if (q.earlier > 0) parts.push(`${q.earlier} statement${q.earlier === 1 ? '' : 's'} above`)
+  if (q.tables.length) parts.push(`${q.tables.length === 1 ? 'table' : 'tables'} ${q.tables.slice(0, 3).join(', ')}${q.tables.length > 3 ? ` +${q.tables.length - 3}` : ''}`)
+  else if (i.hasSchema) parts.push('table list')
+  if (q.outcome === 'error') parts.push('the last error')
+  else if (q.outcome === 'result') parts.push("the result's columns")
+  if (i.messages > 0) parts.push(`${i.messages} message${i.messages === 1 ? '' : 's'}`)
+  if (i.hasDecisions) parts.push('decisions')
+  if (i.sampleRows) parts.push('first 20 rows')
+  return `Sees: ${parts.join(', ')}`
 }

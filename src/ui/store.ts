@@ -28,7 +28,8 @@ import {
   resolveTogglePythonPanel,
   type PythonPanelId,
 } from '../core/dmCycle'
-import { activeCursorPos, replaceActiveAndFocusCursor } from './SqlEditor'
+import { activeCursorPos, activeSelection, replaceActiveAndFocusCursor } from './SqlEditor'
+import { MAX_AI_SQL_ROWS, SQL_DIALECT_NAMES, buildSqlAiContext, replaceCurrentStatement, type SqlAiDialect, type SqlAiResult, type SqlAiTranslation } from '../core/aiSqlContext'
 import type { Walkthrough } from '../data/walkthroughs'
 import { createSchema, listSchemas, moveTables, renameSchema } from '../db/ownDatasets'
 import { catalogSchemaState, datasetName, isOwnSchema, linkedTables } from '../core/ownDatasets'
@@ -62,18 +63,19 @@ import {
   parseChat,
   parseSendNotebook,
   pushFeedExchange,
+  normalizeFeed,
   normalizeHistory,
   type AiChatMessage,
 } from '../core/aiChat'
 import {
   AI_API_KEY_STORAGE,
   AI_CONSENT_KEY,
-  AI_QUICK_ACTIONS,
   AI_SETTINGS_KEY,
   DEFAULT_AI_MODELS,
   buildProviderRequest,
   buildTutorSystemPrompt,
   classifyFetchError,
+  findQuickAction,
   insertCodeAtCursor,
   insertCodeCellBelow,
   parseAiConsent,
@@ -951,7 +953,13 @@ export function setResultView(view: State['resultView']) {
 
 export function setTabDialect(id: string, dialect: Dialect) {
   const view = (v: State['resultView']) => (v === 'translation' && dialect !== 'tsql') || (v === 'plan' && dialect === 'python') || (v === 'table' && dialect !== 'python') ? 'result' : v
+  const before = tabDialect(get().tabs.find((t) => t.id === id))
   set((s) => ({ tabs: s.tabs.map((t) => (t.id === id ? { ...t, dialect } : t)), resultView: view(s.resultView) }))
+  // A conversation that goes on across a dialect change says so in its feed (every request also names the dialect).
+  if (before !== dialect && before !== 'python' && dialect !== 'python') {
+    const chat = getAiChat(id)
+    if (chat.length) setAiChat(id, normalizeFeed([...chat, { role: 'note', text: `Dialect changed to ${SQL_DIALECT_NAMES[dialect]}` }]))
+  }
   if (dialect === 'postgres') void startPostgres()
   if (dialect === 'python') void startPython()
 }
@@ -2044,14 +2052,55 @@ export function closeCopyContextFallback() {
   set({ copyContextFallback: null })
 }
 
+/** A tab's last result as the SQL helper reads it: the first rows come straight from the Arrow table, never the whole of it. */
+function sqlResultForAi(tabId: string, withRows: boolean): SqlAiResult | null {
+  const r = get().results[tabId]
+  if (!r) return null
+  if (r.status === 'error') return { status: 'error', error: r.error, stopped: r.error === STOPPED, hints: r.hints }
+  if (r.status === 'running' || !r.table) return { status: r.status }
+  const t = r.table
+  const columns = t.schema.fields.map((f) => ({ name: f.name, type: String(f.type) }))
+  const rows =
+    withRows && t.numCols > 0 && t.numRows > 0
+      ? resultRows(t, MAX_AI_SQL_ROWS).rows.map((row) => row.map((v) => (v == null ? 'NULL' : String(v))))
+      : undefined
+  return { status: 'done', columns, numRows: t.numRows, more: r.more, rows }
+}
+
+function sqlTranslationForAi(tabId: string): SqlAiTranslation | null {
+  const t = get().translations[tabId]
+  if (!t) return null
+  if (t.status === 'error') return { error: t.error }
+  if (t.status === 'done') return { statements: t.statements }
+  return null
+}
+
 export function gatherTabAiContext(
   tabId: string,
   cursorPos: number,
-  extra?: { sampleRows?: AiContextSampleRows | null; instruction?: string; sendNotebook?: boolean },
+  extra?: { sampleRows?: AiContextSampleRows | null; instruction?: string; sendNotebook?: boolean; includeRows?: boolean },
 ): BuiltAiContext {
   const s = get()
   const tab = s.tabs.find((t) => t.id === tabId)
   const tabText = tab?.sql ?? ''
+  const dialect = tabDialect(tab)
+  if (dialect !== 'python') {
+    const pg = dialect === 'postgres'
+    return buildSqlAiContext({
+      dialect: dialect as SqlAiDialect,
+      tabTitle: tab?.title ?? 'SQL',
+      tabText,
+      cursorPos,
+      selection: s.activeTab === tabId ? activeSelection() : null,
+      tables: (pg ? s.pgTables : s.tables).map((t) => ({ name: labName(t), rows: t.rows, columns: t.columns })),
+      result: sqlResultForAi(tabId, !!extra?.includeRows),
+      translation: dialect === 'tsql' ? sqlTranslationForAi(tabId) : null,
+      includeRows: extra?.includeRows,
+      instruction: extra?.instruction,
+      sendEarlier: extra?.sendNotebook ?? s.aiSendNotebook,
+      decisions: tab?.decisions,
+    })
+  }
   const tables: AiContextTable[] = s.tables.map((t) => ({
     name: labName(t),
     rows: t.rows,
@@ -2124,6 +2173,11 @@ export function openAiSettings(open = true) {
 
 export function toggleAiPanel(open?: boolean) {
   const s = get()
+  // A SQL tab has no Data cycle: its panel state is the helper's alone.
+  if (tabDialect(s.tabs.find((t) => t.id === s.activeTab)) !== 'python') {
+    set({ aiPanelOpen: open ?? !s.aiPanelOpen })
+    return
+  }
   const next = resolveTogglePythonPanel(
     { dmCycleOpen: s.dmCycleOpen, aiPanelOpen: s.aiPanelOpen, lastOpened: s.pythonLastPanel },
     'aiHelper',
@@ -2300,14 +2354,15 @@ export function clearAiConversation(tabId: string) {
  * What the next request would carry, built the way askAi builds it: for the "Sees" line and
  * "Show exactly what is sent". Works without a key. A question still being typed is the instruction.
  */
-export function previewAiRequest(tabId: string, cursorPos: number, question: string) {
-  const built = gatherTabAiContext(tabId, cursorPos, { instruction: question.trim() || '(your question goes here)' })
+export function previewAiRequest(tabId: string, cursorPos: number, question: string, includeRows = false) {
+  const built = gatherTabAiContext(tabId, cursorPos, { instruction: question.trim() || '(your question goes here)', includeRows })
   const history = getAiChat(tabId)
+  const dialect = tabDialect(get().tabs.find((t) => t.id === tabId))
   return {
     built,
     messages: normalizeHistory(history).length,
-    hasSchema: get().tables.length > 0,
-    text: formatRequestPreview(buildTutorSystemPrompt(), history, built.text),
+    hasSchema: (dialect === 'postgres' ? get().pgTables : get().tables).length > 0,
+    text: formatRequestPreview(buildTutorSystemPrompt(dialect), history, built.text),
   }
 }
 
@@ -2355,7 +2410,7 @@ export async function askAi(opts: AiAskOptions): Promise<boolean> {
     return false
   }
 
-  const quick = opts.action ? AI_QUICK_ACTIONS.find((a) => a.id === opts.action) : undefined
+  const quick = findQuickAction(opts.action)
   const userQuestion = opts.question?.trim() ?? ''
   if (!quick && !userQuestion) return false
 
@@ -2395,13 +2450,14 @@ export async function askAi(opts: AiAskOptions): Promise<boolean> {
 
   try {
     let sampleRows: AiContextSampleRows | null = null
-    if (opts.includeSampleRows) {
+    const askDialect = tabDialect(get().tabs.find((t) => t.id === tabId))
+    if (opts.includeSampleRows && askDialect === 'python') {
       const preContext = gatherTabAiContext(tabId, cursorPos, { sampleRows: null })
       sampleRows = await fetchSampleRowsForAi(preContext.referencedTables[0])
       if (gen !== activeAiGen || !get().aiSettings.enabled) return false
     }
 
-    const built = gatherTabAiContext(tabId, cursorPos, { sampleRows, instruction })
+    const built = gatherTabAiContext(tabId, cursorPos, { sampleRows, instruction, includeRows: !!opts.includeSampleRows })
     const history = getAiChat(tabId)
     const currentSettings = get().aiSettings
     const model = currentSettings.models[provider].trim() || DEFAULT_AI_MODELS[provider]
@@ -2421,7 +2477,7 @@ export async function askAi(opts: AiAskOptions): Promise<boolean> {
       provider,
       apiKey,
       model,
-      systemPrompt: buildTutorSystemPrompt(),
+      systemPrompt: buildTutorSystemPrompt(askDialect),
       userPrompt: built.text,
       history,
       baseUrl: currentSettings.baseUrl,
@@ -2495,7 +2551,9 @@ export async function askAi(opts: AiAskOptions): Promise<boolean> {
 
 export function askAiFromError(errorText: string) {
   toggleAiPanel(true)
-  void askAi({ action: 'why-failed', errorOverride: errorText })
+  const s = get()
+  const sql = tabDialect(s.tabs.find((t) => t.id === s.activeTab)) !== 'python'
+  void askAi({ action: sql ? 'sql-why-failed' : 'why-failed', errorOverride: errorText })
 }
 
 function applyAiCodeEdit(
@@ -2504,7 +2562,7 @@ function applyAiCodeEdit(
 ) {
   const s = get()
   const tab = s.tabs.find((t) => t.id === s.activeTab)
-  if (!tab || tabDialect(tab) !== 'python') return
+  if (!tab) return
   const cursorPos = activeCursorPos()
   const { text, cursor } = transform(tab.sql, cursorPos, code)
   if (!replaceActiveAndFocusCursor(text, cursor)) setTabSql(tab.id, text)
@@ -2520,6 +2578,11 @@ export function replaceAiCodeCell(code: string) {
 
 export function insertAiCodeAtCursor(code: string) {
   applyAiCodeEdit(code, insertCodeAtCursor)
+}
+
+/** SQL tabs: the selection, else the statement under the cursor, becomes the code (Ctrl+Z undoes it). */
+export function replaceAiSqlStatement(code: string) {
+  applyAiCodeEdit(code, (text, pos, c) => replaceCurrentStatement(text, pos, c, activeSelection()))
 }
 
 // ------------------------------------------------------------------ practice pages on Kaiyo
@@ -2667,4 +2730,12 @@ export async function checkTask(tabId: string, sql: string) {
   } catch (e) {
     put({ status: 'error', message: `The reference answer could not be computed (were the demo tables changed?): ${String(e instanceof Error ? e.message : e).split('\n')[0]}` })
   }
+}
+
+/** The helper is on and has what it needs to answer: a key, or for an OpenAI-compatible server its address and model. */
+export function aiIsReady(s: Pick<State, 'aiSettings' | 'aiKeys'>): boolean {
+  const { provider, enabled, baseUrl, models } = s.aiSettings
+  if (!enabled) return false
+  if (provider === 'openai') return baseUrl !== '' && (models.openai.trim() || DEFAULT_AI_MODELS.openai) !== ''
+  return s.aiKeys[provider].trim().length > 0
 }

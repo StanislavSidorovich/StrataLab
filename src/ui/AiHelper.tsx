@@ -1,7 +1,7 @@
 // Optional bring-your-own-key AI helper UI (Feature D):
 // - AiSettingsDialog: opt-in master switch (OFF by default), Gemini/Claude provider, masked key input, model override
 // - AiConsentDialog: plain-words consent before first request per provider
-// - AiHelperPanel: side panel on desktop / bounded section on phone in Python tabs
+// - AiHelperPanel: side panel on desktop / bounded section on phone, in Python and SQL tabs
 import { useEffect, useRef, useState } from 'react'
 import {
   AlertTriangle,
@@ -20,7 +20,6 @@ import {
 import {
   AI_ENDPOINT_TEMPLATES,
   AI_KEY_HELP,
-  AI_QUICK_ACTIONS,
   CLAUDE_MODEL_CHOICES,
   GEMINI_TERMS_URL,
   isLocalBaseUrl,
@@ -30,6 +29,7 @@ import {
   appendDictatedText,
   nextAiSpeechLang,
   parseAiSpeechLang,
+  quickActionsFor,
   type AiProvider,
   type AiQuickAction,
   type AiSpeechLang,
@@ -467,8 +467,11 @@ export function AiConsentDialog() {
             <code className="mono">isna().sum()</code> and <code className="mono">describe()</code>), the current cell, and the last error. With the switch <i>&ldquo;Send the notebook&rsquo;s code&rdquo;</i> on (it is on by default), also the code and text of the cells above the current one (never their outputs), your &ldquo;Decisions so far&rdquo; note, and the last messages of this conversation. Your code is not personal data, but it goes to the provider too, so keep anything confidential out of your cells. &ldquo;Show exactly what is sent&rdquo; under the input shows the whole request.
           </p>
           <p>
+            <b>In a SQL tab</b> it is the dialect, the statement under the cursor (or your selection), a few statements above it, the columns of the tables that statement names, your &ldquo;Decisions so far&rdquo; note, the last messages, and the last error or the column names of the last result. Never the whole tab.
+          </p>
+          <p>
             <b>No raw rows by default:</b> table rows are never sent unless you explicitly tick{' '}
-            <i>&ldquo;Also send the first 20 rows for this request&rdquo;</i> for a single question.
+            <i>&ldquo;Also send the first 20 rows for this request&rdquo;</i> (in a SQL tab: the first 20 rows of the last result) for a single question.
           </p>
           <p>
             {local ? (
@@ -520,7 +523,8 @@ export function AiConsentDialog() {
 export function AiHelperPanel() {
   const open = useLab((s) => s.aiPanelOpen)
   const tab = useLab((s) => s.tabs.find((t) => t.id === s.activeTab))
-  const panelW = useSidePanelWidth(open && tabDialect(tab) === 'python')
+  const sql = tabDialect(tab) !== 'python'
+  const panelW = useSidePanelWidth(open)
   const settings = useLab((s) => s.aiSettings)
   const keys = useLab((s) => s.aiKeys)
   const req = useLab((s) => s.aiRequest)
@@ -548,12 +552,12 @@ export function AiHelperPanel() {
   }
 
   useEffect(() => {
-    if (!open || tabDialect(tab) !== 'python') stopListening()
+    if (!open) stopListening()
   }, [open, tab])
 
   useEffect(() => () => stopListening(), [])
 
-  if (!open || tabDialect(tab) !== 'python') return null
+  if (!open) return null
 
   const provider = settings.provider
   const providerLabel = PROVIDER_LABELS[provider]
@@ -705,7 +709,7 @@ export function AiHelperPanel() {
         ) : (
           <>
             <div className="flex flex-wrap gap-1.5">
-              {AI_QUICK_ACTIONS.map((qa) => (
+              {quickActionsFor(tabDialect(tab)).map((qa) => (
                 <button
                   key={qa.id}
                   type="button"
@@ -724,7 +728,7 @@ export function AiHelperPanel() {
                 rows={2}
                 className="field w-full"
                 style={{ fontSize: 12.5, resize: 'vertical' }}
-                placeholder="Ask about your stage, table, or error…"
+                placeholder={sql ? 'Ask about this query, table, or error…' : 'Ask about your stage, table, or error…'}
                 aria-label="Ask AI helper"
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
@@ -743,7 +747,7 @@ export function AiHelperPanel() {
                   checked={includeSampleRows}
                   onChange={(e) => setIncludeSampleRows(e.target.checked)}
                 />
-                <span>Also send the first 20 rows for this request</span>
+                <span>{sql ? 'Also send the first 20 rows of the last result for this request' : 'Also send the first 20 rows for this request'}</span>
               </label>
 
               <label className="flex items-start gap-2 cursor-pointer select-none" style={{ fontSize: 11.5, color: 'var(--muted)' }}>
@@ -753,7 +757,7 @@ export function AiHelperPanel() {
                   checked={sendNotebook}
                   onChange={(e) => setAiSendNotebook(e.target.checked)}
                 />
-                <span>Send the notebook&rsquo;s code (the cells above this one, no outputs)</span>
+                <span>{sql ? 'Send the statements above this one (no results)' : <>Send the notebook&rsquo;s code (the cells above this one, no outputs)</>}</span>
               </label>
 
               <div className="flex flex-wrap items-center gap-1.5">
