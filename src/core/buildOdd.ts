@@ -26,3 +26,12 @@ export function oddText(o: OddCounts): string {
   if (o.returnsPositive === o.returns) return `${first} ${o.returns === 1 ? 'Its' : 'Their'} revenue came positive: ${sign}. ${agree}`
   return `${first} Where there is a revenue (${n(o.returnsPositive)} of them) it came positive: ${sign}. ${agree}`
 }
+
+/** The action line of card P8: it names no count, so it cannot disagree with the paragraph under it. */
+export const oddAction = (read: boolean): string => (read ? 'Nothing to change here.' : 'Read the numbers, then press Got it.')
+
+/** One line under the revenue tile: the returns that came with a positive revenue and are summed as sent; null when there are none. */
+export function returnsNote(returnsPositive: number): string | null {
+  if (!(returnsPositive > 0)) return null
+  return `Includes ${n(returnsPositive)} ${returnsPositive === 1 ? 'return' : 'returns'} the distributor sent with a positive revenue, kept as sent.`
+}

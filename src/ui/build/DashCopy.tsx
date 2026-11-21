@@ -5,6 +5,7 @@ import type { Table } from 'apache-arrow'
 import { money } from './BuildTable'
 import { BarChart } from './BarChart'
 import { ChartView } from '../Chart'
+import { ReturnsNote } from './ReturnsNote'
 import { PinTile, usePinResults } from './PinTiles'
 import type { ResultData } from '../../core/check'
 import type { BuildWork } from '../../core/buildSteps'
@@ -56,7 +57,7 @@ export function DashCopy({ work, ready }: { work: BuildWork; ready: boolean }) {
       {error && <div className="build-error">{error}</div>}
       <section className="ba-dash-tile" data-testid="copy-kpi">
         <div className="bd-tile-title">{title('kpi')}</div>
-        {views.kpi ? <div className="bd-kpi">{money(views.kpi.rows[0][0] as string)}</div> : <div className="build-muted">{ready ? 'Loading…' : 'Waiting for the data…'}</div>}
+        {views.kpi ? <><div className="bd-kpi">{money(views.kpi.rows[0][0] as string)}</div><ReturnsNote ready={ready} /></> : <div className="build-muted">{ready ? 'Loading…' : 'Waiting for the data…'}</div>}
       </section>
       <section className="ba-dash-tile" data-testid="copy-line">
         <div className="bd-tile-title">{title('line')}</div>

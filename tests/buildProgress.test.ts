@@ -4,11 +4,11 @@ import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { BUILD_KEY, STEP_IDS, demoFromHash, emptyBuild, hashWithDemo, hashWithoutBuild, readBuild, saveBuild, type BuildState } from '../src/core/build'
-import { fillBefore, fillBeforeTouchesTables, fillUnit, touchesTables, unitsOf, type FillUnit } from '../src/core/buildFill'
+import { fillBefore, fillBeforeTouchesTables, fillUnit, settle, touchesTables, unitsOf, type FillUnit } from '../src/core/buildFill'
 import { DEMO_KEY, SAVED_KEY, isEmptyRun, keptJson, loadSaved, loadSlot, readSaved, restoreNeedsConfirm, restoreSaved, runKey, sameRun, saveSlot, startOver, writeSaved } from '../src/core/buildProgress'
 import { checkAnswer } from '../src/core/buildDashboard'
 import { checkMoreAnswer } from '../src/core/buildMore'
-import { cleanDone } from '../src/core/buildSteps'
+import { cleanDone, cleanFinished } from '../src/core/buildSteps'
 import type { ResultData } from '../src/core/check'
 import { ANSWERS, BUILD_SOURCES, MORE_IDS, TILE_IDS } from '../src/data/build/kaiyoSales'
 import { RIGHT_SALES } from './buildSolved'
@@ -246,4 +246,32 @@ describe('a filled state is a right state on the engine', () => {
     expect(await n(`SELECT count(*) FROM information_schema.tables WHERE table_schema = 'build_kaiyo' AND table_name LIKE 'gold_%'`)).toBe(0)
     expect(await n(`SELECT count(*) FROM information_schema.tables WHERE table_schema = 'build_kaiyo' AND table_name LIKE 'clean_%'`)).toBe(0)
   }, 60_000)
+})
+
+// ---------------------------------------------------------------- Clean waits for P8 (v0.66.1)
+
+describe('The Clean step finishes with Got it on P8', () => {
+  const cardsPassed = () => {
+    const s = fillBefore(emptyBuild(), 'clean')
+    return apply(s, unitsOf('clean'))
+  }
+  it('the demo fill reads P8 too, so Clean is done after it', () => {
+    const s = cardsPassed()
+    expect(s.work.p8).toBe(true)
+    expect(s.done).toContain('clean')
+  })
+  it('cards passed but P8 not read: Clean is not done, and Model stays locked', () => {
+    const s0 = cardsPassed()
+    const s = settle({ ...emptyBuild(), work: { ...s0.work, p8: false }, done: ['connect'] })
+    expect(cleanDone(s.work.passed)).toBe(true)
+    expect(cleanFinished(s.work)).toBe(false)
+    expect(s.done).not.toContain('clean')
+    expect(settle({ ...s, work: { ...s.work, p8: true } }).done).toContain('clean')
+  })
+  it('a run saved with Clean done and P8 unread keeps Clean done', () => {
+    const s0 = cardsPassed()
+    const old: BuildState = { ...s0, work: { ...s0.work, p8: false } }
+    expect(old.done).toContain('clean')
+    expect(settle(old).done).toContain('clean')
+  })
 })

@@ -326,7 +326,7 @@ export function ModelScreen(p: Props) {
               </div>
             )}
           </div>
-          {panelOn && <LinkPanel pass={pass} tables={tables} many={many} one={one} onSlot={onSlot} onSwap={doSwap} run={run} diag={diag} peek={peek} onCreate={create} onFix={fix} />}
+          {panelOn && <LinkPanel pass={pass} tables={tables} many={many} one={one} onSlot={onSlot} onSwap={doSwap} run={run} diag={diag} peek={peek} onCreate={create} onFix={fix} made={links.map((l) => l.id)} />}
         </div>
       )}
     </div>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { oddText } from '../src/core/buildOdd'
+import { oddAction, oddText, returnsNote } from '../src/core/buildOdd'
 
 describe('P8 text (the count is the data, the claims match it)', () => {
   it('uses the counts it is given, with thousands separators', () => {
@@ -20,5 +20,20 @@ describe('P8 text (the count is the data, the claims match it)', () => {
   })
   it('one return reads in the singular', () => {
     expect(oddText({ noRevenue: 1, noUnits: 1, returns: 1, returnsPositive: 1, returnsNegative: 0 })).toContain('and 1 has negative units (returns). Its revenue came positive')
+  })
+})
+
+describe('P8 action line and the returns note (v0.66.1)', () => {
+  it('the action names no count: the paragraph has four numbers', () => {
+    expect(oddAction(false)).toBe('Read the numbers, then press Got it.')
+    expect(oddAction(false)).not.toMatch(/three|four|\d/i)
+    expect(oddAction(true)).toBe('Nothing to change here.')
+  })
+  it('the returns line comes from the count: none for 0, singular for 1, separators', () => {
+    expect(returnsNote(0)).toBeNull()
+    expect(returnsNote(-1)).toBeNull()
+    expect(returnsNote(1)).toBe('Includes 1 return the distributor sent with a positive revenue, kept as sent.')
+    expect(returnsNote(1002)).toBe('Includes 1,002 returns the distributor sent with a positive revenue, kept as sent.')
+    expect(returnsNote(102)).not.toMatch(/\u2014|\u2013/)
   })
 })

@@ -17,6 +17,7 @@ import { ChartView } from '../Chart'
 import { BarChart } from './BarChart'
 import { BuildTable, money } from './BuildTable'
 import { FillButton } from './DemoContext'
+import { ReturnsNote } from './ReturnsNote'
 import { PinnedGrid } from './PinTiles'
 import { useSlice } from './SliceContext'
 import { SlicerBar } from './SlicerBar'
@@ -120,6 +121,7 @@ export function DashboardScreen({ work, setWork, ready }: Props) {
               return v == null ? '–' : money(v as string)
             })()}
           </div>
+          {!on && <ReturnsNote ready={ready} />}
           {on && sliced.kpi && sliced.kpi.rows[0]?.[0] == null && <p className="build-muted bd-empty" data-testid="tile-kpi-empty">No sales match the slicers.</p>}
           {work.peek && !on && (
             <div className="bd-peek" data-testid="tile-kpi-peek">

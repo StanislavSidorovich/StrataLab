@@ -9,7 +9,7 @@ import { DEMO_KEY, isEmptyRun, loadSaved, loadSlot, restoreNeedsConfirm, restore
 import type { Link } from '../../core/buildLinks'
 import { answersDone, dashboardDone } from '../../core/buildDashboard'
 import { NO_SLICE, type SliceFilter } from '../../core/buildSlice'
-import { activeCard, cleanDone, type BuildWork, type StepSpec } from '../../core/buildSteps'
+import { activeCard, cleanFinished, type BuildWork, type StepSpec } from '../../core/buildSteps'
 import { CLEAN_CARDS } from '../../data/build/kaiyoSales'
 import { BUILD_RETURN_URL, BUILD_SOURCES, type BuildSourceId } from '../../data/build/kaiyoSales'
 import { applySteps, prepare, resetWork, restore, salesLock } from '../../db/buildRun'
@@ -254,8 +254,8 @@ function Shell() {
     if (work.connected.length === BUILD_SOURCES.length) setState((s) => markDone(s, 'connect'))
   }, [work.connected.length])
   useEffect(() => {
-    if (cleanDone(work.passed)) setState((s) => markDone(s, 'clean'))
-  }, [work.passed])
+    if (cleanFinished(work)) setState((s) => markDone(s, 'clean'))
+  }, [work.passed, work.p8])
 
   useEffect(() => {
     if (dashboardDone(work.dash.tiles)) setState((s) => markDone(s, 'dashboard'))

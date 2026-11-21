@@ -91,7 +91,7 @@ export function ConnectScreen({ work, setWork, ready }: Props) {
                 <div className="build-muted">{s.id === 'sales' ? (work.refresh.mode === 'pattern' ? 'every file in the folder' : '30 files · ') : ''}{s.id === 'sales' && work.refresh.mode === 'pattern' ? '' : `${fmtN(s.fileRows)} rows`}</div>
               </header>
               <p className="build-muted" style={{ margin: 0 }}>{BLURB[s.id]}</p>
-              {on ? <BuildTable data={b?.data ?? null} types={b?.types} caption={`${s.bronze}, first rows`} /> : <BuildTable data={previews[s.id] ?? null} caption={`${s.label}, first rows`} />}
+              {on ? <BuildTable scrollHint data={b?.data ?? null} types={b?.types} caption={`${s.bronze}, first rows`} /> : <BuildTable scrollHint data={previews[s.id] ?? null} caption={`${s.label}, first rows`} />}
               <footer className="build-source-foot">
                 {on ? (
                   <span className="build-ok">

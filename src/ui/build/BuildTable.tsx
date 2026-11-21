@@ -1,13 +1,28 @@
 // Small pieces shared by the screens of the build page: a table of a few rows, a folded SQL, a row count line.
-import type { ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { ResultData } from '../../core/check'
+import './walk066.css'
 
 /** A few rows as a plain table; `types` (column → short type) is drawn under the names. */
 /** `errors` (same shape as the rows) marks the cells that are [Error]: NULL where the file had a value (spec 3.6). */
-export function BuildTable({ data, types, caption, tone, errors }: { data: ResultData | null; types?: Record<string, string>; caption?: string; tone?: 'warn' | 'ok'; errors?: boolean[][] }) {
+export function BuildTable({ data, types, caption, tone, errors, scrollHint }: { data: ResultData | null; types?: Record<string, string>; caption?: string; tone?: 'warn' | 'ok'; errors?: boolean[][]; scrollHint?: boolean }) {
+  const wrap = useRef<HTMLDivElement>(null)
+  const [wide, setWide] = useState(false)
+  // a scrollbar can be hidden by the system (Firefox, touch): when the columns do not fit, say so in words
+  useEffect(() => {
+    const el = wrap.current
+    if (!scrollHint || !el) return
+    const measure = () => setWide(el.scrollWidth > el.clientWidth + 1)
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [scrollHint, data])
   if (!data) return <div className="build-muted">Loading…</div>
   return (
-    <div className="build-table-wrap" tabIndex={0} role="region" aria-label={caption ?? 'Rows'}>
+    <>
+    <div className="build-table-wrap" ref={wrap} tabIndex={0} role="region" aria-label={caption ?? 'Rows'}>
       <table className={`build-table${tone ? ` is-${tone}` : ''}`}>
         <thead>
           <tr>
@@ -32,6 +47,12 @@ export function BuildTable({ data, types, caption, tone, errors }: { data: Resul
         </tbody>
       </table>
     </div>
+    {wide && (
+      <div className="build-muted bw-scrollhint" data-testid="table-scroll-hint">
+        Scroll sideways for the other columns.
+      </div>
+    )}
+    </>
   )
 }
 

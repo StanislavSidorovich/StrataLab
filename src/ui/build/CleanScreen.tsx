@@ -1,14 +1,14 @@
 // Step 2 of the build page: Clean (spec section 3). Four cards open one after the other (W watched, P1 products by
 // buttons, P2 sales by a blank, P3 customers by a button with settings); the panel under them shows any source with its
 // toolbar and applied steps, so the learner chooses the tool and the check judges the table.
-import { oddText } from '../../core/buildOdd'
+import { oddAction, oddText } from '../../core/buildOdd'
 import { FABRIC_CLEAN, VOCAB_CLEAN } from '../../data/build/fabricNotes'
 import './fabric.css'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { ArrowRight, Check, CheckCircle2, Lightbulb, Loader2, X, XCircle } from 'lucide-react'
 import { MARKED_CARDS } from '../../core/buildHintMark'
 import { DEDUP_KEY } from '../../core/buildSolved'
-import { CLEAN_COLUMNS, SOURCE_IDS, activeCard, addSpec, checkFormat, cleanDone, datesSql, hasFullGiven, passCard, typedColumn, type BuildWork, type StepSpec, dedupSql } from '../../core/buildSteps'
+import { CLEAN_COLUMNS, SOURCE_IDS, activeCard, addSpec, checkFormat, cleanDone, cleanFinished, datesSql, hasFullGiven, passCard, typedColumn, type BuildWork, type StepSpec, dedupSql } from '../../core/buildSteps'
 import { checkBlank } from '../../core/pipeline'
 import { CLEAN_CARDS, GIVEN_NOTE, P1_SKUS, P3_NOTE, sourceById, type BuildSourceId, type CleanCard, type CleanId } from '../../data/build/kaiyoSales'
 import { LINK_TEXT } from '../../data/build/linkData'
@@ -283,7 +283,7 @@ export function CleanScreen({ work, setWork, ready, rebuild, rev, focus, onBackT
           </button>
         </div>
       )}
-      {cleanDone(work.passed) && (
+      {cleanFinished(work) && (
         <div className="build-quick" data-testid="clean-done">
           <b>Clean is done.</b> Regions 16 rows, products 47, sales 3,000, customers 144, and the sales have dates and numbers.{' '}
           {!hasFullGiven(work) && work.p4 !== 'done' && 'The names of the stores in the sales are still as the distributors typed them: the Model step will tell whether they link. '}
@@ -678,8 +678,14 @@ function OddCard({ work, setWork, ready, rev }: { work: BuildWork; setWork: Prop
     if (!ready) return
     let alive = true
     void oddValues(enginePort)
-      .then((o) => alive && setOdd(o))
-      .catch(() => alive && setOdd(null))
+      .then((o) => {
+        if (!alive) return
+        setOdd(o)
+      })
+      .catch(() => {
+        // the numbers cannot be counted: the step must not wait for a card that cannot show
+        if (alive) setWork((w) => (w.p8 ? w : { ...w, p8: true }))
+      })
     return () => {
       alive = false
     }
@@ -694,13 +700,13 @@ function OddCard({ work, setWork, ready, rev }: { work: BuildWork; setWork: Prop
           <div className="build-muted">sales · nothing to fix</div>
         </div>
       </div>
-      <ActionText action={work.p8 ? 'Nothing to change here.' : 'Read the three numbers, then press Got it.'} text="Not every odd value is an error: an empty revenue stays NULL, a return stays as it was sent." />
+      <ActionText action={oddAction(work.p8)} text="Not every odd value is an error: an empty revenue stays NULL, a return stays as it was sent." />
       <p style={{ margin: 0 }} data-testid="clean-p8-numbers">
         {oddText(odd)}
       </p>
       {!work.p8 && (
         <div>
-          <button className="btn btn-primary" onClick={() => setWork((w) => ({ ...w, p8: true }))} data-testid="clean-p8-read">
+          <button className="btn btn-primary" onClick={() => setWork((w) => (w.p8 ? w : { ...w, p8: true }))} data-testid="clean-p8-read">
             <Check size={14} /> Got it
           </button>
         </div>

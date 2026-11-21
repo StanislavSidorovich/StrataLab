@@ -1,0 +1,23 @@
+/* v0.66.1: small layout fixes from the 1366 x 900 walk through the build */
+
+/* the line under a revenue number */
+.bw-returns { margin: 4px 0 0; font-size: 12.5px; }
+
+/* the step strip keeps whole names: a chip is as wide as its name and the strip scrolls when the screen is too narrow (under 640 px the strip shows the open name only) */
+@media (min-width: 641px) {
+  .build-chip { flex: 1 0 auto; }
+  .build-chip-label { overflow: visible; text-overflow: clip; }
+}
+
+/* the journal fits its card: the step text wraps, Status and ms stay in view */
+.build-table.rf-table { width: 100%; min-width: 0; }
+.build-table.rf-table td:nth-child(3) { white-space: normal; overflow-wrap: anywhere; min-width: 12em; }
+.build-table.rf-table th:nth-child(3) { white-space: normal; }
+
+/* the preview of a file never cuts a column: the table scrolls inside its card */
+.build-table-wrap { max-width: 100%; }
+
+/* SQL shown on the build page wraps instead of running past the edge: a trailing comment such as -- 2026/07/03 must stay readable */
+.build-page .pl-code { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%; box-sizing: border-box; }
+
+.bw-scrollhint { margin: 4px 0 0; font-size: 12px; }

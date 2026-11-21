@@ -33,6 +33,8 @@ interface Props {
   peek: ChainPeek | null
   onCreate: () => void
   onFix: (fix: Fix) => void
+  /** ids of the links made so far (L1, L2, L3): the idle hint names the next one left */
+  made?: readonly string[]
 }
 
 const mark = (type: string) => {
@@ -100,7 +102,7 @@ function SlotBox({
   )
 }
 
-export function LinkPanel({ pass, tables, many, one, onSlot, onSwap, run, diag, peek, onCreate, onFix }: Props) {
+export function LinkPanel({ pass, tables, many, one, onSlot, onSwap, run, diag, peek, onCreate, onFix, made = [] }: Props) {
   const [hint, setHint] = useState(0)
   const hints = pass === 1 ? LINK_TEXT.hint1 : LINK_TEXT.hint2
   const full = !!(many.column && one.column)
@@ -145,7 +147,7 @@ export function LinkPanel({ pass, tables, many, one, onSlot, onSwap, run, diag, 
           )}
         </div>
       )}
-      {!full && !run.error && <div className="lk-caption build-muted">{many.column || one.column ? 'Now the other end.' : pass === 2 ? LINK_TEXT.idleStar : LINK_TEXT.idle}</div>}
+      {!full && !run.error && <div className="lk-caption build-muted">{many.column || one.column ? 'Now the other end.' : pass === 2 ? LINK_TEXT.idleStar : LINK_TEXT.idleFor(made)}</div>}
       {diag && !run.busy && (
         <div className="lk-result" data-testid="link-result">
           {diag.result}

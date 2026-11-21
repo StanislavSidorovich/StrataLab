@@ -9,7 +9,7 @@ import { STEP_IDS, markDone, openStep, type BuildState, type StripId } from './b
 import { answersDone, dashboardDone } from './buildDashboard'
 import { addLink, modelLinked, type Link } from './buildLinks'
 import { DEDUP_KEY, SOLVED_SALES } from './buildSolved'
-import { cleanDone, nextId, passCard, typedColumn, type BuildWork, type StepSpec } from './buildSteps'
+import { cleanDone, cleanFinished, nextId, passCard, typedColumn, type BuildWork, type StepSpec } from './buildSteps'
 
 export type FillUnit =
   | { step: 'connect' }
@@ -60,7 +60,9 @@ function putCard(work: BuildWork, card: CleanId | 'P4' | 'P7'): BuildWork {
   if (card === 'P5') next = { ...next, format: '%d/%m/%Y' }
   if (card === 'P4') return { ...next, p4: 'done' }
   if (card === 'P7') return { ...next, p7: 'done' }
-  return { ...next, passed: passCard(next, card) }
+  const passed = passCard(next, card)
+  // the demo reads the info card P8 too: it is the last thing the Clean step waits for
+  return { ...next, passed, p8: next.p8 || cleanDone(passed) }
 }
 
 /** The five links of the model as the learner makes them; the star is built from the first three. */
@@ -73,7 +75,7 @@ export function settle(state: BuildState): BuildState {
   let s = state
   const w = s.work
   if (w.connected.length === 4) s = markDone(s, 'connect')
-  if (cleanDone(w.passed)) s = markDone(s, 'clean')
+  if (cleanFinished(w)) s = markDone(s, 'clean')
   if (s.star && modelLinked(s.links)) s = markDone(s, 'model')
   if (dashboardDone(w.dash.tiles)) s = markDone(s, 'dashboard')
   if (answersDone(w.dash.answered)) s = markDone(s, 'answer')

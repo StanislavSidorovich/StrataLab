@@ -112,6 +112,14 @@ test('build it by hand: Connect to Answer', async ({ page, browserName }) => {
   await clean.getByTestId('clean-check-P6').click()
   await expect(clean.getByTestId('clean-line')).toContainText('Passed')
   await clean.getByTestId('clean-pass-P6').click()
+  // P8 (info card) comes first: the step is not done, and Model stays locked, until Got it
+  await expect(clean.getByTestId('clean-card-P8')).toBeVisible()
+  await expect(clean.getByTestId('clean-p8-read')).toBeVisible()
+  await expect(clean.getByTestId('clean-card-P8')).not.toContainText('three')
+  await expect(clean.getByTestId('clean-done')).toHaveCount(0)
+  await expect(page.getByTestId('next-locked')).toBeVisible()
+  // SHOT:p8
+  await clean.getByTestId('clean-p8-read').click()
   await expect(clean.getByTestId('clean-done')).toBeVisible()
 
   // ---- Model

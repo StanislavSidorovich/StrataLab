@@ -304,7 +304,7 @@ export interface BuildWork {
   more: MoreWork
   /** the optional step Refresh: how the sales read their folder, the new date format, the journal and the runs (src/core/buildRefresh.ts) */
   refresh: RefreshWork
-  /** the info card P8 (odd values that are not errors) was read; it locks nothing */
+  /** the info card P8 (odd values that are not errors) was read; the Clean step finishes with it (cleanFinished) */
   p8: boolean
 }
 
@@ -372,6 +372,9 @@ export function passedInOrder(list: readonly unknown[]): CleanId[] {
 export const activeCard = (passed: readonly CleanId[]): CleanId | null => CLEAN_IDS.find((c) => !passed.includes(c)) ?? null
 
 export const cleanDone = (passed: readonly CleanId[]) => CLEAN_IDS.every((c) => passed.includes(c))
+
+/** The Clean step is finished when its cards have passed and the info card P8 was read (Got it). The step stays done once marked: nothing takes it back. */
+export const cleanFinished = (w: Pick<BuildWork, 'passed' | 'p8'>) => cleanDone(w.passed) && w.p8
 
 // ---------------------------------------------------------------- diagnoses (3.3 to 3.5)
 
