@@ -648,7 +648,7 @@ export function AiHelperPanel() {
     <aside
       ref={panelW.ref}
       aria-label="AI helper panel"
-      className="relative w-full md:w-[var(--ai-w)] shrink-0 flex flex-col min-h-0 max-h-[46vh] md:max-h-none border-t md:border-t-0 md:border-l"
+      className="side-right relative w-full md:w-[var(--ai-w)] shrink-0 flex flex-col min-h-0 max-h-[46vh] md:max-h-none border-t md:border-t-0 md:border-l"
       style={{ background: 'var(--panel)', borderColor: 'var(--line)', ['--ai-w' as string]: `${panelW.width}px` }}
     >
       <SidePanelHandle width={panelW.width} max={panelW.max} row={panelW.row} onWidth={panelW.setWidth} />

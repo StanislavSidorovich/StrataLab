@@ -1000,7 +1000,7 @@ function Page() {
         </label>
         <RecallSearch id="rail" up />
       </nav>
-      <div ref={main} className="flex-1 min-w-0 overflow-y-auto">
+      <div ref={main} className="work-centre flex-1 min-w-0 overflow-y-auto">
         <header className="sticky top-0 z-20 px-4 py-2 flex items-center gap-2 flex-wrap" style={{ background: 'var(--panel)', borderBottom: '1px solid var(--line)' }}>
           <div className="flex-1 min-w-[10rem]">
             <div className="font-semibold">{book.title}</div>
@@ -1072,7 +1072,7 @@ function Page() {
         </div>
       </div>
       {tablesOpen && tablesBlock && (
-        <aside aria-label="Tables and columns" className="absolute inset-y-0 right-0 z-30 w-full max-w-sm md:static md:w-80 md:shrink-0 flex flex-col" style={{ background: 'var(--panel)', borderLeft: '1px solid var(--line)' }}>
+        <aside aria-label="Tables and columns" className="side-right absolute inset-y-0 right-0 z-30 w-full max-w-sm md:static md:w-80 md:shrink-0 flex flex-col" style={{ background: 'var(--panel)', borderLeft: '1px solid var(--line)' }}>
           <div className="flex items-center gap-2 px-3 py-2" style={{ borderBottom: '1px solid var(--line)' }}>
             <span className="font-semibold flex-1">Tables and columns</span>
             <button className="btn btn-ghost" onClick={() => setTablesOpen(false)} aria-label="Close the tables">

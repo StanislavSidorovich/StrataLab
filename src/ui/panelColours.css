@@ -1,0 +1,27 @@
+/* Left panel, right panel and centre (Appearance, src/core/look.ts).
+   --panel / --panel-2 are the LEFT colour (set on <html> when chosen); the top bar and dialogs use them too.
+   The right panels (.side-right) take --panel-right instead, which falls back to the theme's own surface
+   so a left tint does not leak to the right. The centre (.work-centre) draws its plain buttons in the
+   editor colour; a right panel inside the centre (the AI helper) says it wants its own again. */
+:root {
+  --panel-right: var(--q-surface);
+  --panel-right-2: var(--q-surface-2);
+  --work-hover: var(--q-surface-2);
+}
+.side-right {
+  --panel: var(--panel-right);
+  --panel-2: var(--panel-right-2);
+  --btn-bg: var(--panel-right);
+  --btn-hover: var(--panel-right-2);
+}
+.work-centre {
+  --btn-bg: var(--code-bg);
+  --btn-hover: var(--work-hover);
+}
+/* .btn-primary, .btn-danger and .btn-ghost keep their own look */
+.work-centre .btn:not(.btn-primary):not(.btn-danger):not(.btn-ghost) {
+  background: var(--btn-bg);
+}
+.work-centre .btn:not(.btn-primary):not(.btn-danger):not(.btn-ghost):hover:not(:disabled) {
+  background: var(--btn-hover);
+}

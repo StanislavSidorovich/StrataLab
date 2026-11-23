@@ -1,5 +1,5 @@
-// The "Aa" button in the header: light or dark theme, and the background of the SQL editor and of
-// the panels, each from a few pale tints or any colour. Rules and swatches in src/core/look.ts.
+// The "Aa" button in the header: light or dark theme, and the background of the centre and of
+// the two side panels, each from a few pale tints or any colour. Rules and swatches in src/core/look.ts.
 import { Moon, Sun } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { applyBorders, readBorders, type Borders } from '../core/borders'
@@ -10,6 +10,7 @@ import { clampTint, hslToHex, lightnessRange, NO_TINT, parseTint, TINT_KEY, tint
 import { toggleTheme, useLab } from './store'
 import { TEXT_ZOOM_EVENT } from './useTextZoom'
 import './appearanceTint.css'
+import './panelColours.css'
 import './contrast.css'
 
 const LOOK_KEY = 'stratalab.look'
@@ -250,8 +251,9 @@ export function AppearanceButton({ className = '' }: { className?: string }) {
               ))}
             </div>
           </div>
-          {colorRow('editor', 'SQL editor')}
-          {colorRow('panels', 'Panels (top bar, tree, dialogs)')}
+          {colorRow('editor', 'Centre (SQL editor, buttons in the work area)')}
+          {colorRow('left', 'Left panel (tree, top bar, dialogs)')}
+          {colorRow('right', 'Right panel (tables, AI helper)')}
           {colorRow('grid', 'Data grid (results, build tables)')}
           {tintRow('callout', 'Note colour ("New:" callouts)')}
           {tintRow('accent', 'Accent (buttons, links, active tab)')}

@@ -171,7 +171,7 @@ export function App() {
             aria-orientation="vertical"
           />
         </div>
-        <div className="flex-1 min-w-0 flex flex-col">
+        <div className="work-centre flex-1 min-w-0 flex flex-col">
           <Tabs />
           <DialectBar />
           <DmCyclePanel />
