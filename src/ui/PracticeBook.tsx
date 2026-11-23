@@ -284,6 +284,8 @@ function CellEditor({ value, onChange, onRun, onCheck, minLines, hint, label }: 
         EditorView.theme({ '&': { borderRadius: '5px' }, '.cm-scroller': { borderRadius: '5px' }, '.cm-gutters': { borderRadius: '5px 0 0 5px' } }),
         book.language(tables),
         dark ? [Prec.high(darkBackground), oneDark] : lightTheme,
+        // The current-line band is neutral grey in a task cell (not the accent green) and absent in an example (nothing to point at).
+        Prec.highest(EditorView.theme({ '.cm-activeLine, .cm-activeLineGutter': { backgroundColor: handlers.current.onCheck ? 'color-mix(in srgb, var(--text) 5%, transparent)' : 'transparent' } })),
         hint ? placeholder(hint) : [],
         EditorView.contentAttributes.of({ 'aria-label': label }),
         EditorView.updateListener.of((u) => {
