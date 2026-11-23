@@ -1,0 +1,55 @@
+/* Lesson mode (src/ui/LessonPage.tsx): one task or one vote per screen, for a projector. */
+.lesson-root { position: absolute; inset: 0; z-index: 30; overflow-y: auto; background: var(--bg); color: var(--text); }
+.lesson-board { position: fixed; z-index: 60; }
+.lesson-board .lesson-inner { zoom: 1.4; }
+.lesson-inner { max-width: none; width: 100%; padding: 0 0 24px; }
+.lesson-switches { display: flex; gap: 16px; align-items: center; justify-content: flex-end; flex-wrap: wrap; padding: 6px 16px; font-size: 13px; color: var(--muted); border-bottom: 1px solid var(--line); background: var(--panel); }
+.lesson-switches label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+.lesson-bar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--panel); }
+.lesson-crumb { color: var(--muted); font-weight: 600; }
+.lesson-crumb b { color: var(--text); }
+.lesson-nav { display: inline-flex; gap: 8px; align-items: center; }
+.lesson-body { padding: 16px; display: grid; gap: 14px; }
+.lesson-q { margin: 0; font-size: 24px; line-height: 1.35; font-weight: 650; }
+.lesson-no { color: var(--accent); margin-right: 6px; }
+.lesson-fold { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); padding: 6px 12px; }
+.lesson-fold > summary { cursor: pointer; font-weight: 600; padding: 2px 0; }
+.lesson-fold p { margin: 6px 0; max-width: 60rem; line-height: 1.5; }
+.lesson-fold pre { margin: 6px 0; padding: 8px 12px; border-radius: 6px; background: var(--panel-2); overflow-x: auto; font-size: 13px; }
+.lesson-sub { color: var(--muted); font-size: 13px; margin-top: 8px; }
+.lesson-tables { display: grid; grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr)); gap: 10px; align-items: start; }
+.lesson-table { font-size: 13px; }
+.lesson-muted { color: var(--muted); }
+.lesson-cols { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+.lesson-col { padding: 1px 6px; border-radius: 4px; background: var(--panel-2); font-size: 12px; }
+.lesson-col.key { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.lesson-err { color: var(--danger); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.lesson-run { display: flex; gap: 8px; flex-wrap: wrap; }
+.lesson-solution { margin: 0; padding: 10px 14px; border-radius: 8px; background: var(--panel-2); border-left: 3px solid var(--accent); overflow-x: auto; font-size: 14px; }
+.lesson-verdict { display: flex; gap: 8px; align-items: flex-start; padding: 8px 12px; border-radius: 8px; }
+.lesson-verdict.ok { background: var(--accent-soft); color: var(--accent); }
+.lesson-verdict.bad { background: var(--warn-soft); color: var(--warn-text); }
+.lesson-verdict svg { flex: none; margin-top: 3px; }
+.lesson-note { max-width: 40rem; margin: 40px auto; padding: 0 16px; }
+.lesson-note h2 { margin: 0 0 8px; }
+.lesson-note a { color: var(--accent); text-decoration: underline; }
+.lesson-vote { display: grid; grid-template-columns: 1fr 12rem; gap: 16px; }
+.lesson-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.lesson-opt { position: relative; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); padding: 10px 12px 10px 38px; overflow-x: auto; }
+.lesson-opt.right { border: 2px solid var(--accent); background: var(--accent-soft); }
+.lesson-opt pre { margin: 0; font-size: 14px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.lesson-letter { color: var(--accent); font-size: 1.1em; }
+.lesson-opt .lesson-letter { position: absolute; left: 12px; top: 10px; }
+.lesson-qr { border: 1px dashed var(--line); border-radius: 8px; min-height: 8rem; }
+.lesson-hands { margin: 0; font-size: 18px; }
+.lesson-answer { margin: 0; font-size: 22px; }
+.lesson-why { margin: 0; padding: 8px 14px; border-left: 4px solid var(--accent); background: var(--accent-soft); border-radius: 6px; font-size: 17px; line-height: 1.45; }
+.lesson-results { display: grid; gap: 8px; }
+.lesson-result { display: grid; grid-template-columns: 2rem 1fr; gap: 8px; align-items: baseline; font-size: 15px; }
+@media (max-width: 760px) {
+  .lesson-vote { grid-template-columns: 1fr; }
+  .lesson-qr { display: none; }
+  .lesson-opts { grid-template-columns: 1fr; }
+  .lesson-q { font-size: 19px; }
+  .lesson-tables { grid-template-columns: 1fr; }
+}

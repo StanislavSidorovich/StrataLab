@@ -19,6 +19,7 @@ import { AboutDialog } from './AboutDialog'
 import { ShareDialog } from './ShareDialog'
 import { PracticeDialog, TaskBar } from './Practice'
 import { PracticeBookPage } from './PracticeBook'
+import { LessonPage } from './LessonPage'
 import { PipelinePage } from './PipelinePage'
 import { BuildPage } from './build/BuildPage'
 import { GuideDialog } from './Guide'
@@ -160,6 +161,7 @@ export function App() {
         <PracticeBookPage />
         <PipelinePage />
         <BuildPage />
+        <LessonPage />
         <div className="shrink-0 hidden md:block relative" style={{ width: sideW }}>
           <Sidebar />
           <div

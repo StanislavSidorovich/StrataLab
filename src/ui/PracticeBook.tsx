@@ -99,7 +99,7 @@ type BookTable = PracticeTables['tables'][number]
 
 const linkStyle = { color: 'var(--accent)' }
 
-const SQL_ENGINE: BookEngine = {
+export const SQL_ENGINE: BookEngine = {
   kind: 'sql',
   title: 'SQL practice · Kaiyo Trading',
   sections: SQL_SECTIONS,
@@ -233,7 +233,7 @@ function useContextMenu(items: () => MenuItem[]) {
 const toggled = (list: string[], id: string) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id])
 
 /** `code` in backticks becomes code. */
-function Prose({ text }: { text: string }) {
+export function Prose({ text }: { text: string }) {
   return (
     <>
       {text.split(/`([^`]+)`/).map((part, i) =>
@@ -249,7 +249,7 @@ function Prose({ text }: { text: string }) {
   )
 }
 
-function CellEditor({ value, onChange, onRun, onCheck, minLines, hint, label }: { value: string; onChange: (v: string) => void; onRun: () => void; onCheck?: () => void; minLines: number; hint?: string; label: string }) {
+export function CellEditor({ value, onChange, onRun, onCheck, minLines, hint, label }: { value: string; onChange: (v: string) => void; onRun: () => void; onCheck?: () => void; minLines: number; hint?: string; label: string }) {
   const box = useRef<HTMLDivElement>(null)
   const host = useRef<HTMLDivElement>(null)
   const text = useRef(value)
@@ -314,14 +314,14 @@ function CellEditor({ value, onChange, onRun, onCheck, minLines, hint, label }: 
   )
 }
 
-type Run =
+export type Run =
   | { status: 'idle' }
   | { status: 'running'; message: string }
   | { status: 'error'; message: string }
   | { status: 'done'; ms: number; result: BookRun }
 
 /** Running one cell: Stop, what is being started the first time, and the notes on Fabric. */
-function useCellRun(id: string) {
+export function useCellRun(id: string) {
   const book = useBook()
   const [run, setRun] = useState<Run>({ status: 'idle' })
   const stopped = useRef(false)
@@ -357,7 +357,7 @@ const HEAD_H = 46
 /** Room for the horizontal scrollbar of a wide table, so a short table needs no vertical scroll. */
 const SCROLLBAR_H = 16
 
-function Grid({ table }: { table: Table }) {
+export function Grid({ table }: { table: Table }) {
   return (
     <div className="rounded-md overflow-hidden" style={{ height: Math.min(table.numRows, SHOWN_ROWS) * ROW_H + HEAD_H + 2 + (table.numRows <= SHOWN_ROWS ? SCROLLBAR_H : 0), border: '1px solid var(--line)' }}>
       <DataGrid table={table} compact scaled={false} />
@@ -383,7 +383,7 @@ function SingleValue({ text }: { text: string }) {
   )
 }
 
-function RunResult({ run }: { run: Run }) {
+export function RunResult({ run }: { run: Run }) {
   const book = useBook()
   const kernel = useLab((s) => s.python)
   if (run.status === 'idle') return null
@@ -550,7 +550,7 @@ function OpenInLab({ code, title }: { code: string; title: string }) {
   )
 }
 
-function RunButton({ run, exec, stop }: { run: Run; exec: () => void; stop: () => void }) {
+export function RunButton({ run, exec, stop }: { run: Run; exec: () => void; stop: () => void }) {
   const ready = useLab((s) => s.engine.status === 'ready')
   if (run.status === 'running')
     return (

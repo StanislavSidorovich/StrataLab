@@ -41,6 +41,7 @@ import { runOrder } from '../core/pdScript'
 import { identitySyncSql } from '../core/identitySync'
 import { hashWithPractice, hashWithoutPractice, practiceFromHash, readableError, type PracticeKind } from '../core/sqlPractice'
 import { buildFromHash, hashWithBuild, hashWithoutBuild } from '../core/build'
+import { lessonFromHash } from '../core/lesson'
 import { hashWithPipeline, hashWithoutPipeline, pipelineFromHash } from '../core/pipeline'
 import { BOOK_TABLES } from '../data/pyPractice/tables'
 import { duckdbScript, translateTsql, type TranslatedStatement, type TranslatorProgress } from '../dialects/tsql'
@@ -490,7 +491,7 @@ export const useLab = create<State>(() => ({
   dataset: null,
   catalogOpen: false,
   generate: null,
-  welcomeOpen: !practiceFromHash(location.hash) && !pipelineFromHash(location.hash) && !buildFromHash(location.hash) && firstVisit(),
+  welcomeOpen: !lessonFromHash(location.hash) && !practiceFromHash(location.hash) && !pipelineFromHash(location.hash) && !buildFromHash(location.hash) && firstVisit(),
   practiceBook: practiceFromHash(location.hash)?.kind ?? null,
   pipeline: practiceFromHash(location.hash) ? null : pipelineFromHash(location.hash),
   build: practiceFromHash(location.hash) || pipelineFromHash(location.hash) ? null : buildFromHash(location.hash),
@@ -652,7 +653,8 @@ export async function initEngine() {
     const fromTask = await openTaskFromHash()
     const fromShare = await openShareFromHash()
     window.addEventListener('hashchange', () => {
-      if (practiceFromHash(location.hash)) set({ practiceBook: practiceFromHash(location.hash)!.kind, pipeline: null, build: null })
+      if (lessonFromHash(location.hash)) set({ practiceBook: null, pipeline: null, build: null })
+      else if (practiceFromHash(location.hash)) set({ practiceBook: practiceFromHash(location.hash)!.kind, pipeline: null, build: null })
       else if (pipelineFromHash(location.hash)) set({ pipeline: pipelineFromHash(location.hash), practiceBook: null, build: null })
       else if (buildFromHash(location.hash)) set({ build: buildFromHash(location.hash), practiceBook: null, pipeline: null })
       void openDdlFromHash()
@@ -670,7 +672,7 @@ export async function initEngine() {
       /* ignore */
     }
     // Someone arriving with a model came for that model, not for the demo shop.
-    if (!fromModel && !fromLink && !fromTask && !fromShare && !get().practiceBook && !get().pipeline && !get().build && ownTables(get().tables).length === 0 && (!e.persistent || !offered)) await loadDemo()
+    if (!fromModel && !fromLink && !fromTask && !fromShare && !lessonFromHash(location.hash) && !get().practiceBook && !get().pipeline && !get().build && ownTables(get().tables).length === 0 && (!e.persistent || !offered)) await loadDemo()
   } catch (e) {
     set({ engine: { status: 'error', error: String(e instanceof Error ? e.message : e) } })
   }
@@ -2684,6 +2686,8 @@ export async function openTask(t: PracticeTask) {
 }
 
 export async function openTaskFromHash(): Promise<boolean> {
+  // In a lesson address `task=N` is the lesson's own number (src/core/lesson.ts), not a demo-shop task.
+  if (lessonFromHash(location.hash)) return false
   const id = taskFromHash(location.hash)
   if (!id) return false
   history.replaceState(null, '', location.pathname + location.search + hashWithoutTask(location.hash))
