@@ -109,8 +109,9 @@ np.select([cond_a, cond_b], ["A", "B"], default="other")`,
     ["big promo line", "promo line"],
     default="regular line",
 )
-sellout.assign(kind=kind)["kind"].value_counts()`,
-      sees: 'Three labels with their number of lines: most are regular, 94,600. Order matters: a promo line of 10 units or more meets the first condition and gets "big promo line", not the second.',
+labeled = sellout.assign(kind=kind)  # a copy of sellout with one more column, kind
+labeled["kind"].value_counts()  # how many lines got each label`,
+      sees: 'Three labels with their number of lines: most are regular, 94,600. `assign` returns a new table, so sellout itself keeps its columns; `["kind"]` takes the new column and `value_counts` counts each label. Order matters: a promo line of 10 units or more meets the first condition and gets "big promo line", not the second.',
     },
     {
       kind: 'task',
@@ -154,7 +155,7 @@ sellout.assign(kind=kind)["kind"].value_counts()`,
     {
       kind: 'note',
       topic: 'a counts table with your own column names',
-      text: '`value_counts` sorts by how often a value comes, and `sort_index` puts the values back in their own order. `rename_axis` names the column of values and `reset_index(name=...)` names the column of counts.',
+      text: '`value_counts` puts the most frequent value first. `sort_index` sorts by the values themselves instead: text alphabetically, with capital letters before small ones (so "L" comes before "caps"), numbers from small to large, and the labels of `pd.cut` in the order you gave them. `rename_axis` names the column of values and `reset_index(name=...)` names the column of counts.',
       syntax: `# before: a Series, values as the row labels
 products["unit"].value_counts()
 # now: a table with columns you named
@@ -165,7 +166,7 @@ products["unit"].value_counts().sort_index().rename_axis("unit").reset_index(nam
       id: 'py-new-columns-unit-counts',
       title: 'Products per unit, in alphabetical order',
       code: `products["unit"].value_counts().sort_index().rename_axis("unit").reset_index(name="products")`,
-      sees: 'A table with the columns unit and products, sorted by unit: L has 13 products, caps 2, g 12, ml 10, sachet 1, tab 9.',
+      sees: 'A table with the columns unit and products, sorted by unit, capital L first: L has 13 products, caps 2, g 12, ml 10, sachet 1, tab 9.',
     },
     {
       kind: 'task',
