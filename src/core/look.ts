@@ -127,6 +127,8 @@ export function lookVars(look: Look, theme: Theme): Record<string, string | unde
   return {
     '--code-bg': editor,
     '--work-hover': shade(editor, step),
+    '--work-panel': editor,
+    '--work-panel-2': shade(editor, step),
     '--panel': left,
     '--panel-2': shade(left, step),
     '--panel-right': right,
