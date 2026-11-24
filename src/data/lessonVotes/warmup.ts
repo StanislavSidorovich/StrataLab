@@ -17,7 +17,7 @@ const perOutlet = (where: string, groupBy: string, having: string, orderBy = 'cu
   `SELECT customer_id, SUM(revenue) AS revenue\nFROM quaera.fact_sellout${where ? `\nWHERE ${where}` : ''}\nGROUP BY ${groupBy}${having ? `\nHAVING ${having}` : ''}\nORDER BY ${orderBy};`
 
 const beverages = (where: string, having: string) =>
-  `SELECT p.product_name, AVG(1.0 * s.units) AS avg_units\nFROM quaera.fact_sellout AS s\nJOIN quaera.dim_product AS p ON p.product_id = s.product_id${where ? `\nWHERE ${where}` : ''}\nGROUP BY p.product_name${having ? `\nHAVING ${having}` : ''}\nORDER BY p.product_name;`
+  `SELECT p.product_name, ROUND(AVG(1.0 * s.units), 1) AS avg_units\nFROM quaera.fact_sellout AS s\nJOIN quaera.dim_product AS p ON p.product_id = s.product_id${where ? `\nWHERE ${where}` : ''}\nGROUP BY p.product_name${having ? `\nHAVING ${having}` : ''}\nORDER BY p.product_name;`
 
 const pharmacyByRegion = (select: string, where: string, having: string) =>
   `SELECT c.region_id, ${select}SUM(s.revenue) AS revenue\nFROM quaera.fact_sellout AS s\nJOIN quaera.dim_customer AS c ON c.customer_id = s.customer_id${where ? `\nWHERE ${where}` : ''}\nGROUP BY c.region_id${having ? `\nHAVING ${having}` : ''}\nORDER BY c.region_id;`
