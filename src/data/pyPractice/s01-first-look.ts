@@ -8,7 +8,7 @@ export const FIRST_LOOK: PracticeSection = {
     {
       kind: 'note',
       topic: 'the size and types of a table',
-      text: 'Before any question, find out how big a table is and what its columns hold. `shape` gives the number of rows and columns, `len(sellout)` gives only the rows, and `dtypes` gives the type of each column. `shape` and `dtypes` take no parentheses `()`.',
+      text: 'Before any question, find out how big a table is and what its columns hold. `shape` gives the number of rows and columns, `len(sellout)` gives only the rows, and `dtypes` gives the type of each column. `shape` and `dtypes` take no parentheses `~()`.',
     },
     {
       kind: 'example',
@@ -133,7 +133,7 @@ sellout["units"].describe()`,
     {
       kind: 'note',
       topic: 'an average per group',
-      text: 'A count is a plain number, so you can divide one count by another. The rows divided by the number of different values in a column is an average per value.',
+      text: 'A count is a plain number, so you can divide one count by another with `/`. The rows divided by the number of different values in a column is an average per value.',
     },
     {
       kind: 'example',

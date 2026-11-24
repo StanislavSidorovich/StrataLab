@@ -12,7 +12,7 @@ export const S04: PbiSection = {
     {
       kind: 'note',
       topic: 'Measures and columns',
-      text: 'A measure is a formula calculated when a visual asks for it, for the filters of that visual: `Revenue = SUM(fact_sales[revenue])`. A calculated column is calculated once per row when the data loads and then stays in the table: `Month = FORMAT(fact_sales[sale_date], "yyyy-mm")`. A number that must follow the slicers is a measure; a label on every row is a column.',
+      text: 'A `measure` is a formula calculated when a visual asks for it, for the filters of that visual: `~Revenue = SUM(fact_sales[revenue])`. A `calculated column` is calculated once per row when the data loads and then stays in the table: `~Month = FORMAT(fact_sales[sale_date], "yyyy-mm")`. A number that must follow the slicers is a measure; a label on every row is a column.',
       trap: 'DIVIDE(a, b) gives a blank instead of an error when b is 0. COUNTROWS counts rows, also the ones with a blank value; AVERAGE skips them.',
     },
     {

@@ -12,7 +12,7 @@ export const S08: PbiSection = {
     {
       kind: 'note',
       topic: 'A page that answers one question',
-      text: 'Start from the question, then pick the visual: a trend over time is a line, a comparison of a few groups is a bar, one number is a card, a choice for the whole page is a slicer. Each visual cross-filters the others when you click on it; Format, Edit interactions switches that off visual by visual. Display units on a number (Auto shows K or M) is a way of writing it, not a different number: set it to None when you need the exact one.',
+      text: 'Start from the question, then pick the visual: a trend over time is a line, a comparison of a few groups is a bar, one number is a card, a choice for the whole page is a slicer. Each visual cross-filters the others when you click on it; Format, `Edit interactions` switches that off visual by visual. `Display units` on a number (Auto shows K or M) is a way of writing it, not a different number: set it to None when you need the exact one.',
       trap: 'A pie of seven slices and a table of two hundred rows answer no question quickly. Few groups: bar. Many months: line.',
     },
     {

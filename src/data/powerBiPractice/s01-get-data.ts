@@ -10,7 +10,7 @@ export const S01: PbiSection = {
     {
       kind: 'note',
       topic: 'Loading a CSV',
-      text: 'Home, Get data, Text/CSV opens a preview before anything is loaded. It shows what Power BI guessed: the file origin (encoding), the delimiter and the type of each column. Read it, then press Load. Transform data opens Power Query instead, when something needs fixing first.',
+      text: 'Home, Get data, `Text/CSV` opens a preview before anything is loaded. It shows what Power BI guessed: the file origin (encoding), the delimiter and the type of each column. Read it, then press `Load`. `Transform data` opens Power Query instead, when something needs fixing first.',
       trap: 'A wrong guess here shows up later as odd numbers: a date read as text, a decimal read as a thousand.',
     },
     {

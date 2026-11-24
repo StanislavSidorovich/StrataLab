@@ -1,0 +1,35 @@
+/* Inline code in practice text. Calm by default; the terms a "New:" note introduces stand out.
+   Appearance (src/core/tint.ts) sets --term-new, --term-new-bg and --code-inline-bg on :root; these are the defaults. */
+:root {
+  --code-inline-bg: hsl(215 22% 90%);
+  --code-inline-fg: var(--text);
+  --term-new: hsl(22 85% 33%);
+  --term-new-bg: hsl(22 85% 33% / 0.14);
+}
+.dark {
+  --code-inline-bg: hsl(215 16% 27%);
+  --term-new: hsl(38 90% 66%);
+  --term-new-bg: hsl(38 90% 66% / 0.14);
+}
+.prose-code {
+  background: var(--code-inline-bg);
+  color: var(--code-inline-fg);
+  font-size: 0.92em;
+  padding: 0 4px;
+  border-radius: 4px;
+  overflow-wrap: anywhere;
+}
+.prose-code.prose-code-new {
+  background: var(--term-new-bg);
+  color: var(--term-new);
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px var(--term-new);
+}
+.prose-chips { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-left: 8px; vertical-align: baseline; max-width: 100%; }
+.prose-chip { font-size: 0.8em; padding: 0 6px; line-height: 1.6; }
+/* the new terms inside the example's code (CodeMirror Decoration.mark) */
+.cm-new-term {
+  background: var(--term-new-bg);
+  box-shadow: 0 1px 0 var(--term-new);
+  border-radius: 2px;
+}

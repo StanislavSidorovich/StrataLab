@@ -54,7 +54,7 @@ ph.assign(above_min=ph["list_price"] - ph["list_price"].min())[["product_name", 
     {
       kind: 'note',
       topic: 'a column that chooses between two values',
-      text: '`np.where` takes a condition, a value for the rows where it is true and a value for the rest. It returns one value for every row, so it fits inside `assign`.',
+      text: '`np.where` takes a condition, a value for the rows where it is true and a value for the rest. It returns one value for every row, so it fits inside `~assign`.',
     },
     {
       kind: 'example',
@@ -155,7 +155,7 @@ labeled["kind"].value_counts()  # how many lines got each label`,
     {
       kind: 'note',
       topic: 'a counts table with your own column names',
-      text: '`value_counts` puts the most frequent value first. `sort_index` sorts by the values themselves instead: text alphabetically, with capital letters before small ones (so "L" comes before "caps"), numbers from small to large, and the labels of `pd.cut` in the order you gave them. `rename_axis` names the column of values and `reset_index(name=...)` names the column of counts.',
+      text: '`~value_counts` puts the most frequent value first. `sort_index` sorts by the values themselves instead: text alphabetically, with capital letters before small ones (so "L" comes before "caps"), numbers from small to large, and the labels of `~pd.cut` in the order you gave them. `rename_axis` names the column of values and `reset_index(name=...)` names the column of counts.',
       syntax: `# before: a Series, values as the row labels
 products["unit"].value_counts()
 # now: a table with columns you named
@@ -314,7 +314,7 @@ f["product_name"].str.split(" ").str[1].value_counts().rename_axis("variant").re
     {
       kind: 'note',
       topic: 'pulling a number out of text',
-      text: '`extract` keeps the part of the text that matches a pattern in round brackets, and a row without a match gives NaN. The pattern `x(\\d+)$` means: an x, then digits, at the very end. The result is still text.',
+      text: '`extract` keeps the part of the text that matches a pattern in round brackets, and a row without a match gives NaN. The pattern `~x(\\d+)$` means: an x, then digits, at the very end. The result is still text.',
       trap: '`extract` returns the first match only: anchor the pattern when a name holds several numbers.',
     },
     {

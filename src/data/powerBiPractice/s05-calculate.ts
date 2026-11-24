@@ -13,7 +13,7 @@ export const S05: PbiSection = {
     {
       kind: 'note',
       topic: 'Filter context and CALCULATE',
-      text: 'Every number in a visual is calculated for a filter context: the row of the table, the slicers, the filters of the page. `CALCULATE(expression, filter, …)` calculates the expression in a changed context. A filter on a column that is already filtered replaces that filter; a filter on another column is added to it, so both must hold. A measure can use another measure: `Revenue Kanto = CALCULATE([Revenue], dim_customer[macro_region] = "Kanto")` reads Revenue and changes only the region.',
+      text: 'Every number in a visual is calculated for a filter context: the row of the table, the slicers, the filters of the page. `CALCULATE(expression, filter, …)` calculates the expression in a changed context. A filter on a column that is already filtered replaces that filter; a filter on another column is added to it, so both must hold. A measure can use another measure: `~Revenue Kanto = CALCULATE([Revenue], dim_customer[macro_region] = "Kanto")` reads Revenue and changes only the region.',
       trap: 'A true/false filter such as `fact_sales[units] < 0` is a shortcut for a filter on that one column. It cannot contain an aggregation like AVERAGE: put the average in a variable first, or use FILTER.',
     },
     {

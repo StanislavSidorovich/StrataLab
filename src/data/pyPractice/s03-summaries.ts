@@ -40,7 +40,7 @@ export const SUMMARIES: PracticeSection = {
     {
       kind: 'note',
       topic: 'counts as a table',
-      text: 'The values of `value_counts` are row labels, so you cannot sort by them or use them as a column. `reset_index()` turns the result into an ordinary table with the values in a column and the counts in another.',
+      text: 'The values of `~value_counts` are row labels, so you cannot sort by them or use them as a column. `reset_index()` turns the result into an ordinary table with the values in a column and the counts in another.',
     },
     {
       kind: 'example',
@@ -62,7 +62,7 @@ export const SUMMARIES: PracticeSection = {
     {
       kind: 'note',
       topic: 'a total of the rows you filtered',
-      text: 'A filter, one column and a total answer most first questions: keep the rows, pick the column, then call `sum` (or `mean`, `max`). Totals skip missing values, and `count` tells how many rows have a value.',
+      text: 'A filter, one column and a total answer most first questions: keep the rows, pick the column, then call `sum` (or `~mean`, `~max`). Totals skip missing values, and `count` tells how many rows have a value.',
     },
     {
       kind: 'example',

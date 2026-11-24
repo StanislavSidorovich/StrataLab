@@ -11,7 +11,7 @@ export const S06: PbiSection = {
     {
       kind: 'note',
       topic: 'A date table',
-      text: "Time functions (`SAMEPERIODLASTYEAR`, `TOTALYTD`) need a table with one row for every day, no gaps, and they must be given its date column. The sales have a date only on the days something was sold (here once a week), so a table of its own is made: `Date = CALENDAR(DATE(2024, 1, 1), DATE(2026, 6, 30))`. Mark it as a date table (Table tools), link `Date[Date]` to `fact_sales[sale_date]` (many to one, single), and put the Month and Year columns on the Date table, never on the fact. `SAMEPERIODLASTYEAR` shifts the dates in the filter back a year; `TOTALYTD` adds up from 1 January to the last date in the filter.",
+      text: "Time functions (`SAMEPERIODLASTYEAR`, `TOTALYTD`) need a table with one row for every day, no gaps, and they must be given its date column. The sales have a date only on the days something was sold (here once a week), so a table of its own is made: `~Date = CALENDAR(DATE(2024, 1, 1), DATE(2026, 6, 30))`. Mark it as a date table (Table tools), link `~Date[Date]` to `~fact_sales[sale_date]` (many to one, single), and put the Month and Year columns on the Date table, never on the fact. `SAMEPERIODLASTYEAR` shifts the dates in the filter back a year; `TOTALYTD` adds up from 1 January to the last date in the filter.",
       trap: 'A visual that takes its Month from fact_sales never touches the Date table, so the time measures see no dates. Axis and rows come from the Date table.',
     },
     {

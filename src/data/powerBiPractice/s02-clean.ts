@@ -12,7 +12,7 @@ export const S02: PbiSection = {
     {
       kind: 'note',
       topic: 'Applied steps',
-      text: "Transform data opens Power Query. Every press (Trim, Split Column, Replace Values, Merge Queries) adds a step to the Applied steps list on the right, named by Power Query: Trimmed Text, Split Column by Delimiter, Replaced Value, Merged Queries. It is the same idea as the steps of Lab's Clean: the file is never changed, the steps are replayed each time the data refreshes. Trim cuts the spaces at the edges, UPPERCASE (Transform, Text Column, Format) makes a text upper case, Merge Queries (Home, Combine) joins two tables on a column, Unpivot Columns turns columns into rows.",
+      text: "`Transform data` opens Power Query. Every press (Trim, Split Column, Replace Values, Merge Queries) adds a step to the `Applied steps` list on the right, named by Power Query: Trimmed Text, Split Column by Delimiter, Replaced Value, Merged Queries. It is the same idea as the steps of Lab's Clean: the file is never changed, the steps are replayed each time the data refreshes. `Trim` cuts the spaces at the edges, UPPERCASE (Transform, Text Column, Format) makes a text upper case, `Merge Queries` (Home, Combine) joins two tables on a column, `Unpivot Columns` turns columns into rows.",
       trap: "A join on text is exact: a space or a different case is a different value. Replace Values changes part of a cell unless you tick Match entire cell contents under Advanced options: replacing Beverage with Beverages inside the cell Beverages gives Beveragess.",
     },
     {

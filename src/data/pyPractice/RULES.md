@@ -17,6 +17,7 @@ Tables come in slowly. Sections 1 to 3 use `sellout` and `products`; each later 
 
 - The rhythm is: note, example, a task on that one skill. When a section has shown several skills, a task joins them. The last task is the hardest and adds nothing new.
 - A section has as many tasks as it needs, usually 6 to 12: one for each skill, plus the joins. Sections with no topic of their own (`business`, `free`, `data`) are not ladders.
+- In a note with a topic, code in backticks is a NEW term (highlighted, listed in the header, marked in the example). Write an older word mentioned for reference as `` `~word` ``; every note needs at least one new term (`tests/terms.test.ts`).
 - A note is at most three sentences and first says what the thing is for, plus one line of syntax and one line of trap when they earn it.
 - `skills` on a task names the moves its solution makes, from `skills.ts`. Helpers such as `round`, `head`, `reset_index` and variables are not skills.
 - The first task of a section uses one skill. A task adds at most one skill not yet practised on the page. Skills of earlier sections count as practised. `tests/practiceLadder.test.ts` checks all of this, and that the tags are true.

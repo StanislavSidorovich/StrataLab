@@ -6,7 +6,7 @@ import { applyBorders, readBorders, type Borders } from '../core/borders'
 import { chooseContrast, CONTRAST_LEVELS, contrastLabel, readContrast, showContrast } from '../core/contrast'
 import { parseZoom, ZOOM_KEY, ZOOM_STEPS, zoomLabel } from '../core/practiceZoom'
 import { lookColor, lookVars, NO_LOOK, parseLook, setLookColor, SWATCHES, type Look, type LookPart } from '../core/look'
-import { clampTint, hslToHex, lightnessRange, NO_TINT, parseTint, TINT_KEY, tintColor, tintVars, type Hsl, type Tint, type TintPart } from '../core/tint'
+import { clampTint, hslToHex, lightnessRange, NO_TINT, parseTint, SAT_MAX_OF, TINT_KEY, tintColor, tintVars, type Hsl, type Tint, type TintPart } from '../core/tint'
 import { toggleTheme, useLab } from './store'
 import { TEXT_ZOOM_EVENT } from './useTextZoom'
 import './appearanceTint.css'
@@ -141,7 +141,7 @@ export function AppearanceButton({ className = '' }: { className?: string }) {
     const set = (patch: Partial<Hsl>) => setTint((t) => ({ ...t, [part]: { ...t[part], [theme]: clampTint(part, theme, { ...tintColor(t, part, theme), ...patch }) } }))
     const sliders: { key: keyof Hsl; name: string; min: number; max: number }[] = [
       { key: 'h', name: 'Hue', min: 0, max: 360 },
-      { key: 's', name: 'Saturation', min: 0, max: part === 'callout' ? 60 : 100 },
+      { key: 's', name: 'Saturation', min: 0, max: SAT_MAX_OF[part] },
       { key: 'l', name: 'Lightness', min: lo, max: hi },
     ]
     return (
@@ -257,6 +257,8 @@ export function AppearanceButton({ className = '' }: { className?: string }) {
           {colorRow('grid', 'Data grid (results, build tables)')}
           {tintRow('callout', 'Note colour ("New:" callouts)')}
           {tintRow('accent', 'Accent (buttons, links, active tab)')}
+          {tintRow('term', 'New terms (code a "New:" note introduces)')}
+          {tintRow('code', 'Inline code (the rest of the code in text)')}
           <div style={{ color: 'var(--muted)', fontSize: 12 }}>Colours are kept separately for the light and dark theme, in this browser.</div>
           <button type="button" className="btn self-start" onClick={() => {
               setLook(NO_LOOK)

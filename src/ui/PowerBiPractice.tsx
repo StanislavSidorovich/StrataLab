@@ -17,6 +17,8 @@ import { download } from '../db/export'
 import { starBytes, truth } from '../db/powerBiPracticeRun'
 import { openPracticeBook, useLab } from './store'
 import './practiceNote.css'
+import { Prose, TermChips } from './Prose'
+import { newTermsOf } from '../core/terms'
 
 const READABLE = 'max-w-[46rem]'
 const KEY = 'stratalab.powerbi-practice.v1'
@@ -42,23 +44,6 @@ function progressStore() {
 const useProgress = progressStore()
 
 const toggled = (list: string[], id: string) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id])
-
-/** `code` in backticks becomes code. */
-function Prose({ text }: { text: string }) {
-  return (
-    <>
-      {text.split(/`([^`]+)`/).map((part, i) =>
-        i % 2 ? (
-          <code key={i} className="mono px-1 rounded" style={{ background: 'var(--panel-2)', fontSize: '0.92em' }}>
-            {part}
-          </code>
-        ) : (
-          part
-        ),
-      )}
-    </>
-  )
-}
 
 interface Said {
   ok: boolean
@@ -504,10 +489,10 @@ function BlockView({ section, block, onNext }: { section: PbiSection; block: Pbi
     return (
       <div className={block.topic ? 'pn-new space-y-2' : 'space-y-2'}>
         <div className="font-semibold" style={block.topic ? undefined : { color: 'var(--muted)', fontWeight: 500 }}>
-          {block.topic ? (<><span className="pn-label">New:</span> <span className="pn-topic">{block.topic}</span></>) : 'Reminder'}
+          {block.topic ? (<><span className="pn-label">New:</span> <span className="pn-topic">{block.topic}</span><TermChips terms={newTermsOf(block.text)} /></>) : 'Reminder'}
         </div>
         <p className={`m-0 ${READABLE}`} style={{ fontSize: 15, lineHeight: 1.55 }}>
-          <Prose text={block.text} />
+          <Prose text={block.text} newTerms={!!block.topic} />
         </p>
         {block.trap && (
           <p className={`m-0 flex gap-2 ${READABLE}`} style={{ color: 'var(--warn-text)' }}>

@@ -10,7 +10,7 @@ export const S03: PbiSection = {
     {
       kind: 'note',
       topic: 'A star in Model view',
-      text: "A star has one fact table in the middle (the sales: many rows) and dimension tables around it (customers, products: one row each). Every link goes many to one, from the fact's key to the dimension's key, and a filter travels from the dimension to the fact: pick a chain and only its sales stay.",
+      text: "A star has one `fact table` in the middle (the sales: many rows) and `dimension tables` around it (customers, products: one row each). Every link goes `many to one`, from the fact's key to the dimension's key, and a filter travels from the dimension to the fact: pick a chain and only its sales stay.",
       trap: 'Cross filter direction Both looks handy and makes reports ambiguous. Keep Single until you know why you need Both.',
     },
     {

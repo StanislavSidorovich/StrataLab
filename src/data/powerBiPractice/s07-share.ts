@@ -20,7 +20,7 @@ export const S07: PbiSection = {
     {
       kind: 'note',
       topic: 'Share, rank and top N',
-      text: 'A share is a part divided by a total, and the total is the same measure with a filter taken away: `DIVIDE([Revenue], CALCULATE([Revenue], ALL(dim_customer[macro_region])))`. `ALL(column)` removes the filter on that column only (the slicers on other columns stay). `REMOVEFILTERS` does the same inside CALCULATE. `ALL(column)` is also a table of every value of the column, so it can be handed to `RANKX(table, measure)` for a rank and to `TOPN(n, table, measure)` for the first n values; `SUMX` adds up what TOPN returns.',
+      text: 'A share is a part divided by a total, and the total is the same measure with a filter taken away: `~DIVIDE([Revenue], CALCULATE([Revenue], ALL(dim_customer[macro_region])))`. `ALL(column)` removes the filter on that column only (the slicers on other columns stay). `REMOVEFILTERS` does the same inside CALCULATE. `ALL(column)` is also a table of every value of the column, so it can be handed to `RANKX(table, measure)` for a rank and to `TOPN(n, table, measure)` for the first n values; `SUMX` adds up what TOPN returns.',
       trap: 'The table in RANKX must be the full list of values: `VALUES(column)` is cut to the row (and ranks every row first). Take away the filter on the column you group by, not on the whole table.',
     },
     {

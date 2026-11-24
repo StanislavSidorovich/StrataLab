@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { accentOk, calloutTextContrast, clampTint, lightnessRange, NO_TINT, parseTint, tintColor, tintVars, TINT_DEFAULT } from '../src/core/tint'
+import { accentOk, codeOk, termOk, calloutTextContrast, clampTint, lightnessRange, NO_TINT, parseTint, tintColor, tintVars, TINT_DEFAULT } from '../src/core/tint'
 
 describe('appearance tint (callout and accent colours)', () => {
   it('the defaults themselves keep the contrast', () => {
@@ -41,9 +41,31 @@ describe('appearance tint (callout and accent colours)', () => {
 
   it('writes variables only for what is chosen, as hsl()', () => {
     expect(Object.values(tintVars(NO_TINT, 'light')).every((v) => v === undefined)).toBe(true)
-    const v = tintVars({ callout: { light: { h: 10, s: 20, l: 40 } }, accent: {} }, 'light')
+    const v = tintVars({ callout: { light: { h: 10, s: 20, l: 40 } }, accent: {}, term: {}, code: {} }, 'light')
     expect(v['--note-border']).toBe('hsl(10 20% 40%)')
     expect(v['--accent']).toBeUndefined()
-    expect(tintVars({ callout: { light: { h: 10, s: 20, l: 40 } }, accent: {} }, 'dark')['--note-border']).toBeUndefined()
+    expect(tintVars({ callout: { light: { h: 10, s: 20, l: 40 } }, accent: {}, term: {}, code: {} }, 'dark')['--note-border']).toBeUndefined()
+  })
+
+  it('new-term and inline-code colours: defaults and every allowed lightness keep 4.5:1', () => {
+    for (const theme of ['light', 'dark'] as const) {
+      expect(termOk(TINT_DEFAULT.term[theme], theme)).toBe(true)
+      expect(codeOk(TINT_DEFAULT.code[theme], theme)).toBe(true)
+      for (let h = 0; h <= 360; h += 30) {
+        for (const s of [0, 40, 100]) {
+          for (const l of lightnessRange('term', theme, h, s)) expect(termOk({ h, s, l }, theme), `term ${theme} h${h} s${s} l${l}`).toBe(true)
+          for (const l of lightnessRange('code', theme, h, Math.min(s, 60))) expect(codeOk({ h, s: Math.min(s, 60), l }, theme), `code ${theme} h${h} s${s} l${l}`).toBe(true)
+        }
+      }
+    }
+  })
+
+  it('the chosen term and code colours become CSS variables; a broken stored one is dropped', () => {
+    const v = tintVars({ ...NO_TINT, term: { dark: { h: 10, s: 80, l: 70 } }, code: { dark: { h: 200, s: 10, l: 25 } } }, 'dark')
+    expect(v['--term-new']).toBe('hsl(10 80% 70%)')
+    expect(v['--term-new-bg']).toContain('hsl(10 80% 70%)')
+    expect(v['--code-inline-bg']).toBe('hsl(200 10% 25%)')
+    expect(tintVars({ ...NO_TINT, term: { dark: { h: 10, s: 80, l: 70 } } }, 'light')['--term-new']).toBeUndefined()
+    expect(parseTint('{"term":{"light":{"h":"x","s":1,"l":2}}}')).toEqual(NO_TINT)
   })
 })

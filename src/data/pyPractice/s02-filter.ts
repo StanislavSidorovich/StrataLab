@@ -31,7 +31,7 @@ sellout[sellout["units"] > 100].head()`,
     {
       kind: 'note',
       topic: 'filter first, then pick columns',
-      text: 'A filter gives a table, so you can pick columns from it with a second pair of brackets. The first brackets choose the rows, and the double brackets after them choose the columns.',
+      text: 'A filter gives a table, so you can pick columns from it with a second pair of brackets. The first brackets choose the rows, and the double brackets `[[...]]` after them choose the columns.',
     },
     {
       kind: 'example',
@@ -53,7 +53,7 @@ sellout[sellout["units"] > 100].head()`,
     {
       kind: 'note',
       topic: 'sorting rows',
-      text: '`sort_values` orders the rows by a column, and `ascending=False` puts the largest first. To break ties, pass a list of columns and a list of directions: the first `True` or `False` belongs to the first column, the second to the second.',
+      text: '`sort_values` orders the rows by a column, and `ascending=False` puts the largest first. To break ties, pass a list of columns and a list of directions: the first `~True` or `~False` belongs to the first column, the second to the second.',
     },
     {
       kind: 'example',
@@ -101,7 +101,7 @@ sellout[sellout["units"] > 100].head()`,
     {
       kind: 'note',
       topic: 'two conditions at once',
-      text: 'Join two conditions with `&` when both must be true, or with `|` when at least one must be true. Put each condition in its own parentheses `()`.',
+      text: 'Join two conditions with `&` when both must be true, or with `|` when at least one must be true. Put each condition in its own parentheses `~()`.',
       trap: '`and` and `or` raise an error on columns, and without brackets `&` binds before `>`.',
     },
     {
@@ -124,7 +124,7 @@ sellout[sellout["units"] > 100].head()`,
     {
       kind: 'note',
       topic: 'a value from a list',
-      text: '`isin` tests each row against a list of allowed values. It replaces a chain of `==` joined with `|`.',
+      text: '`isin` tests each row against a list of allowed values. It replaces a chain of `~==` joined with `~|`.',
     },
     {
       kind: 'example',
@@ -218,7 +218,7 @@ sellout[sellout["units"] > 100].head()`,
     {
       kind: 'note',
       topic: 'rows that have a value',
-      text: 'A gap is a cell with no value: a sale with no promotion has no `promo_id`, and pandas shows that as NaN or <NA>. `.notna()` gives True or False for every row, True where a value is there, and `isna` is its mirror. Put that True and False column inside `df[...]` and the table keeps the True rows.',
+      text: 'A gap is a cell with no value: a sale with no promotion has no `~promo_id`, and pandas shows that as NaN or <NA>. `.notna()` gives True or False for every row, True where a value is there, and `isna` is its mirror. Put that True and False column inside `~df[...]` and the table keeps the True rows.',
       syntax: `promo_id:  12      <NA>    7
 .notna():  True    False   True      (rows 1 and 3 are kept)`,
     },
@@ -279,7 +279,7 @@ sellout[sellout["units"] > 100][["week_start", "customer_id", "units"]].head()`,
     {
       kind: 'note',
       topic: 'how to write a long query',
-      text: 'Do not write it in one go: name each condition, look at it, and join them last. Square brackets `[]` select (a column, rows, `.loc[rows, columns]`, a list of names), and parentheses `()` call methods (`.notna()`, `.head(5)`) or group each condition around `&` and `|`, because Python evaluates `&` before `==`. Python may break a line inside open brackets, so wrap the whole chain in `( )` and start each line with `.method`.',
+      text: 'Do not write it in one go: name each condition, look at it, and join them last. Square brackets `~[]` select (a column, rows, `~.loc[rows, columns]`, a list of names), and parentheses `~()` call methods (`~.notna()`, `~.head(5)`) or group each condition around `~&` and `~|`, because Python evaluates `~&` before `~==`. Python may break a line inside open brackets, so wrap the whole chain in `( )` and start each line with `.method`.',
       syntax: `on_promo = sellout["promo_id"].notna()
 in_year = sellout["week_start"].dt.year == 2026
 sellout.loc[on_promo & in_year, cols]      # then sort, then head

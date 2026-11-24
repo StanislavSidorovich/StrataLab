@@ -3,7 +3,7 @@
 // editors on screen exist; the rest show their text, so a page of 70 cells stays light.
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { EditorView, basicSetup } from 'codemirror'
-import { keymap, placeholder } from '@codemirror/view'
+import { Decoration, keymap, placeholder, ViewPlugin, type DecorationSet } from '@codemirror/view'
 import { Prec, type Extension } from '@codemirror/state'
 import { MSSQL, sql as sqlLang } from '@codemirror/lang-sql'
 import { python } from '@codemirror/lang-python'
@@ -29,6 +29,8 @@ import { OutputView } from './PythonOutput'
 import { addTab, openAndRun, openPracticeBook, restartPython, runPracticePython, runPracticeQuery, startPython, useLab } from './store'
 import { followQuaeraLink } from '../core/quaeraLink'
 import './practiceNote.css'
+import { Prose, TermChips } from './Prose'
+import { newTermsOf, termRanges } from '../core/terms'
 import { buildIndex, exampleAnchor, noteAnchor, type PracticeIndex } from '../core/practiceIndex'
 import { dayOf, pickWarmUp } from '../core/practiceRecall'
 import { Hint, IndexContext, RecallSearch } from './PracticeRecall'
@@ -232,24 +234,28 @@ function useContextMenu(items: () => MenuItem[]) {
 
 const toggled = (list: string[], id: string) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id])
 
-/** `code` in backticks becomes code. */
-export function Prose({ text }: { text: string }) {
-  return (
-    <>
-      {text.split(/`([^`]+)`/).map((part, i) =>
-        i % 2 ? (
-          <code key={i} className="mono px-1 rounded" style={{ background: 'var(--panel-2)', fontSize: '0.92em' }}>
-            {part}
-          </code>
-        ) : (
-          part
-        ),
-      )}
-    </>
+export { Prose }
+
+const newTermMark = Decoration.mark({ class: 'cm-new-term' })
+
+/** Marks the words of `needles` in a read-only example: the link from a note's new terms to the code that uses them. */
+function termMarks(needles: string[], ignoreCase: boolean): Extension {
+  const build = (doc: string): DecorationSet => Decoration.set(termRanges(doc, needles, ignoreCase).map(([a, b]) => newTermMark.range(a, b)))
+  return ViewPlugin.fromClass(
+    class {
+      decorations: DecorationSet
+      constructor(view: EditorView) {
+        this.decorations = build(view.state.doc.toString())
+      }
+      update(u: { docChanged: boolean; view: EditorView }) {
+        if (u.docChanged) this.decorations = build(u.view.state.doc.toString())
+      }
+    },
+    { decorations: (v) => v.decorations },
   )
 }
 
-export function CellEditor({ value, onChange, onRun, onCheck, minLines, hint, label }: { value: string; onChange: (v: string) => void; onRun: () => void; onCheck?: () => void; minLines: number; hint?: string; label: string }) {
+export function CellEditor({ value, onChange, onRun, onCheck, minLines, hint, label, marks }: { value: string; onChange: (v: string) => void; onRun: () => void; onCheck?: () => void; minLines: number; hint?: string; label: string; /** words to mark (an example's link to its note) */ marks?: string[] }) {
   const box = useRef<HTMLDivElement>(null)
   const host = useRef<HTMLDivElement>(null)
   const text = useRef(value)
@@ -259,6 +265,7 @@ export function CellEditor({ value, onChange, onRun, onCheck, minLines, hint, la
   const book = useBook()
   const dark = useLab((s) => s.theme === 'dark')
   const tables = useLab((s) => s.tables)
+  const marksKey = marks?.join(' ') ?? ''
 
   useEffect(() => {
     const seen = new IntersectionObserver(([e]) => setVisible(e.isIntersecting), { rootMargin: '600px 0px' })
@@ -287,6 +294,7 @@ export function CellEditor({ value, onChange, onRun, onCheck, minLines, hint, la
         // The current-line band is neutral grey in a task cell (not the accent green) and absent in an example (nothing to point at).
         Prec.highest(EditorView.theme({ '.cm-activeLine, .cm-activeLineGutter': { backgroundColor: handlers.current.onCheck ? 'color-mix(in srgb, var(--text) 5%, transparent)' : 'transparent' } })),
         hint ? placeholder(hint) : [],
+        marks?.length ? termMarks(marks, book.kind === 'sql') : [],
         EditorView.contentAttributes.of({ 'aria-label': label }),
         EditorView.updateListener.of((u) => {
           if (!u.docChanged) return
@@ -298,7 +306,7 @@ export function CellEditor({ value, onChange, onRun, onCheck, minLines, hint, la
     return () => view.destroy()
     // The text lives in the ref: the editor is rebuilt only for what its setup depends on.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, dark, tables])
+  }, [visible, dark, tables, marksKey])
 
   const lines = Math.max(minLines, text.current.split('\n').length)
   return (
@@ -440,10 +448,10 @@ function NoteBlock({ block, afterWork, anchor, children }: { block: PracticeNote
   return (
     <div id={anchor} data-testid={block.topic ? 'note-new' : undefined} className={`${block.topic ? 'pn-new space-y-2' : afterWork ? 'space-y-2 pt-5 mt-2' : 'space-y-2'}`} style={{ scrollMarginTop: 72, ...(afterWork && !block.topic ? { borderTop: '1px solid var(--line)' } : {}) }}>
       <div className="font-semibold" style={block.topic ? undefined : { color: 'var(--muted)', fontWeight: 500 }}>
-        {block.topic ? (<><span className="pn-label">New:</span> <span className="pn-topic">{block.topic}</span></>) : 'Reminder'}
+        {block.topic ? (<><span className="pn-label">New:</span> <span className="pn-topic">{block.topic}</span><TermChips terms={newTermsOf(block.text)} /></>) : 'Reminder'}
       </div>
       <p className={`m-0 ${READABLE}`} style={{ fontSize: 15, lineHeight: 1.55 }}>
-        <Prose text={block.text} />
+        <Prose text={block.text} newTerms={!!block.topic} />
       </p>
       {block.syntax && (
         <pre className="mono m-0 px-3 py-2 rounded-md overflow-x-auto" style={{ background: 'var(--panel-2)', fontSize: 13 }}>
@@ -565,7 +573,7 @@ export function RunButton({ run, exec, stop }: { run: Run; exec: () => void; sto
   )
 }
 
-function ExampleBlock({ block }: { block: PracticeExampleCell }) {
+function ExampleBlock({ block, marks }: { block: PracticeExampleCell; marks?: string[] }) {
   const [text, setText] = useState(block.code)
   const { run, exec, stop } = useCellRun(block.id)
   const go = () => void exec(text)
@@ -587,7 +595,7 @@ function ExampleBlock({ block }: { block: PracticeExampleCell }) {
         <RunButton run={run} exec={go} stop={stop} />
         <OpenInLab code={text} title={block.title} />
       </div>
-      <CellEditor value={block.code} onChange={setText} onRun={go} minLines={1} label={`Example: ${block.title}`} />
+      <CellEditor value={block.code} onChange={setText} onRun={go} minLines={1} label={`Example: ${block.title}`} marks={marks} />
       <RunResult run={run} />
       {block.sees && run.status === 'done' && (
         <p className={`m-0 ${READABLE}`}>
@@ -874,7 +882,7 @@ function SectionView({ section, onNext }: { section: PracticeSection; onNext: (i
           if (b.kind === 'note' && b.topic && after?.kind === 'example') {
             return (
               <NoteBlock key={i} block={b} afterWork={i > 0 && prev.kind === 'task'} anchor={noteAnchor(section.id, i)}>
-                <ExampleBlock block={after} />
+                <ExampleBlock block={after} marks={newTermsOf(b.text).map((t) => t.needle)} />
               </NoteBlock>
             )
           }
