@@ -81,8 +81,10 @@ pd.DataFrame({"skus": [skus], "customers": [customers_n]})`,
       question: 'How many export rows have a units value that cannot be read as a number as it is written? Empty values count, and so do values with a decimal comma. Give the number.',
       ordered: false,
       skills: ['to-numeric'],
-      hints: ['Turn the text into numbers and see what is left empty.', 'pd.to_numeric(..., errors="coerce") gives NaN for what cannot be read; isna() marks them.', 'pd.to_numeric(raw["units"], errors="coerce").isna().sum()'],
+      hints: ['Turn the text into numbers and see what is left empty.', 'pd.to_numeric(..., errors="coerce") gives NaN for what cannot be read; isna() marks them.', 'Step by step: units = pd.to_numeric(raw["units"], errors="coerce"); then units.isna().sum()'],
       solution: `pd.to_numeric(raw["units"], errors="coerce").isna().sum()`,
+      solutionAlt: `units = pd.to_numeric(raw["units"], errors="coerce")
+units.isna().sum()`,
     },
     {
       kind: 'task',
@@ -116,8 +118,10 @@ pd.DataFrame({"units": [units.sum()], "revenue": [round(revenue.sum(), 1)]})`,
       question: 'How many export rows have sale_date written as day.month.year, like 11.03.2024? Give the number.',
       ordered: false,
       skills: ['parse-dates'],
-      hints: ['Parse with the one form, and see which rows could be read.', 'format="%d.%m.%Y" with errors="coerce": the others become NaT; notna() marks the read ones.', 'pd.to_datetime(raw["sale_date"], format="%d.%m.%Y", errors="coerce").notna().sum()'],
+      hints: ['Parse with the one form, and see which rows could be read.', 'format="%d.%m.%Y" with errors="coerce": the others become NaT; notna() marks the read ones.', 'Step by step: sale_date = pd.to_datetime(raw["sale_date"], format="%d.%m.%Y", errors="coerce"); then sale_date.notna().sum()'],
       solution: `pd.to_datetime(raw["sale_date"], format="%d.%m.%Y", errors="coerce").notna().sum()`,
+      solutionAlt: `sale_date = pd.to_datetime(raw["sale_date"], format="%d.%m.%Y", errors="coerce")
+sale_date.notna().sum()`,
     },
     {
       kind: 'task',
@@ -126,8 +130,11 @@ pd.DataFrame({"units": [units.sum()], "revenue": [round(revenue.sum(), 1)]})`,
       question: 'How many export rows have the day first, written either as 11.03.2024 or as 11/03/2024? Give the number.',
       ordered: false,
       skills: ['parse-dates', 'replace-text'],
-      hints: ['The slash form is the dot form with another separator.', 'Change "/" to "." in the text, then parse with format="%d.%m.%Y" and errors="coerce".', 'pd.to_datetime(raw["sale_date"].str.replace("/", "."), format="%d.%m.%Y", errors="coerce").notna().sum()'],
+      hints: ['The slash form is the dot form with another separator.', 'Change "/" to "." in the text, then parse with format="%d.%m.%Y" and errors="coerce".', 'Step by step: slashes_to_dots = raw["sale_date"].str.replace("/", "."); then sale_date = pd.to_datetime(slashes_to_dots, format="%d.%m.%Y", errors="coerce"); then sale_date.notna().sum()'],
       solution: `pd.to_datetime(raw["sale_date"].str.replace("/", "."), format="%d.%m.%Y", errors="coerce").notna().sum()`,
+      solutionAlt: `slashes_to_dots = raw["sale_date"].str.replace("/", ".")
+sale_date = pd.to_datetime(slashes_to_dots, format="%d.%m.%Y", errors="coerce")
+sale_date.notna().sum()`,
       traps: [
         {
           code: `pd.to_datetime(raw["sale_date"], format="%d.%m.%Y", errors="coerce").notna().sum()`,
@@ -183,8 +190,10 @@ month[month < "2024-07-01"].value_counts().sort_index().rename_axis("month_start
       question: 'How many different combinations of customer_name and sku_code, as they are written, does the export have? Give the number.',
       ordered: false,
       skills: ['drop-duplicates'],
-      hints: ['Two columns, and each combination counts once.', 'Pick the two columns, drop the repeated rows, count what is left.', 'len(raw[["customer_name", "sku_code"]].drop_duplicates())'],
+      hints: ['Two columns, and each combination counts once.', 'Pick the two columns, drop the repeated rows, count what is left.', 'Step by step: pairs = raw[["customer_name", "sku_code"]]; then len(pairs.drop_duplicates())'],
       solution: `len(raw[["customer_name", "sku_code"]].drop_duplicates())`,
+      solutionAlt: `pairs = raw[["customer_name", "sku_code"]]
+len(pairs.drop_duplicates())`,
     },
     {
       kind: 'note',

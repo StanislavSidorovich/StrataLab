@@ -34,8 +34,10 @@ export const MISSING: PracticeSection = {
       question: 'In 2026 (week_start in 2026), how many sellout lines have no promo_id? Give the number.',
       ordered: false,
       skills: ['missing-per-column', 'date-part'],
-      hints: ['Keep the lines of 2026, then look at promo_id.', 'The promo_id of those lines, with isna() and sum().', 'sellout[sellout["week_start"].dt.year == 2026]["promo_id"].isna().sum()'],
+      hints: ['Keep the lines of 2026, then look at promo_id.', 'The promo_id of those lines, with isna() and sum().', 'Step by step: lines_2026 = sellout[sellout["week_start"].dt.year == 2026]; then lines_2026["promo_id"].isna().sum()'],
       solution: `sellout[sellout["week_start"].dt.year == 2026]["promo_id"].isna().sum()`,
+      solutionAlt: `lines_2026 = sellout[sellout["week_start"].dt.year == 2026]
+lines_2026["promo_id"].isna().sum()`,
     },
     {
       kind: 'task',
@@ -67,8 +69,11 @@ missing[missing > 0].rename_axis("column").reset_index(name="missing").sort_valu
       question: 'How many customers either have no chain_name or are in the pharmacy channel? Give the number.',
       ordered: false,
       skills: ['filter-missing', 'keep-missing', 'filter-and', 'size'],
-      hints: ['Two ways to qualify: no chain_name, or channel pharmacy.', 'Join the two tests with |, each in its own brackets.', 'len(customers[customers["chain_name"].isna() | (customers["channel"] == "pharmacy")])'],
+      hints: ['Two ways to qualify: no chain_name, or channel pharmacy.', 'Join the two tests with |, each in its own brackets.', 'Step by step: no_chain = customers["chain_name"].isna(); then pharmacy = customers["channel"] == "pharmacy"; then len(customers[no_chain | pharmacy])'],
       solution: `len(customers[customers["chain_name"].isna() | (customers["channel"] == "pharmacy")])`,
+      solutionAlt: `no_chain = customers["chain_name"].isna()
+pharmacy = customers["channel"] == "pharmacy"
+len(customers[no_chain | pharmacy])`,
       traps: [
         {
           code: `len(customers[customers["chain_name"].isna() & (customers["channel"] == "pharmacy")])`,
@@ -106,8 +111,10 @@ len(y[y["promo_id"] != 5])`,
       question: 'Show customer_name and chain for every customer, where chain is the chain_name, or "No chain" when it is missing.',
       ordered: false,
       skills: ['fill-missing', 'add-column', 'pick-columns'],
-      hints: ['A new column from chain_name, with the gaps filled.', 'customers["chain_name"].fillna("No chain") is the new column.', 'customers.assign(chain=customers["chain_name"].fillna("No chain"))[["customer_name", "chain"]]'],
+      hints: ['A new column from chain_name, with the gaps filled.', 'customers["chain_name"].fillna("No chain") is the new column.', 'Step by step: chain = customers["chain_name"].fillna("No chain"); then customers.assign(chain=chain)[["customer_name", "chain"]]'],
       solution: `customers.assign(chain=customers["chain_name"].fillna("No chain"))[["customer_name", "chain"]]`,
+      solutionAlt: `chain = customers["chain_name"].fillna("No chain")
+customers.assign(chain=chain)[["customer_name", "chain"]]`,
     },
     {
       kind: 'task',
@@ -119,6 +126,7 @@ len(y[y["promo_id"] != 5])`,
       hints: ['Keep the customers with channel pharmacy.', 'Fill chain_name with "Independent" before counting.', 'ph["chain_name"].fillna("Independent").value_counts().rename_axis("chain").reset_index(name="customers") gives the table, already from the most.'],
       solution: `ph = customers[customers["channel"] == "pharmacy"]
 ph["chain_name"].fillna("Independent").value_counts().rename_axis("chain").reset_index(name="customers").sort_values(["customers", "chain"], ascending=[False, True])`,
+      solutionAlt: `customers[customers["channel"] == "pharmacy"]["chain_name"].fillna("Independent").value_counts().rename_axis("chain").reset_index(name="customers").sort_values(["customers", "chain"], ascending=[False, True])`,
       traps: [
         {
           code: `ph = customers[customers["channel"] == "pharmacy"]

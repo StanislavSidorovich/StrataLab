@@ -59,6 +59,8 @@ export interface PracticeTaskCell {
   skills?: string[]
   hints: string[]
   solution: string
+  /** Python page only: the same answer in its other form, shown under Solution next to the first. A chain written as one line gets the steps with named intermediates, and a task solved in steps gets the one-line chain. Left out where both forms would be the same length. Same result; the last line is the answer. */
+  solutionAlt?: string
   /** SQL page only: the solution written in PostgreSQL, only where the PostgreSQL form really differs; shown under the task after Solution */
   pg?: string
   traps?: PracticeTrap[]

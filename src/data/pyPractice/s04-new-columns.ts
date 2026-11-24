@@ -120,8 +120,11 @@ labeled["kind"].value_counts()  # how many lines got each label`,
       question: 'Add a column segment to products: pharma for every Pharma product; of the others, premium when list_price is over 100; every remaining product is basic. Show the whole table.',
       ordered: false,
       skills: ['many-outcomes', 'add-column'],
-      hints: ['Three labels, and a product can meet more than one condition: a Pharma product costs over 100 too.', 'np.select(conditions, labels, default=...): the first condition that is true wins, so put the one that must win first.', 'products.assign(segment=np.select([products["division"] == "Pharma", products["list_price"] > 100], ["pharma", "premium"], default="basic"))'],
+      hints: ['Three labels, and a product can meet more than one condition: a Pharma product costs over 100 too.', 'np.select(conditions, labels, default=...): the first condition that is true wins, so put the one that must win first.', 'Step by step: conditions = [products["division"] == "Pharma", products["list_price"] > 100]; then labels = ["pharma", "premium"]; then products.assign(segment=np.select(conditions, labels, default="basic"))'],
       solution: `products.assign(segment=np.select([products["division"] == "Pharma", products["list_price"] > 100], ["pharma", "premium"], default="basic"))`,
+      solutionAlt: `conditions = [products["division"] == "Pharma", products["list_price"] > 100]
+labels = ["pharma", "premium"]
+products.assign(segment=np.select(conditions, labels, default="basic"))`,
       traps: [
         {
           code: `products.assign(segment=np.select([products["list_price"] > 100, products["division"] == "Pharma"], ["premium", "pharma"], default="basic"))`,
@@ -149,8 +152,10 @@ labeled["kind"].value_counts()  # how many lines got each label`,
       question: 'Add a column price_band to products: low up to 100, mid over 100 up to 300, high over 300. Show the whole table.',
       ordered: false,
       skills: ['bands', 'add-column'],
-      hints: ['Three bands of list_price.', 'pd.cut(values, edges, labels=...) with the edges 0, 100, 300 and np.inf.', 'products.assign(price_band=pd.cut(products["list_price"], [0, 100, 300, np.inf], labels=["low", "mid", "high"]))'],
+      hints: ['Three bands of list_price.', 'pd.cut(values, edges, labels=...) with the edges 0, 100, 300 and np.inf.', 'Step by step: price_band = pd.cut(products["list_price"], [0, 100, 300, np.inf], labels=["low", "mid", "high"]); then products.assign(price_band=price_band)'],
       solution: `products.assign(price_band=pd.cut(products["list_price"], [0, 100, 300, np.inf], labels=["low", "mid", "high"]))`,
+      solutionAlt: `price_band = pd.cut(products["list_price"], [0, 100, 300, np.inf], labels=["low", "mid", "high"])
+products.assign(price_band=price_band)`,
     },
     {
       kind: 'note',
@@ -175,8 +180,10 @@ products["unit"].value_counts().sort_index().rename_axis("unit").reset_index(nam
       question: 'How many products does each category have? Show category and products, in alphabetical order of category.',
       ordered: true,
       skills: ['count-values', 'name-counts'],
-      hints: ['Count the values of category.', 'value_counts, then sort_index to put the categories in their own order.', 'products["category"].value_counts().sort_index().rename_axis("category").reset_index(name="products")'],
+      hints: ['Count the values of category.', 'value_counts, then sort_index to put the categories in their own order.', 'Step by step: per_category = products["category"].value_counts().sort_index(); then per_category.rename_axis("category").reset_index(name="products")'],
       solution: `products["category"].value_counts().sort_index().rename_axis("category").reset_index(name="products")`,
+      solutionAlt: `per_category = products["category"].value_counts().sort_index()
+per_category.rename_axis("category").reset_index(name="products")`,
     },
     {
       kind: 'task',
@@ -187,6 +194,8 @@ products["unit"].value_counts().sort_index().rename_axis("unit").reset_index(nam
       skills: ['bands', 'count-values', 'name-counts'],
       hints: ['Cut list_price into the three bands, then count them.', 'sort_index keeps the band order, because the labels were given in that order.', 'pd.cut(...).value_counts().sort_index().rename_axis("band").reset_index(name="products")'],
       solution: `pd.cut(products["list_price"], [0, 100, 300, np.inf], labels=["low", "mid", "high"]).value_counts().sort_index().rename_axis("band").reset_index(name="products")`,
+      solutionAlt: `price_band = pd.cut(products["list_price"], [0, 100, 300, np.inf], labels=["low", "mid", "high"])
+price_band.value_counts().sort_index().rename_axis("band").reset_index(name="products")`,
     },
     {
       kind: 'task',
@@ -199,6 +208,7 @@ products["unit"].value_counts().sort_index().rename_axis("unit").reset_index(nam
       solution: `y = sellout[sellout["week_start"].dt.year == 2026]
 band = pd.cut(y["units"], [0, 2, 5, 9, np.inf], labels=["1-2", "3-5", "6-9", "10+"])
 band.value_counts().sort_index().rename_axis("band").reset_index(name="lines")`,
+      solutionAlt: `pd.cut(sellout[sellout["week_start"].dt.year == 2026]["units"], [0, 2, 5, 9, np.inf], labels=["1-2", "3-5", "6-9", "10+"]).value_counts().sort_index().rename_axis("band").reset_index(name="lines")`,
       traps: [
         {
           code: `y = sellout[sellout["week_start"].dt.year == 2026]
@@ -231,6 +241,7 @@ band.value_counts().sort_index().rename_axis("band").reset_index(name="lines")`,
       hints: ['Two moves: recode the unit column with a dict (map), then add the result as a column (assign). Do them one at a time: first the dict in a variable.', 'The dict has six keys: L, ml, g, tab, caps, sachet. pack_map = {"L": "liquid", "ml": "liquid", ...}', 'Last line: products.assign(pack_type=products["unit"].map(pack_map)). It is the same pieces in one line, as in the example with np.where inside assign.'],
       solution: `pack_map = {"L": "liquid", "ml": "liquid", "g": "solid", "tab": "dose", "caps": "dose", "sachet": "dose"}
 products.assign(pack_type=products["unit"].map(pack_map))`,
+      solutionAlt: `products.assign(pack_type=products["unit"].map({"L": "liquid", "ml": "liquid", "g": "solid", "tab": "dose", "caps": "dose", "sachet": "dose"}))`,
       traps: [
         {
           code: `pack_map = {"L": "liquid", "ml": "liquid", "g": "solid", "tab": "dose", "caps": "dose"}
@@ -249,6 +260,7 @@ products.assign(pack_type=products["unit"].map(pack_map))`,
       hints: ['Recode category into a department with a dict, then count.', 'products["category"].map({...}) needs one key for each of the 5 categories.', 'Count with .value_counts().rename_axis("department").reset_index(name="products"), then sort_values(["products", "department"], ascending=[False, True]).'],
       solution: `dept = products["category"].map({"Beverages": "Drinks", "Snacks": "Food", "Dairy": "Food", "Home care": "Home", "OTC": "Health"})
 dept.value_counts().rename_axis("department").reset_index(name="products").sort_values(["products", "department"], ascending=[False, True])`,
+      solutionAlt: `products["category"].map({"Beverages": "Drinks", "Snacks": "Food", "Dairy": "Food", "Home care": "Home", "OTC": "Health"}).value_counts().rename_axis("department").reset_index(name="products").sort_values(["products", "department"], ascending=[False, True])`,
       traps: [
         {
           code: `dept = products["category"].map({"Beverages": "Drinks", "Snacks": "Food", "Home care": "Home", "OTC": "Health"})
@@ -278,6 +290,8 @@ dept.value_counts().rename_axis("department").reset_index(name="products").sort_
       skills: ['text-parts', 'filter', 'distinct'],
       hints: ['Keep the Aqualis products, then cut the name into words.', 'products[...]["product_name"].str.split(" ").str[1] is the second word.', 'Finish with .unique().'],
       solution: `products[products["brand"] == "Aqualis"]["product_name"].str.split(" ").str[1].unique()`,
+      solutionAlt: `aqualis = products[products["brand"] == "Aqualis"]
+aqualis["product_name"].str.split(" ").str[1].unique()`,
     },
     {
       kind: 'task',
@@ -310,8 +324,10 @@ f["product_name"].str.split(" ").str[1].value_counts().rename_axis("variant").re
       question: 'Add a column code to products: the letter P followed by product_id, like P7. Show product_name and code.',
       ordered: false,
       skills: ['to-type', 'add-column', 'pick-columns'],
-      hints: ['Text and a number cannot be joined as they are.', 'Make product_id text with astype(str), then add it to "P".', 'products.assign(code="P" + products["product_id"].astype(str))[["product_name", "code"]]'],
+      hints: ['Text and a number cannot be joined as they are.', 'Make product_id text with astype(str), then add it to "P".', 'Step by step: codes = "P" + products["product_id"].astype(str); then products.assign(code=codes)[["product_name", "code"]]'],
       solution: `products.assign(code="P" + products["product_id"].astype(str))[["product_name", "code"]]`,
+      solutionAlt: `codes = "P" + products["product_id"].astype(str)
+products.assign(code=codes)[["product_name", "code"]]`,
     },
     {
       kind: 'note',
@@ -336,6 +352,8 @@ pyrexan.assign(pieces=pyrexan["product_name"].str.extract(r" x(\\d+)$")[0])[["pr
       skills: ['text-parts', 'to-type', 'one-number'],
       hints: ['Pull the number out of the name; the other products give NaN.', 'str.extract(r" x(\\d+)$")[0] is text: astype(float) makes it a number.', 'An average skips NaN, so round(....mean(), 1) is the answer.'],
       solution: `round(products["product_name"].str.extract(r" x(\\d+)$")[0].astype(float).mean(), 1)`,
+      solutionAlt: `pieces = products["product_name"].str.extract(r" x(\\d+)$")[0].astype(float)
+round(pieces.mean(), 1)`,
     },
     {
       kind: 'note',
@@ -358,8 +376,10 @@ len(sellout.dropna(subset=["promo_id"]))`,
       question: 'In 2026 (week_start in 2026), how many sellout lines were sold under a promotion, that is, have a promo_id? Give the number.',
       ordered: false,
       skills: ['drop-missing', 'size', 'date-part'],
-      hints: ['Keep the lines of 2026, then the lines that have a promo_id.', 'dropna(subset=["promo_id"]) removes the lines without one.', 'len(sellout[sellout["week_start"].dt.year == 2026].dropna(subset=["promo_id"]))'],
+      hints: ['Keep the lines of 2026, then the lines that have a promo_id.', 'dropna(subset=["promo_id"]) removes the lines without one.', 'Step by step: lines_2026 = sellout[sellout["week_start"].dt.year == 2026]; then len(lines_2026.dropna(subset=["promo_id"]))'],
       solution: `len(sellout[sellout["week_start"].dt.year == 2026].dropna(subset=["promo_id"]))`,
+      solutionAlt: `lines_2026 = sellout[sellout["week_start"].dt.year == 2026]
+len(lines_2026.dropna(subset=["promo_id"]))`,
     },
     {
       kind: 'task',

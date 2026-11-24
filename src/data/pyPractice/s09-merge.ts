@@ -26,6 +26,8 @@ export const MERGE: PracticeSection = {
       skills: ['merge'],
       hints: ['The rep is in reps, the region name in regions, and both have region_id.', 'Merge the two tables on region_id.', 'reps[["rep_name", "region_id"]].merge(regions[["region_id", "region_name"]], on="region_id")'],
       solution: `reps[["rep_name", "region_id"]].merge(regions[["region_id", "region_name"]], on="region_id")[["rep_name", "region_name"]]`,
+      solutionAlt: `rep_regions = reps[["rep_name", "region_id"]].merge(regions[["region_id", "region_name"]], on="region_id")
+rep_regions[["rep_name", "region_name"]]`,
     },
     {
       kind: 'task',
@@ -34,8 +36,10 @@ export const MERGE: PracticeSection = {
       question: 'How many units did each brand sell in sell-out over the whole period? Show brand and units.',
       ordered: false,
       skills: ['merge', 'group-total'],
-      hints: ['Units are in sellout and the brand is in products.', 'Merge on product_id, then group by brand.', 'sellout.merge(products[["product_id", "brand"]], on="product_id").groupby("brand", as_index=False)["units"].sum()'],
+      hints: ['Units are in sellout and the brand is in products.', 'Merge on product_id, then group by brand.', 'Step by step: with_brand = sellout.merge(products[["product_id", "brand"]], on="product_id"); then with_brand.groupby("brand", as_index=False)["units"].sum()'],
       solution: `sellout.merge(products[["product_id", "brand"]], on="product_id").groupby("brand", as_index=False)["units"].sum()`,
+      solutionAlt: `with_brand = sellout.merge(products[["product_id", "brand"]], on="product_id")
+with_brand.groupby("brand", as_index=False)["units"].sum()`,
     },
     {
       kind: 'task',
@@ -47,6 +51,9 @@ export const MERGE: PracticeSection = {
       hints: ['Revenue is in sellout and the brand is in products: they share product_id.', 'Filter the weeks of 2026, merge on product_id, then group by brand.', 'merge(products[["product_id", "brand"]], on="product_id").groupby("brand", as_index=False)["revenue"].sum().sort_values("revenue", ascending=False)'],
       solution: `y = sellout[sellout["week_start"].dt.year == 2026]
 y.merge(products[["product_id", "brand"]], on="product_id").groupby("brand", as_index=False)["revenue"].sum().sort_values("revenue", ascending=False)`,
+      solutionAlt: `sellout_2026 = sellout[sellout["week_start"].dt.year == 2026]
+with_brand = sellout_2026.merge(products[["product_id", "brand"]], on="product_id")
+with_brand.groupby("brand", as_index=False)["revenue"].sum().sort_values("revenue", ascending=False)`,
     },
     {
       kind: 'note',
@@ -84,6 +91,9 @@ d.groupby("customer_name", as_index=False)["net_amount"].sum().sort_values("net_
       skills: ['merge', 'merge-left'],
       hints: ['The rep_id is on the customer row; the name is in reps.', 'Merge on rep_id, and keep the customers that find no rep.', 'customers[["customer_id", "customer_name", "rep_id"]].merge(reps[["rep_id", "rep_name"]], on="rep_id", how="left")'],
       solution: `customers[["customer_id", "customer_name", "rep_id"]].merge(reps[["rep_id", "rep_name"]], on="rep_id", how="left")[["customer_id", "customer_name", "rep_name"]]`,
+      solutionAlt: `rep_names = reps[["rep_id", "rep_name"]]
+customer_cols = customers[["customer_id", "customer_name", "rep_id"]]
+customer_cols.merge(rep_names, on="rep_id", how="left")[["customer_id", "customer_name", "rep_name"]]`,
       traps: [
         {
           code: `customers[["customer_id", "customer_name", "rep_id"]].merge(reps[["rep_id", "rep_name"]], on="rep_id")[["customer_id", "customer_name", "rep_name"]]`,
@@ -130,6 +140,7 @@ pd.Series({"before": len(sellin), "after": len(named)})`,
       hints: ['The channel is a column of customers; sellout has the customer_id.', 'Merge with validate="m:1" so the lines cannot be repeated, then group by channel.', 'y.merge(customers[["customer_id", "channel"]], on="customer_id", validate="m:1").groupby("channel", as_index=False)["units"].sum()'],
       solution: `y = sellout[sellout["week_start"].dt.year == 2026]
 y.merge(customers[["customer_id", "channel"]], on="customer_id", validate="m:1").groupby("channel", as_index=False)["units"].sum()`,
+      solutionAlt: `sellout[sellout["week_start"].dt.year == 2026].merge(customers[["customer_id", "channel"]], on="customer_id", validate="m:1").groupby("channel", as_index=False)["units"].sum()`,
     },
     {
       kind: 'task',

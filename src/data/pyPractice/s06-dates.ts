@@ -34,8 +34,10 @@ export const DATES: PracticeSection = {
       question: 'How many sell-in shipments were ordered on a Sunday? Give the number.',
       ordered: false,
       skills: ['weekday', 'size'],
-      hints: ['The weekday number of order_date, with Monday as 0.', 'Sunday is 6: dt.dayofweek == 6 keeps those rows.', 'len(sellin[sellin["order_date"].dt.dayofweek == 6])'],
+      hints: ['The weekday number of order_date, with Monday as 0.', 'Sunday is 6: dt.dayofweek == 6 keeps those rows.', 'Step by step: sundays = sellin[sellin["order_date"].dt.dayofweek == 6]; then len(sundays)'],
       solution: `len(sellin[sellin["order_date"].dt.dayofweek == 6])`,
+      solutionAlt: `sundays = sellin[sellin["order_date"].dt.dayofweek == 6]
+len(sundays)`,
     },
     {
       kind: 'task',
@@ -63,8 +65,10 @@ t`,
       question: 'In how many different months does sellout have weeks? A week belongs to the month of its week_start. Give the number.',
       ordered: false,
       skills: ['month-start', 'distinct'],
-      hints: ['Turn each week_start into its month, then count the different ones.', 'dt.to_period("M") gives the month of a date.', 'sellout["week_start"].dt.to_period("M").nunique()'],
+      hints: ['Turn each week_start into its month, then count the different ones.', 'dt.to_period("M") gives the month of a date.', 'Step by step: months = sellout["week_start"].dt.to_period("M"); then months.nunique()'],
       solution: `sellout["week_start"].dt.to_period("M").nunique()`,
+      solutionAlt: `months = sellout["week_start"].dt.to_period("M")
+months.nunique()`,
     },
     {
       kind: 'task',
@@ -76,6 +80,7 @@ t`,
       hints: ['Keep the weeks of 2025, and turn week_start into a month.', 'dt.to_period("M").dt.to_timestamp() gives the first day of the month as a date.', 'Count with value_counts().sort_index().rename_axis("month_start").reset_index(name="lines").'],
       solution: `y = sellout[sellout["week_start"].dt.year == 2025]
 y["week_start"].dt.to_period("M").dt.to_timestamp().value_counts().sort_index().rename_axis("month_start").reset_index(name="lines")`,
+      solutionAlt: `sellout[sellout["week_start"].dt.year == 2025]["week_start"].dt.to_period("M").dt.to_timestamp().value_counts().sort_index().rename_axis("month_start").reset_index(name="lines")`,
     },
     {
       kind: 'task',
@@ -113,8 +118,10 @@ days.describe()`,
       question: 'What is the longest time, in days, from order_date to ship_date in sellin? Give the number.',
       ordered: false,
       skills: ['date-gap', 'one-number'],
-      hints: ['The gap between two date columns, row by row.', 'ship_date minus order_date, then .dt.days.', '(sellin["ship_date"] - sellin["order_date"]).dt.days.max()'],
+      hints: ['The gap between two date columns, row by row.', 'ship_date minus order_date, then .dt.days.', 'Step by step: wait = sellin["ship_date"] - sellin["order_date"]; then wait.dt.days.max()'],
       solution: `(sellin["ship_date"] - sellin["order_date"]).dt.days.max()`,
+      solutionAlt: `wait = sellin["ship_date"] - sellin["order_date"]
+wait.dt.days.max()`,
     },
     {
       kind: 'task',
@@ -123,8 +130,10 @@ days.describe()`,
       question: 'How many sell-in shipments left more than 7 days after the order? Give the number.',
       ordered: false,
       skills: ['date-gap', 'size'],
-      hints: ['The days from order_date to ship_date, as a column.', 'Keep the rows where the days are above 7.', 'len(sellin[(sellin["ship_date"] - sellin["order_date"]).dt.days > 7])'],
+      hints: ['The days from order_date to ship_date, as a column.', 'Keep the rows where the days are above 7.', 'Step by step: wait_days = (sellin["ship_date"] - sellin["order_date"]).dt.days; then len(sellin[wait_days > 7])'],
       solution: `len(sellin[(sellin["ship_date"] - sellin["order_date"]).dt.days > 7])`,
+      solutionAlt: `wait_days = (sellin["ship_date"] - sellin["order_date"]).dt.days
+len(sellin[wait_days > 7])`,
       traps: [
         {
           code: `len(sellin[(sellin["ship_date"] - sellin["order_date"]).dt.days >= 7])`,

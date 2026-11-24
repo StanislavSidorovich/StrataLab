@@ -24,8 +24,10 @@ export const GROUPBY: PracticeSection = {
       question: 'What is the highest list_price in each category? Show category and the price.',
       ordered: false,
       skills: ['group-total'],
-      hints: ['One key, category, and one column to sum up.', 'Group products by category, take list_price, and ask for the largest value of each group.', 'products.groupby("category", as_index=False)["list_price"].max()'],
+      hints: ['One key, category, and one column to sum up.', 'Group products by category, take list_price, and ask for the largest value of each group.', 'Step by step: by_category = products.groupby("category", as_index=False); then by_category["list_price"].max()'],
       solution: `products.groupby("category", as_index=False)["list_price"].max()`,
+      solutionAlt: `by_category = products.groupby("category", as_index=False)
+by_category["list_price"].max()`,
     },
     {
       kind: 'task',
@@ -46,6 +48,8 @@ export const GROUPBY: PracticeSection = {
       skills: ['group-total', 'date-part', 'sort'],
       hints: ['The key is not a column yet: make the year from week_start.', 'sellout.groupby(sellout["week_start"].dt.year) groups by the year, and the index is named week_start.', 'Add [["units", "revenue"]].sum().rename_axis("year").reset_index().'],
       solution: `sellout.groupby(sellout["week_start"].dt.year)[["units", "revenue"]].sum().rename_axis("year").reset_index().sort_values("year")`,
+      solutionAlt: `per_year = sellout.groupby(sellout["week_start"].dt.year)[["units", "revenue"]].sum()
+per_year.rename_axis("year").reset_index().sort_values("year")`,
     },
     {
       kind: 'task',
@@ -57,6 +61,7 @@ export const GROUPBY: PracticeSection = {
       hints: ['Only the lines of 2025 go into the groups.', 'Filter the rows by the year of week_start first, then group them by product_id.', 'sellout[sellout["week_start"].dt.year == 2025].groupby("product_id", as_index=False)["revenue"].sum()'],
       solution: `y = sellout[sellout["week_start"].dt.year == 2025]
 y.groupby("product_id", as_index=False)["revenue"].sum()`,
+      solutionAlt: `sellout[sellout["week_start"].dt.year == 2025].groupby("product_id", as_index=False)["revenue"].sum()`,
     },
     {
       kind: 'note',
@@ -70,8 +75,10 @@ y.groupby("product_id", as_index=False)["revenue"].sum()`,
       question: 'For each brand, how many products does it have (products) and what is their average list_price (avg_price)? Show brand, products and avg_price.',
       ordered: false,
       skills: ['group-total', 'group-agg'],
-      hints: ['Two results for each brand: a count of rows and an average.', 'groupby("brand", as_index=False).agg(...) with one named result for each.', 'products.groupby("brand", as_index=False).agg(products=("product_id", "size"), avg_price=("list_price", "mean"))'],
+      hints: ['Two results for each brand: a count of rows and an average.', 'groupby("brand", as_index=False).agg(...) with one named result for each.', 'Step by step: by_brand = products.groupby("brand", as_index=False); then by_brand.agg(products=("product_id", "size"), avg_price=("list_price", "mean"))'],
       solution: `products.groupby("brand", as_index=False).agg(products=("product_id", "size"), avg_price=("list_price", "mean"))`,
+      solutionAlt: `by_brand = products.groupby("brand", as_index=False)
+by_brand.agg(products=("product_id", "size"), avg_price=("list_price", "mean"))`,
     },
     {
       kind: 'task',
@@ -80,8 +87,10 @@ y.groupby("product_id", as_index=False)["revenue"].sum()`,
       question: 'How many products does each pair of division and category have? Show division, category and products.',
       ordered: false,
       skills: ['group-total', 'group-agg'],
-      hints: ['Two keys give one row for each pair that exists.', 'Put both columns in a list: groupby(["division", "category"], as_index=False).', 'products.groupby(["division", "category"], as_index=False).agg(products=("product_id", "size"))'],
+      hints: ['Two keys give one row for each pair that exists.', 'Put both columns in a list: groupby(["division", "category"], as_index=False).', 'Step by step: by_group = products.groupby(["division", "category"], as_index=False); then by_group.agg(products=("product_id", "size"))'],
       solution: `products.groupby(["division", "category"], as_index=False).agg(products=("product_id", "size"))`,
+      solutionAlt: `by_group = products.groupby(["division", "category"], as_index=False)
+by_group.agg(products=("product_id", "size"))`,
     },
     {
       kind: 'task',
@@ -93,6 +102,7 @@ y.groupby("product_id", as_index=False)["revenue"].sum()`,
       hints: ['Make a year column first, then group by two keys.', 'groupby(["distributor_id", "year"], as_index=False) gives one row for each pair, with the keys in order.', 'agg(shipments=("sellin_id", "size"), units=("units", "sum"), net_amount=("net_amount", "sum")) finishes it.'],
       solution: `s = sellin.assign(year=sellin["order_date"].dt.year)
 s.groupby(["distributor_id", "year"], as_index=False).agg(shipments=("sellin_id", "size"), units=("units", "sum"), net_amount=("net_amount", "sum")).sort_values(["distributor_id", "year"])`,
+      solutionAlt: `sellin.assign(year=sellin["order_date"].dt.year).groupby(["distributor_id", "year"], as_index=False).agg(shipments=("sellin_id", "size"), units=("units", "sum"), net_amount=("net_amount", "sum")).sort_values(["distributor_id", "year"])`,
     },
     {
       kind: 'note',
@@ -107,8 +117,10 @@ s.groupby(["distributor_id", "year"], as_index=False).agg(shipments=("sellin_id"
       question: 'For each product_id: how many sellout lines (lines) and how many of them have a promo_id (promo_lines)? Show product_id, lines and promo_lines.',
       ordered: false,
       skills: ['group-total', 'group-agg'],
-      hints: ['Two counts for each product: every row, and the rows where promo_id has a value.', 'size counts every row of the group, count skips the missing promo_id.', 'sellout.groupby("product_id", as_index=False).agg(lines=("sellout_id", "size"), promo_lines=("promo_id", "count"))'],
+      hints: ['Two counts for each product: every row, and the rows where promo_id has a value.', 'size counts every row of the group, count skips the missing promo_id.', 'Step by step: by_product = sellout.groupby("product_id", as_index=False); then by_product.agg(lines=("sellout_id", "size"), promo_lines=("promo_id", "count"))'],
       solution: `sellout.groupby("product_id", as_index=False).agg(lines=("sellout_id", "size"), promo_lines=("promo_id", "count"))`,
+      solutionAlt: `by_product = sellout.groupby("product_id", as_index=False)
+by_product.agg(lines=("sellout_id", "size"), promo_lines=("promo_id", "count"))`,
       traps: [
         {
           code: `sellout.groupby("product_id", as_index=False).agg(lines=("sellout_id", "size"), promo_lines=("promo_id", "size"))`,

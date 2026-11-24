@@ -607,6 +607,43 @@ function ExampleBlock({ block, marks }: { block: PracticeExampleCell; marks?: st
   )
 }
 
+// The sentence on the two forms of a solution is said once per page load, under the first task that shows both.
+let formsSaid = false
+
+/** Both forms of a solution, the one with more lines first: naming the steps and one long line give the same result. */
+function SolutionForms({ solution, alt }: { solution: string; alt: string }) {
+  const [says] = useState(() => {
+    const first = !formsSaid
+    formsSaid = true
+    return first
+  })
+  const lines = (c: string) => c.split('\n').length
+  const steps = lines(solution) >= lines(alt) ? solution : alt
+  const oneLine = steps === solution ? alt : solution
+  return (
+    <div className="space-y-1.5">
+      {says && (
+        <p className="m-0" style={{ color: 'var(--muted)', fontSize: 12 }}>
+          Both forms give the same result. Naming the steps is easier to read and to debug; one line is what you will often see in other people’s code.
+        </p>
+      )}
+      {(
+        [
+          ['Step by step', steps],
+          ['In one line', oneLine],
+        ] as const
+      ).map(([label, code]) => (
+        <div key={label}>
+          <div style={{ color: 'var(--muted)', fontSize: 12 }}>{label}</div>
+          <pre className="mono m-0 mt-0.5 px-3 py-2 rounded-md overflow-x-auto" style={{ background: 'var(--panel-2)', fontSize: 13 }}>
+            {code}
+          </pre>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 type CheckState = { verdict: Verdict; trap: string | null; got: ResultData; expected: ResultData } | null
 
 /** `warm`: the cell is shown again as a warm-up, so its ids and run tags must not meet those of the task in its own section. */
@@ -750,6 +787,7 @@ function TaskBlock({ section, block, onNext, warm = false }: { section: Practice
           </pre>
         </details>
       )}
+      {solutionShown && block.solutionAlt && <SolutionForms solution={block.solution} alt={block.solutionAlt} />}
       {check && said && (
         <div role="status" className="rounded-md px-2.5 py-1.5 flex gap-2" style={check.verdict.ok ? { background: 'var(--accent-soft)', color: 'var(--accent)' } : { background: 'var(--warn-soft)', color: 'var(--warn-text)' }}>
           {check.verdict.ok ? <CheckCircle2 size={15} className="shrink-0 mt-0.5" /> : <XCircle size={15} className="shrink-0 mt-0.5" />}

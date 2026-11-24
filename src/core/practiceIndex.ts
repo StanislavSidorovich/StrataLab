@@ -177,7 +177,7 @@ export function untaughtIn(index: PracticeIndex, sections: PracticeSection[]): s
   for (const s of sections)
     for (const b of s.blocks) {
       if (b.kind !== 'task') continue
-      for (const [label, code] of [['solution', b.solution], ['pg', b.pg]] as const) {
+      for (const [label, code] of [['solution', b.solution], ['pg', b.pg], ['alt', b.solutionAlt]] as const) {
         if (!code) continue
         const bad = [...new Set(g.code(code))].filter((w) => !g.basic.has(w) && !(label === 'pg' && PG_ONLY.has(w)) && !(index.introducedIn(w) && index.introducedIn(w)!.n <= s.n))
         if (bad.length) missing.push(`${b.id} (${label}): ${bad.join(', ')}`)

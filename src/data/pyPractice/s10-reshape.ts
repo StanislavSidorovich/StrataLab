@@ -44,6 +44,7 @@ p.reset_index().rename_axis(columns=None)`,
       hints: ['sellin has the order_date and the net_amount; the year has to become a column first.', 'sellin.assign(year=...) with the year of order_date, then pivot_table with index="product_id" and columns="year".', 's.pivot_table(index="product_id", columns="year", values="net_amount", aggfunc="sum", fill_value=0).reset_index().rename_axis(columns=None)'],
       solution: `s = sellin.assign(year=sellin["order_date"].dt.year)
 s.pivot_table(index="product_id", columns="year", values="net_amount", aggfunc="sum", fill_value=0).reset_index().rename_axis(columns=None)`,
+      solutionAlt: `sellin.assign(year=sellin["order_date"].dt.year).pivot_table(index="product_id", columns="year", values="net_amount", aggfunc="sum", fill_value=0).reset_index().rename_axis(columns=None)`,
     },
     {
       kind: 'task',
@@ -83,8 +84,11 @@ m.pivot_table(index="category", columns="channel", values="units", fill_value=0)
       question: 'How many customers of each channel were opened (opened_date) in each year? One row for each channel, one column for each year. Show channel, then the years.',
       ordered: false,
       skills: ['crosstab', 'date-part', 'name-counts'],
-      hints: ['It is a count of customers for each pair of channel and year.', 'crosstab takes two series: the channel, and the year of opened_date.', 'pd.crosstab(customers["channel"], customers["opened_date"].dt.year).reset_index().rename_axis(columns=None)'],
+      hints: ['It is a count of customers for each pair of channel and year.', 'crosstab takes two series: the channel, and the year of opened_date.', 'Step by step: opened_year = customers["opened_date"].dt.year; then counts = pd.crosstab(customers["channel"], opened_year); then counts.reset_index().rename_axis(columns=None)'],
       solution: `pd.crosstab(customers["channel"], customers["opened_date"].dt.year).reset_index().rename_axis(columns=None)`,
+      solutionAlt: `opened_year = customers["opened_date"].dt.year
+counts = pd.crosstab(customers["channel"], opened_year)
+counts.reset_index().rename_axis(columns=None)`,
     },
     {
       kind: 'task',

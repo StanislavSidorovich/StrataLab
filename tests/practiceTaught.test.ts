@@ -24,7 +24,7 @@ function untaught(sections: PracticeSection[], words: (code: string) => string[]
       if (b.kind === 'note') for (const w of [...prose(b.text), ...(b.trap ? prose(b.trap) : []), ...(b.syntax ? words(b.syntax) : [])]) taught.add(w)
       if (b.kind === 'example') for (const w of words(b.code)) taught.add(w)
       if (b.kind === 'task') {
-        const new_ = [...new Set(words(b.solution))].filter((w) => !taught.has(w))
+        const new_ = [...new Set([...words(b.solution), ...words(b.solutionAlt ?? '')])].filter((w) => !taught.has(w))
         if (new_.length) missing.push(`${b.id}: ${new_.join(', ')}`)
       }
     }

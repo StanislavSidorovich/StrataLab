@@ -52,6 +52,24 @@ sellout[sellout["units"] > 100].head()`,
     },
     {
       kind: 'note',
+      topic: 'one long line or named steps',
+      text: 'A long line can be cut into steps: put the filtered table in a variable, then work on the variable. Both ways give the same result: steps are easier to read and to debug, one line is what you will often see in other people’s code. `vitanor` is just a name you choose.',
+      syntax: `# one line
+products[products["brand"] == "Vitanor"][["product_name", "list_price"]]
+# the same in steps
+vitanor = products[products["brand"] == "Vitanor"]
+vitanor[["product_name", "list_price"]]`,
+    },
+    {
+      kind: 'example',
+      id: 'py-filter-named-steps',
+      title: 'The same rows in steps',
+      code: `vitanor = products[products["brand"] == "Vitanor"]
+vitanor[["product_name", "list_price"]].head()`,
+      sees: 'The same rows and columns as the one-line form: Vitanor products with their name and price. The first line only names the table, and the last line is the answer.',
+    },
+    {
+      kind: 'note',
       topic: 'sorting rows',
       text: '`sort_values` orders the rows by a column, and `ascending=False` puts the largest first. To break ties, pass a list of columns and a list of directions: the first `~True` or `~False` belongs to the first column, the second to the second.',
     },
@@ -79,8 +97,10 @@ sellout[sellout["units"] > 100].head()`,
       question: 'Which products are in the division FMCG? Show all their columns, sorted by brand from A to Z, then by list_price from the highest, then by product_name.',
       ordered: true,
       skills: ['filter', 'sort'],
-      hints: ['Filter on division first, then sort the result.', 'Three sort keys, and the directions differ: brand goes up, list_price goes down.', 'products[products["division"] == "FMCG"].sort_values(["brand", "list_price", "product_name"], ascending=[True, False, True])'],
+      hints: ['Filter on division first, then sort the result.', 'Three sort keys, and the directions differ: brand goes up, list_price goes down.', 'Step by step: fmcg = products[products["division"] == "FMCG"]; then fmcg.sort_values(["brand", "list_price", "product_name"], ascending=[True, False, True])'],
       solution: `products[products["division"] == "FMCG"].sort_values(["brand", "list_price", "product_name"], ascending=[True, False, True])`,
+      solutionAlt: `fmcg = products[products["division"] == "FMCG"]
+fmcg.sort_values(["brand", "list_price", "product_name"], ascending=[True, False, True])`,
     },
     {
       kind: 'task',
@@ -91,6 +111,9 @@ sellout[sellout["units"] > 100].head()`,
       skills: ['filter', 'pick-columns', 'sort'],
       hints: ['Filter products on division, then pick columns.', 'df[df["division"] == "Pharma"][[...]]', 'Finish with .sort_values(["list_price", "product_name"], ascending=[False, True]).'],
       solution: `products[products["division"] == "Pharma"][["product_name", "brand", "list_price"]].sort_values(["list_price", "product_name"], ascending=[False, True])`,
+      solutionAlt: `pharma = products[products["division"] == "Pharma"]
+pharma_cols = pharma[["product_name", "brand", "list_price"]]
+pharma_cols.sort_values(["list_price", "product_name"], ascending=[False, True])`,
       traps: [
         {
           code: `products[products["division"] == "pharma"][["product_name", "brand", "list_price"]].sort_values(["list_price", "product_name"], ascending=[False, True])`,
@@ -118,8 +141,11 @@ sellout[sellout["units"] > 100].head()`,
       question: 'Which Pharma products have a list_price under 500? Show all their columns.',
       ordered: false,
       skills: ['filter', 'filter-and'],
-      hints: ['Two conditions, both must hold.', 'Each condition in brackets, joined with &.', 'products[(products["division"] == "Pharma") & (products["list_price"] < 500)]'],
+      hints: ['Two conditions, both must hold.', 'Each condition in brackets, joined with &.', 'Step by step: is_pharma = products["division"] == "Pharma"; then is_cheap = products["list_price"] < 500; then products[is_pharma & is_cheap]'],
       solution: `products[(products["division"] == "Pharma") & (products["list_price"] < 500)]`,
+      solutionAlt: `is_pharma = products["division"] == "Pharma"
+is_cheap = products["list_price"] < 500
+products[is_pharma & is_cheap]`,
     },
     {
       kind: 'note',
@@ -167,8 +193,10 @@ sellout[sellout["units"] > 100].head()`,
       question: 'How many rows of sellout have week_start from 2026-01-01 to 2026-03-31, both included? Give the number.',
       ordered: false,
       skills: ['size', 'filter-list'],
-      hints: ['A range on one column.', 'between takes dates as text: "2026-01-01".', 'len(sellout[sellout["week_start"].between("2026-01-01", "2026-03-31")])'],
+      hints: ['A range on one column.', 'between takes dates as text: "2026-01-01".', 'Step by step: q1_lines = sellout[sellout["week_start"].between("2026-01-01", "2026-03-31")]; then len(q1_lines)'],
       solution: `len(sellout[sellout["week_start"].between("2026-01-01", "2026-03-31")])`,
+      solutionAlt: `q1_lines = sellout[sellout["week_start"].between("2026-01-01", "2026-03-31")]
+len(q1_lines)`,
     },
     {
       kind: 'note',
@@ -236,8 +264,10 @@ sellout[sellout["units"] > 100].head()`,
       question: 'How many rows of sellout are on a promotion? Give the number.',
       ordered: false,
       skills: ['size', 'filter-missing'],
-      hints: ['A row on a promotion has a promo_id.', 'Keep the rows where df["promo_id"].notna(), then count them.', 'len(sellout[sellout["promo_id"].notna()])'],
+      hints: ['A row on a promotion has a promo_id.', 'Keep the rows where df["promo_id"].notna(), then count them.', 'Step by step: promo_lines = sellout[sellout["promo_id"].notna()]; then len(promo_lines)'],
       solution: `len(sellout[sellout["promo_id"].notna()])`,
+      solutionAlt: `promo_lines = sellout[sellout["promo_id"].notna()]
+len(promo_lines)`,
       traps: [{ code: `len(sellout[sellout["promo_id"].isna()])`, says: '`isna` keeps the rows without a promotion. Rows on one have a `promo_id`, so the test is `notna`.' }],
     },
     {
@@ -259,8 +289,10 @@ sellout[sellout["units"] > 100].head()`,
       question: 'How many rows of sellout have a week_start from 2025-01-01 to 2025-12-31 (2025 only)? Give the number.',
       ordered: false,
       skills: ['size', 'date-part'],
-      hints: ['A condition on the year of week_start.', 'df["week_start"].dt.year == 2025 is the condition.', 'len(sellout[sellout["week_start"].dt.year == 2025])'],
+      hints: ['A condition on the year of week_start.', 'df["week_start"].dt.year == 2025 is the condition.', 'Step by step: lines_2025 = sellout[sellout["week_start"].dt.year == 2025]; then len(lines_2025)'],
       solution: `len(sellout[sellout["week_start"].dt.year == 2025])`,
+      solutionAlt: `lines_2025 = sellout[sellout["week_start"].dt.year == 2025]
+len(lines_2025)`,
     },
     {
       kind: 'note',

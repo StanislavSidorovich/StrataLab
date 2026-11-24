@@ -56,8 +56,10 @@ export const SUMMARIES: PracticeSection = {
       question: 'How many products does each brand have? Show brand and count, the most first, then by brand.',
       ordered: true,
       skills: ['count-values', 'sort'],
-      hints: ['value_counts on brand gives the numbers.', 'Ties need a second key: make it a table with reset_index first.', 'products["brand"].value_counts().reset_index().sort_values(["count", "brand"], ascending=[False, True])'],
+      hints: ['value_counts on brand gives the numbers.', 'Ties need a second key: make it a table with reset_index first.', 'Step by step: brand_sizes = products["brand"].value_counts().reset_index(); then brand_sizes.sort_values(["count", "brand"], ascending=[False, True])'],
       solution: `products["brand"].value_counts().reset_index().sort_values(["count", "brand"], ascending=[False, True])`,
+      solutionAlt: `brand_sizes = products["brand"].value_counts().reset_index()
+brand_sizes.sort_values(["count", "brand"], ascending=[False, True])`,
     },
     {
       kind: 'note',
@@ -82,6 +84,8 @@ y["promo_id"].count()`,
       skills: ['filter-missing', 'one-number'],
       hints: ['First the rows with a promo_id, then one column of them.', 'sellout[sellout["promo_id"].notna()]["units"]', 'Finish with .sum().'],
       solution: `sellout[sellout["promo_id"].notna()]["units"].sum()`,
+      solutionAlt: `promo_lines = sellout[sellout["promo_id"].notna()]
+promo_lines["units"].sum()`,
     },
     {
       kind: 'note',
@@ -102,8 +106,10 @@ y["promo_id"].count()`,
       question: 'What percentage of products has a list_price over 500? Give it rounded to 1 decimal.',
       ordered: false,
       skills: ['filter', 'share'],
-      hints: ['The condition gives True or False for each product.', 'The mean of the condition is the share.', 'round((products["list_price"] > 500).mean() * 100, 1)'],
+      hints: ['The condition gives True or False for each product.', 'The mean of the condition is the share.', 'Step by step: is_premium = products["list_price"] > 500; then round(is_premium.mean() * 100, 1)'],
       solution: `round((products["list_price"] > 500).mean() * 100, 1)`,
+      solutionAlt: `is_premium = products["list_price"] > 500
+round(is_premium.mean() * 100, 1)`,
     },
     {
       kind: 'task',
@@ -112,8 +118,10 @@ y["promo_id"].count()`,
       question: 'What share of sellout rows has no promotion? Give it as a percentage rounded to 1 decimal.',
       ordered: false,
       skills: ['filter-missing', 'share'],
-      hints: ['No promotion means promo_id is missing.', 'The mean of True and False is the share of True.', 'round(sellout["promo_id"].isna().mean() * 100, 1)'],
+      hints: ['No promotion means promo_id is missing.', 'The mean of True and False is the share of True.', 'Step by step: off_promo = sellout["promo_id"].isna(); then round(off_promo.mean() * 100, 1)'],
       solution: `round(sellout["promo_id"].isna().mean() * 100, 1)`,
+      solutionAlt: `off_promo = sellout["promo_id"].isna()
+round(off_promo.mean() * 100, 1)`,
     },
     {
       kind: 'task',
@@ -124,6 +132,8 @@ y["promo_id"].count()`,
       skills: ['filter', 'one-number'],
       hints: ['First the Pharma rows, then one column of them.', 'products[products["division"] == "Pharma"]["list_price"]', 'Take .mean() and wrap it in round(..., 1).'],
       solution: `round(products[products["division"] == "Pharma"]["list_price"].mean(), 1)`,
+      solutionAlt: `pharma = products[products["division"] == "Pharma"]
+round(pharma["list_price"].mean(), 1)`,
     },
     {
       kind: 'task',

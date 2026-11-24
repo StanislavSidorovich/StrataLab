@@ -148,6 +148,23 @@ describe('Python practice: content', () => {
         expect(compareResults(rows, rows, t.ordered).ok, t.id).toBe(true)
       }
     }, 120_000)
+    it('the other form of a solution gives the same answer, with its last line as the answer', async () => {
+      const aliases = new Set(Object.keys(BOOK_TABLES))
+      let n = 0
+      for (const t of tasks) {
+        if (!t.solutionAlt) continue
+        n++
+        const lines = (c: string) => c.trim().split('\n')
+        expect(lines(t.solutionAlt).length, `${t.id}: both forms are the same length, so it needs no alternative`).not.toBe(lines(t.solution).length)
+        expect(t.solutionAlt, t.id).not.toMatch(/\bprint\(/)
+        for (const m of t.solutionAlt.matchAll(/^([A-Za-z_]\w*) = /gm)) expect(aliases.has(m[1]), `${t.id}: ${m[1]} shadows a table`).toBe(false)
+        const main = await answer(t.solution, t.id)
+        const alt = await answer(t.solutionAlt, `${t.id} (other form)`)
+        expect(compareResults(alt, main, t.ordered).ok, `${t.id}: the other form differs`).toBe(true)
+        expect(compareResults(main, alt, t.ordered).ok, t.id).toBe(true)
+      }
+      expect(n).toBeGreaterThan(30)
+    }, 180_000)
     it('an ordered answer sorts', () => {
       for (const t of tasks) if (t.ordered) expect(t.solution, t.id).toMatch(/sort_values|sort_index|nlargest|nsmallest|value_counts/)
     })
