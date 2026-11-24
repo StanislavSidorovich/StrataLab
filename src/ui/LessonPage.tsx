@@ -1,15 +1,20 @@
 // Lesson mode for a teacher (src/core/lesson.ts): `#lesson=sql&set=<section>&task=N` is one task per screen, `…&mode=vote&q=N`
-// is a question with four queries to vote on, reveal and run. Hidden: no menu, button or page links here. It reuses
-// the practice page's editor, runner and check; it records no progress and counts nothing in Quaera.
-import { useCallback, useEffect, useRef, useState } from 'react'
+// is a question with four queries to vote on, reveal and run, `set=warmup&q=N` a short "which one do you use" question,
+// and `#lesson=sql` alone is the page where a teacher builds a plan (`&plan=w3,v2,t:inner-join:4`) that runs the chosen
+// items in order. Hidden: no menu, button or page links here. It reuses the practice page's editor, runner and check;
+// it records no progress and counts nothing in Quaera.
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Table } from 'apache-arrow'
-import { ArrowLeft, ArrowRight, CheckCircle2, Eye, Loader2, Play, RefreshCw, Square, XCircle } from 'lucide-react'
+import { ArrowLeft, ArrowRight, CheckCircle2, Copy, Eye, ListChecks, Loader2, Play, RefreshCw, Square, XCircle } from 'lucide-react'
 import { compareResults, describeVerdict, type ResultData, type Verdict } from '../core/check'
-import { LETTERS, arrange, clampIndex, describeRun, errorLine, hashWithoutLesson, lastTask, lessonFromHash, lessonHash, lessonSections, lessonTables, type Letter, type LessonKind } from '../core/lesson'
+import {
+  LETTERS, LEVELS, PICK_ROWS, PLAN_MAX, WARMUP_SET, clampIndex, describeRun, errorLine, handShares, hashWithoutLesson, lastTask, lessonFromHash, lessonHash, lessonSections, lessonTables, planFromHash, planHash, planKey, voteOptions, warmOptions,
+  type Letter, type LessonKind, type Level, type PlanCatalog, type PlanItem, type QuizOption,
+} from '../core/lesson'
 import { cancelQuery } from '../db/engine'
 import { resultRows } from '../db/export'
 import { SECTIONS } from '../data/sqlPractice'
-import { VOTES } from '../data/lessonVotes'
+import { VOTES, WARMUP } from '../data/lessonVotes'
 import { taskNumber, tasksOf, type PracticeSection, type PracticeTaskCell } from '../data/practiceBook'
 import { CellEditor, Grid, Prose, RunButton, RunResult, SQL_ENGINE, useCellRun } from './PracticeBook'
 import { ResultCompare } from './ResultCompare'
@@ -20,6 +25,20 @@ const LAST_KEY = 'stratalab.lesson.last.v1'
 const WRITE_HINT = 'Type your query here, then press Ctrl+Enter'
 
 type Go = (r: { set?: string | null; mode?: 'task' | 'vote'; n?: number | null }) => void
+
+/** The "n of N" control of a screen: its own set (Task 3 of 7) or the lesson plan (Step 2 of 5). */
+interface NavSpec {
+  label: string
+  n: number
+  count: number
+  go: (m: number) => void
+}
+
+const CATALOG: PlanCatalog = {
+  warm: WARMUP.length,
+  votes: Object.fromEntries(Object.entries(VOTES).map(([k, v]) => [k, v.length])),
+  tasks: Object.fromEntries(SECTIONS.map((s) => [s.id, tasksOf(s).length])),
+}
 
 export function LessonPage() {
   const [hash, setHash] = useState(location.hash)
@@ -32,6 +51,8 @@ export function LessonPage() {
   }, [])
   const route = lessonFromHash(hash)
   const kind: LessonKind = route?.kind ?? 'sql'
+  const plan = route && kind === 'sql' ? planFromHash(hash, CATALOG) : null
+  const running = !!plan && plan.items.length > 0
   const go: Go = useCallback(
     (r) => {
       history.replaceState(null, '', location.pathname + location.search + lessonHash(location.hash, { kind, ...r }))
@@ -39,17 +60,26 @@ export function LessonPage() {
     },
     [kind],
   )
+  const goPlan = useCallback((items: readonly PlanItem[], at: number) => {
+    history.replaceState(null, '', location.pathname + location.search + planHash(location.hash, items, at))
+    setHash(location.hash)
+  }, [])
   const exit = () => {
     history.replaceState(null, '', location.pathname + location.search + hashWithoutLesson(location.hash))
     setHash(location.hash)
     setBoard(false)
   }
+  // A plan runs on the projector: larger text, Lab's own frame hidden (the switch stays, the teacher may turn it off).
+  useEffect(() => {
+    if (running) setBoard(true)
+  }, [running])
 
-  const section = route?.set ? SECTIONS.find((s) => s.id === route.set) : undefined
+  const warm = route?.set === WARMUP_SET
+  const section = route?.set && !warm ? SECTIONS.find((s) => s.id === route.set) : undefined
   const tasks = section ? tasksOf(section) : []
-  const questions = route?.set ? VOTES[route.set] : undefined
+  const questions = route?.set && !warm ? VOTES[route.set] : undefined
   const mode = route?.mode ?? 'task'
-  const count = mode === 'vote' ? (questions?.length ?? 0) : tasks.length
+  const count = plan ? 0 : warm ? WARMUP.length : mode === 'vote' ? (questions?.length ?? 0) : tasks.length
   let n = 1
   if (route && count > 0) {
     let saved: string | null = null
@@ -68,18 +98,24 @@ export function LessonPage() {
   useEffect(() => {
     if (fix) go({ set: route!.set, mode, n })
   }, [fix, go, route, mode, n])
+  useEffect(() => {
+    if (!running || !plan) return
+    const raw = /(?:^#|&)i=([^&]*)/i.exec(hash)?.[1]
+    if (raw !== undefined && Number(raw) !== plan.at) goPlan(plan.items, plan.at)
+  }, [running, plan, hash, goPlan])
 
   useEffect(() => {
-    if (!route || mode !== 'task' || count === 0) return
+    if (!route || plan || mode !== 'task' || count === 0) return
     try {
       localStorage.setItem(LAST_KEY, JSON.stringify({ set: route.set, task: n }))
     } catch {
       /* nothing is remembered */
     }
-  }, [route, mode, count, n])
+  }, [route, plan, mode, count, n])
 
   if (!route) return null
 
+  const setNav = (label: string, m: number, total: number, set: string): NavSpec => ({ label, n: m, count: total, go: (x) => go({ set, mode: set === WARMUP_SET ? 'vote' : mode, n: x }) })
   let body
   if (route.kind === 'python')
     body = (
@@ -90,9 +126,12 @@ export function LessonPage() {
         </p>
       </div>
     )
+  else if (plan && plan.items.length > 0) body = <PlanRun key={plan.items.map(planKey).join()} items={plan.items} at={plan.at} skipped={plan.skipped} capped={plan.capped} checkOn={checkOn} goPlan={goPlan} />
+  else if (plan || (!route.set && route.n === null && mode === 'task')) body = <PlanBuilder note={plan ? (plan.skipped.length ? `Nothing in that plan could be used (${plan.skipped.join(', ')}).` : 'That plan is empty.') : null} onOpen={(items) => goPlan(items, 1)} />
+  else if (warm) body = <WarmView key={n} q={n} count={count} nav={setNav('Question', n, count, WARMUP_SET)} />
   else if (!section || count === 0) body = <SetList mode={mode} unknown={route.set} />
-  else if (mode === 'vote') body = <VoteView key={`${section.id}-${n}`} section={section} q={n} count={count} go={go} />
-  else body = <TaskView key={tasks[n - 1].id} section={section} task={tasks[n - 1]} n={n} count={count} check={checkOn} go={go} />
+  else if (mode === 'vote') body = <VoteView key={`${section.id}-${n}`} section={section} q={n} nav={setNav('Question', n, count, section.id)} />
+  else body = <TaskView key={tasks[n - 1].id} section={section} task={tasks[n - 1]} check={checkOn} nav={setNav('Task', n, count, section.id)} />
 
   return (
     <div className={`lesson-root${board ? ' lesson-board' : ''}`} data-testid="lesson">
@@ -121,6 +160,11 @@ function SetList({ mode, unknown }: { mode: 'task' | 'vote'; unknown: string | n
       <h2>{unknown ? `There is no lesson set “${unknown}”` : 'Choose a set'}</h2>
       <p>{mode === 'vote' ? 'Sets with a vote:' : 'Sets with tasks:'}</p>
       <ul>
+        {mode === 'vote' && (
+          <li>
+            <a href={lessonHash('', { kind: 'sql', set: WARMUP_SET, mode: 'vote', n: 1 })}>Warm-up questions ({WARMUP.length})</a>
+          </li>
+        )}
         {sections.map((s) => (
           <li key={s.id}>
             <a href={lessonHash('', { kind: 'sql', set: s.id, mode, n: 1 })}>
@@ -129,6 +173,9 @@ function SetList({ mode, unknown }: { mode: 'task' | 'vote'; unknown: string | n
           </li>
         ))}
       </ul>
+      <p>
+        <a href="#lesson=sql">Build a lesson plan</a>
+      </p>
     </div>
   )
 }
@@ -149,34 +196,36 @@ function useArrows(prev: (() => void) | null, next: (() => void) | null) {
   }, [])
 }
 
-function Nav({ label, n, count, go, mode }: { label: string; n: number; count: number; go: Go; mode: 'task' | 'vote' }) {
+function Nav({ nav }: { nav: NavSpec }) {
+  const { label, n, count, go } = nav
   return (
     <span className="lesson-nav">
-      <button className="btn" disabled={n <= 1} onClick={() => go({ set: undefined, mode, n: n - 1 })} aria-label="Previous">
+      <button className="btn" disabled={n <= 1} onClick={() => go(n - 1)} aria-label="Previous">
         <ArrowLeft size={16} />
       </button>
-      <b>
+      <b data-testid="lesson-position">
         {label} {n} of {count}
       </b>
-      <button className="btn" disabled={n >= count} onClick={() => go({ set: undefined, mode, n: n + 1 })} aria-label="Next">
+      <button className="btn" disabled={n >= count} onClick={() => go(n + 1)} aria-label="Next">
         <ArrowRight size={16} />
       </button>
     </span>
   )
 }
 
+const useNavArrows = (nav: NavSpec) => useArrows(nav.n > 1 ? () => nav.go(nav.n - 1) : null, nav.n < nav.count ? () => nav.go(nav.n + 1) : null)
+
 // ------------------------------------------------------------------ A: one task a screen
 
 type CheckState = { verdict: Verdict; trap: string | null; got: ResultData; expected: ResultData } | null
 
-function TaskView({ section, task, n, count, check, go }: { section: PracticeSection; task: PracticeTaskCell; n: number; count: number; check: boolean; go: Go }) {
+function TaskView({ section, task, check, nav }: { section: PracticeSection; task: PracticeTaskCell; check: boolean; nav: NavSpec }) {
   const text = useRef('')
   const { run, exec, stop } = useCellRun(`lesson-${task.id}`)
   const [result, setResult] = useState<CheckState>(null)
   const [solution, setSolution] = useState(false)
   const busy = useRef(false)
-  const setHere = (m: number) => go({ set: section.id, mode: 'task', n: m })
-  useArrows(n > 1 ? () => setHere(n - 1) : null, n < count ? () => setHere(n + 1) : null)
+  useNavArrows(nav)
 
   // The same comparison as the practice page: its runner and compareResults, traps included.
   const go_ = async () => {
@@ -216,7 +265,7 @@ function TaskView({ section, task, n, count, check, go }: { section: PracticeSec
         <span className="lesson-crumb">
           SQL · <b>{section.n}. {section.title}</b>
         </span>
-        <Nav label="Task" n={n} count={count} go={(r) => setHere(r.n ?? n)} mode="task" />
+        <Nav nav={nav} />
       </div>
       <div className="lesson-body">
         <p className="lesson-q">
@@ -332,23 +381,34 @@ function TablesPanel({ task }: { task: PracticeTaskCell }) {
   )
 }
 
-// ------------------------------------------------------------------ B: vote, then run
+// ------------------------------------------------------------------ B: a question with four options (a vote on code, a warm-up)
 
-type Option = { status: 'idle' } | { status: 'running' } | { status: 'done'; text: string } | { status: 'error'; text: string; dataset: boolean }
+type Option = { status: 'idle' } | { status: 'running' } | { status: 'none' } | { status: 'done'; text: string } | { status: 'error'; text: string; dataset: boolean }
+type Pick = { letter: Letter } & ({ status: 'running' } | { status: 'none' } | { status: 'error'; text: string; dataset: boolean } | { status: 'rows'; table: Table; total: number; more: boolean })
 
-function VoteView({ section, q, count, go }: { section: PracticeSection; q: number; count: number; go: Go }) {
-  const item = VOTES[section.id][q - 1]
-  const options = arrange(item, q - 1)
+interface QuizProps {
+  crumb: string
+  question: string
+  options: QuizOption[]
+  /** one or two sentences after Reveal */
+  why: string
+  nav: NavSpec
+}
+
+const failedLoad = (msg: string) => /could not be loaded|was not loaded/.test(msg)
+
+function QuizView({ crumb, question, options, why, nav }: QuizProps) {
   const [revealed, setRevealed] = useState(false)
   const [runs, setRuns] = useState<Partial<Record<Letter, Option>>>({})
   const [running, setRunning] = useState(false)
+  const [pick, setPick] = useState<Pick | null>(null)
   const busy = useRef(false)
   const stopped = useRef(false)
+  const pickSeq = useRef(0)
   const ready = useLab((s) => s.engine.status === 'ready')
-  const setHere = (m: number) => go({ set: section.id, mode: 'vote', n: m })
-  useArrows(q > 1 ? () => setHere(q - 1) : null, q < count ? () => setHere(q + 1) : null)
+  useNavArrows(nav)
+  const queries = options.filter((o) => o.sql).length
 
-  const reveal = () => setRevealed(true)
   const runAll = async () => {
     if (busy.current) return
     busy.current = true
@@ -357,6 +417,10 @@ function VoteView({ section, q, count, go }: { section: PracticeSection; q: numb
     setRuns({})
     try {
       for (const o of options) {
+        if (!o.sql) {
+          setRuns((r) => ({ ...r, [o.letter]: { status: 'none' } }))
+          continue
+        }
         if (stopped.current) {
           setRuns((r) => ({ ...r, [o.letter]: { status: 'error', text: 'Stopped.', dataset: false } }))
           continue
@@ -367,7 +431,7 @@ function VoteView({ section, q, count, go }: { section: PracticeSection; q: numb
           setRuns((r) => ({ ...r, [o.letter]: { status: 'done', text: describeRun(resultRows(table), 3, more) } }))
         } catch (e) {
           const msg = errorLine(e instanceof Error ? e.message : String(e))
-          setRuns((r) => ({ ...r, [o.letter]: { status: 'error', text: stopped.current ? 'Stopped.' : msg, dataset: /could not be loaded|was not loaded/.test(msg) } }))
+          setRuns((r) => ({ ...r, [o.letter]: { status: 'error', text: stopped.current ? 'Stopped.' : msg, dataset: failedLoad(msg) } }))
         }
       }
     } finally {
@@ -379,21 +443,44 @@ function VoteView({ section, q, count, go }: { section: PracticeSection; q: numb
     stopped.current = true
     for (const l of LETTERS) void cancelQuery(`lesson-vote-${l}`)
   }
+
+  /** A click on an option, after Reveal: run its query and show the first rows or the error under the options. */
+  const choose = async (o: QuizOption) => {
+    if (!revealed) return
+    const seq = ++pickSeq.current
+    if (!o.sql) {
+      setPick({ letter: o.letter, status: 'none' })
+      return
+    }
+    if (!ready) {
+      setPick({ letter: o.letter, status: 'error', text: 'The engine is still loading: click again in a moment.', dataset: false })
+      return
+    }
+    setPick({ letter: o.letter, status: 'running' })
+    try {
+      const { table, more } = await runPracticeQuery(o.sql, 'lesson-pick', () => seq !== pickSeq.current)
+      if (seq === pickSeq.current) setPick({ letter: o.letter, status: 'rows', table: table.slice(0, PICK_ROWS), total: table.numRows, more })
+    } catch (e) {
+      if (seq !== pickSeq.current) return
+      const msg = errorLine(e instanceof Error ? e.message : String(e))
+      setPick({ letter: o.letter, status: 'error', text: msg, dataset: failedLoad(msg) })
+    }
+  }
   const failedToLoad = LETTERS.some((l) => {
     const r = runs[l]
     return r?.status === 'error' && r.dataset
   })
+  const rightOpt = options.find((o) => o.right)!
+  const picked = pick ? options.find((o) => o.letter === pick.letter)! : null
 
   return (
     <>
       <div className="lesson-bar">
-        <span className="lesson-crumb">
-          SQL · <b>{section.n}. {section.title}</b> · vote
-        </span>
-        <Nav label="Question" n={q} count={count} go={(r) => setHere(r.n ?? q)} mode="vote" />
+        <span className="lesson-crumb">{crumb}</span>
+        <Nav nav={nav} />
         <span className="lesson-nav">
           {!revealed ? (
-            <button className="btn btn-primary" onClick={reveal}>
+            <button className="btn btn-primary" onClick={() => setRevealed(true)}>
               Reveal
             </button>
           ) : running ? (
@@ -401,22 +488,45 @@ function VoteView({ section, q, count, go }: { section: PracticeSection; q: numb
               <Square size={14} /> Stop
             </button>
           ) : (
-            <button className="btn btn-primary" disabled={!ready} onClick={() => void runAll()} title={ready ? undefined : 'The engine is still loading'}>
-              {failedToLoad ? <RefreshCw size={14} /> : <Play size={14} />} {failedToLoad ? 'Retry' : 'Run all four'}
+            <button className="btn btn-primary" disabled={!ready || queries === 0} onClick={() => void runAll()} title={ready ? undefined : 'The engine is still loading'}>
+              {failedToLoad ? <RefreshCw size={14} /> : <Play size={14} />} {failedToLoad ? 'Retry' : queries === options.length ? 'Run all four' : 'Run all'}
             </button>
           )}
         </span>
       </div>
       <div className="lesson-body">
         <p className="lesson-q">
-          <Prose text={item.question} />
+          <Prose text={question} />
         </p>
         <div className="lesson-vote">
           <div className="lesson-opts">
             {options.map((o) => (
-              <div key={o.letter} className={`lesson-opt${revealed && o.right ? ' right' : ''}`} data-testid={`opt-${o.letter}`} data-right={revealed ? o.right : undefined}>
+              <div
+                key={o.letter}
+                className={`lesson-opt${revealed && o.right ? ' right' : ''}${revealed ? ' clickable' : ''}${pick?.letter === o.letter ? ' picked' : ''}`}
+                data-testid={`opt-${o.letter}`}
+                data-right={revealed ? o.right : undefined}
+                role={revealed ? 'button' : undefined}
+                tabIndex={revealed ? 0 : undefined}
+                aria-pressed={revealed ? pick?.letter === o.letter : undefined}
+                title={revealed ? (o.sql ? 'Run this option' : 'This option is not a query') : undefined}
+                onClick={() => void choose(o)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    void choose(o)
+                  }
+                }}
+              >
                 <b className="lesson-letter">{o.letter}</b>
-                <pre className="mono">{o.sql}</pre>
+                {o.code ? (
+                  <pre className="mono">{o.text}</pre>
+                ) : (
+                  <div className="lesson-opt-text">
+                    <Prose text={o.text} />
+                  </div>
+                )}
+                {revealed && o.why && <p className="lesson-optwhy">{o.why}</p>}
               </div>
             ))}
           </div>
@@ -425,18 +535,24 @@ function VoteView({ section, q, count, go }: { section: PracticeSection; q: numb
         {!revealed && <p className="lesson-muted lesson-hands">Vote: A, B, C or D (hands up)</p>}
         {revealed && (
           <>
-            <h3 className="lesson-answer">{options.find((o) => o.right)!.letter} is right.</h3>
+            <h3 className="lesson-answer">{rightOpt.letter} is right.</h3>
             <p className="lesson-why">
-              <b>Why:</b> {item.why}
+              <b>Why:</b> {why}
             </p>
+            <HandCounts right={rightOpt.letter} />
+            {picked && pick && <PickPanel option={picked} pick={pick} />}
+            <p className="lesson-muted lesson-clickhint">Click an option to run its query.</p>
             <div className="lesson-results" data-testid="lesson-results">
               {options.map((o) => {
                 const r = runs[o.letter]
+                if (!r) return null
                 return (
                   <div key={o.letter} className="lesson-result" data-testid={`res-${o.letter}`}>
                     <b className="lesson-letter">{o.letter}</b>
-                    {!r || r.status === 'idle' ? (
+                    {r.status === 'idle' ? (
                       <span className="lesson-muted">Not run yet.</span>
+                    ) : r.status === 'none' ? (
+                      <span className="lesson-muted">Not a query: see the line under the option.</span>
                     ) : r.status === 'running' ? (
                       <span className="lesson-muted">
                         <Loader2 size={14} className="animate-spin inline" /> Running…
@@ -444,6 +560,12 @@ function VoteView({ section, q, count, go }: { section: PracticeSection; q: numb
                     ) : r.status === 'error' ? (
                       <span>
                         <b>Error:</b> {r.text}
+                        {o.mssql && (
+                          <>
+                            {' '}
+                            <b>In SQL Server:</b> {o.mssql}
+                          </>
+                        )}
                       </span>
                     ) : (
                       <span>
@@ -458,5 +580,282 @@ function VoteView({ section, q, count, go }: { section: PracticeSection; q: numb
         )}
       </div>
     </>
+  )
+}
+
+/** What a click on an option showed: its query (for a warm-up), then the error with SQL Server's wording, or the first rows. */
+function PickPanel({ option, pick }: { option: QuizOption; pick: Pick }) {
+  return (
+    <div className="lesson-pick" data-testid="lesson-pick">
+      <div className="lesson-pick-head">
+        <b className="lesson-letter">{option.letter}</b>
+        {option.sql && option.text !== option.sql && <pre className="mono">{option.sql}</pre>}
+      </div>
+      {pick.status === 'running' && (
+        <div className="lesson-muted">
+          <Loader2 size={14} className="animate-spin inline" /> Running…
+        </div>
+      )}
+      {pick.status === 'none' && <div className="lesson-muted">This option is not a query. The line under it says why it is right or wrong.</div>}
+      {pick.status === 'error' && (
+        <div data-testid="pick-error">
+          <div className="lesson-pick-err">
+            <b>Error:</b> {pick.text}
+          </div>
+          {option.mssql && (
+            <div className="lesson-pick-mssql" data-testid="pick-mssql">
+              <b>In SQL Server:</b> {option.mssql}
+            </div>
+          )}
+        </div>
+      )}
+      {pick.status === 'rows' && (
+        <div data-testid="pick-rows">
+          <div className={option.right ? 'lesson-pick-ok' : 'lesson-pick-diff'}>
+            <b>{option.right ? 'Right.' : 'Runs, but not the answer.'}</b>{' '}
+            {pick.total === 0 ? '0 rows.' : `${pick.total.toLocaleString('en-US')}${pick.more ? '+' : ''} row${pick.total === 1 ? '' : 's'}${pick.total > PICK_ROWS ? `, the first ${PICK_ROWS} shown` : ''}.`}
+          </div>
+          {pick.table.numRows > 0 && <Grid table={pick.table} />}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** The teacher types how many hands each letter got; bars and percentages appear. Nothing is sent or stored. */
+function HandCounts({ right }: { right: Letter }) {
+  const [raw, setRaw] = useState(['', '', '', ''])
+  const shares = handShares(raw)
+  const counted = shares?.reduce((a, s) => a + s.count, 0) ?? 0
+  return (
+    <div className="lesson-handcounts" data-testid="lesson-handcounts">
+      <div className="lesson-hand-inputs">
+        <b>Hands:</b>
+        {LETTERS.map((l, i) => {
+          const t = raw[i].trim()
+          const bad = t !== '' && !/^\d{1,9}$/.test(t)
+          return (
+            <label key={l} title={bad ? 'Not a whole number: counted as 0' : undefined}>
+              <b className="lesson-letter">{l}</b>
+              <input
+                inputMode="numeric"
+                aria-label={`Hands for ${l}`}
+                aria-invalid={bad || undefined}
+                data-testid={`hands-${l}`}
+                value={raw[i]}
+                placeholder="0"
+                onChange={(e) => setRaw((r) => r.map((v, j) => (j === i ? e.target.value : v)))}
+              />
+            </label>
+          )
+        })}
+      </div>
+      {shares ? (
+        <div className="lesson-bars" data-testid="lesson-bars">
+          {shares.map((s) => (
+            <div key={s.letter} className="lesson-barrow" data-testid={`bar-${s.letter}`}>
+              <b className="lesson-letter">{s.letter}</b>
+              <div className="lesson-bartrack">
+                <div className={`lesson-barfill${s.letter === right ? ' right' : ''}`} style={{ width: `${s.pct}%` }} />
+              </div>
+              <span className="lesson-barnum">
+                {s.count.toLocaleString('en-US')} · {s.pct}%
+              </span>
+            </div>
+          ))}
+          <div className="lesson-muted">{counted.toLocaleString('en-US')} counted</div>
+        </div>
+      ) : (
+        <div className="lesson-muted">Type how many hands each letter got; the bars appear here.</div>
+      )}
+    </div>
+  )
+}
+
+function VoteView({ section, q, nav }: { section: PracticeSection; q: number; nav: NavSpec }) {
+  const item = VOTES[section.id][q - 1]
+  return <QuizView crumb={`SQL · ${section.n}. ${section.title} · vote`} question={item.question} options={voteOptions(item, q - 1)} why={item.why} nav={nav} />
+}
+
+function WarmView({ q, nav }: { q: number; count: number; nav: NavSpec }) {
+  const item = WARMUP[q - 1]
+  return <QuizView crumb={`SQL · Warm-up · ${item.topic} · ${item.level}`} question={item.question} options={warmOptions(item)} why={item.why} nav={nav} />
+}
+
+// ------------------------------------------------------------------ C: a lesson plan, run in order
+
+function PlanRun({ items, at, skipped, capped, checkOn, goPlan }: { items: PlanItem[]; at: number; skipped: string[]; capped: boolean; checkOn: boolean; goPlan: (items: readonly PlanItem[], at: number) => void }) {
+  const nav: NavSpec = { label: 'Step', n: at, count: items.length, go: (m) => goPlan(items, m) }
+  const it = items[at - 1]
+  const section = it.kind === 'w' ? undefined : SECTIONS.find((s) => s.id === it.set)
+  let body = null
+  if (it.kind === 'w') body = <WarmView key={`w${it.n}`} q={it.n} count={WARMUP.length} nav={nav} />
+  else if (section && it.kind === 'v') body = <VoteView key={`v-${section.id}-${it.n}`} section={section} q={it.n} nav={nav} />
+  else if (section && it.kind === 't') {
+    const task = tasksOf(section)[it.n - 1]
+    body = <TaskView key={task.id} section={section} task={task} check={checkOn} nav={nav} />
+  }
+  return (
+    <>
+      {(skipped.length > 0 || capped) && (
+        <div className="lesson-plannote" data-testid="plan-note">
+          {skipped.length > 0 && <>Skipped, not found: {skipped.join(', ')}. </>}
+          {capped && <>Only the first {PLAN_MAX} items are used.</>}
+        </div>
+      )}
+      {body}
+    </>
+  )
+}
+
+interface PlanRow {
+  item: PlanItem
+  key: string
+  topic: string
+  level?: Level
+  text: string
+}
+
+const plain = (s: string, max = 120) => {
+  const t = s.replace(/`/g, '').replace(/\s+/g, ' ').trim()
+  return t.length > max ? t.slice(0, max - 1) + '…' : t
+}
+
+const GROUPS = [
+  { id: 'w', title: 'Warm-up', note: 'a short question, four options, run a query by clicking an option' },
+  { id: 'v', title: 'Vote on code', note: 'four queries, the room votes, then all four run on the data' },
+  { id: 't', title: 'Write code', note: 'a practice task: the room writes the query, Check compares it' },
+] as const
+
+const ROWS: PlanRow[] = [
+  ...WARMUP.map((q, i): PlanRow => ({ item: { kind: 'w', n: i + 1 }, key: `w${i + 1}`, topic: q.topic, level: q.level, text: plain(q.question) })),
+  ...Object.entries(VOTES).flatMap(([setId, qs]) => {
+    const s = SECTIONS.find((x) => x.id === setId)!
+    return qs.map((q, i): PlanRow => ({ item: { kind: 'v', set: setId, n: i + 1 }, key: planKey({ kind: 'v', set: setId, n: i + 1 }), topic: `${s.n}. ${s.title}`, text: plain(q.question) }))
+  }),
+  ...lessonSections(SECTIONS).flatMap((s) =>
+    tasksOf(s).map((t, i): PlanRow => ({ item: { kind: 't', set: s.id, n: i + 1 }, key: planKey({ kind: 't', set: s.id, n: i + 1 }), topic: `${s.n}. ${s.title}`, text: plain(t.question) })),
+  ),
+]
+const WARM_TOPICS = [...new Set(WARMUP.map((q) => q.topic))]
+const SECTION_TOPICS = [...new Set(ROWS.filter((r) => r.item.kind !== 'w').map((r) => r.topic))]
+
+/** `#lesson=sql`: the teacher ticks warm-up questions, votes and tasks, and gets a link that runs them in order. */
+function PlanBuilder({ note, onOpen }: { note: string | null; onOpen: (items: PlanItem[]) => void }) {
+  const [sel, setSel] = useState<PlanItem[]>([])
+  const [group, setGroup] = useState<'all' | 'w' | 'v' | 't'>('all')
+  const [topic, setTopic] = useState('')
+  const [level, setLevel] = useState<'' | Level>('')
+  const [copied, setCopied] = useState<'' | 'ok' | 'fail'>('')
+  const linkRef = useRef<HTMLInputElement>(null)
+  const keys = sel.map(planKey)
+  const link = sel.length ? location.origin + location.pathname + location.search + planHash('', sel) : ''
+  const full = sel.length >= PLAN_MAX
+
+  const shown = useMemo(() => ROWS.filter((r) => (group === 'all' || r.item.kind === group) && (!topic || r.topic === topic) && (!level || r.level === level)), [group, topic, level])
+  const toggle = (row: PlanRow) => {
+    setCopied('')
+    setSel((s) => (s.some((x) => planKey(x) === row.key) ? s.filter((x) => planKey(x) !== row.key) : s.length >= PLAN_MAX ? s : [...s, row.item]))
+  }
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(link)
+      setCopied('ok')
+    } catch {
+      linkRef.current?.select() // no clipboard here (an insecure page, a locked-down browser): the link is selected to copy by hand
+      setCopied('fail')
+    }
+  }
+
+  return (
+    <div className="lesson-plan" data-testid="plan-builder">
+      <h2>Lesson plan</h2>
+      <p className="lesson-muted">Tick what to use, in the order you want it. The link opens the items one after another, with Back and Next.</p>
+      {note && <p className="lesson-plannote">{note}</p>}
+      <div className="lesson-planbox">
+        <div>
+          <b data-testid="plan-count">
+            {sel.length} of {PLAN_MAX} items
+          </b>{' '}
+          <span className="mono lesson-plankeys">{keys.join(', ') || 'nothing yet'}</span>
+        </div>
+        <div className="lesson-planlink">
+          <input ref={linkRef} readOnly value={link} placeholder="The link appears when you tick an item" aria-label="Plan link" data-testid="plan-link" onFocus={(e) => e.target.select()} />
+          <button className="btn" disabled={!sel.length} onClick={() => void copy()} data-testid="plan-copy">
+            <Copy size={14} /> {copied === 'ok' ? 'Copied' : 'Copy link'}
+          </button>
+          <button className="btn btn-primary" disabled={!sel.length} onClick={() => onOpen(sel)} data-testid="plan-open">
+            <ListChecks size={14} /> Start
+          </button>
+          <button className="btn btn-ghost" disabled={!sel.length} onClick={() => setSel([])}>
+            Clear
+          </button>
+        </div>
+        {copied === 'fail' && <div className="lesson-muted">Could not copy automatically: the link is selected, press Ctrl+C.</div>}
+        {full && <div className="lesson-muted">That is the most a plan holds ({PLAN_MAX}). Untick an item to add another.</div>}
+      </div>
+      <div className="lesson-filters">
+        <label>
+          Kind{' '}
+          <select value={group} onChange={(e) => setGroup(e.target.value as typeof group)} data-testid="plan-kind">
+            <option value="all">All three</option>
+            {GROUPS.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.title}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Topic or section{' '}
+          <select value={topic} onChange={(e) => setTopic(e.target.value)} data-testid="plan-topic">
+            <option value="">All</option>
+            <optgroup label="Warm-up topics">
+              {WARM_TOPICS.map((t) => (
+                <option key={t}>{t}</option>
+              ))}
+            </optgroup>
+            <optgroup label="Sections">
+              {SECTION_TOPICS.map((t) => (
+                <option key={t}>{t}</option>
+              ))}
+            </optgroup>
+          </select>
+        </label>
+        <label title="Only warm-up questions have a level">
+          Level (warm-up){' '}
+          <select value={level} onChange={(e) => setLevel(e.target.value as typeof level)} data-testid="plan-level">
+            <option value="">Any</option>
+            {LEVELS.map((l) => (
+              <option key={l}>{l}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+      {GROUPS.map((g) => {
+        const rows = shown.filter((r) => r.item.kind === g.id)
+        if (rows.length === 0) return null
+        return (
+          <section key={g.id} className="lesson-planlist" data-testid={`plan-group-${g.id}`}>
+            <h3>
+              {g.title} <span className="lesson-muted">({rows.length}) · {g.note}</span>
+            </h3>
+            {rows.map((r) => {
+              const at = keys.indexOf(r.key)
+              return (
+                <label key={r.key} className={`lesson-planrow${at >= 0 ? ' on' : ''}`}>
+                  <input type="checkbox" checked={at >= 0} disabled={at < 0 && full} onChange={() => toggle(r)} data-testid={`plan-pick-${r.key}`} />
+                  <span className="mono lesson-planid">{r.key}</span>
+                  <span className="lesson-plantext">{r.text}</span>
+                  <span className="lesson-muted lesson-plantag">{r.level ? `${r.topic} · ${r.level}` : r.topic}</span>
+                  {at >= 0 && <span className="lesson-planat">{at + 1}</span>}
+                </label>
+              )
+            })}
+          </section>
+        )
+      })}
+      {shown.length === 0 && <p className="lesson-muted">Nothing matches these filters.</p>}
+    </div>
   )
 }

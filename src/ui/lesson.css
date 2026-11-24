@@ -53,3 +53,48 @@
   .lesson-q { font-size: 19px; }
   .lesson-tables { grid-template-columns: 1fr; }
 }
+.lesson-opt.clickable { cursor: pointer; }
+.lesson-opt.clickable:hover { border-color: var(--accent); }
+.lesson-opt.picked { outline: 2px solid var(--accent); outline-offset: 1px; }
+.lesson-opt-text { font-size: 17px; line-height: 1.4; }
+.lesson-optwhy { margin: 8px 0 0; font-size: 13.5px; line-height: 1.45; color: var(--muted); }
+.lesson-clickhint { margin: 0; font-size: 13px; }
+.lesson-pick { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); padding: 10px 12px; display: grid; gap: 8px; }
+.lesson-pick-head { display: flex; gap: 10px; align-items: flex-start; }
+.lesson-pick-head pre { margin: 0; flex: 1; padding: 8px 12px; border-radius: 6px; background: var(--panel-2); font-size: 14px; overflow-x: auto; }
+.lesson-pick-err { color: var(--danger); font-size: 15px; }
+.lesson-pick-mssql { font-size: 15px; margin-top: 4px; }
+.lesson-pick-ok { color: var(--accent); }
+.lesson-pick-diff { color: var(--warn-text); }
+.lesson-handcounts { display: grid; gap: 8px; }
+.lesson-hand-inputs { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+.lesson-hand-inputs label { display: inline-flex; gap: 6px; align-items: center; }
+.lesson-hand-inputs input { width: 4.5rem; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--text); font: inherit; }
+.lesson-hand-inputs input[aria-invalid] { border-color: var(--danger); }
+.lesson-bars { display: grid; gap: 6px; }
+.lesson-barrow { display: grid; grid-template-columns: 1.5rem 1fr 7rem; gap: 8px; align-items: center; }
+.lesson-bartrack { height: 22px; border-radius: 4px; background: var(--panel-2); overflow: hidden; }
+.lesson-barfill { height: 100%; min-width: 0; background: var(--muted); opacity: 0.55; transition: width 0.25s; }
+.lesson-barfill.right { background: var(--accent); opacity: 1; }
+.lesson-barnum { font-variant-numeric: tabular-nums; font-size: 14px; }
+.lesson-plan { max-width: 62rem; margin: 24px auto; padding: 0 16px; display: grid; gap: 12px; }
+.lesson-plan h2 { margin: 0; font-size: 24px; font-weight: 650; }
+.lesson-plan h3 { margin: 8px 0 4px; font-size: 16px; }
+.lesson-planbox { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); padding: 10px 12px; display: grid; gap: 8px; position: sticky; top: 0; z-index: 2; }
+.lesson-plankeys { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+.lesson-planlink { display: flex; gap: 8px; flex-wrap: wrap; }
+.lesson-planlink input { flex: 1; min-width: 16rem; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel-2); color: var(--text); font: 13px ui-monospace, monospace; }
+.lesson-filters { display: flex; gap: 12px 20px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.lesson-filters select { padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--text); font: inherit; max-width: 18rem; }
+.lesson-planrow { display: grid; grid-template-columns: auto 4.5rem 1fr auto 1.6rem; gap: 8px; align-items: baseline; padding: 4px 8px; border-radius: 6px; cursor: pointer; font-size: 14px; }
+.lesson-planrow:hover { background: var(--panel-2); }
+.lesson-planrow.on { background: var(--accent-soft); }
+.lesson-planid { color: var(--accent); font-size: 12.5px; }
+.lesson-plantag { font-size: 12px; white-space: nowrap; }
+.lesson-planat { font-weight: 700; color: var(--accent); text-align: right; }
+.lesson-plannote { margin: 0; padding: 6px 16px; font-size: 13.5px; background: var(--warn-soft); color: var(--warn-text); }
+.lesson-plan .lesson-plannote { border-radius: 8px; }
+@media (max-width: 760px) {
+  .lesson-planrow { grid-template-columns: auto 3.5rem 1fr; }
+  .lesson-plantag, .lesson-planat { display: none; }
+}
