@@ -1,5 +1,13 @@
-// Lesson mode for a teacher (`#lesson=sql&set=inner-join&task=3`, `#lesson=sql&set=inner-join&mode=vote&q=1`): the address,
-// the tables a task names, and how a vote's four queries are shuffled. Pure. Hidden: no menu or page links to it.
+// Lesson mode for a teacher (`#lesson=sql&set=inner-join&task=3`, `#lesson=sql&set=inner-join&mode=vote&q=1`,
+// `#lesson=sql&set=warmup&q=5`, `#lesson=sql&plan=w3,w7,v2,t:inner-join:4`): the address, the tables a task names, how a
+// vote's four queries are shuffled, the warm-up options, hand counts and the lesson plan. Pure. Hidden: no menu or page links to it.
+//
+// Plan link: `#lesson=sql&plan=<item>,<item>,…&i=<position>`. Items, in the order they are shown:
+//   w<n>               warm-up question n          (w3)
+//   v<n>               vote on code, question n of the INNER JOIN set (v2); `v:<set>:<n>` for another set
+//   t:<section>:<n>    write-code task n of a practice section (t:inner-join:4)
+// `i` is the 1-based position being shown (absent = 1). Duplicates are dropped, at most PLAN_MAX (20) items are used, an item
+// that does not exist is skipped and named on the page. `set=…&mode=vote&q=N` links keep working on their own.
 import type { PracticeSection, PracticeTables, PracticeTaskCell } from '../data/practiceBook'
 import { tasksOf } from '../data/practiceBook'
 
@@ -13,15 +21,19 @@ export interface LessonRoute {
   n: number | null
 }
 
+/** The set id of the warm-up questions: a set numbered by `q`, like a vote. */
+export const WARMUP_SET = 'warmup'
+
 const param = (hash: string, name: string) => new RegExp(`(?:^#|&)${name}=([^&]*)`, 'i').exec(hash)?.[1]
 
 /** The lesson asked for in the address; null when the address is not a lesson (other Lab links are parsed as before). */
 export function lessonFromHash(hash: string): LessonRoute | null {
   const kind = param(hash, 'lesson')?.toLowerCase()
   if (kind !== 'sql' && kind !== 'python') return null
-  const mode = param(hash, 'mode')?.toLowerCase() === 'vote' ? 'vote' : 'task'
+  const set = param(hash, 'set')?.toLowerCase() || null
+  const mode = param(hash, 'mode')?.toLowerCase() === 'vote' || set === WARMUP_SET ? 'vote' : 'task'
   const rawN = param(hash, mode === 'vote' ? 'q' : 'task')
-  return { kind, set: param(hash, 'set')?.toLowerCase() || null, mode, n: rawN === undefined ? null : Number(rawN.trim() === '' ? NaN : rawN) }
+  return { kind, set, mode, n: rawN === undefined ? null : Number(rawN.trim() === '' ? NaN : rawN) }
 }
 
 /** A 1-based position held to 1..count: a missing, non-numeric or too small number is 1, a too large one the last. */
@@ -31,7 +43,7 @@ export function clampIndex(n: number | null, count: number): number {
   return Math.min(count, Math.max(1, Math.trunc(n)))
 }
 
-const LESSON_KEYS = /^(lesson|set|task|mode|q)=/i
+const LESSON_KEYS = /^(lesson|set|task|mode|q|plan|i)=/i
 
 export function hashWithoutLesson(hash: string): string {
   const rest = hash.replace(/^#/, '').split('&').filter((p) => p && !LESSON_KEYS.test(p))
@@ -105,6 +117,170 @@ export function describeRun(r: { header: string[]; rows: (string | number | null
 
 /** The first line of an error, without the engine's JSON wrapper (see readableError). */
 export const errorLine = (message: string): string => message.split('\n')[0].trim()
+
+// ------------------------------------------------------------------ warm-up questions and clickable options
+
+export type Level = 'easy' | 'medium' | 'tricky'
+export const LEVELS: readonly Level[] = ['easy', 'medium', 'tricky']
+
+export interface WarmOption {
+  /** what the slide shows; may hold `code` in backticks */
+  text: string
+  /** the query that shows this choice: clicking the option runs it. None when the option is not a query. */
+  sql?: string
+  /** after Reveal: why it is tempting and what is wrong, or why it is right */
+  why: string
+  /** what SQL Server says when this option's query fails (short, only when known for sure); shown after DuckDB's own error */
+  mssql?: string
+}
+
+export interface WarmQuestion {
+  id: string
+  topic: string
+  level: Level
+  question: string
+  /** four options, A to D in this order */
+  options: WarmOption[]
+  /** index of the right option */
+  right: number
+  why: string
+  /** the right option's query is meant to give no rows (NOT IN with a NULL) */
+  empty?: boolean
+}
+
+/** What one option looks like on the slide, for the warm-up and for the vote on code alike. */
+export interface QuizOption {
+  letter: Letter
+  text: string
+  /** the text is code (a vote option) and is shown as such */
+  code: boolean
+  sql?: string
+  why?: string
+  mssql?: string
+  right: boolean
+}
+
+/** An option that is a bit of SQL (`WHERE`, `COUNT(*)`, `s.id IS NULL`, `TOP (5) alone`) is set in the code font; a sentence is not. */
+export const looksLikeCode = (text: string): boolean =>
+  /^[A-Z][A-Z ]*( \(.*\))?$/.test(text) || /^(COUNT|SUM|SELECT|TOP \(|NOT (IN|EXISTS)|<> ANY|FULL |LEFT |RIGHT |INNER |CROSS )/.test(text) || /^[a-z_][\w.]*\s*(=|==|<>|IS)\s/.test(text)
+
+export const warmOptions = (q: WarmQuestion): QuizOption[] => q.options.map((o, i) => ({ letter: LETTERS[i], text: o.text, code: looksLikeCode(o.text), sql: o.sql, why: o.why, mssql: o.mssql, right: i === q.right }))
+
+export const voteOptions = (q: VoteQuestion, index: number): QuizOption[] => arrange(q, index).map((o) => ({ letter: o.letter, text: o.sql, code: true, sql: o.sql, right: o.right }))
+
+/** The rows of a clicked option's result that the slide shows. */
+export const PICK_ROWS = 10
+
+// ------------------------------------------------------------------ hand counts
+
+export interface HandShare {
+  letter: Letter
+  count: number
+  /** whole percent of all counted votes */
+  pct: number
+}
+
+/** A typed count: a whole number from 0 up; empty, negative, decimal or text counts as 0, and a huge number is held to a million. */
+export function parseCount(raw: string | undefined): number {
+  const t = (raw ?? '').trim()
+  return /^\d{1,9}$/.test(t) ? Math.min(1_000_000, Number(t)) : 0
+}
+
+/** The four typed counts as shares of the total, or null when no vote was counted (nothing to draw, no division by 0). */
+export function handShares(raw: readonly (string | undefined)[]): HandShare[] | null {
+  const counts = LETTERS.map((_, i) => parseCount(raw[i]))
+  const total = counts.reduce((a, b) => a + b, 0)
+  if (total === 0) return null
+  return LETTERS.map((letter, i) => ({ letter, count: counts[i], pct: Math.round((counts[i] / total) * 100) }))
+}
+
+// ------------------------------------------------------------------ the lesson plan
+
+export const PLAN_MAX = 20
+export const VOTE_DEFAULT_SET = 'inner-join'
+
+export type PlanItem = { kind: 'w'; n: number } | { kind: 'v'; set: string; n: number } | { kind: 't'; set: string; n: number }
+
+/** The item as written in a plan link. */
+export function planKey(it: PlanItem): string {
+  if (it.kind === 'w') return `w${it.n}`
+  if (it.kind === 'v') return it.set === VOTE_DEFAULT_SET ? `v${it.n}` : `v:${it.set}:${it.n}`
+  return `t:${it.set}:${it.n}`
+}
+
+function parseItem(raw: string): PlanItem | null {
+  let m = /^w(\d{1,4})$/.exec(raw)
+  if (m) return { kind: 'w', n: Number(m[1]) }
+  m = /^v(\d{1,4})$/.exec(raw)
+  if (m) return { kind: 'v', set: VOTE_DEFAULT_SET, n: Number(m[1]) }
+  m = /^([vt]):([a-z0-9-]{1,40}):(\d{1,4})$/.exec(raw)
+  if (m) return { kind: m[1] as 'v' | 't', set: m[2], n: Number(m[3]) }
+  return null
+}
+
+/** The items of a plan value, in order, without repeats; what could not be read comes back as `bad`. */
+export function parsePlan(raw: string | null | undefined): { items: PlanItem[]; bad: string[] } {
+  const items: PlanItem[] = []
+  const bad: string[] = []
+  const seen = new Set<string>()
+  for (const part of (raw ?? '').split(',')) {
+    const t = part.trim().toLowerCase()
+    if (!t) continue
+    const it = parseItem(t)
+    if (!it || it.n < 1) {
+      if (!bad.includes(t)) bad.push(t)
+      continue
+    }
+    const k = planKey(it)
+    if (!seen.has(k)) {
+      seen.add(k)
+      items.push(it)
+    }
+  }
+  return { items, bad }
+}
+
+/** What exists: the number of warm-up questions and, by section id, of vote questions and of tasks. */
+export interface PlanCatalog {
+  warm: number
+  votes: Record<string, number>
+  tasks: Record<string, number>
+}
+
+export interface PlanRead {
+  items: PlanItem[]
+  /** items that could not be read or do not exist, as written */
+  skipped: string[]
+  /** more than PLAN_MAX items were given: the rest are not used */
+  capped: boolean
+  /** 1-based position asked for, held to the items */
+  at: number
+}
+
+/** The plan in an address: null when there is no `plan=`. */
+export function planFromHash(hash: string, cat: PlanCatalog): PlanRead | null {
+  const raw = param(hash, 'plan')
+  if (raw === undefined) return null
+  const { items, bad } = parsePlan(raw)
+  const skipped = [...bad]
+  const known = items.filter((it) => {
+    const have = it.kind === 'w' ? cat.warm : ((it.kind === 'v' ? cat.votes : cat.tasks)[it.set] ?? 0)
+    if (it.n <= have) return true
+    skipped.push(planKey(it))
+    return false
+  })
+  const rawAt = param(hash, 'i')
+  const used = known.slice(0, PLAN_MAX)
+  return { items: used, skipped, capped: known.length > PLAN_MAX, at: clampIndex(rawAt === undefined || rawAt.trim() === '' ? null : Number(rawAt), used.length) }
+}
+
+/** The address of a plan, at a position; other parts of the hash stay after it. */
+export function planHash(hash: string, items: readonly PlanItem[], at?: number | null): string {
+  const rest = hashWithoutLesson(hash).replace(/^#/, '')
+  const parts = ['lesson=sql', `plan=${items.map(planKey).join(',')}`]
+  if (at != null && at > 1) parts.push(`i=${at}`)
+  return '#' + parts.join('&') + (rest ? `&${rest}` : '')
+}
 
 /** The task a lesson reopens at: the last one shown in this browser, if it was in the same set and still exists. */
 export function lastTask(raw: string | null, set: string, count: number): number | null {
