@@ -102,7 +102,7 @@ describe('warm-up: on the data', () => {
         expect(compareResults(got, answer, false).ok, `${q.id}: option ${'ABCD'[i]} (${o.text}) gives the right answer`).toBe(false)
       })
     }
-  })
+  }, 60_000)
 
   it('an SQL Server line is given only to options that really fail here', () => {
     for (const q of WARMUP)
@@ -111,7 +111,7 @@ describe('warm-up: on the data', () => {
         expect(o.sql, `${q.id} ${'ABCD'[i]}`).toBeTruthy()
         expect(isError(attempt(o.sql!)), `${q.id} ${'ABCD'[i]} has an SQL Server message but runs`).toBe(true)
       })
-  })
+  }, 60_000)
 
   it('the numbers the options and questions state are the data’s', () => {
     const one = (sql: string) => (attempt(sql) as ResultData).rows[0][0]

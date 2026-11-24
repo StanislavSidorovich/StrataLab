@@ -50,6 +50,12 @@ export function LessonPage() {
     return () => window.removeEventListener('hashchange', f)
   }, [])
   const route = lessonFromHash(hash)
+  // A lesson link never shows the first-visit welcome (the store skips it on load); when the link is followed inside a tab that
+  // already opened it, the dialog is hidden here. It is not marked as seen: a later ordinary visit still gets it.
+  const inLesson = !!route
+  useEffect(() => {
+    if (inLesson) useLab.setState({ welcomeOpen: false })
+  }, [inLesson])
   const kind: LessonKind = route?.kind ?? 'sql'
   const plan = route && kind === 'sql' ? planFromHash(hash, CATALOG) : null
   const running = !!plan && plan.items.length > 0
