@@ -22,6 +22,7 @@ Tables come in slowly. Sections 1 to 3 use `sellout` and `products`; each later 
 - `skills` on a task names the moves its solution makes, from `skills.ts`. Helpers such as `round`, `head`, `reset_index` and variables are not skills.
 - The first task of a section uses one skill. A task adds at most one skill not yet practised on the page. Skills of earlier sections count as practised. `tests/practiceLadder.test.ts` checks all of this, and that the tags are true.
 - The trap is a mistake people really make with this topic, not a general warning.
+- A solution that combines moves from different notes is written in steps: name the intermediate (a dict, a condition, a filtered table) in a variable, then one short last line that uses it. The question says so ("write the dict first") and the hints lead the same way. A nested one-liner is for later tasks, after an earlier task did the same combination in steps. The learner meets one new thing per line.
 - Every `.method` or function a solution uses has already appeared in a note or an example above it, on this page. `tests/practiceTaught.test.ts` fails otherwise. Prefer a simpler solution to a new function that only tidies the answer.
 - The last task of a section is its hardest: "Test me" jumps there.
 - No story, no characters, no praise. English; no long dashes.

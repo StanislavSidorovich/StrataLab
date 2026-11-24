@@ -225,14 +225,16 @@ band.value_counts().sort_index().rename_axis("band").reset_index(name="lines")`,
       kind: 'task',
       id: 'py-new-columns-pack-type',
       title: 'Liquid, solid or dose',
-      question: 'Add a column pack_type to products from unit: L and ml are liquid, g is solid, tab, caps and sachet are dose. Show the whole table.',
+      question: 'Add a column pack_type to products from unit: L and ml are liquid, g is solid, tab, caps and sachet are dose. Write the dict first, in a variable, then use it. Show the whole table.',
       ordered: false,
       skills: ['map-values', 'add-column'],
-      hints: ['Recode the unit column, one key for each unit.', 'products["unit"].map({...}) has six keys: L, ml, g, tab, caps, sachet.', 'products.assign(pack_type=products["unit"].map({"L": "liquid", "ml": "liquid", ...}))'],
-      solution: `products.assign(pack_type=products["unit"].map({"L": "liquid", "ml": "liquid", "g": "solid", "tab": "dose", "caps": "dose", "sachet": "dose"}))`,
+      hints: ['Two moves: recode the unit column with a dict (map), then add the result as a column (assign). Do them one at a time: first the dict in a variable.', 'The dict has six keys: L, ml, g, tab, caps, sachet. pack_map = {"L": "liquid", "ml": "liquid", ...}', 'Last line: products.assign(pack_type=products["unit"].map(pack_map)). It is the same pieces in one line, as in the example with np.where inside assign.'],
+      solution: `pack_map = {"L": "liquid", "ml": "liquid", "g": "solid", "tab": "dose", "caps": "dose", "sachet": "dose"}
+products.assign(pack_type=products["unit"].map(pack_map))`,
       traps: [
         {
-          code: `products.assign(pack_type=products["unit"].map({"L": "liquid", "ml": "liquid", "g": "solid", "tab": "dose", "caps": "dose"}))`,
+          code: `pack_map = {"L": "liquid", "ml": "liquid", "g": "solid", "tab": "dose", "caps": "dose"}
+products.assign(pack_type=products["unit"].map(pack_map))`,
           says: 'Sachet is missing from the dict, so Pyrexan Powder got NaN instead of dose. Every unit needs a key.',
         },
       ],
