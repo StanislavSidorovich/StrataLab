@@ -18,6 +18,8 @@ import { VOTES, WARMUP } from '../data/lessonVotes'
 import { taskNumber, tasksOf, type PracticeSection, type PracticeTaskCell } from '../data/practiceBook'
 import { CellEditor, Grid, Prose, RunButton, RunResult, SQL_ENGINE, useCellRun } from './PracticeBook'
 import { ResultCompare } from './ResultCompare'
+import { RoomChip, RoomProvider, RoomSide, useRoom, useTeacherRoom } from './LessonRoom'
+import { roomKeyForPlan, roomKeyForSet, sharesFromCounts, teacherView, votesText, type RoomQuestion } from '../core/voting'
 import { runPracticeQuery, useLab } from './store'
 import './lesson.css'
 
@@ -119,6 +121,25 @@ export function LessonPage() {
     }
   }, [route, plan, mode, count, n])
 
+  // Phone voting (hidden, optional): one room per plan or per single vote link; it follows the question on the screen.
+  const planItem = running && plan ? plan.items[plan.at - 1] : null
+  let roomKey: string | null = null
+  let asked: RoomQuestion | null = null
+  if (route && kind === 'sql') {
+    if (running && plan) {
+      roomKey = roomKeyForPlan(plan.items.map(planKey))
+      if (planItem?.kind === 'w') asked = { key: planKey(planItem), label: `Warm-up ${planItem.n}` }
+      else if (planItem?.kind === 'v') asked = { key: planKey(planItem), label: `Question ${planItem.n}` }
+    } else if (!plan && warm && count > 0) {
+      roomKey = roomKeyForSet(WARMUP_SET)
+      asked = { key: `w${n}`, label: `Warm-up ${n}` }
+    } else if (!plan && !warm && mode === 'vote' && section && questions && count > 0) {
+      roomKey = roomKeyForSet(section.id)
+      asked = { key: planKey({ kind: 'v', set: section.id, n }), label: `Question ${n}` }
+    }
+  }
+  const room = useTeacherRoom(roomKey, asked)
+
   if (!route) return null
 
   const setNav = (label: string, m: number, total: number, set: string): NavSpec => ({ label, n: m, count: total, go: (x) => go({ set, mode: set === WARMUP_SET ? 'vote' : mode, n: x }) })
@@ -149,11 +170,14 @@ export function LessonPage() {
           <label title="Larger text, Lab's own frame hidden">
             <input type="checkbox" checked={board} onChange={(e) => setBoard(e.target.checked)} /> Board mode
           </label>
+          <RoomProvider value={room}>
+            <RoomChip />
+          </RoomProvider>
           <button className="btn btn-ghost" onClick={exit} title="Back to the workbench">
             Exit lesson
           </button>
         </div>
-        {body}
+        <RoomProvider value={room}>{body}</RoomProvider>
       </div>
     </div>
   )
@@ -412,6 +436,7 @@ function QuizView({ crumb, question, options, why, nav }: QuizProps) {
   const stopped = useRef(false)
   const pickSeq = useRef(0)
   const ready = useLab((s) => s.engine.status === 'ready')
+  const room = useRoom()
   useNavArrows(nav)
   const queries = options.filter((o) => o.sql).length
 
@@ -486,7 +511,13 @@ function QuizView({ crumb, question, options, why, nav }: QuizProps) {
         <Nav nav={nav} />
         <span className="lesson-nav">
           {!revealed ? (
-            <button className="btn btn-primary" onClick={() => setRevealed(true)}>
+            <button
+              className="btn btn-primary"
+              onClick={() => {
+                setRevealed(true)
+                if (room?.current) room.reveal(room.current.key)
+              }}
+            >
               Reveal
             </button>
           ) : running ? (
@@ -536,16 +567,30 @@ function QuizView({ crumb, question, options, why, nav }: QuizProps) {
               </div>
             ))}
           </div>
-          <div className="lesson-qr" aria-hidden="true" data-testid="lesson-qr" />
+          {room ? (
+            <div className="lesson-qr lesson-qr-live" data-testid="lesson-qr">
+              <RoomSide />
+            </div>
+          ) : (
+            <div className="lesson-qr" aria-hidden="true" data-testid="lesson-qr" />
+          )}
         </div>
-        {!revealed && <p className="lesson-muted lesson-hands">Vote: A, B, C or D (hands up)</p>}
+        {room && <PhoneBars right={revealed ? rightOpt.letter : null} />}
+        {!revealed && <p className="lesson-muted lesson-hands">{room?.state.phase === 'live' && !room.state.lost ? 'Vote on your phone, or hands up.' : 'Vote: A, B, C or D (hands up)'}</p>}
         {revealed && (
           <>
             <h3 className="lesson-answer">{rightOpt.letter} is right.</h3>
             <p className="lesson-why">
               <b>Why:</b> {why}
             </p>
-            <HandCounts right={rightOpt.letter} />
+            {room?.state.phase === 'live' ? (
+              <details className="lesson-fold" open={room.state.lost || undefined} data-testid="hands-fold">
+                <summary>Count hands instead</summary>
+                <HandCounts right={rightOpt.letter} />
+              </details>
+            ) : (
+              <HandCounts right={rightOpt.letter} />
+            )}
             {picked && pick && <PickPanel option={picked} pick={pick} />}
             <p className="lesson-muted lesson-clickhint">Click an option to run its query.</p>
             <div className="lesson-results" data-testid="lesson-results">
@@ -656,23 +701,51 @@ function HandCounts({ right }: { right: Letter }) {
           )
         })}
       </div>
-      {shares ? (
-        <div className="lesson-bars" data-testid="lesson-bars">
-          {shares.map((s) => (
-            <div key={s.letter} className="lesson-barrow" data-testid={`bar-${s.letter}`}>
-              <b className="lesson-letter">{s.letter}</b>
-              <div className="lesson-bartrack">
-                <div className={`lesson-barfill${s.letter === right ? ' right' : ''}`} style={{ width: `${s.pct}%` }} />
-              </div>
-              <span className="lesson-barnum">
-                {s.count.toLocaleString('en-US')} · {s.pct}%
-              </span>
-            </div>
-          ))}
-          <div className="lesson-muted">{counted.toLocaleString('en-US')} counted</div>
+      {shares ? <Bars shares={shares} right={right} note={`${counted.toLocaleString('en-US')} counted`} /> : <div className="lesson-muted">Type how many hands each letter got; the bars appear here.</div>}
+    </div>
+  )
+}
+
+/** Bars for four counts, from hands or from phones. */
+function Bars({ shares, right, note, id = '' }: { shares: NonNullable<ReturnType<typeof handShares>>; right: Letter | null; note: string; id?: string }) {
+  return (
+    <div className="lesson-bars" data-testid={`${id}lesson-bars`}>
+      {shares.map((s) => (
+        <div key={s.letter} className="lesson-barrow" data-testid={`${id}bar-${s.letter}`}>
+          <b className="lesson-letter">{s.letter}</b>
+          <div className="lesson-bartrack">
+            <div className={`lesson-barfill${s.letter === right ? ' right' : ''}`} style={{ width: `${s.pct}%` }} />
+          </div>
+          <span className="lesson-barnum">
+            {s.count.toLocaleString('en-US')} · {s.pct}%
+          </span>
         </div>
-      ) : (
-        <div className="lesson-muted">Type how many hands each letter got; the bars appear here.</div>
+      ))}
+      <div className="lesson-muted">{note}</div>
+    </div>
+  )
+}
+
+/** Live votes from the room for the question on the screen: "N votes" and bars (none while nobody has voted). */
+function PhoneBars({ right }: { right: Letter | null }) {
+  const room = useRoom()
+  if (!room || room.state.phase !== 'live') return null
+  const v = teacherView(room.state, room.current)
+  const lost = room.state.lost
+  return (
+    <div className="lesson-phonebars" data-testid="phone-bars">
+      {lost && (
+        <div className="lesson-lost" role="status" data-testid="room-lost">
+          Connection lost: count hands.
+        </div>
+      )}
+      {v.here && !lost && (
+        <>
+          <div className="lesson-phonehead">
+            <b data-testid="phone-total">{votesText(v.total)}</b> <span className="lesson-muted">from phones{v.open ? ' · open' : ' · closed'}</span>
+          </div>
+          {sharesFromCounts(room.state.counts) && <Bars id="phone-" shares={sharesFromCounts(room.state.counts)!} right={right} note={`${v.total.toLocaleString('en-US')} counted`} />}
+        </>
       )}
     </div>
   )

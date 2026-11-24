@@ -98,3 +98,17 @@
   .lesson-planrow { grid-template-columns: auto 3.5rem 1fr; }
   .lesson-plantag, .lesson-planat { display: none; }
 }
+
+/* phone voting (teacher side) */
+.lesson-qr-live { border-style: solid; padding: 10px; }
+.lesson-room { display: grid; gap: 8px; justify-items: center; text-align: center; }
+.lesson-room-code { font-size: 34px; font-weight: 700; letter-spacing: 0.12em; color: var(--accent); }
+.lesson-room-link { font-size: 11px; overflow-wrap: anywhere; }
+.lesson-room-note { font-size: 13px; }
+.lesson-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border: 1px solid var(--line); border-radius: 999px; font-size: 13px; color: var(--accent); }
+.lesson-phonebars { display: grid; gap: 8px; }
+.lesson-phonehead { font-size: 18px; }
+.lesson-lost { padding: 8px 12px; border: 1px solid var(--danger); border-radius: 8px; color: var(--danger); font-weight: 600; }
+@media (max-width: 760px) {
+  .lesson-qr-live { display: block; }
+}
