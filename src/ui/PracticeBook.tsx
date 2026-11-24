@@ -365,10 +365,10 @@ const HEAD_H = 46
 /** Room for the horizontal scrollbar of a wide table, so a short table needs no vertical scroll. */
 const SCROLLBAR_H = 16
 
-export function Grid({ table }: { table: Table }) {
+export function Grid({ table, tight = false }: { table: Table; tight?: boolean }) {
   return (
     <div className="rounded-md overflow-hidden" style={{ height: Math.min(table.numRows, SHOWN_ROWS) * ROW_H + HEAD_H + 2 + (table.numRows <= SHOWN_ROWS ? SCROLLBAR_H : 0), border: '1px solid var(--line)' }}>
-      <DataGrid table={table} compact scaled={false} />
+      <DataGrid table={table} compact scaled={false} tight={tight} />
     </div>
   )
 }

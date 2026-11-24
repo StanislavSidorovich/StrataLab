@@ -3,12 +3,12 @@
 // and `#lesson=sql` alone is the page where a teacher builds a plan (`&plan=w3,v2,t:inner-join:4`) that runs the chosen
 // items in order. Hidden: no menu, button or page links here. It reuses the practice page's editor, runner and check;
 // it records no progress and counts nothing in Quaera.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Table } from 'apache-arrow'
 import { ArrowLeft, ArrowRight, CheckCircle2, Copy, Eye, ListChecks, Loader2, Play, RefreshCw, Square, XCircle } from 'lucide-react'
 import { compareResults, describeVerdict, type ResultData, type Verdict } from '../core/check'
 import {
-  LETTERS, LEVELS, PICK_ROWS, PLAN_MAX, WARMUP_SET, clampIndex, describeRun, errorLine, handShares, hashWithoutLesson, lastTask, lessonFromHash, lessonHash, lessonSections, lessonTables, planFromHash, planHash, planKey, voteOptions, warmOptions,
+  LETTERS, LEVELS, PICK_ROWS, PLAN_MAX, WARMUP_SET, clampIndex, stepLabel, describeRun, errorLine, handShares, hashWithoutLesson, lastTask, lessonFromHash, lessonHash, lessonSections, lessonTables, planFromHash, planHash, planKey, voteOptions, warmOptions,
   type Letter, type LessonKind, type Level, type PlanCatalog, type PlanItem, type QuizOption,
 } from '../core/lesson'
 import { cancelQuery } from '../db/engine'
@@ -19,7 +19,8 @@ import { taskNumber, tasksOf, type PracticeSection, type PracticeTaskCell } from
 import { CellEditor, Grid, Prose, RunButton, RunResult, SQL_ENGINE, useCellRun } from './PracticeBook'
 import { ResultCompare } from './ResultCompare'
 import { RoomChip, RoomProvider, RoomSide, useRoom, useTeacherRoom } from './LessonRoom'
-import { roomKeyForPlan, roomKeyForSet, sharesFromCounts, teacherView, votesText, type RoomQuestion } from '../core/voting'
+import { ResultsSlide, SchemaSlide, ScopeContext, loadHands, saveHands, useScope } from './LessonPlanSlides'
+import { RESULTS_KEY, roomKeyForPlan, roomKeyForSet, sharesFromCounts, teacherView, votesText, type RoomQuestion } from '../core/voting'
 import { runPracticeQuery, useLab } from './store'
 import './lesson.css'
 
@@ -128,8 +129,10 @@ export function LessonPage() {
   if (route && kind === 'sql') {
     if (running && plan) {
       roomKey = roomKeyForPlan(plan.items.map(planKey))
-      if (planItem?.kind === 'w') asked = { key: planKey(planItem), label: `Warm-up ${planItem.n}` }
-      else if (planItem?.kind === 'v') asked = { key: planKey(planItem), label: `Question ${planItem.n}` }
+      // the phone shows the projector's own "Step 3 of 8"; a slide or a task has no vote (the results slide is told apart by its key)
+      const label = stepLabel(plan.at, plan.items.length)
+      if (planItem?.kind === 'w' || planItem?.kind === 'v') asked = { key: planKey(planItem), label }
+      else if (planItem?.kind === 'r') asked = { key: RESULTS_KEY, label }
     } else if (!plan && warm && count > 0) {
       roomKey = roomKeyForSet(WARMUP_SET)
       asked = { key: `w${n}`, label: `Warm-up ${n}` }
@@ -177,7 +180,9 @@ export function LessonPage() {
             Exit lesson
           </button>
         </div>
-        <RoomProvider value={room}>{body}</RoomProvider>
+        <ScopeContext.Provider value={roomKey}>
+          <RoomProvider value={room}>{body}</RoomProvider>
+        </ScopeContext.Provider>
       </div>
     </div>
   )
@@ -354,6 +359,31 @@ function TablesPanel({ task }: { task: PracticeTaskCell }) {
   const ready = useLab((s) => s.engine.status)
   const [rows, setRows] = useState<Record<string, { table: Table } | { error: string }>>({})
   const [attempt, setAttempt] = useState(0)
+  // Two tables share a row; one whose sample rows do not fit half the width takes a row of its own. Measured, not guessed from the
+  // number of columns: after the rows are drawn, a table whose grid scrolls sideways is widened (and stays so until the width changes).
+  const box = useRef<HTMLDivElement>(null)
+  const [wide, setWide] = useState<string[]>([])
+  useLayoutEffect(() => {
+    const el = box.current
+    if (!el) return
+    const over = [...el.querySelectorAll<HTMLElement>('details[data-table]')]
+      .filter((d) => !wide.includes(d.dataset.table!) && [...d.querySelectorAll<HTMLElement>('.overflow-auto')].some((g) => g.scrollWidth > g.clientWidth + 1))
+      .map((d) => d.dataset.table!)
+    if (over.length) setWide([...wide, ...over])
+  })
+  useEffect(() => {
+    const el = box.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    let last = el.clientWidth
+    const ro = new ResizeObserver(() => {
+      if (Math.abs(el.clientWidth - last) > 8) {
+        last = el.clientWidth
+        setWide([])
+      }
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   useEffect(() => {
     if (ready !== 'ready' || !names) return
@@ -377,11 +407,11 @@ function TablesPanel({ task }: { task: PracticeTaskCell }) {
 
   if (tables.length === 0) return null
   return (
-    <div className="lesson-tables" data-testid="lesson-tables">
+    <div ref={box} className="lesson-tables" data-testid="lesson-tables">
       {tables.map((t) => {
         const got = rows[t.name]
         return (
-          <details key={t.name} open className="lesson-fold lesson-table">
+          <details key={t.name} open data-table={t.name} className={`lesson-fold lesson-table${wide.includes(t.name) ? ' wide' : ''}`}>
             <summary>
               <b className="mono">{t.name}</b> <span className="lesson-muted">· {t.row}</span>
             </summary>
@@ -394,7 +424,7 @@ function TablesPanel({ task }: { task: PracticeTaskCell }) {
               ))}
             </div>
             {got && 'table' in got ? (
-              <Grid table={got.table} />
+              <Grid table={got.table} tight />
             ) : got ? (
               <div className="lesson-err">
                 {got.error} <button className="btn" onClick={() => setAttempt(attempt + 1)}><RefreshCw size={13} /> Retry</button>
@@ -417,6 +447,8 @@ type Option = { status: 'idle' } | { status: 'running' } | { status: 'none' } | 
 type Pick = { letter: Letter } & ({ status: 'running' } | { status: 'none' } | { status: 'error'; text: string; dataset: boolean } | { status: 'rows'; table: Table; total: number; more: boolean })
 
 interface QuizProps {
+  /** the question as a plan item (w3, v2): the typed hand counts are kept under it */
+  qkey: string
   crumb: string
   question: string
   options: QuizOption[]
@@ -427,7 +459,7 @@ interface QuizProps {
 
 const failedLoad = (msg: string) => /could not be loaded|was not loaded/.test(msg)
 
-function QuizView({ crumb, question, options, why, nav }: QuizProps) {
+function QuizView({ qkey, crumb, question, options, why, nav }: QuizProps) {
   const [revealed, setRevealed] = useState(false)
   const [runs, setRuns] = useState<Partial<Record<Letter, Option>>>({})
   const [running, setRunning] = useState(false)
@@ -586,10 +618,10 @@ function QuizView({ crumb, question, options, why, nav }: QuizProps) {
             {room?.state.phase === 'live' ? (
               <details className="lesson-fold" open={room.state.lost || undefined} data-testid="hands-fold">
                 <summary>Count hands instead</summary>
-                <HandCounts right={rightOpt.letter} />
+                <HandCounts right={rightOpt.letter} qkey={qkey} />
               </details>
             ) : (
-              <HandCounts right={rightOpt.letter} />
+              <HandCounts right={rightOpt.letter} qkey={qkey} />
             )}
             {picked && pick && <PickPanel option={picked} pick={pick} />}
             <p className="lesson-muted lesson-clickhint">Click an option to run its query.</p>
@@ -674,8 +706,12 @@ function PickPanel({ option, pick }: { option: QuizOption; pick: Pick }) {
 }
 
 /** The teacher types how many hands each letter got; bars and percentages appear. Nothing is sent or stored. */
-function HandCounts({ right }: { right: Letter }) {
-  const [raw, setRaw] = useState(['', '', '', ''])
+function HandCounts({ right, qkey }: { right: Letter; qkey: string }) {
+  const scope = useScope()
+  const [raw, setRaw] = useState(() => {
+    const kept = loadHands(scope)[qkey]
+    return kept ?? ['', '', '', '']
+  })
   const shares = handShares(raw)
   const counted = shares?.reduce((a, s) => a + s.count, 0) ?? 0
   return (
@@ -695,7 +731,11 @@ function HandCounts({ right }: { right: Letter }) {
                 data-testid={`hands-${l}`}
                 value={raw[i]}
                 placeholder="0"
-                onChange={(e) => setRaw((r) => r.map((v, j) => (j === i ? e.target.value : v)))}
+                onChange={(e) => {
+                  const next = raw.map((v, j) => (j === i ? e.target.value : v))
+                  setRaw(next)
+                  saveHands(scope, qkey, next)
+                }}
               />
             </label>
           )
@@ -753,12 +793,12 @@ function PhoneBars({ right }: { right: Letter | null }) {
 
 function VoteView({ section, q, nav }: { section: PracticeSection; q: number; nav: NavSpec }) {
   const item = VOTES[section.id][q - 1]
-  return <QuizView crumb={`SQL · ${section.n}. ${section.title} · vote`} question={item.question} options={voteOptions(item, q - 1)} why={item.why} nav={nav} />
+  return <QuizView qkey={planKey({ kind: 'v', set: section.id, n: q })} crumb={`SQL · ${section.n}. ${section.title} · vote`} question={item.question} options={voteOptions(item, q - 1)} why={item.why} nav={nav} />
 }
 
 function WarmView({ q, nav }: { q: number; count: number; nav: NavSpec }) {
   const item = WARMUP[q - 1]
-  return <QuizView crumb={`SQL · Warm-up · ${item.topic} · ${item.level}`} question={item.question} options={warmOptions(item)} why={item.why} nav={nav} />
+  return <QuizView qkey={`w${q}`} crumb={`SQL · Warm-up · ${item.topic} · ${item.level}`} question={item.question} options={warmOptions(item)} why={item.why} nav={nav} />
 }
 
 // ------------------------------------------------------------------ C: a lesson plan, run in order
@@ -766,9 +806,11 @@ function WarmView({ q, nav }: { q: number; count: number; nav: NavSpec }) {
 function PlanRun({ items, at, skipped, capped, checkOn, goPlan }: { items: PlanItem[]; at: number; skipped: string[]; capped: boolean; checkOn: boolean; goPlan: (items: readonly PlanItem[], at: number) => void }) {
   const nav: NavSpec = { label: 'Step', n: at, count: items.length, go: (m) => goPlan(items, m) }
   const it = items[at - 1]
-  const section = it.kind === 'w' ? undefined : SECTIONS.find((s) => s.id === it.set)
+  const section = it.kind === 'w' || it.kind === 's' || it.kind === 'r' ? undefined : SECTIONS.find((s) => s.id === it.set)
   let body = null
-  if (it.kind === 'w') body = <WarmView key={`w${it.n}`} q={it.n} count={WARMUP.length} nav={nav} />
+  if (it.kind === 's') body = <SchemaSlide key="s" items={items} nav={nav} />
+  else if (it.kind === 'r') body = <ResultsSlide key="r" items={items} nav={nav} goStep={(m) => goPlan(items, m)} />
+  else if (it.kind === 'w') body = <WarmView key={`w${it.n}`} q={it.n} count={WARMUP.length} nav={nav} />
   else if (section && it.kind === 'v') body = <VoteView key={`v-${section.id}-${it.n}`} section={section} q={it.n} nav={nav} />
   else if (section && it.kind === 't') {
     const task = tasksOf(section)[it.n - 1]
@@ -788,6 +830,7 @@ function PlanRun({ items, at, skipped, capped, checkOn, goPlan }: { items: PlanI
 }
 
 interface PlanRow {
+  group: 'w' | 'v' | 't' | 'x'
   item: PlanItem
   key: string
   topic: string
@@ -801,28 +844,31 @@ const plain = (s: string, max = 120) => {
 }
 
 const GROUPS = [
+  { id: 'x', title: 'Slides', note: 'the schema and the results of the votes: put them where you want them' },
   { id: 'w', title: 'Warm-up', note: 'a short question, four options, run a query by clicking an option' },
   { id: 'v', title: 'Vote on code', note: 'four queries, the room votes, then all four run on the data' },
   { id: 't', title: 'Write code', note: 'a practice task: the room writes the query, Check compares it' },
 ] as const
 
 const ROWS: PlanRow[] = [
-  ...WARMUP.map((q, i): PlanRow => ({ item: { kind: 'w', n: i + 1 }, key: `w${i + 1}`, topic: q.topic, level: q.level, text: plain(q.question) })),
+  { item: { kind: 's' }, group: 'x', key: 's', topic: 'Slides', text: 'The tables the plan uses, with keys and links' },
+  { item: { kind: 'r' }, group: 'x', key: 'r', topic: 'Slides', text: 'Results of every vote in the plan: votes and share right' },
+  ...WARMUP.map((q, i): PlanRow => ({ item: { kind: 'w', n: i + 1 }, group: 'w', key: `w${i + 1}`, topic: q.topic, level: q.level, text: plain(q.question) })),
   ...Object.entries(VOTES).flatMap(([setId, qs]) => {
     const s = SECTIONS.find((x) => x.id === setId)!
-    return qs.map((q, i): PlanRow => ({ item: { kind: 'v', set: setId, n: i + 1 }, key: planKey({ kind: 'v', set: setId, n: i + 1 }), topic: `${s.n}. ${s.title}`, text: plain(q.question) }))
+    return qs.map((q, i): PlanRow => ({ item: { kind: 'v', set: setId, n: i + 1 }, group: 'v', key: planKey({ kind: 'v', set: setId, n: i + 1 }), topic: `${s.n}. ${s.title}`, text: plain(q.question) }))
   }),
   ...lessonSections(SECTIONS).flatMap((s) =>
-    tasksOf(s).map((t, i): PlanRow => ({ item: { kind: 't', set: s.id, n: i + 1 }, key: planKey({ kind: 't', set: s.id, n: i + 1 }), topic: `${s.n}. ${s.title}`, text: plain(t.question) })),
+    tasksOf(s).map((t, i): PlanRow => ({ item: { kind: 't', set: s.id, n: i + 1 }, group: 't', key: planKey({ kind: 't', set: s.id, n: i + 1 }), topic: `${s.n}. ${s.title}`, text: plain(t.question) })),
   ),
 ]
 const WARM_TOPICS = [...new Set(WARMUP.map((q) => q.topic))]
-const SECTION_TOPICS = [...new Set(ROWS.filter((r) => r.item.kind !== 'w').map((r) => r.topic))]
+const SECTION_TOPICS = [...new Set(ROWS.filter((r) => r.group === 'v' || r.group === 't').map((r) => r.topic))]
 
 /** `#lesson=sql`: the teacher ticks warm-up questions, votes and tasks, and gets a link that runs them in order. */
 function PlanBuilder({ note, onOpen }: { note: string | null; onOpen: (items: PlanItem[]) => void }) {
   const [sel, setSel] = useState<PlanItem[]>([])
-  const [group, setGroup] = useState<'all' | 'w' | 'v' | 't'>('all')
+  const [group, setGroup] = useState<'all' | 'w' | 'v' | 't' | 'x'>('all')
   const [topic, setTopic] = useState('')
   const [level, setLevel] = useState<'' | Level>('')
   const [copied, setCopied] = useState<'' | 'ok' | 'fail'>('')
@@ -831,7 +877,7 @@ function PlanBuilder({ note, onOpen }: { note: string | null; onOpen: (items: Pl
   const link = sel.length ? location.origin + location.pathname + location.search + planHash('', sel) : ''
   const full = sel.length >= PLAN_MAX
 
-  const shown = useMemo(() => ROWS.filter((r) => (group === 'all' || r.item.kind === group) && (!topic || r.topic === topic) && (!level || r.level === level)), [group, topic, level])
+  const shown = useMemo(() => ROWS.filter((r) => (group === 'all' || r.group === group) && (!topic || r.topic === topic) && (!level || r.level === level)), [group, topic, level])
   const toggle = (row: PlanRow) => {
     setCopied('')
     setSel((s) => (s.some((x) => planKey(x) === row.key) ? s.filter((x) => planKey(x) !== row.key) : s.length >= PLAN_MAX ? s : [...s, row.item]))
@@ -912,7 +958,7 @@ function PlanBuilder({ note, onOpen }: { note: string | null; onOpen: (items: Pl
         </label>
       </div>
       {GROUPS.map((g) => {
-        const rows = shown.filter((r) => r.item.kind === g.id)
+        const rows = shown.filter((r) => r.group === g.id)
         if (rows.length === 0) return null
         return (
           <section key={g.id} className="lesson-planlist" data-testid={`plan-group-${g.id}`}>

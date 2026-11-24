@@ -6,6 +6,9 @@
 //   w<n>               warm-up question n          (w3)
 //   v<n>               vote on code, question n of the INNER JOIN set (v2); `v:<set>:<n>` for another set
 //   t:<section>:<n>    write-code task n of a practice section (t:inner-join:4)
+//   s                  the schema slide: the tables the plan's items use, their keys and links
+//   r                  the results slide: every vote of the plan with its votes and the share who were right
+// A plan value that is a name in PLAN_PRESETS (`plan=intro`) stands for that list of items.
 // `i` is the 1-based position being shown (absent = 1). Duplicates are dropped, at most PLAN_MAX (20) items are used, an item
 // that does not exist is skipped and named on the page. `set=…&mode=vote&q=N` links keep working on their own.
 import type { PracticeSection, PracticeTables, PracticeTaskCell } from '../data/practiceBook'
@@ -199,16 +202,33 @@ export function handShares(raw: readonly (string | undefined)[]): HandShare[] | 
 export const PLAN_MAX = 20
 export const VOTE_DEFAULT_SET = 'inner-join'
 
-export type PlanItem = { kind: 'w'; n: number } | { kind: 'v'; set: string; n: number } | { kind: 't'; set: string; n: number }
+export type PlanItem = { kind: 'w'; n: number } | { kind: 'v'; set: string; n: number } | { kind: 't'; set: string; n: number } | { kind: 's' } | { kind: 'r' }
+
+/**
+ * Named plans: `#lesson=sql&plan=intro`. `intro` is the first lesson for a class that has not seen the Kaiyo tables: the schema, six
+ * votes from easy to medium on at most one fact table (w1 WHERE vs HAVING; w6 INNER JOIN; v1 join on the right key; w5 LEFT JOIN;
+ * w9 ON vs WHERE in a LEFT JOIN; v2 two conditions across a join), the results, and one plain write-code task (where: Yellow tag promotions).
+ */
+export const PLAN_PRESETS: Record<string, string> = {
+  intro: 's,w1,w6,v1,w5,w9,v2,r,t:where:1',
+}
+
+/** The same text the teacher's header shows: "Step 3 of 8". */
+export const stepLabel = (at: number, count: number): string => `Step ${at} of ${count}`
+
+/** The questions a plan can be voted on: warm-ups and votes on code (the items that have four options). */
+export const isVoteItem = (it: PlanItem): it is Extract<PlanItem, { kind: 'w' | 'v' }> => it.kind === 'w' || it.kind === 'v'
 
 /** The item as written in a plan link. */
 export function planKey(it: PlanItem): string {
+  if (it.kind === 's' || it.kind === 'r') return it.kind
   if (it.kind === 'w') return `w${it.n}`
   if (it.kind === 'v') return it.set === VOTE_DEFAULT_SET ? `v${it.n}` : `v:${it.set}:${it.n}`
   return `t:${it.set}:${it.n}`
 }
 
 function parseItem(raw: string): PlanItem | null {
+  if (raw === 's' || raw === 'r') return { kind: raw }
   let m = /^w(\d{1,4})$/.exec(raw)
   if (m) return { kind: 'w', n: Number(m[1]) }
   m = /^v(\d{1,4})$/.exec(raw)
@@ -223,11 +243,12 @@ export function parsePlan(raw: string | null | undefined): { items: PlanItem[]; 
   const items: PlanItem[] = []
   const bad: string[] = []
   const seen = new Set<string>()
-  for (const part of (raw ?? '').split(',')) {
+  const name = (raw ?? '').trim().toLowerCase()
+  for (const part of (Object.hasOwn(PLAN_PRESETS, name) ? PLAN_PRESETS[name] : (raw ?? '')).split(',')) {
     const t = part.trim().toLowerCase()
     if (!t) continue
     const it = parseItem(t)
-    if (!it || it.n < 1) {
+    if (!it || ('n' in it && it.n < 1)) {
       if (!bad.includes(t)) bad.push(t)
       continue
     }
@@ -264,6 +285,7 @@ export function planFromHash(hash: string, cat: PlanCatalog): PlanRead | null {
   const { items, bad } = parsePlan(raw)
   const skipped = [...bad]
   const known = items.filter((it) => {
+    if (it.kind === 's' || it.kind === 'r') return true
     const have = it.kind === 'w' ? cat.warm : ((it.kind === 'v' ? cat.votes : cat.tasks)[it.set] ?? 0)
     if (it.n <= have) return true
     skipped.push(planKey(it))
@@ -277,7 +299,9 @@ export function planFromHash(hash: string, cat: PlanCatalog): PlanRead | null {
 /** The address of a plan, at a position; other parts of the hash stay after it. */
 export function planHash(hash: string, items: readonly PlanItem[], at?: number | null): string {
   const rest = hashWithoutLesson(hash).replace(/^#/, '')
-  const parts = ['lesson=sql', `plan=${items.map(planKey).join(',')}`]
+  const written = items.map(planKey).join(',')
+  const preset = Object.keys(PLAN_PRESETS).find((k) => PLAN_PRESETS[k] === written)
+  const parts = ['lesson=sql', `plan=${preset ?? written}`]
   if (at != null && at > 1) parts.push(`i=${at}`)
   return '#' + parts.join('&') + (rest ? `&${rest}` : '')
 }

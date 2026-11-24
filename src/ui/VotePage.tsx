@@ -6,7 +6,41 @@ import { ApiError, castVote, roomState } from '../core/voteApi'
 import { loadMine, safeStore, saveMine, voterToken } from '../core/voteStorage'
 import { PHONE_POLL_MS, PROBLEM_TEXT, isVoteHash, normaliseRoomCode, phoneMine, phoneOffline, phoneReduce, phoneStart, phoneStatus, voteCodeFromHash, voteHash } from '../core/voting'
 
+import { DATA_MAP } from '../data/sqlPractice/s00-data'
+import { linkText, schemaOf } from '../core/lessonSchema'
+
 const store = safeStore(() => localStorage)
+
+// the Kaiyo tables, from the static metadata of the practice page (names, columns, keys, links; no rows, no engine)
+const TABLES_BLOCK = DATA_MAP.blocks.find((b) => b.kind === 'tables')
+const TABLES = TABLES_BLOCK?.kind === 'tables' ? schemaOf(TABLES_BLOCK.tables.map((t) => t.name), TABLES_BLOCK.tables, TABLES_BLOCK.keys) : []
+
+/** "Tables": what each table holds, for a student who wants to read the options on the phone. Folded away until asked for. */
+function TablesFold() {
+  if (TABLES.length === 0) return null
+  return (
+    <details className="vote-tables" data-testid="vote-tables">
+      <summary className="vote-tables-btn">Tables</summary>
+      {TABLES.map((t) => (
+        <details key={t.name} className="vote-table">
+          <summary>{t.name}</summary>
+          <p className="vote-table-row">one row: {t.row}</p>
+          <p className="vote-table-cols">
+            {t.columns.map((c) => (
+              <span key={c} className={`vote-col${c === t.key ? ' key' : ''}`}>
+                {c}
+                {c === t.key ? ' · key' : ''}
+              </span>
+            ))}
+          </p>
+          {t.links.map((l) => (
+            <p key={l.from} className="vote-table-link">{linkText(t.name, l)}</p>
+          ))}
+        </details>
+      ))}
+    </details>
+  )
+}
 
 export function VotePage() {
   const [hash, setHash] = useState(location.hash)
@@ -138,6 +172,12 @@ function Room({ code }: { code: string }) {
           No vote right now, look at the screen.
         </p>
       )}
+      {status === 'results' && room && (
+        <div data-testid="vote-state" data-state="results">
+          <h1 className="vote-q">{room.q_label}</h1>
+          <p className="vote-msg">Results are on the screen.</p>
+        </div>
+      )}
       {status === 'closed' && room && (
         <div data-testid="vote-state" data-state="closed">
           <h1 className="vote-q">{room.q_label}</h1>
@@ -168,6 +208,7 @@ function Room({ code }: { code: string }) {
           {!s.problem && !mine && <p className="vote-msg">Tap A, B, C or D.</p>}
         </div>
       )}
+      {status !== 'loading' && status !== 'offline' && status !== 'ended' && <TablesFold />}
     </>
   )
 }

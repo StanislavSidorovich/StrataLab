@@ -2,7 +2,7 @@
 // sorted into the few kinds the screens speak about. The functions are in supabase/0001_lesson_voting.sql.
 import type { Letter } from './lesson'
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from './voteConfig'
-import { REQUEST_TIMEOUT_MS, parseRoomState, type RoomState } from './voting'
+import { REQUEST_TIMEOUT_MS, parseRoomState, parseSummary, type Counts, type RoomState } from './voting'
 
 export type ApiErrorKind = 'network' | 'not-set-up' | 'busy' | 'server'
 
@@ -64,6 +64,16 @@ export const revealQuestion = (code: string, secret: string, key: string, f?: Fe
 
 export async function roomState(code: string, f?: Fetch): Promise<RoomState | null> {
   return parseRoomState(await rpc('lesson_room_state', { p_code: code }, f))
+}
+
+/** Counts of every question the room has had votes on; null when the function is not in the project yet (0002 not run). */
+export async function roomSummary(code: string, f?: Fetch): Promise<Record<string, Counts> | null> {
+  try {
+    return parseSummary(await rpc('lesson_room_summary', { p_code: code }, f)) ?? {}
+  } catch (e) {
+    if (e instanceof ApiError && e.kind === 'not-set-up') return null
+    throw e
+  }
 }
 
 export type CastResult = 'ok' | 'closed' | 'unknown' | 'room_full' | 'too_many_changes'

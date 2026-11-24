@@ -17,7 +17,8 @@
 .lesson-fold p { margin: 6px 0; max-width: 60rem; line-height: 1.5; }
 .lesson-fold pre { margin: 6px 0; padding: 8px 12px; border-radius: 6px; background: var(--panel-2); overflow-x: auto; font-size: 13px; }
 .lesson-sub { color: var(--muted); font-size: 13px; margin-top: 8px; }
-.lesson-tables { display: grid; grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr)); gap: 10px; align-items: start; }
+.lesson-tables { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-flow: row dense; gap: 10px; align-items: start; }
+.lesson-table.wide { grid-column: 1 / -1; }
 .lesson-table { font-size: 13px; }
 .lesson-muted { color: var(--muted); }
 .lesson-cols { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
@@ -112,3 +113,15 @@
 @media (max-width: 760px) {
   .lesson-qr-live { display: block; }
 }
+
+/* schema slide and results slide of a plan */
+.lesson-schema { display: grid; grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr)); gap: 12px; align-items: start; }
+.lesson-schema-card h3 { margin: 0 0 2px; font-size: 18px; color: var(--accent); }
+.lesson-schema-link { margin-top: 4px; font-size: 13px; color: var(--accent); }
+.lesson-results-table { width: 100%; border-collapse: collapse; font-size: 16px; }
+.lesson-results-table th { text-align: left; padding: 6px 10px; border-bottom: 2px solid var(--line); color: var(--muted); font-weight: 600; }
+.lesson-results-table td { padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.lesson-results-row { cursor: pointer; }
+.lesson-results-row:hover, .lesson-results-row:focus { background: var(--accent-soft); outline: none; }
+.lesson-results-table td:nth-child(3) { white-space: nowrap; }
+.lesson-resultbar { grid-template-columns: 1fr 3rem; min-width: 9rem; }

@@ -17,3 +17,15 @@ html, body { margin: 0; background: var(--q-bg, #fff); color: var(--q-text, #101
 .vote-input { box-sizing: border-box; width: 100%; min-height: 56px; padding: 0 14px; font: inherit; font-size: 28px; letter-spacing: 0.15em; text-transform: uppercase; text-align: center; border: 2px solid var(--q-line, #d0d5dd); border-radius: 12px; background: var(--q-surface, #fff); color: inherit; }
 .vote-btn { min-height: 56px; font: inherit; font-size: 20px; font-weight: 600; border: 0; border-radius: 12px; background: var(--q-accent, #15803d); color: #fff; cursor: pointer; }
 .vote-btn:disabled { opacity: 0.5; }
+.vote-tables { margin-top: 18px; border-top: 1px solid var(--q-line, #d0d5dd); padding-top: 12px; }
+.vote-tables-btn { cursor: pointer; list-style: none; min-height: 48px; display: flex; align-items: center; justify-content: center; border: 2px solid var(--q-line, #d0d5dd); border-radius: 12px; font-size: 18px; font-weight: 600; background: var(--q-surface, #fff); }
+.vote-tables-btn::-webkit-details-marker { display: none; }
+.vote-tables[open] > .vote-tables-btn { margin-bottom: 8px; }
+.vote-table { border-bottom: 1px solid var(--q-line, #d0d5dd); padding: 6px 2px; }
+.vote-table > summary { cursor: pointer; font-family: ui-monospace, monospace; font-size: 16px; font-weight: 600; padding: 6px 0; }
+.vote-table p { margin: 4px 0; font-size: 14px; line-height: 1.4; }
+.vote-table-row { color: var(--q-muted, #667085); }
+.vote-table-cols { display: flex; flex-wrap: wrap; gap: 4px; }
+.vote-col { padding: 1px 6px; border-radius: 4px; background: var(--q-surface-2, #f2f4f7); font-family: ui-monospace, monospace; font-size: 12px; }
+.vote-col.key { background: color-mix(in srgb, var(--q-accent, #15803d) 14%, var(--q-surface, #fff)); color: var(--q-accent, #15803d); font-weight: 600; }
+.vote-table-link { font-family: ui-monospace, monospace; font-size: 12px !important; color: var(--q-muted, #667085); }

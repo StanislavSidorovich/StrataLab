@@ -81,6 +81,20 @@ export function sharesFromCounts(counts: Counts | null | undefined): HandShare[]
   return handShares(LETTERS.map((l) => String(counts[l] ?? 0)))
 }
 
+/** The room's question key while the results slide of a plan is shown (the plan item `r`). */
+export const RESULTS_KEY = 'r'
+
+/** `lesson_room_summary`: `[{q_key, counts, total}]` as a map from question key to counts; null when it is not that shape. */
+export function parseSummary(raw: unknown): Record<string, Counts> | null {
+  if (!Array.isArray(raw)) return null
+  const out: Record<string, Counts> = {}
+  for (const row of raw) {
+    const r = parseRoomState({ q_key: (row as { q_key?: unknown })?.q_key, counts: (row as { counts?: unknown })?.counts })
+    if (r?.q_key) out[r.q_key] = r.counts
+  }
+  return out
+}
+
 export const votesText = (n: number): string => `${n.toLocaleString('en-US')} vote${n === 1 ? '' : 's'}`
 
 export const parseLetter = (raw: unknown): Letter | null => (typeof raw === 'string' && (LETTERS as readonly string[]).includes(raw.toUpperCase()) ? (raw.toUpperCase() as Letter) : null)
@@ -202,7 +216,7 @@ export const needsQuestion = (s: TeacherState, current: RoomQuestion | null): bo
 
 // ------------------------------------------------------------------ the phone's side
 
-export type PhoneStatus = 'loading' | 'ended' | 'none' | 'open' | 'voted' | 'closed' | 'offline'
+export type PhoneStatus = 'loading' | 'ended' | 'none' | 'results' | 'open' | 'voted' | 'closed' | 'offline'
 export type SendProblem = 'network' | 'closed' | 'full' | 'limit' | 'ended' | 'busy' | null
 
 export interface PhoneState {
@@ -238,6 +252,7 @@ export function phoneStatus(s: PhoneState): PhoneStatus {
   if (s.room === undefined) return s.failures > 0 ? 'offline' : 'loading'
   if (s.room === null) return 'ended'
   if (!s.room.q_key) return 'none'
+  if (s.room.q_key === RESULTS_KEY) return 'results' // the results slide is on the screen: nothing to vote on
   if (!s.room.open) return 'closed'
   return s.mine[s.room.q_key] ? 'voted' : 'open'
 }

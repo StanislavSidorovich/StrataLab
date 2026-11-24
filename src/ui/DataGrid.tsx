@@ -10,7 +10,8 @@ import { useTextZoom } from './useTextZoom'
 const BASE_ROW_H = 26
 
 /** `onCellMenu`: a right-click (or a long press) on a cell, with its row and column. */
-export function DataGrid({ table, compact = false, scaled = true, onCellMenu }: { table: Table; compact?: boolean; scaled?: boolean; onCellMenu?: (row: number, col: number, at: { x: number; y: number }) => void }) {
+/** `tight`: narrow columns (at most 110 px, long names and values cut with the full text on hover), for a few sample rows that must fit without sideways scrolling (lesson mode). */
+export function DataGrid({ table, compact = false, scaled = true, tight = false, onCellMenu }: { table: Table; compact?: boolean; scaled?: boolean; tight?: boolean; onCellMenu?: (row: number, col: number, at: { x: number; y: number }) => void }) {
   const parentRef = useRef<HTMLDivElement>(null)
   // the size chosen under Aa: row height, column widths and font all follow it
   // (`scaled` off where a parent already zooms the page, as the practice pages do, or where the size should not apply)
@@ -28,10 +29,10 @@ export function DataGrid({ table, compact = false, scaled = true, onCellMenu }: 
         const v = fmt(vec?.get(r))
         len = Math.max(len, v == null ? 4 : String(v).length)
       }
-      return { field: f, vec, fmt, num: isNumericField(f), width: Math.min(360, Math.max(70, len * 7.6 + 20)) }
+      return { field: f, vec, fmt, num: isNumericField(f), width: tight ? Math.min(110, Math.max(44, len * 6 + 14)) : Math.min(360, Math.max(70, len * 7.6 + 20)) }
     })
-  }, [table, fields])
-  const numW = Math.round(Math.max(40, String(table.numRows).length * 8 + 16) * zoom)
+  }, [table, fields, tight])
+  const numW = Math.round((tight ? 28 : Math.max(40, String(table.numRows).length * 8 + 16)) * zoom)
   const total = numW + cols.reduce((s, c) => s + Math.round(c.width * zoom), 0)
 
   const cellAt = (target: EventTarget, x: number, y: number) => {
