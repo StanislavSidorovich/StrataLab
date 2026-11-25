@@ -4,4 +4,5 @@ import type { VoteQuestion } from '../../core/lesson'
 import { INNER_JOIN_VOTES } from './innerJoin'
 
 export { WARMUP } from './warmup'
+export { SHOP_VOTES } from './shop'
 export const VOTES: Record<string, VoteQuestion[]> = { 'inner-join': INNER_JOIN_VOTES }

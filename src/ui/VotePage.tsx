@@ -1,22 +1,26 @@
 // The phone page of lesson voting: `#vote=K7M2P`. Small on purpose: no DuckDB, no store, no App; only fetch and localStorage (with a
 // memory fallback), so it opens in a camera app or an in-app browser. Rules: src/core/voting.ts.
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
-import { LETTERS, type Letter } from '../core/lesson'
+import { LETTERS, isShopKey, type Letter } from '../core/lesson'
 import { ApiError, castVote, roomState } from '../core/voteApi'
 import { loadMine, safeStore, saveMine, voterToken } from '../core/voteStorage'
 import { PHONE_POLL_MS, PROBLEM_TEXT, isVoteHash, normaliseRoomCode, phoneMine, phoneOffline, phoneReduce, phoneStart, phoneStatus, voteCodeFromHash, voteHash } from '../core/voting'
 
 import { DATA_MAP } from '../data/sqlPractice/s00-data'
+import { SHOP_KEYS, SHOP_TABLES } from '../data/shopTables'
 import { linkText, schemaOf } from '../core/lessonSchema'
 
 const store = safeStore(() => localStorage)
 
 // the Kaiyo tables, from the static metadata of the practice page (names, columns, keys, links; no rows, no engine)
 const TABLES_BLOCK = DATA_MAP.blocks.find((b) => b.kind === 'tables')
-const TABLES = TABLES_BLOCK?.kind === 'tables' ? schemaOf(TABLES_BLOCK.tables.map((t) => t.name), TABLES_BLOCK.tables, TABLES_BLOCK.keys) : []
+const KAIYO_TABLES = TABLES_BLOCK?.kind === 'tables' ? schemaOf(TABLES_BLOCK.tables.map((t) => t.name), TABLES_BLOCK.tables, TABLES_BLOCK.keys) : []
+// the demo shop's, for the plan that asks about it (`#lesson=sql&plan=shop`): told apart by the question key
+const SHOP_SCHEMA = schemaOf(SHOP_TABLES.map((t) => t.name), SHOP_TABLES, SHOP_KEYS)
 
 /** "Tables": what each table holds, for a student who wants to read the options on the phone. Folded away until asked for. */
-function TablesFold() {
+function TablesFold({ shop }: { shop: boolean }) {
+  const TABLES = shop ? SHOP_SCHEMA : KAIYO_TABLES
   if (TABLES.length === 0) return null
   return (
     <details className="vote-tables" data-testid="vote-tables">
@@ -123,6 +127,9 @@ function Room({ code }: { code: string }) {
 
   const status = phoneStatus(s)
   const room = s.room
+  // Once a question of the demo shop was on the screen, this lesson is the shop's: its results slide lists the same tables.
+  const shopLesson = useRef(false)
+  if (isShopKey(room?.q_key)) shopLesson.current = true
   const mine = phoneMine(s)
 
   const vote = useCallback(
@@ -208,7 +215,7 @@ function Room({ code }: { code: string }) {
           {!s.problem && !mine && <p className="vote-msg">Tap A, B, C or D.</p>}
         </div>
       )}
-      {status !== 'loading' && status !== 'offline' && status !== 'ended' && <TablesFold />}
+      {status !== 'loading' && status !== 'offline' && status !== 'ended' && <TablesFold key={shopLesson.current ? 'shop' : 'kaiyo'} shop={shopLesson.current} />}
     </>
   )
 }

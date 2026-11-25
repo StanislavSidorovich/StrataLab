@@ -81,6 +81,9 @@ export function sharesFromCounts(counts: Counts | null | undefined): HandShare[]
   return handShares(LETTERS.map((l) => String(counts[l] ?? 0)))
 }
 
+/** The key the teacher sends while a schema slide is on the screen of a plan that needs the phones to know which tables it shows (`s:shop`). */
+export const isSlideKey = (key: string): boolean => /^s(?::|$)/.test(key)
+
 /** The room's question key while the results slide of a plan is shown (the plan item `r`). */
 export const RESULTS_KEY = 'r'
 
@@ -251,7 +254,7 @@ export function phoneReduce(s: PhoneState, e: PhoneEvent): PhoneState {
 export function phoneStatus(s: PhoneState): PhoneStatus {
   if (s.room === undefined) return s.failures > 0 ? 'offline' : 'loading'
   if (s.room === null) return 'ended'
-  if (!s.room.q_key) return 'none'
+  if (!s.room.q_key || isSlideKey(s.room.q_key)) return 'none' // a slide (the schema) is on the screen: nothing to vote on
   if (s.room.q_key === RESULTS_KEY) return 'results' // the results slide is on the screen: nothing to vote on
   if (!s.room.open) return 'closed'
   return s.mine[s.room.q_key] ? 'voted' : 'open'

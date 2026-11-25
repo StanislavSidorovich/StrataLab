@@ -2627,6 +2627,7 @@ async function ensureKaiyo() {
 /** Translates T-SQL and runs it on the practice page; throws with the message to show. The last statement with columns is the result. */
 export async function runPracticeQuery(sql: string, tag: string, isStopped: () => boolean, onProgress?: (p: TranslatorProgress) => void) {
   await ensureKaiyo()
+  if (/\bdemo\./i.test(sql)) await ensureDemo() // the demo shop plan of lesson mode asks for demo.orders and the like
   const translated = await translateTsql(sql, (p) => onProgress?.(p))
   const bad = translated.find((st) => st.error)
   if (bad) throw new Error(`This could not be read as T-SQL: ${bad.error}`)

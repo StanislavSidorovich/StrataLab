@@ -55,6 +55,9 @@ export function computeResults(items: readonly ResultItem[], phones: Readonly<Re
   })
 }
 
+/** The unit next to the count on the results slide: "1 phone", "2 phones", "1 hand", "3 hands". */
+export const sourceText = (total: number, source: ResultSource | null): string => (source === 'hands' ? (total === 1 ? 'hand' : 'hands') : total === 1 ? 'phone' : 'phones')
+
 /** The first `max` characters of a question as plain text: no backticks, one line, an ellipsis when cut. */
 export function shortText(s: string, max = 80): string {
   const t = s.replace(/`/g, '').replace(/\s+/g, ' ').trim()

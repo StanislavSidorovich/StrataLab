@@ -8,18 +8,18 @@ import type { Table } from 'apache-arrow'
 import { ArrowLeft, ArrowRight, CheckCircle2, Copy, Eye, ListChecks, Loader2, Play, RefreshCw, Square, XCircle } from 'lucide-react'
 import { compareResults, describeVerdict, type ResultData, type Verdict } from '../core/check'
 import {
-  LETTERS, LEVELS, PICK_ROWS, PLAN_MAX, WARMUP_SET, clampIndex, stepLabel, describeRun, errorLine, handShares, hashWithoutLesson, lastTask, lessonFromHash, lessonHash, lessonSections, lessonTables, planFromHash, planHash, planKey, voteOptions, warmOptions,
+  LETTERS, LEVELS, PICK_ROWS, PLAN_MAX, WARMUP_SET, clampIndex, stepLabel, describeRun, errorLine, handShares, hashWithoutLesson, isVoteItem, lastTask, lessonFromHash, lessonHash, lessonSections, lessonTables, planFromHash, planHash, planKey, voteOptions, warmOptions,
   type Letter, type LessonKind, type Level, type PlanCatalog, type PlanItem, type QuizOption,
 } from '../core/lesson'
 import { cancelQuery } from '../db/engine'
 import { resultRows } from '../db/export'
 import { SECTIONS } from '../data/sqlPractice'
-import { VOTES, WARMUP } from '../data/lessonVotes'
+import { SHOP_VOTES, VOTES, WARMUP } from '../data/lessonVotes'
 import { taskNumber, tasksOf, type PracticeSection, type PracticeTaskCell } from '../data/practiceBook'
 import { CellEditor, Grid, Prose, RunButton, RunResult, SQL_ENGINE, useCellRun } from './PracticeBook'
 import { ResultCompare } from './ResultCompare'
 import { RoomChip, RoomProvider, RoomSide, useRoom, useTeacherRoom } from './LessonRoom'
-import { ResultsSlide, SchemaSlide, ScopeContext, loadHands, saveHands, useScope } from './LessonPlanSlides'
+import { ResultsSlide, SchemaSlide, ScopeContext, isShopPlan, loadHands, saveHands, useScope } from './LessonPlanSlides'
 import { RESULTS_KEY, roomKeyForPlan, roomKeyForSet, sharesFromCounts, teacherView, votesText, type RoomQuestion } from '../core/voting'
 import { runPracticeQuery, useLab } from './store'
 import './lesson.css'
@@ -39,6 +39,7 @@ interface NavSpec {
 
 const CATALOG: PlanCatalog = {
   warm: WARMUP.length,
+  shop: SHOP_VOTES.length,
   votes: Object.fromEntries(Object.entries(VOTES).map(([k, v]) => [k, v.length])),
   tasks: Object.fromEntries(SECTIONS.map((s) => [s.id, tasksOf(s).length])),
 }
@@ -131,8 +132,10 @@ export function LessonPage() {
       roomKey = roomKeyForPlan(plan.items.map(planKey))
       // the phone shows the projector's own "Step 3 of 8"; a slide or a task has no vote (the results slide is told apart by its key)
       const label = stepLabel(plan.at, plan.items.length)
-      if (planItem?.kind === 'w' || planItem?.kind === 'v') asked = { key: planKey(planItem), label }
+      if (planItem && isVoteItem(planItem)) asked = { key: planKey(planItem), label }
       else if (planItem?.kind === 'r') asked = { key: RESULTS_KEY, label }
+      // the demo shop's schema slide tells the phones which tables to list (the key is no question: the phone shows "no vote right now")
+      else if (planItem?.kind === 's' && isShopPlan(plan.items)) asked = { key: 's:shop', label }
     } else if (!plan && warm && count > 0) {
       roomKey = roomKeyForSet(WARMUP_SET)
       asked = { key: `w${n}`, label: `Warm-up ${n}` }
@@ -801,16 +804,23 @@ function WarmView({ q, nav }: { q: number; count: number; nav: NavSpec }) {
   return <QuizView qkey={`w${q}`} crumb={`SQL · Warm-up · ${item.topic} · ${item.level}`} question={item.question} options={warmOptions(item)} why={item.why} nav={nav} />
 }
 
+/** A question on the demo shop (plan item `d<n>`): the same slide as a warm-up, over demo.customers, orders and the rest. */
+function ShopView({ q, nav }: { q: number; nav: NavSpec }) {
+  const item = SHOP_VOTES[q - 1]
+  return <QuizView qkey={`d${q}`} crumb={`SQL · Demo shop · ${item.topic}`} question={item.question} options={warmOptions(item)} why={item.why} nav={nav} />
+}
+
 // ------------------------------------------------------------------ C: a lesson plan, run in order
 
 function PlanRun({ items, at, skipped, capped, checkOn, goPlan }: { items: PlanItem[]; at: number; skipped: string[]; capped: boolean; checkOn: boolean; goPlan: (items: readonly PlanItem[], at: number) => void }) {
   const nav: NavSpec = { label: 'Step', n: at, count: items.length, go: (m) => goPlan(items, m) }
   const it = items[at - 1]
-  const section = it.kind === 'w' || it.kind === 's' || it.kind === 'r' ? undefined : SECTIONS.find((s) => s.id === it.set)
+  const section = it.kind === 'w' || it.kind === 'd' || it.kind === 's' || it.kind === 'r' ? undefined : SECTIONS.find((s) => s.id === it.set)
   let body = null
   if (it.kind === 's') body = <SchemaSlide key="s" items={items} nav={nav} />
   else if (it.kind === 'r') body = <ResultsSlide key="r" items={items} nav={nav} goStep={(m) => goPlan(items, m)} />
   else if (it.kind === 'w') body = <WarmView key={`w${it.n}`} q={it.n} count={WARMUP.length} nav={nav} />
+  else if (it.kind === 'd') body = <ShopView key={`d${it.n}`} q={it.n} nav={nav} />
   else if (section && it.kind === 'v') body = <VoteView key={`v-${section.id}-${it.n}`} section={section} q={it.n} nav={nav} />
   else if (section && it.kind === 't') {
     const task = tasksOf(section)[it.n - 1]
@@ -830,7 +840,7 @@ function PlanRun({ items, at, skipped, capped, checkOn, goPlan }: { items: PlanI
 }
 
 interface PlanRow {
-  group: 'w' | 'v' | 't' | 'x'
+  group: 'w' | 'd' | 'v' | 't' | 'x'
   item: PlanItem
   key: string
   topic: string
@@ -846,6 +856,7 @@ const plain = (s: string, max = 120) => {
 const GROUPS = [
   { id: 'x', title: 'Slides', note: 'the schema and the results of the votes: put them where you want them' },
   { id: 'w', title: 'Warm-up', note: 'a short question, four options, run a query by clicking an option' },
+  { id: 'd', title: 'Demo shop', note: 'a question on the small demo shop (customers, orders): no business terms needed, run a query by clicking an option' },
   { id: 'v', title: 'Vote on code', note: 'four queries, the room votes, then all four run on the data' },
   { id: 't', title: 'Write code', note: 'a practice task: the room writes the query, Check compares it' },
 ] as const
@@ -854,6 +865,7 @@ const ROWS: PlanRow[] = [
   { item: { kind: 's' }, group: 'x', key: 's', topic: 'Slides', text: 'The tables the plan uses, with keys and links' },
   { item: { kind: 'r' }, group: 'x', key: 'r', topic: 'Slides', text: 'Results of every vote in the plan: votes and share right' },
   ...WARMUP.map((q, i): PlanRow => ({ item: { kind: 'w', n: i + 1 }, group: 'w', key: `w${i + 1}`, topic: q.topic, level: q.level, text: plain(q.question) })),
+  ...SHOP_VOTES.map((q, i): PlanRow => ({ item: { kind: 'd', n: i + 1 }, group: 'd', key: `d${i + 1}`, topic: `Demo shop · ${q.topic}`, level: q.level, text: plain(q.question) })),
   ...Object.entries(VOTES).flatMap(([setId, qs]) => {
     const s = SECTIONS.find((x) => x.id === setId)!
     return qs.map((q, i): PlanRow => ({ item: { kind: 'v', set: setId, n: i + 1 }, group: 'v', key: planKey({ kind: 'v', set: setId, n: i + 1 }), topic: `${s.n}. ${s.title}`, text: plain(q.question) }))
@@ -863,12 +875,13 @@ const ROWS: PlanRow[] = [
   ),
 ]
 const WARM_TOPICS = [...new Set(WARMUP.map((q) => q.topic))]
+const SHOP_TOPICS = [...new Set(SHOP_VOTES.map((q) => `Demo shop · ${q.topic}`))]
 const SECTION_TOPICS = [...new Set(ROWS.filter((r) => r.group === 'v' || r.group === 't').map((r) => r.topic))]
 
 /** `#lesson=sql`: the teacher ticks warm-up questions, votes and tasks, and gets a link that runs them in order. */
 function PlanBuilder({ note, onOpen }: { note: string | null; onOpen: (items: PlanItem[]) => void }) {
   const [sel, setSel] = useState<PlanItem[]>([])
-  const [group, setGroup] = useState<'all' | 'w' | 'v' | 't' | 'x'>('all')
+  const [group, setGroup] = useState<'all' | 'w' | 'd' | 'v' | 't' | 'x'>('all')
   const [topic, setTopic] = useState('')
   const [level, setLevel] = useState<'' | Level>('')
   const [copied, setCopied] = useState<'' | 'ok' | 'fail'>('')
@@ -923,7 +936,7 @@ function PlanBuilder({ note, onOpen }: { note: string | null; onOpen: (items: Pl
         <label>
           Kind{' '}
           <select value={group} onChange={(e) => setGroup(e.target.value as typeof group)} data-testid="plan-kind">
-            <option value="all">All three</option>
+            <option value="all">All kinds</option>
             {GROUPS.map((g) => (
               <option key={g.id} value={g.id}>
                 {g.title}
@@ -940,6 +953,11 @@ function PlanBuilder({ note, onOpen }: { note: string | null; onOpen: (items: Pl
                 <option key={t}>{t}</option>
               ))}
             </optgroup>
+            <optgroup label="Demo shop">
+              {SHOP_TOPICS.map((t) => (
+                <option key={t}>{t}</option>
+              ))}
+            </optgroup>
             <optgroup label="Sections">
               {SECTION_TOPICS.map((t) => (
                 <option key={t}>{t}</option>
@@ -947,8 +965,8 @@ function PlanBuilder({ note, onOpen }: { note: string | null; onOpen: (items: Pl
             </optgroup>
           </select>
         </label>
-        <label title="Only warm-up questions have a level">
-          Level (warm-up){' '}
+        <label title="Only warm-up and demo shop questions have a level">
+          Level (warm-up, shop){' '}
           <select value={level} onChange={(e) => setLevel(e.target.value as typeof level)} data-testid="plan-level">
             <option value="">Any</option>
             {LEVELS.map((l) => (

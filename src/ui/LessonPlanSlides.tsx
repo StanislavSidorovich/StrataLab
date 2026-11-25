@@ -3,12 +3,13 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, ArrowRight } from 'lucide-react'
 import { LETTERS, arrange, warmOptions, planKey, stepLabel, type PlanItem } from '../core/lesson'
-import { HANDS_KEY, computeResults, readHands, shortText, type HandsStore, type ResultItem } from '../core/lessonResults'
+import { HANDS_KEY, computeResults, readHands, shortText, sourceText, type HandsStore, type ResultItem } from '../core/lessonResults'
 import { linkText, schemaOf, tablesOfQueries } from '../core/lessonSchema'
 import { roomSummary } from '../core/voteApi'
 import { TEACHER_POLL_MS, type Counts } from '../core/voting'
 import { SECTIONS } from '../data/sqlPractice'
-import { VOTES, WARMUP } from '../data/lessonVotes'
+import { SHOP_VOTES, VOTES, WARMUP } from '../data/lessonVotes'
+import { SHOP_KEYS, SHOP_TABLES } from '../data/shopTables'
 import { tasksOf } from '../data/practiceBook'
 import { useRoom } from './LessonRoom'
 
@@ -54,8 +55,8 @@ const ALL_KEYS = DATA?.kind === 'tables' ? (DATA.keys ?? []) : []
 function sqlsOf(items: readonly PlanItem[]): string[] {
   const out: string[] = []
   for (const it of items) {
-    if (it.kind === 'w') {
-      const q = WARMUP[it.n - 1]
+    if (it.kind === 'w' || it.kind === 'd') {
+      const q = (it.kind === 'w' ? WARMUP : SHOP_VOTES)[it.n - 1]
       if (q) for (const o of warmOptions(q)) if (o.sql) out.push(o.sql)
     } else if (it.kind === 'v') {
       const q = VOTES[it.set]?.[it.n - 1]
@@ -69,8 +70,12 @@ function sqlsOf(items: readonly PlanItem[]): string[] {
   return out
 }
 
+/** A plan with demo shop questions describes the demo shop (the phone follows the same rule by the question key: isShopKey). */
+export const isShopPlan = (items: readonly PlanItem[]): boolean => items.some((it) => it.kind === 'd')
+
 /** The tables of the plan, with keys and links; all of the Kaiyo tables when the plan runs no query. */
 export function planSchema(items: readonly PlanItem[]) {
+  if (isShopPlan(items)) return schemaOf(SHOP_TABLES.map((t) => t.name), SHOP_TABLES, SHOP_KEYS) // all four: the class sees the whole shop once
   const names = tablesOfQueries(sqlsOf(items), ALL_TABLES)
   return schemaOf(names.length ? names : ALL_TABLES.map((t) => t.name), ALL_TABLES, ALL_KEYS)
 }
@@ -79,8 +84,8 @@ export function planSchema(items: readonly PlanItem[]) {
 export function resultItems(items: readonly PlanItem[]): ResultItem[] {
   const out: ResultItem[] = []
   items.forEach((it, i) => {
-    if (it.kind === 'w') {
-      const q = WARMUP[it.n - 1]
+    if (it.kind === 'w' || it.kind === 'd') {
+      const q = (it.kind === 'w' ? WARMUP : SHOP_VOTES)[it.n - 1]
       if (q) out.push({ step: i + 1, key: planKey(it), text: shortText(q.question), right: LETTERS[q.right] })
     } else if (it.kind === 'v') {
       const q = VOTES[it.set]?.[it.n - 1]
@@ -211,7 +216,7 @@ export function ResultsSlide({ items, nav, goStep }: { items: readonly PlanItem[
                   <td data-testid={`result-votes-${r.key}`}>
                     {r.total > 0 ? (
                       <>
-                        {r.total.toLocaleString('en-US')} <span className="lesson-muted">{r.source === 'hands' ? 'hands' : 'phones'}</span>
+                        {r.total.toLocaleString('en-US')} <span className="lesson-muted">{sourceText(r.total, r.source)}</span>
                       </>
                     ) : (
                       <span className="lesson-muted">not counted</span>
