@@ -1,0 +1,13 @@
+// The answers of the fill questions (src/data/lessonFill.ts): for each gap the accepted spellings, the first one is shown and run.
+// Case, extra spaces and a trailing `;` do not matter (normalizeAnswer). Projector only: the phone bundle never imports this.
+
+export const FILL_ANSWERS: Record<string, string[][]> = {
+  f1: [['WHERE'], ['GROUP BY'], ['HAVING']],
+  f2: [['LEFT JOIN', 'LEFT OUTER JOIN'], ['c.customer_id']],
+}
+
+/** One sentence after Reveal: why the right words are right, for a first-year student. */
+export const FILL_WHY: Record<string, string> = {
+  f1: 'WHERE filters single orders before they are grouped, GROUP BY makes one group per customer, HAVING filters the groups by their count.',
+  f2: 'LEFT JOIN keeps every customer, ON says which order belongs to which customer: the order’s customer_id equals the customer’s own customer_id.',
+}

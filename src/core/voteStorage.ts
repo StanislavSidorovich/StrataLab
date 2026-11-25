@@ -6,6 +6,7 @@ import { normaliseRoomCode, readStoredRooms, type StoredRoom, type StoredRooms }
 export const ROOMS_KEY = 'stratalab.lesson.room.v1'
 export const TOKEN_KEY = 'stratalab.vote.token.v1'
 export const MINE_KEY = 'stratalab.vote.mine.v1'
+export const FILL_KEY = 'stratalab.vote.fill.v1'
 
 export interface Store {
   get(key: string): string | null
@@ -101,6 +102,25 @@ export function loadMine(store: Store, code: string): Record<string, Letter> {
   } catch {
     return {}
   }
+}
+
+/** The phone's own fill answers in a room, `{question key: [answers]}`, so a reload still shows them. */
+export function loadFillMine(store: Store, code: string): Record<string, string[]> {
+  try {
+    const all = JSON.parse(store.get(FILL_KEY) ?? 'null') as Record<string, Record<string, unknown>> | null
+    const mine = all?.[code]
+    if (!mine || typeof mine !== 'object') return {}
+    const out: Record<string, string[]> = {}
+    for (const [k, v] of Object.entries(mine)) if (Array.isArray(v) && v.length >= 1 && v.length <= 3 && v.every((x) => typeof x === 'string')) out[k] = v as string[]
+    return out
+  } catch {
+    return {}
+  }
+}
+
+export function saveFillMine(store: Store, code: string, mine: Record<string, string[]>): void {
+  if (!normaliseRoomCode(code)) return
+  store.set(FILL_KEY, JSON.stringify({ [code]: mine }))
 }
 
 /** Only the latest room's votes are kept (a phone sees one room at a time). */

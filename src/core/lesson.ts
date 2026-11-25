@@ -7,7 +7,7 @@
 //   v<n>               vote on code, question n of the INNER JOIN set (v2); `v:<set>:<n>` for another set
 //   t:<section>:<n>    write-code task n of a practice section (t:inner-join:4)
 //   d<n>               vote on the demo shop (schema `demo`: customers, products, orders, order_items), question n (d3); for a class
-//                      that knows no business terms. Same four-option shape as a warm-up. Prefixes in use: w v t s r d (f: fill the gaps, v0.74)
+//                      that knows no business terms. Same four-option shape as a warm-up. f<n> fill the gaps of a query on the demo shop (f1). Prefixes in use: w v t s r d f
 //   s                  the schema slide: the tables the plan's items use, their keys and links
 //   r                  the results slide: every vote of the plan with its votes and the share who were right
 // A plan value that is a name in PLAN_PRESETS (`plan=intro`) stands for that list of items.
@@ -207,7 +207,7 @@ export function handShares(raw: readonly (string | undefined)[]): HandShare[] | 
 export const PLAN_MAX = 20
 export const VOTE_DEFAULT_SET = 'inner-join'
 
-export type PlanItem = { kind: 'w'; n: number } | { kind: 'd'; n: number } | { kind: 'v'; set: string; n: number } | { kind: 't'; set: string; n: number } | { kind: 's' } | { kind: 'r' }
+export type PlanItem = { kind: 'w'; n: number } | { kind: 'd'; n: number } | { kind: 'f'; n: number } | { kind: 'v'; set: string; n: number } | { kind: 't'; set: string; n: number } | { kind: 's' } | { kind: 'r' }
 
 /**
  * Named plans: `#lesson=sql&plan=intro`. `intro` is the first lesson for a class that has not seen the Kaiyo tables: the schema, six
@@ -217,7 +217,7 @@ export type PlanItem = { kind: 'w'; n: number } | { kind: 'd'; n: number } | { k
 export const PLAN_PRESETS: Record<string, string> = {
   intro: 's,w1,w6,v1,w5,w9,v2,r,t:where:1',
   // `shop`: the same flow on the small demo shop (customers, orders, products), for a class that knows no business terms.
-  shop: 's,d1,d2,d3,d4,d5,d6,r',
+  shop: 's,d1,d2,d3,d4,d5,d6,f1,f2,r',
 }
 
 /** The same text the teacher's header shows: "Step 3 of 8". */
@@ -226,11 +226,15 @@ export const stepLabel = (at: number, count: number): string => `Step ${at} of $
 /** The questions a plan can be voted on: warm-ups and votes on code (the items that have four options). */
 export const isVoteItem = (it: PlanItem): it is Extract<PlanItem, { kind: 'w' | 'v' | 'd' }> => it.kind === 'w' || it.kind === 'v' || it.kind === 'd'
 
+/** The items the room can ask the phones: votes (a letter) and fill questions (words). */
+export const isRoomItem = (it: PlanItem): it is Extract<PlanItem, { kind: 'w' | 'v' | 'd' | 'f' }> => isVoteItem(it) || it.kind === 'f'
+
 /** The item as written in a plan link. */
 export function planKey(it: PlanItem): string {
   if (it.kind === 's' || it.kind === 'r') return it.kind
   if (it.kind === 'w') return `w${it.n}`
   if (it.kind === 'd') return `d${it.n}`
+  if (it.kind === 'f') return `f${it.n}`
   if (it.kind === 'v') return it.set === VOTE_DEFAULT_SET ? `v${it.n}` : `v:${it.set}:${it.n}`
   return `t:${it.set}:${it.n}`
 }
@@ -241,6 +245,8 @@ function parseItem(raw: string): PlanItem | null {
   if (m) return { kind: 'w', n: Number(m[1]) }
   m = /^d(\d{1,4})$/.exec(raw)
   if (m) return { kind: 'd', n: Number(m[1]) }
+  m = /^f(\d{1,4})$/.exec(raw)
+  if (m) return { kind: 'f', n: Number(m[1]) }
   m = /^v(\d{1,4})$/.exec(raw)
   if (m) return { kind: 'v', set: VOTE_DEFAULT_SET, n: Number(m[1]) }
   m = /^([vt]):([a-z0-9-]{1,40}):(\d{1,4})$/.exec(raw)
@@ -276,6 +282,8 @@ export interface PlanCatalog {
   warm: number
   /** demo shop votes (d1, d2, ...) */
   shop?: number
+  /** fill-the-gaps questions (f1, ...) */
+  fill?: number
   votes: Record<string, number>
   tasks: Record<string, number>
 }
@@ -298,7 +306,7 @@ export function planFromHash(hash: string, cat: PlanCatalog): PlanRead | null {
   const skipped = [...bad]
   const known = items.filter((it) => {
     if (it.kind === 's' || it.kind === 'r') return true
-    const have = it.kind === 'w' ? cat.warm : it.kind === 'd' ? (cat.shop ?? 0) : ((it.kind === 'v' ? cat.votes : cat.tasks)[it.set] ?? 0)
+    const have = it.kind === 'w' ? cat.warm : it.kind === 'd' ? (cat.shop ?? 0) : it.kind === 'f' ? (cat.fill ?? 0) : ((it.kind === 'v' ? cat.votes : cat.tasks)[it.set] ?? 0)
     if (it.n <= have) return true
     skipped.push(planKey(it))
     return false

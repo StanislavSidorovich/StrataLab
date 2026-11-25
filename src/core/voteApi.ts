@@ -2,6 +2,7 @@
 // sorted into the few kinds the screens speak about. The functions are in supabase/0001_lesson_voting.sql.
 import type { Letter } from './lesson'
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from './voteConfig'
+import { parseFillRows, type FillRow } from './lessonFill'
 import { REQUEST_TIMEOUT_MS, parseRoomState, parseSummary, type Counts, type RoomState } from './voting'
 
 export type ApiErrorKind = 'network' | 'not-set-up' | 'busy' | 'server'
@@ -74,6 +75,19 @@ export async function roomSummary(code: string, f?: Fetch): Promise<Record<strin
     if (e instanceof ApiError && e.kind === 'not-set-up') return null
     throw e
   }
+}
+
+/** The teacher's read of fill answers (0003): one row per distinct set of answers; `key` null reads every question. Throws not-set-up while 0003 has not been run. */
+export async function fillRead(code: string, secret: string, key: string | null, f?: Fetch): Promise<FillRow[]> {
+  const raw = await rpc('lesson_fill_read', { p_code: code, p_secret: secret, p_q_key: key }, f)
+  if (raw === null) return [] // an unknown room or a wrong secret: the room poll tells the teacher
+  return parseFillRows(raw) ?? []
+}
+
+/** A phone sends its answers to a fill question (0003). */
+export async function castFill(code: string, key: string, token: string, answers: string[], f?: Fetch): Promise<CastResult | 'invalid'> {
+  const r = await rpc('lesson_cast_fill', { p_code: code, p_q_key: key, p_token: token, p_answers: answers }, f)
+  return r === 'ok' || r === 'closed' || r === 'room_full' || r === 'too_many_changes' || r === 'invalid' ? r : 'unknown'
 }
 
 export type CastResult = 'ok' | 'closed' | 'unknown' | 'room_full' | 'too_many_changes'

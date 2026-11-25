@@ -50,9 +50,9 @@ describe('demo shop plan: shape', () => {
 })
 
 describe('demo shop plan: the preset and the link', () => {
-  it('is the schema, six votes and the results', () => {
-    expect(PLAN_PRESETS.shop).toBe('s,d1,d2,d3,d4,d5,d6,r')
-    const r = planFromHash('#lesson=sql&plan=shop', { warm: 30, shop: SHOP_VOTES.length, votes: {}, tasks: {} })!
+  it('is the schema, six votes, the two fill questions and the results', () => {
+    expect(PLAN_PRESETS.shop).toBe('s,d1,d2,d3,d4,d5,d6,f1,f2,r')
+    const r = planFromHash('#lesson=sql&plan=shop', { warm: 30, shop: SHOP_VOTES.length, fill: 2, votes: {}, tasks: {} })!
     expect(r.items.map(planKey).join(',')).toBe(PLAN_PRESETS.shop)
     expect(r.skipped).toEqual([])
   })

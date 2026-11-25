@@ -2,12 +2,15 @@
 // memory fallback), so it opens in a camera app or an in-app browser. Rules: src/core/voting.ts.
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
 import { LETTERS, isShopKey, type Letter } from '../core/lesson'
-import { ApiError, castVote, roomState } from '../core/voteApi'
-import { loadMine, safeStore, saveMine, voterToken } from '../core/voteStorage'
-import { PHONE_POLL_MS, PROBLEM_TEXT, isVoteHash, normaliseRoomCode, phoneMine, phoneOffline, phoneReduce, phoneStart, phoneStatus, voteCodeFromHash, voteHash } from '../core/voting'
+import { ApiError, castFill, castVote, roomState } from '../core/voteApi'
+import { loadFillMine, loadMine, safeStore, saveFillMine, saveMine, voterToken } from '../core/voteStorage'
+import { PHONE_POLL_MS, PROBLEM_TEXT, type SendProblem, isVoteHash, normaliseRoomCode, phoneMine, phoneOffline, phoneReduce, phoneStart, phoneStatus, voteCodeFromHash, voteHash } from '../core/voting'
 
 import { DATA_MAP } from '../data/sqlPractice/s00-data'
 import { SHOP_KEYS, SHOP_TABLES } from '../data/shopTables'
+import { FILL_QUESTIONS } from '../data/lessonFill'
+import { fillNumber } from '../core/lessonFill'
+import { FillPad } from './FillPhone'
 import { linkText, schemaOf } from '../core/lessonSchema'
 
 const store = safeStore(() => localStorage)
@@ -103,6 +106,11 @@ function Room({ code }: { code: string }) {
   const [s, dispatch] = useReducer(phoneReduce, undefined, () => phoneStart(loadMine(store, code)))
   const tokenRef = useRef<string | null>(null)
   const sending = useRef(false)
+  // fill-the-gaps questions: the phone's own answers by question key, and the send in flight (src/ui/FillPhone.tsx)
+  const [fillMine, setFillMine] = useState<Record<string, string[]>>(() => loadFillMine(store, code))
+  const [fillBusy, setFillBusy] = useState(false)
+  const [fillProblem, setFillProblem] = useState<SendProblem>(null)
+  const sendingFill = useRef(false)
   const sRef = useRef(s)
   sRef.current = s
 
@@ -155,6 +163,38 @@ function Room({ code }: { code: string }) {
     [code],
   )
 
+  const fillKey = room?.q_key ?? null
+  const fillQ = fillNumber(fillKey) ? FILL_QUESTIONS[fillNumber(fillKey)! - 1] : undefined
+  // a new question starts without the last one's complaint
+  useEffect(() => setFillProblem(null), [fillKey])
+  const sendFill = useCallback(
+    async (answers: string[]) => {
+      const key = sRef.current.room?.q_key
+      if (!key || sendingFill.current) return // a double tap while the first is on its way
+      sendingFill.current = true
+      setFillBusy(true)
+      setFillProblem(null)
+      try {
+        tokenRef.current ??= voterToken(store)
+        const r = await castFill(code, key, tokenRef.current, answers)
+        if (r === 'ok') {
+          setFillMine((m) => {
+            const next = { ...m, [key]: answers }
+            saveFillMine(store, code, next)
+            return next
+          })
+        } else setFillProblem(r === 'closed' ? 'closed' : r === 'room_full' ? 'full' : r === 'too_many_changes' ? 'limit' : 'ended')
+        if (r === 'closed' || r === 'unknown') void roomState(code).then((rs) => dispatch({ t: 'poll', room: rs }), () => undefined)
+      } catch (e) {
+        setFillProblem(e instanceof ApiError && e.kind === 'not-set-up' ? 'unavailable' : 'network')
+      } finally {
+        sendingFill.current = false
+        setFillBusy(false)
+      }
+    },
+    [code],
+  )
+
   return (
     <>
       {phoneOffline(s) && (
@@ -190,9 +230,17 @@ function Room({ code }: { code: string }) {
           <h1 className="vote-q">{room.q_label}</h1>
           <p className="vote-msg">Closed, look at the screen.</p>
           {mine && <p className="vote-mine">Your vote: <b>{mine}</b></p>}
+          {fillKey && fillMine[fillKey] && <p className="vote-mine">Your answer: <b className="mono">{fillMine[fillKey].join(' · ')}</b></p>}
         </div>
       )}
-      {(status === 'open' || status === 'voted') && room && (
+      {(status === 'open' || status === 'voted') && room && fillQ && (
+        <div data-testid="vote-state" data-state="open" data-fill={fillQ.id}>
+          <h1 className="vote-q">{room.q_label}</h1>
+          <p className="vote-msg fill-ask">{fillQ.question}</p>
+          <FillPad key={fillQ.id} q={fillQ} saved={fillMine[fillQ.id] ?? null} busy={fillBusy} problem={fillProblem} onSend={(a) => void sendFill(a)} />
+        </div>
+      )}
+      {(status === 'open' || status === 'voted') && room && !fillQ && (
         <div data-testid="vote-state" data-state={status}>
           <h1 className="vote-q">{room.q_label}</h1>
           <div className="vote-letters" role="group" aria-label="Your answer">

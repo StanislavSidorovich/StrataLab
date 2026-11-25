@@ -125,3 +125,16 @@
 .lesson-results-row:hover, .lesson-results-row:focus { background: var(--accent-soft); outline: none; }
 .lesson-results-table td:nth-child(3) { white-space: nowrap; }
 .lesson-resultbar { grid-template-columns: 1fr 3rem; min-width: 9rem; }
+
+/* Fill the gaps on the projector (LessonFill.tsx): the code with empty boxes, the bank as plain chips, the stats after Reveal. */
+.fill-code-board { margin: 0; padding: 14px 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); font-size: 18px; line-height: 2.4; white-space: pre-wrap; overflow-wrap: anywhere; }
+.fill-code-board .fill-gap { display: inline-block; min-width: 6.5em; height: 1.5em; margin: 0 3px; padding: 0 8px; vertical-align: middle; text-align: center; line-height: 1.5em; font-weight: 700; border: 2px dashed var(--muted, #667085); border-radius: 6px; background: var(--bg, #fff); }
+.fill-code-board .fill-gap.filled { border-style: solid; border-color: var(--accent); background: var(--accent-soft); }
+.fill-bank-board { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+.fill-bank-board .fill-chip { padding: 6px 14px; font-size: 17px; font-weight: 700; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.fill-stats { display: grid; gap: 8px; margin: 10px 0; }
+.fill-fully { font-size: 22px; }
+.fill-gaprow { grid-template-columns: 2rem minmax(8rem, 22rem) 7rem 1fr; }
+.fill-wrong { font-size: 17px; color: var(--muted, #667085); }
+.fill-run { display: grid; gap: 10px; margin-top: 12px; justify-items: start; }
+.fill-sql { margin: 0; padding: 10px 12px; border: 2px solid var(--accent); border-radius: 8px; background: var(--accent-soft); font-size: 16px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }

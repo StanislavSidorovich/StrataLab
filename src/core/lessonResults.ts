@@ -1,6 +1,7 @@
 // The results slide of a lesson plan (plan item `r`): for every vote of the plan, how many answered and how many were right.
 // Counts come from the phones (the room's summary) or from the hands the teacher typed; phones win when both exist. Pure.
 import { LETTERS, parseCount, type Letter } from './lesson'
+import { allRight, type FillRow } from './lessonFill'
 import { emptyCounts, type Counts } from './voting'
 
 /** One vote of the plan, as the slide knows it before any count. */
@@ -11,8 +12,10 @@ export interface ResultItem {
   key: string
   /** what the question says, short */
   text: string
-  /** the letter that is right */
-  right: Letter
+  /** the letter that is right (a vote) */
+  right?: Letter
+  /** a fill question: the accepted spellings of every gap; "right" then means every gap right */
+  fill?: readonly (readonly string[])[]
 }
 
 export type ResultSource = 'phones' | 'hands'
@@ -37,8 +40,20 @@ export function handsToCounts(raw: readonly (string | undefined)[] | undefined):
 }
 
 /** The slide's rows: phones if they counted anyone, else hands if any were typed, else "not counted". */
-export function computeResults(items: readonly ResultItem[], phones: Readonly<Record<string, Counts>> | null | undefined, hands: Readonly<Record<string, readonly (string | undefined)[]>> | null | undefined): ResultRow[] {
+export function computeResults(
+  items: readonly ResultItem[],
+  phones: Readonly<Record<string, Counts>> | null | undefined,
+  hands: Readonly<Record<string, readonly (string | undefined)[]>> | null | undefined,
+  fills?: Readonly<Record<string, readonly FillRow[]>> | null,
+): ResultRow[] {
   return items.map((it) => {
+    if (it.fill) {
+      // a fill question has phones only (no hands): the share of phones with every gap right
+      const rows = (fills?.[it.key] ?? []).filter((r) => r.answers.length === it.fill!.length)
+      const total = rows.reduce((a, r) => a + r.n, 0)
+      const fully = rows.reduce((a, r) => a + (allRight(it.fill!, r.answers) ? r.n : 0), 0)
+      return { ...it, counts: null, total, rightPct: total > 0 ? Math.round((fully / total) * 100) : null, source: total > 0 ? 'phones' : null }
+    }
     const p = phones?.[it.key]
     const h = handsToCounts(hands?.[it.key])
     let counts: Counts | null = null
@@ -51,7 +66,7 @@ export function computeResults(items: readonly ResultItem[], phones: Readonly<Re
       source = 'hands'
     }
     const total = counts ? sum(counts) : 0
-    return { ...it, counts, total, rightPct: counts && total > 0 ? Math.round((counts[it.right] / total) * 100) : null, source }
+    return { ...it, counts, total, rightPct: counts && total > 0 && it.right ? Math.round((counts[it.right] / total) * 100) : null, source }
   })
 }
 

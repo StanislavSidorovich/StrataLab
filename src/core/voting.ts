@@ -220,7 +220,7 @@ export const needsQuestion = (s: TeacherState, current: RoomQuestion | null): bo
 // ------------------------------------------------------------------ the phone's side
 
 export type PhoneStatus = 'loading' | 'ended' | 'none' | 'results' | 'open' | 'voted' | 'closed' | 'offline'
-export type SendProblem = 'network' | 'closed' | 'full' | 'limit' | 'ended' | 'busy' | null
+export type SendProblem = 'network' | 'closed' | 'full' | 'limit' | 'ended' | 'busy' | 'unavailable' | null
 
 export interface PhoneState {
   /** undefined: not heard yet; null: the room is unknown or gone */
@@ -273,4 +273,5 @@ export const PROBLEM_TEXT: Record<Exclude<SendProblem, null>, string> = {
   limit: 'You have changed your vote too many times.',
   ended: 'This vote has ended or the code is wrong.',
   busy: 'Not sent, tap again.',
+  unavailable: 'Answers cannot be collected yet. Tell the teacher.',
 }

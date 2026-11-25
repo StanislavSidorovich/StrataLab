@@ -5,10 +5,13 @@ import { ArrowLeft, ArrowRight } from 'lucide-react'
 import { LETTERS, arrange, warmOptions, planKey, stepLabel, type PlanItem } from '../core/lesson'
 import { HANDS_KEY, computeResults, readHands, shortText, sourceText, type HandsStore, type ResultItem } from '../core/lessonResults'
 import { linkText, schemaOf, tablesOfQueries } from '../core/lessonSchema'
-import { roomSummary } from '../core/voteApi'
+import { ApiError, fillRead, roomSummary } from '../core/voteApi'
+import type { FillRow } from '../core/lessonFill'
 import { TEACHER_POLL_MS, type Counts } from '../core/voting'
 import { SECTIONS } from '../data/sqlPractice'
 import { SHOP_VOTES, VOTES, WARMUP } from '../data/lessonVotes'
+import { FILL_ANSWERS } from '../data/lessonFillAnswers'
+import { FILL_QUESTIONS } from '../data/lessonFill'
 import { SHOP_KEYS, SHOP_TABLES } from '../data/shopTables'
 import { tasksOf } from '../data/practiceBook'
 import { useRoom } from './LessonRoom'
@@ -71,7 +74,7 @@ function sqlsOf(items: readonly PlanItem[]): string[] {
 }
 
 /** A plan with demo shop questions describes the demo shop (the phone follows the same rule by the question key: isShopKey). */
-export const isShopPlan = (items: readonly PlanItem[]): boolean => items.some((it) => it.kind === 'd')
+export const isShopPlan = (items: readonly PlanItem[]): boolean => items.some((it) => it.kind === 'd' || it.kind === 'f')
 
 /** The tables of the plan, with keys and links; all of the Kaiyo tables when the plan runs no query. */
 export function planSchema(items: readonly PlanItem[]) {
@@ -90,6 +93,9 @@ export function resultItems(items: readonly PlanItem[]): ResultItem[] {
     } else if (it.kind === 'v') {
       const q = VOTES[it.set]?.[it.n - 1]
       if (q) out.push({ step: i + 1, key: planKey(it), text: shortText(q.question), right: arrange(q, it.n - 1).find((o) => o.right)!.letter })
+    } else if (it.kind === 'f') {
+      const q = FILL_QUESTIONS[it.n - 1]
+      if (q) out.push({ step: i + 1, key: planKey(it), text: shortText(q.question), fill: FILL_ANSWERS[q.id] })
     }
   })
   return out
@@ -163,12 +169,18 @@ export function ResultsSlide({ items, nav, goStep }: { items: readonly PlanItem[
   const code = room?.state.phase === 'live' ? room.state.code : null
   const [phones, setPhones] = useState<Record<string, Counts> | null>(null)
   const [missing, setMissing] = useState(false)
+  const [fills, setFills] = useState<Record<string, FillRow[]> | null>(null)
+  const [fillMissing, setFillMissing] = useState(false)
+  const hasFill = items.some((it) => it.kind === 'f')
+  const secret = room?.state.secret ?? null
   const [typed, setTyped] = useState(() => loadHands(scope))
 
   useEffect(() => {
     if (!code) {
       setPhones(null)
       setMissing(false)
+      setFills(null)
+      setFillMissing(false)
       return
     }
     let off = false
@@ -181,6 +193,18 @@ export function ResultsSlide({ items, nav, goStep }: { items: readonly PlanItem[
       } catch {
         /* a failed poll keeps the last counts */
       }
+      if (hasFill && secret) {
+        try {
+          const rows = await fillRead(code, secret, null)
+          if (off) return
+          const by: Record<string, FillRow[]> = {}
+          for (const r of rows) (by[r.q_key] ??= []).push(r)
+          setFills(by)
+          setFillMissing(false)
+        } catch (e) {
+          if (!off && e instanceof ApiError && e.kind === 'not-set-up') setFillMissing(true) // 0003 has not been run
+        }
+      }
       if (!off) setTyped(loadHands(scope))
     }
     void tick()
@@ -189,9 +213,9 @@ export function ResultsSlide({ items, nav, goStep }: { items: readonly PlanItem[
       off = true
       clearInterval(id)
     }
-  }, [code, scope])
+  }, [code, scope, hasFill, secret])
 
-  const rows = useMemo(() => computeResults(resultItems(items), phones, typed), [items, phones, typed])
+  const rows = useMemo(() => computeResults(resultItems(items), phones, typed, fills), [items, phones, typed, fills])
   return (
     <>
       <SlideBar crumb="Results" nav={nav} />
@@ -238,6 +262,11 @@ export function ResultsSlide({ items, nav, goStep }: { items: readonly PlanItem[
               ))}
             </tbody>
           </table>
+        )}
+        {hasFill && fillMissing && (
+          <p className="lesson-muted" role="status" data-testid="results-fill-note">
+            Run supabase/0003 to collect fill answers.
+          </p>
         )}
         {missing && (
           <p className="lesson-muted" role="status" data-testid="results-note">
