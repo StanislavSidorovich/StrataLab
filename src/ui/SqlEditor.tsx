@@ -14,6 +14,7 @@ import { explainSql, openAsModel, ownTables, runPython, runSql, setTabSql, stopQ
 import { Menu, useLongPress, type MenuItem } from './Menu'
 import { NO_CHORD, stepChord } from '../core/cellChord'
 import { statementAt } from '../core/statementAt'
+import { selectedLines } from '../core/selectionNote'
 import { cellRunPlan, insertCellAfter, insertCellBefore, splitCells } from '../core/pyCells'
 import { pyCellBars } from './pyCellBars'
 import type { TableInfo } from '../db/catalog'
@@ -59,6 +60,22 @@ function runAll(v: EditorView, id: string) {
 
 let activeView: EditorView | null = null
 let activeTabId: string | null = null
+
+// How many lines of the active editor are selected (0 = none): the Run button's "selection only" hint reads it.
+let selLines = 0
+const selListeners = new Set<() => void>()
+function publishSelection(state: EditorState | null) {
+  const sel = state?.selection.main
+  const n = sel && !sel.empty ? selectedLines(state!.sliceDoc(sel.from, sel.to)) : 0
+  if (n === selLines) return
+  selLines = n
+  selListeners.forEach((f) => f())
+}
+export function subscribeSelection(f: () => void) {
+  selListeners.add(f)
+  return () => void selListeners.delete(f)
+}
+export const getSelectionLines = () => selLines
 
 /** Cursor offset in the active editor if it matches the active tab, else 0. */
 export function activeCursorPos(): number {
@@ -370,6 +387,7 @@ export function SqlEditor() {
         theme.of(themeExt()),
         EditorView.updateListener.of((u) => {
           if (u.docChanged) setTabSql(id, u.state.doc.toString())
+          if (u.selectionSet || u.docChanged) publishSelection(u.state)
         }),
       ],
     })
@@ -387,6 +405,7 @@ export function SqlEditor() {
       view.current = null
       activeView = null
       activeTabId = null
+      publishSelection(null)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -405,6 +424,7 @@ export function SqlEditor() {
     v.dispatch({ effects: [language.reconfigure(langExt()), theme.reconfigure(themeExt()), cellBars.reconfigure(barsExt(activeTab))] })
     shownTab.current = activeTab
     activeTabId = activeTab
+    publishSelection(v.state)
     v.focus()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab])

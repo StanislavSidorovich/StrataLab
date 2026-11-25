@@ -1,10 +1,11 @@
 // Above the editor (stage 4): what this tab speaks. DuckDB runs as written; T-SQL is translated
 // to DuckDB first (sqlglot) and the translation can be seen side by side; PostgreSQL runs on a
 // real PostgreSQL (PGlite), a separate database that tables are copied into.
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { ArrowLeftRight, BookOpen, ChevronDown, ClipboardCopy, Copy, ListTree, Loader2, Play, Plus, Redo2, RotateCcw, Search, Sparkles, Square, SquareSlash, Undo2, WandSparkles, X } from 'lucide-react'
 import { copyContextForAi, copySchemaToPostgres, explainSql, ownTables, openCompare, openWelcome, restartPython, retryPython, setTabDialect, showTranslation, startPython, stopQuery, tabDialect, toggleAiPanel, toggleDmCycle, useLab } from './store'
-import { activeCursorPos, activeSql, addCell, editorCommand, formatActiveTab, runActive, runActiveAll, runActiveCell } from './SqlEditor'
+import { activeCursorPos, activeSql, addCell, editorCommand, formatActiveTab, getSelectionLines, runActive, runActiveAll, runActiveCell, subscribeSelection } from './SqlEditor'
+import { selectionNote } from '../core/selectionNote'
 import { Menu, type MenuItem } from './Menu'
 import { SQL_DIALECTS, dismissNote, needsNote, noteDismissed, sqlLabel, type SqlDialect } from '../core/dialectNote'
 import { pythonProgressLabel, pythonProgressShare } from '../core/progress'
@@ -32,6 +33,7 @@ export function DialectBar() {
     <div className="relative shrink-0">
     <div className="h-9 flex items-center gap-1 sm:gap-2 px-2 overflow-x-auto" style={{ background: 'var(--panel)', borderBottom: '1px solid var(--line)', fontSize: 12 }}>
       <RunButton />
+      {dialect !== 'python' && <SelectionHint />}
       {dialect !== 'python' && <ExplainButton />}
       {dialect !== 'python' && <SqlDialectMenu tabId={tab.id} dialect={dialect} />}
 
@@ -264,6 +266,23 @@ function RunButton() {
     <button className="btn btn-primary btn-run shrink-0" onClick={runActive} disabled={disabled} title="Run the selection, or the statement at the cursor (Ctrl+Enter). F5 runs the whole tab">
       {spin} Run
     </button>
+  )
+}
+
+/** Beside Run: part of the editor is selected, so only that part runs (the CREATE above it would be skipped). */
+function SelectionHint() {
+  const lines = useSyncExternalStore(subscribeSelection, getSelectionLines)
+  const note = selectionNote(lines)
+  if (!note) return null
+  return (
+    <span
+      className="shrink-0 px-1.5 rounded"
+      style={{ background: 'var(--accent-soft)', color: 'var(--accent)', fontWeight: 600 }}
+      role="status"
+      title="Run executes only the selected text. To run the whole script, click in the editor to clear the selection and press F5, or select everything (Ctrl+A) first."
+    >
+      {note}
+    </span>
   )
 }
 
