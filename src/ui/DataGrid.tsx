@@ -8,9 +8,11 @@ import { useLongPress } from './Menu'
 import { useTextZoom } from './useTextZoom'
 
 const BASE_ROW_H = 26
+/** widest a `tight` column grows: longer values are cut with an ellipsis (the full text is in the cell's title), the grid scrolls sideways inside its own box */
+const TIGHT_MAX = 240
 
 /** `onCellMenu`: a right-click (or a long press) on a cell, with its row and column. */
-/** `tight`: narrow columns (at most 110 px, long names and values cut with the full text on hover), for a few sample rows that must fit without sideways scrolling (lesson mode). */
+/** `tight`: columns sized to their longest value or header (about 7.4 px a character, at most 240 px; longer text is cut with an ellipsis and the full text on hover), for a few sample rows in lesson mode; a grid wider than its box scrolls inside it. */
 export function DataGrid({ table, compact = false, scaled = true, tight = false, onCellMenu }: { table: Table; compact?: boolean; scaled?: boolean; tight?: boolean; onCellMenu?: (row: number, col: number, at: { x: number; y: number }) => void }) {
   const parentRef = useRef<HTMLDivElement>(null)
   // the size chosen under Aa: row height, column widths and font all follow it
@@ -29,7 +31,7 @@ export function DataGrid({ table, compact = false, scaled = true, tight = false,
         const v = fmt(vec?.get(r))
         len = Math.max(len, v == null ? 4 : String(v).length)
       }
-      return { field: f, vec, fmt, num: isNumericField(f), width: tight ? Math.min(110, Math.max(44, len * 6 + 14)) : Math.min(360, Math.max(70, len * 7.6 + 20)) }
+      return { field: f, vec, fmt, num: isNumericField(f), width: tight ? Math.min(TIGHT_MAX, Math.max(44, len * 7.4 + 22)) : Math.min(360, Math.max(70, len * 7.6 + 20)) }
     })
   }, [table, fields, tight])
   const numW = Math.round((tight ? 28 : Math.max(40, String(table.numRows).length * 8 + 16)) * zoom)
