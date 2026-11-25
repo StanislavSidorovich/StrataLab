@@ -852,7 +852,7 @@ function FillView({ q, nav }: { q: number; nav: NavSpec }) {
           <Prose text={item.question} />
         </p>
         <div className="lesson-vote">
-          <div className="lesson-opts">
+          <div className="lesson-opts fill-opts">
             <FillCode template={item.template} words={revealed ? right : null} />
             {item.mode === 'choose' && !revealed && (
               <div className="fill-bank fill-bank-board" aria-label="Words to choose from">

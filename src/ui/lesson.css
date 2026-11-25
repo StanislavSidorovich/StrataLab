@@ -138,3 +138,7 @@
 .fill-wrong { font-size: 17px; color: var(--muted, #667085); }
 .fill-run { display: grid; gap: 10px; margin-top: 12px; justify-items: start; }
 .fill-sql { margin: 0; padding: 10px 12px; border: 2px solid var(--accent); border-radius: 8px; background: var(--accent-soft); font-size: 16px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+/* The fill slide sits in the vote layout, but code and bank are one column (not the A-D grid), the code keeps its lines, chips keep their own height. */
+.lesson-opts.fill-opts { grid-template-columns: 1fr; align-content: start; }
+.fill-opts .fill-code-board { white-space: pre; overflow-x: auto; overflow-wrap: normal; }
+.fill-bank-board { align-items: flex-start; }
