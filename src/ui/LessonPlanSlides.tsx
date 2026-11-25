@@ -2,7 +2,8 @@
 // and `r` the results (every vote of the plan with its votes and the share who were right). Rules: src/core/lessonSchema.ts, lessonResults.ts.
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, ArrowRight } from 'lucide-react'
-import { LETTERS, arrange, warmOptions, planKey, stepLabel, type PlanItem } from '../core/lesson'
+import { LETTERS, arrange, warmOptions, planKey, stepLabel, type LessonTable, type PlanItem } from '../core/lesson'
+import { rightQuery } from '../core/lessonFill'
 import { HANDS_KEY, computeResults, readHands, shortText, sourceText, type HandsStore, type ResultItem } from '../core/lessonResults'
 import { linkText, schemaOf, tablesOfQueries } from '../core/lessonSchema'
 import { ApiError, fillRead, roomSummary } from '../core/voteApi'
@@ -54,23 +55,36 @@ const DATA = SECTIONS.flatMap((s) => s.blocks).find((b) => b.kind === 'tables')
 const ALL_TABLES = DATA?.kind === 'tables' ? DATA.tables : []
 const ALL_KEYS = DATA?.kind === 'tables' ? (DATA.keys ?? []) : []
 
-/** Every query a plan's items show: the options of warm-ups and votes, the solutions of tasks. */
-function sqlsOf(items: readonly PlanItem[]): string[] {
+/** Every query one plan item shows: the options of warm-ups and votes, the right query of a fill question, the solution of a task. */
+export function sqlsOfItem(it: PlanItem): string[] {
   const out: string[] = []
-  for (const it of items) {
-    if (it.kind === 'w' || it.kind === 'd') {
-      const q = (it.kind === 'w' ? WARMUP : SHOP_VOTES)[it.n - 1]
-      if (q) for (const o of warmOptions(q)) if (o.sql) out.push(o.sql)
-    } else if (it.kind === 'v') {
-      const q = VOTES[it.set]?.[it.n - 1]
-      if (q) out.push(q.right, ...q.wrong)
-    } else if (it.kind === 't') {
-      const s = SECTIONS.find((x) => x.id === it.set)
-      const t = s ? tasksOf(s)[it.n - 1] : undefined
-      if (t) out.push(t.solution)
-    }
+  if (it.kind === 'w' || it.kind === 'd') {
+    const q = (it.kind === 'w' ? WARMUP : SHOP_VOTES)[it.n - 1]
+    if (q) for (const o of warmOptions(q)) if (o.sql) out.push(o.sql)
+  } else if (it.kind === 'v') {
+    const q = VOTES[it.set]?.[it.n - 1]
+    if (q) out.push(q.right, ...q.wrong)
+  } else if (it.kind === 'f') {
+    const q = FILL_QUESTIONS[it.n - 1]
+    const accepted = q && FILL_ANSWERS[q.id]
+    if (q && accepted) out.push(rightQuery(q.template, accepted))
+  } else if (it.kind === 't') {
+    const s = SECTIONS.find((x) => x.id === it.set)
+    const t = s ? tasksOf(s)[it.n - 1] : undefined
+    if (t) out.push(t.solution)
   }
   return out
+}
+
+/** Every query a plan's items show. */
+const sqlsOf = (items: readonly PlanItem[]): string[] => items.flatMap(sqlsOfItem)
+
+/** The tables one question's queries use (the strip under it on the projector): metadata, key = first column; the demo shop's for `d` and `f`. */
+export function stripTables(it: PlanItem): { schema: 'quaera' | 'demo'; tables: (LessonTable & { key: string })[] } {
+  const shop = it.kind === 'd' || it.kind === 'f'
+  const all: readonly LessonTable[] = shop ? SHOP_TABLES : ALL_TABLES
+  const tables = tablesOfQueries(sqlsOfItem(it), all).map((n) => all.find((t) => t.name === n)!).map((t) => ({ ...t, key: t.columns[0] }))
+  return { schema: shop ? 'demo' : 'quaera', tables }
 }
 
 /** A plan with demo shop questions describes the demo shop (the phone follows the same rule by the question key: isShopKey). */

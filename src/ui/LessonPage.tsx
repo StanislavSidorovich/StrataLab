@@ -9,7 +9,7 @@ import { ArrowLeft, ArrowRight, CheckCircle2, Copy, Eye, ListChecks, Loader2, Pl
 import { compareResults, describeVerdict, type ResultData, type Verdict } from '../core/check'
 import {
   LETTERS, LEVELS, PICK_ROWS, PLAN_MAX, WARMUP_SET, clampIndex, stepLabel, describeRun, errorLine, handShares, hashWithoutLesson, isRoomItem, lastTask, lessonFromHash, lessonHash, lessonSections, lessonTables, planFromHash, planHash, planKey, voteOptions, warmOptions,
-  type Letter, type LessonKind, type Level, type PlanCatalog, type PlanItem, type QuizOption,
+  type LessonTable, type Letter, type LessonKind, type Level, type PlanCatalog, type PlanItem, type QuizOption,
 } from '../core/lesson'
 import { cancelQuery } from '../db/engine'
 import { resultRows } from '../db/export'
@@ -23,7 +23,7 @@ import { taskNumber, tasksOf, type PracticeSection, type PracticeTaskCell } from
 import { CellEditor, Grid, Prose, RunButton, RunResult, SQL_ENGINE, useCellRun } from './PracticeBook'
 import { ResultCompare } from './ResultCompare'
 import { RoomChip, RoomProvider, RoomSide, useRoom, useTeacherRoom } from './LessonRoom'
-import { ResultsSlide, SchemaSlide, ScopeContext, isShopPlan, loadHands, saveHands, useScope } from './LessonPlanSlides'
+import { ResultsSlide, SchemaSlide, ScopeContext, isShopPlan, loadHands, saveHands, stripTables, useScope } from './LessonPlanSlides'
 import { RESULTS_KEY, roomKeyForPlan, roomKeyForSet, sharesFromCounts, teacherView, votesText, type RoomQuestion } from '../core/voting'
 import { runPracticeQuery, useLab } from './store'
 import './lesson.css'
@@ -362,7 +362,17 @@ function TaskView({ section, task, check, nav }: { section: PracticeSection; tas
 /** The tables a task names: columns, key and two rows of the dataset, open and foldable. */
 function TablesPanel({ task }: { task: PracticeTaskCell }) {
   const all = SECTIONS.flatMap((s) => s.blocks).find((b) => b.kind === 'tables')
-  const tables = all?.kind === 'tables' ? lessonTables(task, all.tables) : []
+  return <TablesList tables={all?.kind === 'tables' ? lessonTables(task, all.tables) : []} schema="quaera" />
+}
+
+type ListedTable = LessonTable & { key: string }
+
+/**
+ * The table list of the task screen, for any tables of the dataset (`schema` quaera) or the demo shop (`demo`): name, what a row is,
+ * columns with the key marked, and the first `rowsShown` rows read live. `quiet` (the strip under a question): a table that cannot be
+ * read is left out instead of showing an error, and the rest still load.
+ */
+function TablesList({ tables, schema, rowsShown = 2, quiet = false }: { tables: ListedTable[]; schema: 'quaera' | 'demo'; rowsShown?: number; quiet?: boolean }) {
   const names = tables.map((t) => t.name).join(',')
   const ready = useLab((s) => s.engine.status)
   const [rows, setRows] = useState<Record<string, { table: Table } | { error: string }>>({})
@@ -400,24 +410,32 @@ function TablesPanel({ task }: { task: PracticeTaskCell }) {
     void (async () => {
       for (const name of names.split(',')) {
         try {
-          const { table } = await runPracticeQuery(`SELECT TOP (2) * FROM quaera.${name};`, `lesson-peek-${name}`, () => off)
+          const { table } = await runPracticeQuery(`SELECT TOP (${rowsShown}) * FROM ${schema}.${name};`, `lesson-peek-${name}`, () => off)
           if (!off) setRows((r) => ({ ...r, [name]: { table } }))
         } catch (e) {
           if (!off) setRows((r) => ({ ...r, [name]: { error: errorLine(e instanceof Error ? e.message : String(e)) } }))
-          return
+          if (!quiet) return
         }
       }
     })()
     return () => {
       off = true
     }
-  }, [names, ready, attempt])
+  }, [names, ready, attempt, schema, rowsShown, quiet])
 
   if (tables.length === 0) return null
+  const skipped = (n: string) => quiet && 'error' in (rows[n] ?? {})
+  if (quiet && tables.every((t) => skipped(t.name)))
+    return (
+      <div className="lesson-muted" data-testid="lesson-tables-none">
+        The rows cannot be read right now.
+      </div>
+    )
   return (
     <div ref={box} className="lesson-tables" data-testid="lesson-tables">
       {tables.map((t) => {
         const got = rows[t.name]
+        if (skipped(t.name)) return null
         return (
           <details key={t.name} open data-table={t.name} className={`lesson-fold lesson-table${wide.includes(t.name) ? ' wide' : ''}`}>
             <summary>
@@ -432,7 +450,7 @@ function TablesPanel({ task }: { task: PracticeTaskCell }) {
               ))}
             </div>
             {got && 'table' in got ? (
-              <Grid table={got.table} tight />
+              got.table.numRows === 0 ? <div className="lesson-muted">no rows</div> : <Grid table={got.table} tight />
             ) : got ? (
               <div className="lesson-err">
                 {got.error} <button className="btn" onClick={() => setAttempt(attempt + 1)}><RefreshCw size={13} /> Retry</button>
@@ -449,6 +467,46 @@ function TablesPanel({ task }: { task: PracticeTaskCell }) {
   )
 }
 
+const TABLES_OPEN_KEY = 'stratalab.lesson.tables-used.open'
+let tablesOpenMemory = false // where sessionStorage is not available: kept for this page load
+
+function readTablesOpen(): boolean {
+  try {
+    const v = sessionStorage.getItem(TABLES_OPEN_KEY)
+    return v === null ? tablesOpenMemory : v === '1'
+  } catch {
+    return tablesOpenMemory
+  }
+}
+
+/** "Tables used (2)" under a question on the projector: folded by default, the choice is kept for the session. */
+function TablesUsed({ item }: { item: PlanItem }) {
+  const { schema, tables } = useMemo(() => stripTables(item), [item])
+  const [open, setOpen] = useState(readTablesOpen)
+  const ready = useLab((s) => s.engine.status === 'ready')
+  if (tables.length === 0) return null
+  return (
+    <details
+      className="lesson-fold lesson-used"
+      open={open}
+      data-testid="tables-used"
+      onToggle={(e) => {
+        const now = e.currentTarget.open
+        setOpen(now)
+        tablesOpenMemory = now
+        try {
+          sessionStorage.setItem(TABLES_OPEN_KEY, now ? '1' : '0')
+        } catch {
+          /* kept in memory */
+        }
+      }}
+    >
+      <summary>Tables used ({tables.length})</summary>
+      {open && (ready ? <TablesList tables={tables} schema={schema} rowsShown={3} quiet /> : <div className="lesson-muted" data-testid="tables-used-loading">Loading tables…</div>)}
+    </details>
+  )
+}
+
 // ------------------------------------------------------------------ B: a question with four options (a vote on code, a warm-up)
 
 type Option = { status: 'idle' } | { status: 'running' } | { status: 'none' } | { status: 'done'; text: string } | { status: 'error'; text: string; dataset: boolean }
@@ -462,12 +520,14 @@ interface QuizProps {
   options: QuizOption[]
   /** one or two sentences after Reveal */
   why: string
+  /** the plan item, to find the tables its queries use */
+  item: PlanItem
   nav: NavSpec
 }
 
 const failedLoad = (msg: string) => /could not be loaded|was not loaded/.test(msg)
 
-function QuizView({ qkey, crumb, question, options, why, nav }: QuizProps) {
+function QuizView({ qkey, crumb, question, options, why, item, nav }: QuizProps) {
   const [revealed, setRevealed] = useState(false)
   const [runs, setRuns] = useState<Partial<Record<Letter, Option>>>({})
   const [running, setRunning] = useState(false)
@@ -575,6 +635,7 @@ function QuizView({ qkey, crumb, question, options, why, nav }: QuizProps) {
         <p className="lesson-q">
           <Prose text={question} />
         </p>
+        <TablesUsed item={item} />
         <div className="lesson-vote">
           <div className="lesson-opts">
             {options.map((o) => (
@@ -801,18 +862,18 @@ function PhoneBars({ right }: { right: Letter | null }) {
 
 function VoteView({ section, q, nav }: { section: PracticeSection; q: number; nav: NavSpec }) {
   const item = VOTES[section.id][q - 1]
-  return <QuizView qkey={planKey({ kind: 'v', set: section.id, n: q })} crumb={`SQL · ${section.n}. ${section.title} · vote`} question={item.question} options={voteOptions(item, q - 1)} why={item.why} nav={nav} />
+  return <QuizView qkey={planKey({ kind: 'v', set: section.id, n: q })} crumb={`SQL · ${section.n}. ${section.title} · vote`} question={item.question} options={voteOptions(item, q - 1)} why={item.why} item={{ kind: 'v', set: section.id, n: q }} nav={nav} />
 }
 
 function WarmView({ q, nav }: { q: number; count: number; nav: NavSpec }) {
   const item = WARMUP[q - 1]
-  return <QuizView qkey={`w${q}`} crumb={`SQL · Warm-up · ${item.topic} · ${item.level}`} question={item.question} options={warmOptions(item)} why={item.why} nav={nav} />
+  return <QuizView qkey={`w${q}`} crumb={`SQL · Warm-up · ${item.topic} · ${item.level}`} question={item.question} options={warmOptions(item)} why={item.why} item={{ kind: 'w', n: q }} nav={nav} />
 }
 
 /** A question on the demo shop (plan item `d<n>`): the same slide as a warm-up, over demo.customers, orders and the rest. */
 function ShopView({ q, nav }: { q: number; nav: NavSpec }) {
   const item = SHOP_VOTES[q - 1]
-  return <QuizView qkey={`d${q}`} crumb={`SQL · Demo shop · ${item.topic}`} question={item.question} options={warmOptions(item)} why={item.why} nav={nav} />
+  return <QuizView qkey={`d${q}`} crumb={`SQL · Demo shop · ${item.topic}`} question={item.question} options={warmOptions(item)} why={item.why} item={{ kind: 'd', n: q }} nav={nav} />
 }
 
 /** A fill-the-gaps question (plan item `f<n>`): the code with gaps, phones answer by choosing words or typing; Reveal shows who got what right. */
@@ -851,6 +912,7 @@ function FillView({ q, nav }: { q: number; nav: NavSpec }) {
         <p className="lesson-q">
           <Prose text={item.question} />
         </p>
+        <TablesUsed item={{ kind: 'f', n: q }} />
         <div className="lesson-vote">
           <div className="lesson-opts fill-opts">
             <FillCode template={item.template} words={revealed ? right : null} />

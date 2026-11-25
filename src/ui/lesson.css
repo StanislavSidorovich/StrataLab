@@ -142,3 +142,9 @@
 .lesson-opts.fill-opts { grid-template-columns: 1fr; align-content: start; }
 .fill-opts .fill-code-board { white-space: pre; overflow-x: auto; overflow-wrap: normal; }
 .fill-bank-board { align-items: flex-start; }
+.lesson-used > summary { font-size: 14px; }
+.lesson-used > .lesson-tables, .lesson-used > .lesson-muted { margin-top: 8px; }
+.lesson-used { padding: 4px 10px; }
+.lesson-used > .lesson-tables { max-height: 210px; overflow-y: auto; gap: 8px; }
+.lesson-used .lesson-table { padding: 3px 10px; }
+.lesson-used .lesson-cols { margin: 3px 0; }
