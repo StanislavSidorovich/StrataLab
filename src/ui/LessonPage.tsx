@@ -9,7 +9,7 @@ import { ArrowLeft, ArrowRight, CheckCircle2, Copy, Eye, ListChecks, Loader2, Pl
 import { compareResults, describeVerdict, type ResultData, type Verdict } from '../core/check'
 import {
   LETTERS, LEVELS, PICK_ROWS, PLAN_MAX, WARMUP_SET, clampIndex, stepLabel, describeRun, errorLine, handShares, hashWithoutLesson, isRoomItem, lastTask, lessonFromHash, lessonHash, lessonSections, lessonTables, planFromHash, planHash, planKey, sqlAround, voteOptions, warmOptions,
-  type LessonTable, type Letter, type LessonKind, type Level, type PlanCatalog, type PlanItem, type QuizOption,
+  type HandShare, type LessonTable, type Letter, type LessonKind, type Level, type PlanCatalog, type PlanItem, type QuizOption,
 } from '../core/lesson'
 import { cancelQuery } from '../db/engine'
 import { resultRows } from '../db/export'
@@ -622,6 +622,19 @@ function QuizView({ qkey, crumb, question, options, why, item, nav }: QuizProps)
     if (revealed) answerRef.current?.scrollIntoView({ block: 'start' })
   }, [revealed, rightRows])
 
+  // The votes shown on the options after Reveal: the phones' when they voted on this question, else the hands typed in.
+  const [handShares, setHandShares] = useState<HandShare[] | null>(null)
+  const phone = room ? teacherView(room.state, room.current) : null
+  const fromPhones = !!phone?.here && !!phone.shares && !room?.state.lost
+  const shares = fromPhones ? phone!.shares : handShares
+  const counted = shares?.reduce((a, s) => a + s.count, 0) ?? 0
+  const votes = {
+    total: counted,
+    label: fromPhones ? `${votesText(counted)} from phones` : `${counted.toLocaleString('en-US')} hand${counted === 1 ? '' : 's'}`,
+    right: shares?.find((s) => s.letter === rightOpt.letter)?.pct ?? 0,
+    of: (l: Letter) => shares?.find((s) => s.letter === l),
+  }
+
   return (
     <>
       <div className="lesson-bar">
@@ -659,28 +672,42 @@ function QuizView({ qkey, crumb, question, options, why, item, nav }: QuizProps)
           )
         }
       >
-        <p className="lesson-q">
-          <Prose text={question} />
-        </p>
-        <TablesUsed item={item} />
         {!revealed ? (
-          <div className="lesson-vote">
-            <div className="lesson-opts">
-              {options.map((o) => (
-                <div key={o.letter} className="lesson-opt" data-testid={`opt-${o.letter}`}>
-                  <b className="lesson-letter">{o.letter}</b>
-                  <OptionBody option={o} />
-                </div>
-              ))}
+          <>
+            <p className="lesson-q">
+              <Prose text={question} />
+            </p>
+            <TablesUsed item={item} />
+            <div className="lesson-vote">
+              <div className="lesson-opts">
+                {options.map((o) => (
+                  <div key={o.letter} className="lesson-opt" data-testid={`opt-${o.letter}`}>
+                    <b className="lesson-letter">{o.letter}</b>
+                    <OptionBody option={o} />
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          </>
         ) : (
-          // After Reveal, what matters fits one screen and the slide scrolls to it: the right option big, its result beside it, why,
-          // then the other three as one line each (a click runs that one and shows its result in the same place).
-          <div className="lesson-revealed" ref={answerRef}>
-            <h3 className="lesson-answer">{rightOpt.letter} is right.</h3>
+          // Reveal turns the slide into the answer page, one screen: the question as one small line, the right option big with its
+          // result beside it, why, the other three as one line each (a click runs that one into the same place), and the votes on
+          // each option itself (phones, or the hands typed below), so no separate chart takes height.
+          <div className="lesson-revealed" ref={answerRef} data-testid="lesson-answer-page">
+            <p className="lesson-q-small">
+              <Prose text={question} />
+            </p>
+            <h3 className="lesson-answer">
+              {rightOpt.letter} is right.
+              {votes.total > 0 && <span className="lesson-answer-votes"> {votes.right}% of {votes.label} chose it.</span>}
+            </h3>
+            {room?.state.lost && (
+              <div className="lesson-lost" role="status" data-testid="room-lost">
+                Connection lost: count hands.
+              </div>
+            )}
             <div className="lesson-answer-row">
-              <OptionCard option={rightOpt} picked={pick?.letter === rightOpt.letter} onChoose={choose} />
+              <OptionCard option={rightOpt} picked={pick?.letter === rightOpt.letter} onChoose={choose} share={votes.of(rightOpt.letter)} />
               <div className="lesson-answer-result">{picked && pick ? <PickPanel option={picked} pick={pick} showSql={!picked.right} /> : <div className="lesson-muted">Click an option to run its query.</div>}</div>
             </div>
             <p className="lesson-why">
@@ -690,17 +717,16 @@ function QuizView({ qkey, crumb, question, options, why, item, nav }: QuizProps)
               {options
                 .filter((o) => !o.right)
                 .map((o) => (
-                  <OptionCard key={o.letter} option={o} picked={pick?.letter === o.letter} onChoose={choose} line />
+                  <OptionCard key={o.letter} option={o} picked={pick?.letter === o.letter} onChoose={choose} share={votes.of(o.letter)} line />
                 ))}
             </div>
-            {room && <PhoneBars right={rightOpt.letter} />}
             {room?.state.phase === 'live' ? (
               <details className="lesson-fold" open={room.state.lost || undefined} data-testid="hands-fold">
                 <summary>Count hands instead</summary>
-                <HandCounts right={rightOpt.letter} qkey={qkey} />
+                <HandCounts right={rightOpt.letter} qkey={qkey} onShares={setHandShares} />
               </details>
             ) : (
-              <HandCounts right={rightOpt.letter} qkey={qkey} />
+              <HandCounts right={rightOpt.letter} qkey={qkey} onShares={setHandShares} />
             )}
             <div className="lesson-results" data-testid="lesson-results">
               {options.map((o) => {
@@ -808,7 +834,7 @@ function OptionBody({ option: o }: { option: QuizOption }) {
  * An option after Reveal, clickable to run its query: the right one as a full card (its whole query), a wrong one as one line
  * (`line`: the letter, its words or the start of its query, and why it is wrong).
  */
-function OptionCard({ option: o, picked, onChoose, line = false }: { option: QuizOption; picked: boolean; onChoose: (o: QuizOption) => void; line?: boolean }) {
+function OptionCard({ option: o, picked, onChoose, line = false, share }: { option: QuizOption; picked: boolean; onChoose: (o: QuizOption) => void; line?: boolean; /** this option's votes, when anyone voted */ share?: HandShare }) {
   const label = o.text === o.sql ? o.text.replace(/\s+/g, ' ') : o.text
   const mono = o.code || o.text === o.sql || !!sqlAround(o.sql, o.text)
   return (
@@ -832,12 +858,29 @@ function OptionCard({ option: o, picked, onChoose, line = false }: { option: Qui
       {line ? (
         <>
           <span className={`lesson-line-label${mono ? ' mono' : ''}`}>{label}</span>
-          {o.why && <span className="lesson-line-why">{o.why}</span>}
+          <span className="lesson-line-why">{o.why}</span>
+          <ShareBadge share={share} right={o.right} />
         </>
       ) : (
-        <OptionBody option={o} />
+        <>
+          <OptionBody option={o} />
+          <ShareBadge share={share} right={o.right} />
+        </>
       )}
     </div>
+  )
+}
+
+/** An option's votes on the answer page: a short bar and "70% · 16"; nothing when nobody voted. */
+function ShareBadge({ share, right }: { share?: HandShare; right: boolean }) {
+  if (!share) return <span className="lesson-share empty" />
+  return (
+    <span className={`lesson-share${right ? ' right' : ''}`} data-testid="option-share">
+      <span className="lesson-share-track">
+        <span className="lesson-share-fill" style={{ width: `${share.pct}%` }} />
+      </span>
+      <b>{share.pct}%</b> <span className="lesson-muted">· {share.count.toLocaleString('en-US')}</span>
+    </span>
   )
 }
 
@@ -887,8 +930,11 @@ function PickPanel({ option, pick, showSql = true }: { option: QuizOption; pick:
   )
 }
 
-/** The teacher types how many hands each letter got; bars and percentages appear. Nothing is sent or stored. */
-function HandCounts({ right, qkey }: { right: Letter; qkey: string }) {
+/**
+ * The teacher types how many hands each letter got. With `onShares` (the answer page) the shares go onto the options themselves and
+ * only the inputs and the count stay here; without it, bars and percentages appear here. Nothing is sent; kept for the session.
+ */
+function HandCounts({ right, qkey, onShares }: { right: Letter; qkey: string; onShares?: (s: HandShare[] | null) => void }) {
   const scope = useScope()
   const [raw, setRaw] = useState(() => {
     const kept = loadHands(scope)[qkey]
@@ -896,6 +942,11 @@ function HandCounts({ right, qkey }: { right: Letter; qkey: string }) {
   })
   const shares = handShares(raw)
   const counted = shares?.reduce((a, s) => a + s.count, 0) ?? 0
+  const key = raw.join('|')
+  useEffect(() => {
+    onShares?.(handShares(raw))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key])
   return (
     <div className="lesson-handcounts" data-testid="lesson-handcounts">
       <div className="lesson-hand-inputs">
@@ -923,7 +974,13 @@ function HandCounts({ right, qkey }: { right: Letter; qkey: string }) {
           )
         })}
       </div>
-      {shares ? <Bars shares={shares} right={right} note={`${counted.toLocaleString('en-US')} counted`} /> : <div className="lesson-muted">Type how many hands each letter got; the bars appear here.</div>}
+      {onShares ? (
+        <div className="lesson-muted">{shares ? `${counted.toLocaleString('en-US')} counted: the shares are on the options above.` : 'Type how many hands each letter got; the shares appear on the options above.'}</div>
+      ) : shares ? (
+        <Bars shares={shares} right={right} note={`${counted.toLocaleString('en-US')} counted`} />
+      ) : (
+        <div className="lesson-muted">Type how many hands each letter got; the bars appear here.</div>
+      )}
     </div>
   )
 }
@@ -1022,10 +1079,11 @@ function FillView({ q, nav }: { q: number; nav: NavSpec }) {
         </span>
       </div>
       <VoteBody status={!revealed && <FillPhones total={stats.total} live={!!live} missing={missing} failed={failed} open={open} />}>
-        <p className="lesson-q">
+        {/* after Reveal the answer page: the question as one small line, no tables strip (the filled query and its rows are below) */}
+        <p className={revealed ? 'lesson-q-small' : 'lesson-q'}>
           <Prose text={item.question} />
         </p>
-        <TablesUsed item={{ kind: 'f', n: q }} />
+        {!revealed && <TablesUsed item={{ kind: 'f', n: q }} />}
         <div className="lesson-vote">
           <div className="lesson-opts fill-opts">
             <FillCode template={item.template} words={revealed ? right : null} />
