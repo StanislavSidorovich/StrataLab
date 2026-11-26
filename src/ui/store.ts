@@ -2615,7 +2615,15 @@ export function openBuild(id: string | null) {
 }
 
 /** The dataset the page's queries read; loaded with the usual progress card the first time. */
-async function ensureKaiyo() {
+/** One load at a time: two callers at once (the tables strip and a query on a lesson slide) share it instead of racing; a failed load is tried again by the next caller. */
+function once(load: () => Promise<void>): () => Promise<void> {
+  let running: Promise<void> | null = null
+  return () => (running ??= load().finally(() => (running = null)))
+}
+
+const ensureKaiyo = once(loadKaiyo)
+
+async function loadKaiyo() {
   await refreshCatalog()
   const d = datasetById('quaera')!
   const { state, extra } = catalogState(d)
@@ -2626,8 +2634,10 @@ async function ensureKaiyo() {
 
 /** Translates T-SQL and runs it on the practice page; throws with the message to show. The last statement with columns is the result. */
 export async function runPracticeQuery(sql: string, tag: string, isStopped: () => boolean, onProgress?: (p: TranslatorProgress) => void) {
-  await ensureKaiyo()
-  if (/\bdemo\./i.test(sql)) await ensureDemo() // the demo shop plan of lesson mode asks for demo.orders and the like
+  // the demo shop plan of lesson mode asks for demo.orders and the like: those need the small demo tables, not the whole Kaiyo dataset
+  const demo = /\bdemo\./i.test(sql)
+  if (!demo || /\bquaera\./i.test(sql)) await ensureKaiyo()
+  if (demo) await ensureDemo()
   const translated = await translateTsql(sql, (p) => onProgress?.(p))
   const bad = translated.find((st) => st.error)
   if (bad) throw new Error(`This could not be read as T-SQL: ${bad.error}`)
@@ -2666,9 +2676,9 @@ export function openPractice(open = true) {
 }
 
 /** The demo shop's tables must be there for examples and tasks (hidden is fine: queries work). */
-async function ensureDemo() {
+const ensureDemo = once(async () => {
   if (!hasDemoTables(get().tables)) await loadDemo()
-}
+})
 
 export async function openExample(e: PracticeExample) {
   set({ practiceOpen: false })

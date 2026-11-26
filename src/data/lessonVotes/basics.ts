@@ -38,7 +38,7 @@ export const BASICS_VOTES: WarmQuestion[] = [
     id: 'd8',
     topic: 'Alias in WHERE',
     level: 'medium',
-    question: 'The list shows each product with `price * 1.23 AS price_with_tax`. You want only the products whose price with tax is over 30. Which WHERE works in SQL Server?',
+    question: 'Only the products whose price with tax (`price_with_tax`) is over 30. Which WHERE works in SQL Server?',
     right: 1,
     why: 'In SQL Server, WHERE is read before SELECT, so the alias price_with_tax does not exist yet. Repeat the expression in WHERE. (ORDER BY runs after SELECT, so only there can you use the alias.)',
     options: [

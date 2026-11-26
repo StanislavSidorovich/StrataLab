@@ -179,8 +179,23 @@ export const warmOptions = (q: WarmQuestion): QuizOption[] => q.options.map((o, 
 
 export const voteOptions = (q: VoteQuestion, index: number): QuizOption[] => arrange(q, index).map((o) => ({ letter: o.letter, text: o.sql, code: true, sql: o.sql, right: o.right }))
 
-/** The rows of a clicked option's result that the slide shows. */
-export const PICK_ROWS = 10
+/**
+ * An option shows a piece of a query (`GROUP BY status`), but a class needs to see the whole query around it (does it have COUNT(*)? where does it start?).
+ * Finds the piece inside the full query: the text before it, the piece, the text after it. Null when the piece is not in the query
+ * as written (a description such as `TOP (5) alone`), or when it is the whole query: nothing to add then.
+ */
+export function sqlAround(sql: string | undefined, piece: string): { before: string; hit: string; after: string } | null {
+  if (!sql || !piece.trim()) return null
+  const at = sql.indexOf(piece)
+  if (at < 0) return null
+  const before = sql.slice(0, at)
+  const after = sql.slice(at + piece.length)
+  if (!before.trim() && !after.replace(/;\s*$/, '').trim()) return null
+  return { before, hit: piece, after }
+}
+
+/** The rows of a clicked option's result that the slide shows: few enough that the answer, its rows and the other options fit one projector screen. */
+export const PICK_ROWS = 6
 
 // ------------------------------------------------------------------ hand counts
 

@@ -3,12 +3,12 @@
 // and `#lesson=sql` alone is the page where a teacher builds a plan (`&plan=w3,v2,t:inner-join:4`) that runs the chosen
 // items in order. Hidden: no menu, button or page links here. It reuses the practice page's editor, runner and check;
 // it records no progress and counts nothing in Quaera.
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { Table } from 'apache-arrow'
 import { ArrowLeft, ArrowRight, CheckCircle2, Copy, Eye, ListChecks, Loader2, Play, RefreshCw, Square, XCircle } from 'lucide-react'
 import { compareResults, describeVerdict, type ResultData, type Verdict } from '../core/check'
 import {
-  LETTERS, LEVELS, PICK_ROWS, PLAN_MAX, WARMUP_SET, clampIndex, stepLabel, describeRun, errorLine, handShares, hashWithoutLesson, isRoomItem, lastTask, lessonFromHash, lessonHash, lessonSections, lessonTables, planFromHash, planHash, planKey, voteOptions, warmOptions,
+  LETTERS, LEVELS, PICK_ROWS, PLAN_MAX, WARMUP_SET, clampIndex, stepLabel, describeRun, errorLine, handShares, hashWithoutLesson, isRoomItem, lastTask, lessonFromHash, lessonHash, lessonSections, lessonTables, planFromHash, planHash, planKey, sqlAround, voteOptions, warmOptions,
   type LessonTable, type Letter, type LessonKind, type Level, type PlanCatalog, type PlanItem, type QuizOption,
 } from '../core/lesson'
 import { cancelQuery } from '../db/engine'
@@ -427,8 +427,11 @@ function TablesList({ tables, schema, rowsShown = 2, quiet = false }: { tables: 
   const skipped = (n: string) => quiet && 'error' in (rows[n] ?? {})
   if (quiet && tables.every((t) => skipped(t.name)))
     return (
-      <div className="lesson-muted" data-testid="lesson-tables-none">
-        The rows cannot be read right now.
+      <div className="lesson-muted lesson-err" data-testid="lesson-tables-none">
+        The rows cannot be read right now.{' '}
+        <button className="btn" onClick={() => setAttempt(attempt + 1)} data-testid="lesson-tables-retry">
+          <RefreshCw size={13} /> Retry
+        </button>
       </div>
     )
   return (
@@ -440,15 +443,17 @@ function TablesList({ tables, schema, rowsShown = 2, quiet = false }: { tables: 
           <details key={t.name} open data-table={t.name} className={`lesson-fold lesson-table${wide.includes(t.name) ? ' wide' : ''}`}>
             <summary>
               <b className="mono">{t.name}</b> <span className="lesson-muted">· {t.row}</span>
+              {/* on the projector the grid's head already names the columns: only the key is said, on the same line */}
+              {quiet && t.key && <span className="mono lesson-col key lesson-col-inline">{t.key} · key</span>}
             </summary>
-            <div className="lesson-cols">
+            {!quiet && <div className="lesson-cols">
               {t.columns.map((c) => (
                 <span key={c} className={`mono lesson-col${c === t.key ? ' key' : ''}`}>
                   {c}
                   {c === t.key ? ' · key' : ''}
                 </span>
               ))}
-            </div>
+            </div>}
             {got && 'table' in got ? (
               got.table.numRows === 0 ? <div className="lesson-muted">no rows</div> : <Grid table={got.table} tight />
             ) : got ? (
@@ -502,7 +507,7 @@ function TablesUsed({ item }: { item: PlanItem }) {
       }}
     >
       <summary>Tables used ({tables.length})</summary>
-      {open && (ready ? <TablesList tables={tables} schema={schema} rowsShown={3} quiet /> : <div className="lesson-muted" data-testid="tables-used-loading">Loading tables…</div>)}
+      {open && (ready ? <TablesList tables={tables} schema={schema} rowsShown={2} quiet /> : <div className="lesson-muted" data-testid="tables-used-loading">Loading tables…</div>)}
     </details>
   )
 }
@@ -604,6 +609,19 @@ function QuizView({ qkey, crumb, question, options, why, item, nav }: QuizProps)
   const rightOpt = options.find((o) => o.right)!
   const picked = pick ? options.find((o) => o.letter === pick.letter)! : null
 
+  // After Reveal the projector shows what the right query gives, without a click. A click on another option later replaces it.
+  useEffect(() => {
+    if (revealed && ready && rightOpt.sql && pickSeq.current === 0) void choose(rightOpt)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [revealed, ready])
+  // ...and scrolls to the answer, so the right query and its rows are on screen (the question is above, a scroll away, and on the phones).
+  // Again once the rows are in (they change the height), without smooth scrolling, which a layout change mid-way stops short.
+  const answerRef = useRef<HTMLDivElement>(null)
+  const rightRows = pick?.letter === rightOpt.letter && pick.status !== 'running'
+  useEffect(() => {
+    if (revealed) answerRef.current?.scrollIntoView({ block: 'start' })
+  }, [revealed, rightRows])
+
   return (
     <>
       <div className="lesson-bar">
@@ -631,59 +649,51 @@ function QuizView({ qkey, crumb, question, options, why, item, nav }: QuizProps)
           )}
         </span>
       </div>
-      <div className="lesson-body">
+      <VoteBody
+        status={
+          !revealed && (
+            <>
+              {room && <PhoneBars right={null} />}
+              <p className="lesson-muted lesson-hands">{room?.state.phase === 'live' && !room.state.lost ? 'Vote on your phone, or hands up.' : 'Vote: A, B, C or D (hands up)'}</p>
+            </>
+          )
+        }
+      >
         <p className="lesson-q">
           <Prose text={question} />
         </p>
         <TablesUsed item={item} />
-        <div className="lesson-vote">
-          <div className="lesson-opts">
-            {options.map((o) => (
-              <div
-                key={o.letter}
-                className={`lesson-opt${revealed && o.right ? ' right' : ''}${revealed ? ' clickable' : ''}${pick?.letter === o.letter ? ' picked' : ''}`}
-                data-testid={`opt-${o.letter}`}
-                data-right={revealed ? o.right : undefined}
-                role={revealed ? 'button' : undefined}
-                tabIndex={revealed ? 0 : undefined}
-                aria-pressed={revealed ? pick?.letter === o.letter : undefined}
-                title={revealed ? (o.sql ? 'Run this option' : 'This option is not a query') : undefined}
-                onClick={() => void choose(o)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    void choose(o)
-                  }
-                }}
-              >
-                <b className="lesson-letter">{o.letter}</b>
-                {o.code ? (
-                  <pre className="mono">{o.text}</pre>
-                ) : (
-                  <div className="lesson-opt-text">
-                    <Prose text={o.text} />
-                  </div>
-                )}
-                {revealed && o.why && <p className="lesson-optwhy">{o.why}</p>}
-              </div>
-            ))}
-          </div>
-          {room ? (
-            <div className="lesson-qr lesson-qr-live" data-testid="lesson-qr">
-              <RoomSide />
+        {!revealed ? (
+          <div className="lesson-vote">
+            <div className="lesson-opts">
+              {options.map((o) => (
+                <div key={o.letter} className="lesson-opt" data-testid={`opt-${o.letter}`}>
+                  <b className="lesson-letter">{o.letter}</b>
+                  <OptionBody option={o} />
+                </div>
+              ))}
             </div>
-          ) : (
-            <div className="lesson-qr" aria-hidden="true" data-testid="lesson-qr" />
-          )}
-        </div>
-        {room && <PhoneBars right={revealed ? rightOpt.letter : null} />}
-        {!revealed && <p className="lesson-muted lesson-hands">{room?.state.phase === 'live' && !room.state.lost ? 'Vote on your phone, or hands up.' : 'Vote: A, B, C or D (hands up)'}</p>}
-        {revealed && (
-          <>
+          </div>
+        ) : (
+          // After Reveal, what matters fits one screen and the slide scrolls to it: the right option big, its result beside it, why,
+          // then the other three as one line each (a click runs that one and shows its result in the same place).
+          <div className="lesson-revealed" ref={answerRef}>
             <h3 className="lesson-answer">{rightOpt.letter} is right.</h3>
+            <div className="lesson-answer-row">
+              <OptionCard option={rightOpt} picked={pick?.letter === rightOpt.letter} onChoose={choose} />
+              <div className="lesson-answer-result">{picked && pick ? <PickPanel option={picked} pick={pick} showSql={!picked.right} /> : <div className="lesson-muted">Click an option to run its query.</div>}</div>
+            </div>
             <p className="lesson-why">
               <b>Why:</b> {why}
             </p>
+            <div className="lesson-wrongs">
+              {options
+                .filter((o) => !o.right)
+                .map((o) => (
+                  <OptionCard key={o.letter} option={o} picked={pick?.letter === o.letter} onChoose={choose} line />
+                ))}
+            </div>
+            {room && <PhoneBars right={rightOpt.letter} />}
             {room?.state.phase === 'live' ? (
               <details className="lesson-fold" open={room.state.lost || undefined} data-testid="hands-fold">
                 <summary>Count hands instead</summary>
@@ -692,8 +702,6 @@ function QuizView({ qkey, crumb, question, options, why, item, nav }: QuizProps)
             ) : (
               <HandCounts right={rightOpt.letter} qkey={qkey} />
             )}
-            {picked && pick && <PickPanel option={picked} pick={pick} />}
-            <p className="lesson-muted lesson-clickhint">Click an option to run its query.</p>
             <div className="lesson-results" data-testid="lesson-results">
               {options.map((o) => {
                 const r = runs[o.letter]
@@ -734,21 +742,115 @@ function QuizView({ qkey, crumb, question, options, why, item, nav }: QuizProps)
                 )
               })}
             </div>
-          </>
+          </div>
         )}
-      </div>
+      </VoteBody>
     </>
   )
 }
 
+/**
+ * The body of a slide people vote on. With a room, the QR is a column of its own on the right, as tall as it needs and stuck to the
+ * top while the slide scrolls, so it never pushes the question, the tables or the options down. Hidden (Hide QR), the slide takes the
+ * full width and the code stays in the top bar's chip, which brings the QR back.
+ */
+function VoteBody({ children, status }: { children: ReactNode; /** the vote count and "vote on your phone" before Reveal: under the QR when it is shown, so the slide fits one screen; else under the options */ status?: ReactNode }) {
+  const room = useRoom()
+  const side = !!room && !(room.qrHidden && room.state.phase === 'live')
+  return (
+    <div className={`lesson-body${side ? ' with-side' : ''}`}>
+      <div className="lesson-main">
+        {children}
+        {!side && status}
+      </div>
+      {side && (
+        <aside className="lesson-side">
+          <div className="lesson-qr lesson-qr-live" data-testid="lesson-qr">
+            <RoomSide />
+          </div>
+          {status && <div className="lesson-side-status">{status}</div>}
+        </aside>
+      )}
+    </div>
+  )
+}
+
+/**
+ * One option's text. A piece of a query (`GROUP BY status`) is set inside the whole query with the piece marked, so the class sees where the
+ * query starts and what else it holds (SELECT, COUNT(*)). A description (`TOP (5) alone`) keeps its words and gets the query under them.
+ */
+function OptionBody({ option: o }: { option: QuizOption }) {
+  const parts = sqlAround(o.sql, o.text)
+  if (parts) {
+    return (
+      <pre className="mono lesson-opt-whole" data-testid="opt-whole">
+        {parts.before}
+        <mark className="lesson-opt-hit">{parts.hit}</mark>
+        {parts.after}
+      </pre>
+    )
+  }
+  return (
+    <>
+      {o.code ? (
+        <pre className="mono">{o.text}</pre>
+      ) : (
+        <div className="lesson-opt-text">
+          <Prose text={o.text} />
+        </div>
+      )}
+      {o.sql && o.sql !== o.text && <pre className="mono lesson-opt-sql">{o.sql}</pre>}
+    </>
+  )
+}
+
+/**
+ * An option after Reveal, clickable to run its query: the right one as a full card (its whole query), a wrong one as one line
+ * (`line`: the letter, its words or the start of its query, and why it is wrong).
+ */
+function OptionCard({ option: o, picked, onChoose, line = false }: { option: QuizOption; picked: boolean; onChoose: (o: QuizOption) => void; line?: boolean }) {
+  const label = o.text === o.sql ? o.text.replace(/\s+/g, ' ') : o.text
+  const mono = o.code || o.text === o.sql || !!sqlAround(o.sql, o.text)
+  return (
+    <div
+      className={`lesson-opt clickable${o.right ? ' right' : ''}${line ? ' lesson-opt-line' : ''}${picked ? ' picked' : ''}`}
+      data-testid={`opt-${o.letter}`}
+      data-right={o.right}
+      role="button"
+      tabIndex={0}
+      aria-pressed={picked}
+      title={o.sql ? 'Run this option' : 'This option is not a query'}
+      onClick={() => onChoose(o)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onChoose(o)
+        }
+      }}
+    >
+      <b className="lesson-letter">{o.letter}</b>
+      {line ? (
+        <>
+          <span className={`lesson-line-label${mono ? ' mono' : ''}`}>{label}</span>
+          {o.why && <span className="lesson-line-why">{o.why}</span>}
+        </>
+      ) : (
+        <OptionBody option={o} />
+      )}
+    </div>
+  )
+}
+
 /** What a click on an option showed: its query (for a warm-up), then the error with SQL Server's wording, or the first rows. */
-function PickPanel({ option, pick }: { option: QuizOption; pick: Pick }) {
+function PickPanel({ option, pick, showSql = true }: { option: QuizOption; pick: Pick; /** false when the query is already on screen beside it (the right option's card) */ showSql?: boolean }) {
   return (
     <div className="lesson-pick" data-testid="lesson-pick">
-      <div className="lesson-pick-head">
-        <b className="lesson-letter">{option.letter}</b>
-        {option.sql && option.text !== option.sql && <pre className="mono">{option.sql}</pre>}
-      </div>
+      {showSql && (
+        <div className="lesson-pick-head">
+          <b className="lesson-letter">{option.letter}</b>
+          {option.sql && option.text !== option.sql && <pre className="mono">{option.sql}</pre>}
+        </div>
+      )}
       {pick.status === 'running' && (
         <div className="lesson-muted">
           <Loader2 size={14} className="animate-spin inline" /> Running…
@@ -919,7 +1021,7 @@ function FillView({ q, nav }: { q: number; nav: NavSpec }) {
           )}
         </span>
       </div>
-      <div className="lesson-body">
+      <VoteBody status={!revealed && <FillPhones total={stats.total} live={!!live} missing={missing} failed={failed} open={open} />}>
         <p className="lesson-q">
           <Prose text={item.question} />
         </p>
@@ -937,15 +1039,8 @@ function FillView({ q, nav }: { q: number; nav: NavSpec }) {
               </div>
             )}
           </div>
-          {room ? (
-            <div className="lesson-qr lesson-qr-live" data-testid="lesson-qr">
-              <RoomSide />
-            </div>
-          ) : (
-            <div className="lesson-qr" aria-hidden="true" data-testid="lesson-qr" />
-          )}
         </div>
-        <FillPhones total={stats.total} live={!!live} missing={missing} failed={failed} open={open} />
+        {revealed && <FillPhones total={stats.total} live={!!live} missing={missing} failed={failed} open={open} />}
         {revealed && (
           <>
             <h3 className="lesson-answer">The answer</h3>
@@ -956,7 +1051,7 @@ function FillView({ q, nav }: { q: number; nav: NavSpec }) {
             <FilledQuery sql={rightQuery(item.template, accepted)} />
           </>
         )}
-      </div>
+      </VoteBody>
     </>
   )
 }

@@ -1,8 +1,8 @@
 // The teacher's side of phone voting (src/core/voting.ts holds the rules): one room per lesson plan or single vote link, kept in
 // the browser for a day, polled every 2 s. The room follows the question on the screen. Without a room, nothing here shows and
 // the hand counts work as before.
-import { createContext, useCallback, useContext, useEffect, useReducer, useRef } from 'react'
-import { Loader2, Smartphone } from 'lucide-react'
+import { createContext, useCallback, useContext, useEffect, useReducer, useRef, useState } from 'react'
+import { Loader2, QrCode as QrCodeIcon, Smartphone } from 'lucide-react'
 import { ApiError, createRoom, revealQuestion, roomState, setQuestion } from '../core/voteApi'
 import { dropRoom, loadRooms, safeStore, saveRoom } from '../core/voteStorage'
 import { TEACHER_POLL_MS, teacherReduce, teacherStart, voteLink, type RoomQuestion, type TeacherState } from '../core/voting'
@@ -17,6 +17,9 @@ export interface RoomApi {
   end: () => void
   /** the teacher pressed Reveal on this question */
   reveal: (key: string) => void
+  /** the QR is folded away (phones already in follow the screen on their own); the top bar's chip still shows the code */
+  qrHidden: boolean
+  setQrHidden: (hidden: boolean) => void
 }
 
 const RoomContext = createContext<RoomApi | null>(null)
@@ -26,6 +29,7 @@ export const useRoom = () => useContext(RoomContext)
 
 export function useTeacherRoom(roomKey: string | null, current: RoomQuestion | null): RoomApi | null {
   const [state, dispatch] = useReducer(teacherReduce, undefined, teacherStart)
+  const [qrHidden, setQrHidden] = useState(false)
   const cur = useRef(current)
   cur.current = current
   const secret = useRef<string | null>(null)
@@ -97,6 +101,7 @@ export function useTeacherRoom(roomKey: string | null, current: RoomQuestion | n
   const end = useCallback(() => {
     if (roomKey) dropRoom(store, roomKey)
     pendingReveal.current = null
+    setQrHidden(false)
     dispatch({ t: 'end' })
   }, [roomKey])
 
@@ -109,7 +114,7 @@ export function useTeacherRoom(roomKey: string | null, current: RoomQuestion | n
   )
 
   if (!roomKey) return null
-  return { state, current, start, end, reveal }
+  return { state, current, start, end, reveal, qrHidden, setQrHidden }
 }
 
 const NOTICE: Record<string, string> = {
@@ -136,9 +141,14 @@ export function RoomSide() {
           <QrCode text={link} label={`QR code for ${link}`} />
           <div className="lesson-muted lesson-room-link mono">{link.replace(/^https?:\/\//, '')}</div>
           {!current && <div className="lesson-muted">No vote on this screen.</div>}
-          <button className="btn btn-ghost" onClick={room.end} data-testid="room-end">
-            End voting
-          </button>
+          <div className="lesson-room-actions">
+            <button className="btn btn-ghost" onClick={() => room.setQrHidden(true)} data-testid="room-hide" title="Phones already in follow the screen. The code stays in the top bar; click it to bring the QR back.">
+              Hide QR
+            </button>
+            <button className="btn btn-ghost" onClick={room.end} data-testid="room-end">
+              End voting
+            </button>
+          </div>
         </>
       ) : (
         <button className="btn btn-primary" onClick={room.start} disabled={state.phase === 'creating'} data-testid="room-start">
@@ -158,6 +168,13 @@ export function RoomSide() {
 export function RoomChip() {
   const room = useRoom()
   if (!room || room.state.phase !== 'live' || !room.state.code) return null
+  if (room.qrHidden) {
+    return (
+      <button className="lesson-chip mono lesson-chip-btn" title="Phone voting is on. Show the QR again" onClick={() => room.setQrHidden(false)} data-testid="room-chip">
+        <Smartphone size={13} /> {room.state.code} <QrCodeIcon size={13} />
+      </button>
+    )
+  }
   return (
     <span className="lesson-chip mono" title="Phone voting is on" data-testid="room-chip">
       <Smartphone size={13} /> {room.state.code}
