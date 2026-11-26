@@ -1,6 +1,6 @@
 // The phone page of lesson voting: `#vote=K7M2P`. Small on purpose: no DuckDB, no store, no App; only fetch and localStorage (with a
 // memory fallback), so it opens in a camera app or an in-app browser. Rules: src/core/voting.ts.
-import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
+import { useCallback, useEffect, useReducer, useRef, useState, type ReactNode } from 'react'
 import { LETTERS, isShopKey, type Letter } from '../core/lesson'
 import { ApiError, castFill, castVote, roomState } from '../core/voteApi'
 import { loadFillMine, loadMine, safeStore, saveFillMine, saveMine, voterToken } from '../core/voteStorage'
@@ -47,6 +47,24 @@ function TablesFold({ shop }: { shop: boolean }) {
       ))}
     </details>
   )
+}
+
+type PhoneResultModule = typeof import('./PhoneResult')
+
+/**
+ * A closed question: the student's own result (src/ui/PhoneResult.tsx), loaded only now so the answer key and the previews stay out of the
+ * phone's first bundle. While it loads, and when it cannot be loaded (offline, a stale tab after a deploy), the plain "look at the screen" shows.
+ */
+function ClosedResult({ qkey, mine, mineFill, fallback }: { qkey: string; mine: string | null; mineFill: string[] | null; fallback: ReactNode }) {
+  const [mod, setMod] = useState<PhoneResultModule | null>(null)
+  useEffect(() => {
+    let off = false
+    import('./PhoneResult').then((m) => !off && setMod(m), () => undefined)
+    return () => {
+      off = true
+    }
+  }, [])
+  return mod ? <mod.PhoneResult qkey={qkey} mine={mine} mineFill={mineFill} fallback={fallback} /> : <>{fallback}</>
 }
 
 export function VotePage() {
@@ -228,9 +246,18 @@ function Room({ code }: { code: string }) {
       {status === 'closed' && room && (
         <div data-testid="vote-state" data-state="closed">
           <h1 className="vote-q">{room.q_label}</h1>
-          <p className="vote-msg">Closed, look at the screen.</p>
-          {mine && <p className="vote-mine">Your vote: <b>{mine}</b></p>}
-          {fillKey && fillMine[fillKey] && <p className="vote-mine">Your answer: <b className="mono">{fillMine[fillKey].join(' · ')}</b></p>}
+          <ClosedResult
+            qkey={room.q_key!}
+            mine={mine}
+            mineFill={fillKey ? (fillMine[fillKey] ?? null) : null}
+            fallback={
+              <>
+                <p className="vote-msg">Closed, look at the screen.</p>
+                {mine && <p className="vote-mine">Your vote: <b>{mine}</b></p>}
+                {fillKey && fillMine[fillKey] && <p className="vote-mine">Your answer: <b className="mono">{fillMine[fillKey].join(' · ')}</b></p>}
+              </>
+            }
+          />
         </div>
       )}
       {(status === 'open' || status === 'voted') && room && fillQ && (

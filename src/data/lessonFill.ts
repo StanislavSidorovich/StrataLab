@@ -21,4 +21,21 @@ export const FILL_QUESTIONS: FillQuestion[] = [
     question: 'Every customer with the number of their orders. Type the missing words.',
     template: 'SELECT c.full_name, COUNT(o.order_id) AS orders\nFROM demo.customers AS c\n___ demo.orders AS o ON o.customer_id = ___\nGROUP BY c.customer_id, c.full_name;',
   },
+  {
+    id: 'f3',
+    mode: 'choose',
+    topic: 'WHERE, GROUP BY, ORDER BY with TOP',
+    level: 'medium',
+    question: 'The 3 categories with the most products that cost more than 7. Put the words in the gaps: tap a word or drag it.',
+    template: 'SELECT TOP (3) category, COUNT(*) AS products\nFROM demo.products\n___ price > 7\n___ category\n___ COUNT(*) DESC;',
+    bank: ['HAVING', 'GROUP BY', 'ON', 'ORDER BY', 'WHERE'],
+  },
+  {
+    id: 'f4',
+    mode: 'type',
+    topic: 'TOP and ORDER BY',
+    level: 'easy',
+    question: 'The 5 most expensive products. Type the missing words.',
+    template: 'SELECT ___ (5) product_name, price\nFROM demo.products\nORDER BY price ___;',
+  },
 ]

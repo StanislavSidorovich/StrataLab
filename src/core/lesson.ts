@@ -140,6 +140,8 @@ export interface WarmOption {
   why: string
   /** what SQL Server says when this option's query fails (short, only when known for sure); shown after DuckDB's own error */
   mssql?: string
+  /** the query RUNS in DuckDB (which is more lenient, e.g. a SELECT alias in WHERE) and only SQL Server refuses it: `mssql` is then the truth, and a run here is not what a student would see */
+  mssqlOnly?: boolean
 }
 
 export interface WarmQuestion {
@@ -165,6 +167,7 @@ export interface QuizOption {
   sql?: string
   why?: string
   mssql?: string
+  mssqlOnly?: boolean
   right: boolean
 }
 
@@ -172,7 +175,7 @@ export interface QuizOption {
 export const looksLikeCode = (text: string): boolean =>
   /^[A-Z][A-Z ]*( \(.*\))?$/.test(text) || /^(COUNT|SUM|SELECT|TOP \(|NOT (IN|EXISTS)|<> ANY|FULL |LEFT |RIGHT |INNER |CROSS )/.test(text) || /^[a-z_][\w.]*\s*(=|==|<>|IS)\s/.test(text)
 
-export const warmOptions = (q: WarmQuestion): QuizOption[] => q.options.map((o, i) => ({ letter: LETTERS[i], text: o.text, code: looksLikeCode(o.text), sql: o.sql, why: o.why, mssql: o.mssql, right: i === q.right }))
+export const warmOptions = (q: WarmQuestion): QuizOption[] => q.options.map((o, i) => ({ letter: LETTERS[i], text: o.text, code: looksLikeCode(o.text), sql: o.sql, why: o.why, mssql: o.mssql, mssqlOnly: o.mssqlOnly, right: i === q.right }))
 
 export const voteOptions = (q: VoteQuestion, index: number): QuizOption[] => arrange(q, index).map((o) => ({ letter: o.letter, text: o.sql, code: true, sql: o.sql, right: o.right }))
 
@@ -218,6 +221,9 @@ export const PLAN_PRESETS: Record<string, string> = {
   intro: 's,w1,w6,v1,w5,w9,v2,r,t:where:1',
   // `shop`: the same flow on the small demo shop (customers, orders, products), for a class that knows no business terms.
   shop: 's,d1,d2,d3,d4,d5,d6,f1,f2,r',
+  // `basics`: the first SQL Server lesson for a class that is learning SELECT, WHERE, ORDER BY, TOP and GROUP BY; `basics-join` adds the join.
+  basics: 's,d7,d8,d9,f4,d10,f3,d11,f1,r',
+  'basics-join': 's,d7,d8,d9,f4,d10,f3,d11,f1,d2,f2,r',
 }
 
 /** The same text the teacher's header shows: "Step 3 of 8". */

@@ -721,7 +721,13 @@ function QuizView({ qkey, crumb, question, options, why, item, nav }: QuizProps)
                       </span>
                     ) : (
                       <span>
-                        <b>{o.right ? 'Right.' : 'Runs, but not the answer:'}</b> {r.text}
+                        <b>{o.right ? 'Right.' : o.mssqlOnly ? 'Runs here, but SQL Server refuses it:' : 'Runs, but not the answer:'}</b> {r.text}
+                        {o.mssqlOnly && o.mssql && (
+                          <>
+                            {' '}
+                            <b>In SQL Server:</b> {o.mssql}
+                          </>
+                        )}
                       </span>
                     )}
                   </div>
@@ -764,9 +770,14 @@ function PickPanel({ option, pick }: { option: QuizOption; pick: Pick }) {
       {pick.status === 'rows' && (
         <div data-testid="pick-rows">
           <div className={option.right ? 'lesson-pick-ok' : 'lesson-pick-diff'}>
-            <b>{option.right ? 'Right.' : 'Runs, but not the answer.'}</b>{' '}
+            <b>{option.right ? 'Right.' : option.mssqlOnly ? 'Runs here, but SQL Server refuses it.' : 'Runs, but not the answer.'}</b>{' '}
             {pick.total === 0 ? '0 rows.' : `${pick.total.toLocaleString('en-US')}${pick.more ? '+' : ''} row${pick.total === 1 ? '' : 's'}${pick.total > PICK_ROWS ? `, the first ${PICK_ROWS} shown` : ''}.`}
           </div>
+          {option.mssqlOnly && option.mssql && (
+            <div className="lesson-pick-mssql" data-testid="pick-mssql">
+              <b>In SQL Server:</b> {option.mssql}
+            </div>
+          )}
           {pick.table.numRows > 0 && <Grid table={pick.table} />}
         </div>
       )}

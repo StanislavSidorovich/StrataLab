@@ -1,8 +1,6 @@
 // Fill-the-gaps questions (plan items f<n>): the comparison, what the projector computes from the room's counts, the pad's tap and drag
 // rules, and the two shop questions run on the demo rows.
 import { readFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
-import { resolve } from 'node:path'
 import { beforeAll, describe, expect, it } from 'vitest'
 import {
   FILL_GAP, FILL_MAX_LEN, allRight, answeredText, answersToSend, checkAnswers, cleanAnswer, fillNumber, fillQuery, fillStats, gapCount, matchesGap, normalizeAnswer, parseFillRows, rightQuery, splitTemplate, wrongText, type FillRow,
@@ -14,10 +12,7 @@ import { loadFillMine, safeStore, saveFillMine } from '../src/core/voteStorage'
 import { PLAN_PRESETS, isRoomItem, isShopKey, parsePlan, planFromHash, planKey } from '../src/core/lesson'
 import { FILL_QUESTIONS } from '../src/data/lessonFill'
 import { FILL_ANSWERS, FILL_WHY } from '../src/data/lessonFillAnswers'
-import { DEMO_SQL } from '../src/data/demo'
-import { resultRows } from '../src/db/export'
-
-const require = createRequire(import.meta.url)
+import { isError, makeRunner, type Runner } from './helpers/runner'
 
 describe('fill: comparing an answer', () => {
   it('ignores case, extra spaces, line breaks and a trailing semicolon', () => {
@@ -204,8 +199,8 @@ describe('fill: the pad', () => {
 
 describe('fill: the shop questions', () => {
   it('one choose and one type, 1 to 3 gaps, a bank of 4 to 6 chips with distractors', () => {
-    expect(FILL_QUESTIONS.map((q) => q.id)).toEqual(['f1', 'f2'])
-    expect(FILL_QUESTIONS.map((q) => q.mode)).toEqual(['choose', 'type'])
+    expect(FILL_QUESTIONS.map((q) => q.id)).toEqual(['f1', 'f2', 'f3', 'f4'])
+    expect(FILL_QUESTIONS.map((q) => q.mode)).toEqual(['choose', 'type', 'choose', 'type'])
     for (const q of FILL_QUESTIONS) {
       const g = gapCount(q.template)
       expect(g, q.id).toBeGreaterThanOrEqual(1)
@@ -231,7 +226,7 @@ describe('fill: the shop questions', () => {
   })
   it('the plan `shop` ends with the two fill questions before the results', () => {
     expect(PLAN_PRESETS.shop).toBe('s,d1,d2,d3,d4,d5,d6,f1,f2,r')
-    const p = planFromHash('#lesson=sql&plan=shop', { warm: 30, shop: 6, fill: FILL_QUESTIONS.length, votes: {}, tasks: {} })!
+    const p = planFromHash('#lesson=sql&plan=shop', { warm: 30, shop: 11, fill: FILL_QUESTIONS.length, votes: {}, tasks: {} })!
     expect(p.items.map(planKey).join(',')).toBe(PLAN_PRESETS.shop)
     expect(p.skipped).toEqual([])
     expect(planFromHash('#lesson=sql&plan=f1,f9', { warm: 30, fill: 2, votes: {}, tasks: {} })!.skipped).toEqual(['f9'])
@@ -244,16 +239,28 @@ describe('fill: the shop questions', () => {
 })
 
 describe('fill: the filled queries on the demo rows', () => {
-  let duck: { query: (sql: string) => Parameters<typeof resultRows>[0] }
+  // T-SQL, as Lab runs it (TOP is translated), on the demo rows
+  let runner: Runner
   beforeAll(async () => {
-    const duckdb = require('@duckdb/duckdb-wasm/dist/duckdb-node-blocking.cjs')
-    const dist = resolve('node_modules/@duckdb/duckdb-wasm/dist')
-    const db = await duckdb.createDuckDB({ mvp: { mainModule: `${dist}/duckdb-mvp.wasm`, mainWorker: '' }, eh: { mainModule: `${dist}/duckdb-eh.wasm`, mainWorker: '' } }, new duckdb.VoidLogger(), duckdb.NODE_RUNTIME)
-    await db.instantiate()
-    duck = db.connect()
-    for (const s of DEMO_SQL.split(';\n').map((x) => x.trim()).filter(Boolean)) duck.query(s)
-  }, 120_000)
-  const run = (sql: string) => resultRows(duck.query(sql))
+    runner = await makeRunner()
+  }, 180_000)
+  const run = (sql: string) => {
+    const r = runner.attempt(sql)
+    if (isError(r)) throw new Error(r.error)
+    return r
+  }
+  /** How many of the wrong word sets fail or give other rows than the right answer. */
+  const visiblyWrong = (id: string, bads: string[][]) => {
+    const q = FILL_QUESTIONS.find((x) => x.id === id)!
+    const base = JSON.stringify(run(rightQuery(q.template, FILL_ANSWERS[id])).rows)
+    return bads.filter((bad) => {
+      try {
+        return JSON.stringify(run(fillQuery(q.template, bad)).rows) !== base
+      } catch {
+        return true
+      }
+    }).length
+  }
 
   it('the right answers give a query that runs and returns rows', () => {
     for (const q of FILL_QUESTIONS) {
@@ -273,17 +280,19 @@ describe('fill: the filled queries on the demo rows', () => {
     }
   })
   it('f1: swapping the words fails or gives other rows (a wrong answer is visible when run)', () => {
-    const q = FILL_QUESTIONS[0]
-    const base = JSON.stringify(run(rightQuery(q.template, FILL_ANSWERS.f1)).rows)
-    let different = 0
-    for (const bad of [['HAVING', 'GROUP BY', 'WHERE'], ['WHERE', 'ORDER BY', 'HAVING'], ['WHERE', 'GROUP BY', 'ON']]) {
-      try {
-        if (JSON.stringify(run(fillQuery(q.template, bad)).rows) !== base) different++
-      } catch {
-        different++
-      }
-    }
-    expect(different).toBe(3)
+    expect(visiblyWrong('f1', [['HAVING', 'GROUP BY', 'WHERE'], ['WHERE', 'ORDER BY', 'HAVING'], ['WHERE', 'GROUP BY', 'ON']])).toBe(3)
+  })
+  it('f3: swapping the words fails or gives other rows; the answer is 3 categories without a tie at the cut', () => {
+    expect(visiblyWrong('f3', [['HAVING', 'GROUP BY', 'ORDER BY'], ['WHERE', 'ORDER BY', 'GROUP BY'], ['WHERE', 'GROUP BY', 'ON'], ['ON', 'GROUP BY', 'ORDER BY']])).toBe(4)
+    const q = FILL_QUESTIONS.find((x) => x.id === 'f3')!
+    expect(run(rightQuery(q.template, FILL_ANSWERS.f3)).rows).toEqual([['Equipment', 4], ['Coffee', 3], ['Accessories', 2]])
+    // place 4 is Snacks with 1: the third place is not shared
+    expect(runner.attempt("SELECT category, COUNT(*) AS n FROM demo.products WHERE price > 7 GROUP BY category ORDER BY n DESC")).toMatchObject({ rows: [['Equipment', 4], ['Coffee', 3], ['Accessories', 2], ['Snacks', 1]] })
+  })
+  it('f4: no TOP, or no DESC, gives other rows or fails', () => {
+    expect(visiblyWrong('f4', [['TOP', 'ASC'], ['TOP', ''], ['LIMIT', 'DESC'], ['SELECT', 'DESC']])).toBe(4)
+    const q = FILL_QUESTIONS.find((x) => x.id === 'f4')!
+    expect(run(rightQuery(q.template, FILL_ANSWERS.f4)).rows.map((r) => r[0])).toEqual(['Hand grinder', 'Moka pot', 'French press', 'Milk frother', 'Espresso beans 1kg'])
   })
 })
 

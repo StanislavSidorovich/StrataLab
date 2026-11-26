@@ -7,6 +7,7 @@
 // option: the right one answers, each wrong one fails or answers differently, and the numbers the questions state are the data's.
 import type { WarmQuestion } from '../../core/lesson'
 import { MSG_147, MSG_8120 } from './warmup'
+import { BASICS_VOTES } from './basics'
 
 /** Orders per customer; `where`, `groupBy`, `having` and `orderBy` are what the question is about. */
 const deliveredBy = (where: string, groupBy: string, having: string, orderBy = 'customer_id') =>
@@ -118,4 +119,5 @@ export const SHOP_VOTES: WarmQuestion[] = [
       { text: 'COUNT(DISTINCT status)', sql: countDelivered('COUNT(DISTINCT status)'), why: 'This counts different statuses. Every row here is delivered, so the answer is 1.' },
     ],
   },
+  ...BASICS_VOTES,
 ]

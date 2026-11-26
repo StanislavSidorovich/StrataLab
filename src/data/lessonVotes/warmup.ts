@@ -10,6 +10,8 @@ import type { WarmQuestion } from '../../core/lesson'
 
 export const MSG_8121 = (col: string) => `Msg 8121, Level 16: Column '${col}' is invalid in the HAVING clause because it is not contained in either an aggregate function or the GROUP BY clause.`
 export const MSG_8120 = (col: string) => `Msg 8120, Level 16: Column '${col}' is invalid in the select list because it is not contained in either an aggregate function or the GROUP BY clause.`
+/** SQL Server refuses a SELECT alias in WHERE (DuckDB accepts it: see `mssqlOnly` in WarmOption). */
+export const MSG_207 = (col: string) => `Msg 207, Level 16: Invalid column name '${col}'.`
 export const MSG_147 = 'Msg 147, Level 15: An aggregate may not appear in the WHERE clause unless it is in a subquery contained in a HAVING clause or a select list, and the column being aggregated is an outer reference.'
 
 /** Total revenue per outlet, with the clause under test in the middle. */

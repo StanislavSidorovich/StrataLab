@@ -46,3 +46,18 @@ html, body { margin: 0; background: var(--q-bg, #fff); color: var(--q-text, #101
 .fill-chip.used { opacity: 0.35; cursor: default; background: var(--q-surface-2, #f2f4f7); }
 .fill-send { width: 100%; }
 .fill-ghost { position: fixed; z-index: 10; transform: translate(-50%, -130%); padding: 10px 16px; font-size: 16px; font-weight: 700; border: 2px solid var(--q-accent, #15803d); border-radius: 10px; background: var(--q-surface, #fff); box-shadow: 0 6px 18px rgba(16, 24, 40, 0.25); pointer-events: none; }
+
+/* After Reveal (PhoneResult.tsx): the student's own answer and the result of its query. Nothing here may widen the page: tables scroll inside their card. */
+.phone-verdict { margin: 4px 0 8px; font-size: 24px; font-weight: 700; }
+.phone-verdict.ok { color: var(--q-accent, #15803d); }
+.phone-verdict.bad { color: #b42318; }
+.phone-verdict.none { color: var(--q-muted, #667085); font-size: 20px; }
+.phone-pick { margin: 12px 0 4px; font-size: 16px; }
+.phone-why { margin: 8px 0; font-size: 16px; line-height: 1.4; }
+.phone-code { box-sizing: border-box; max-width: 100%; margin: 4px 0; padding: 10px 12px; border: 1px solid var(--q-line, #d0d5dd); border-radius: 10px; background: var(--q-surface-2, #f2f4f7); font-size: 14px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+.phone-err { margin: 8px 0; padding: 10px 12px; border-radius: 10px; background: #fee4e2; color: #7a271a; font-size: 15px; line-height: 1.4; overflow-wrap: anywhere; }
+.phone-gaps { margin: 4px 0 10px; padding: 0; list-style: none; display: grid; gap: 6px; font-size: 16px; }
+.phone-gaps li { padding: 8px 10px; border-radius: 10px; border: 1px solid var(--q-line, #d0d5dd); }
+.phone-gaps li.ok { background: color-mix(in srgb, var(--q-accent, #15803d) 12%, var(--q-surface, #fff)); }
+.phone-gaps li.bad { background: #fef3f2; }
+.phone-gap-n { color: var(--q-muted, #667085); margin-right: 6px; }
