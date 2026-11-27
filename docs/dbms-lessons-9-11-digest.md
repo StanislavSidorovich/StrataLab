@@ -74,3 +74,59 @@ Checked by searching the section files for the keywords, so "covered" means the 
 ## 5. Not read yet
 
 Class 9 slides 30 to 96 were read from extracted text, in short. Class 11 slides 50 to the end (Advanced SQL) and the "Show solution" slides have not been read. The Class 1 to 3 PDFs, the cheat sheet and the SQL folders in `4. dbms` were not opened.
+
+## 6. T-SQL write probe (2026-11-27)
+
+`tests/tsqlWrite.test.ts` (45 tests) runs each construct below the way a T-SQL tab does: sqlglot translates the script, DuckDB runs the statements one at a time on one connection, the first error stops the script, the ones before it stay done. It uses small tables made in the test (customers 1:n orders, PK, FK, IDENTITY, like the demo shop) and asserts what Lab does today, so a red test means the behaviour moved and this table needs a look. It ran in Node without the ICU extension: `CAST(GETDATE() AS DATE)` failed there, which is not a finding; check it in the browser before using it in a task.
+
+Verdicts: **runs**; **error**; **differs** (runs, but the effect is not SQL Server's).
+
+| Construct | Result | Note |
+|---|---|---|
+| `INSERT` with explicit columns | runs | Columns left out take their `DEFAULT` and the next IDENTITY |
+| Several rows in one `VALUES` | runs | |
+| `INSERT ... SELECT` | runs | |
+| `DEFAULT` keyword in `VALUES` | runs | |
+| Text longer than `NVARCHAR(50)` | **differs** | Lab keeps all of it (a `VARCHAR` has no length); SQL Server: "String or binary data would be truncated" |
+| `INSERT ... OUTPUT inserted.col` | error | Translated to `RETURNING inserted.col`: "Referenced table "inserted" not found" |
+| `IDENTITY(1,1)` column | runs | A sequence `<table>_<column>_seq` is the column's default |
+| Explicit id in an IDENTITY column | **differs** | Accepted without `SET IDENTITY_INSERT ON` (SQL Server: error). The sequence does not follow it (the sync only covers CREATE TABLEs of the same script), so later ids walk up to it and collide |
+| `SCOPE_IDENTITY()` | error | "Scalar Function with name scope_identity does not exist"; the INSERT before it stays done |
+| `DECLARE @id ...; SET @id = SCOPE_IDENTITY()` | error | Syntax error at `DECLARE`; no statement of the script runs |
+| `@@IDENTITY`, `IDENT_CURRENT('t')` | error | `@@IDENTITY` reaches DuckDB as `$$IDENTITY` (parser error); `ident_current` does not exist |
+| Way round it | runs | `SELECT currval('<table>_<column>_seq')` right after the INSERT, same connection |
+| `SELECT ... INTO new_table` | runs | `CREATE TABLE ... AS SELECT`; no key, no IDENTITY, as in SQL Server. Into an existing name: error, as in SQL Server |
+| `SELECT ... INTO #t` | runs | A `TEMPORARY` table |
+| `UPDATE` with `CASE`, with a subquery (in `SET` or `WHERE`), several columns | runs | |
+| `DATEADD(day / month, n, d)` | runs | `d + INTERVAL n DAY / MONTH` |
+| `UPDATE c SET c.x = ... FROM t c JOIN u ON ...` | error | "Qualified column names in UPDATE .. SET not supported" |
+| `UPDATE t SET x = ... FROM t JOIN u ON ...` | error | "Ambiguous reference to column name" |
+| Way round it | runs | `UPDATE t SET x = x + u.y FROM u WHERE u.k = t.k` (DuckDB's own form: no repeat of `t`) |
+| `DELETE FROM t WHERE k IN (subquery)`, `EXISTS` | runs | |
+| `DELETE t FROM t JOIN u ON ...`, alias or table name | error | Syntax error at the alias or table name |
+| `DELETE TOP (n) FROM t` | error | Syntax error at `TOP` |
+| Way round it | runs | `DELETE FROM t USING u WHERE u.k = t.k`, or a subquery |
+| `DELETE` of a parent row with children | error | `Constraint Error: Violates foreign key constraint ... still referenced`: blocks as SQL Server does, in DuckDB's words |
+| `UPDATE` of a key a child points at | error | Same error; a key nobody points at changes. Moving the children first, then the key, runs |
+| `ON DELETE CASCADE`, `ON DELETE SET NULL`, `ON DELETE SET DEFAULT`, `ON UPDATE CASCADE` in `CREATE TABLE` | error | "FOREIGN KEY constraints cannot use CASCADE, SET NULL or SET DEFAULT" at that CREATE TABLE; tables before it stay, the rest of the script does not run. `ON DELETE NO ACTION` written out runs |
+| `TRUNCATE TABLE` (a table nobody points at) | **differs** | Runs, but does not reset the IDENTITY: the next id continues (SQL Server: back to 1) |
+| `TRUNCATE TABLE` of a referenced parent | error | FK error, as in SQL Server. `DELETE` without `WHERE` keeps the IDENTITY in both |
+| `NOT IN (subquery holding a NULL)` in `DELETE` | runs | Deletes nothing, as in SQL Server; with `IS NOT NULL` in the subquery it deletes the rows |
+| `BEGIN TRANSACTION ... ROLLBACK`, `... COMMIT`, `BEGIN TRAN` / `ROLLBACK TRAN` | runs | Rolls back / keeps the changes; the statements run as `BEGIN`, ..., `ROLLBACK` |
+| A statement fails inside `BEGIN ... COMMIT` | **differs** | The whole transaction is aborted and every later statement fails ("Current transaction is aborted (please ROLLBACK)") until a ROLLBACK is sent; Lab sends none by itself. SQL Server: COMMIT would keep the other statements |
+| `BEGIN TRANSACTION` with no `COMMIT` / `ROLLBACK` | **differs** | The transaction stays open for the next Run. In a saved database Lab sends `CHECKPOINT` after every Run; that fails inside a transaction ("Cannot CHECKPOINT: ... transaction local changes") and aborts it. Shown here on the CHECKPOINT itself; in the app it would appear as an error after a successful Run (not checked in the browser) |
+| Script where statement 3 of 4 fails | **differs** | 1 and 2 stay done, 4 never runs. SQL Server: an FK error ends only that statement and 4 runs |
+| A statement sqlglot cannot read | error | Nothing of the script runs |
+| `WHERE name = 'ana'` against 'Ana' | **differs** | Text compares case-sensitively: 0 rows touched (SQL Server's default collation: 1) |
+| `credit / 2` in `SET` on an INT column | **differs** | True division, rounded on the way back into the column: `7 / 2` gives 4 (SQL Server: 3) |
+| What a data-changing statement returns | **differs** | A one-cell table `Count`; SQL Server prints "(3 rows affected)" |
+
+**What the future write section must avoid or translate**
+
+- Write every `UPDATE ... FROM` as `UPDATE t SET x = ... FROM u WHERE u.k = t.k` and every `DELETE ... JOIN` as `DELETE FROM t USING u WHERE ...` or a subquery. A note can show the SQL Server form ("what the course writes"), but the cell the student runs takes the form that runs. The subquery forms run in both, so teach those first.
+- No `SCOPE_IDENTITY()`, `@@IDENTITY`, `OUTPUT`, `DECLARE @x`, `DELETE TOP`. A task that needs the new id takes it from a subquery on the parent, or uses `currval` in a cell marked as DuckDB-only.
+- Referential actions (`CASCADE`, `SET NULL`) cannot be declared in CREATE TABLE, so a task on them is a manual script (children first, then the parent) or a note. The "delete blocked by FK" lesson works as it is.
+- Every task starts by dropping and recreating its copy of `demo` (or a fresh schema) and sends `ROLLBACK` first, so a transaction left open or aborted by the previous Run cannot break it. Whether Lab itself should send a ROLLBACK after a failed script, and before CHECKPOINT, is the one fix in Lab's own code this probe points at.
+- Don't ask for a case-mismatched `WHERE`, `/` on integers, or an id shown after `TRUNCATE`, unless the task is the trap. Show ids from `ROW_NUMBER` or leave them out of the expected state.
+- Check by comparing the table afterwards (or a follow-up `SELECT`) with the expected rows, never by the `Count` the statement returns.
+- An INSERT with an explicit id into an IDENTITY table leaves the sequence behind; the reset script re-creates the table, so nothing carries over.
