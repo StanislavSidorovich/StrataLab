@@ -125,7 +125,8 @@ export function Sidebar() {
   const shownSchemas = schemas.map((s) => [s, matching(inTree.filter((t) => t.schema === s), search)] as const).filter(([, list]) => !searching || list.length > 0)
 
   return (
-    <aside className="h-full flex flex-col" style={{ background: 'var(--panel)', borderRight: '1px solid var(--line)' }}>
+    // zoom follows "Text size" under Aa (--practice-zoom), as the AI helper and the practice pages do
+    <aside className="h-full flex flex-col" style={{ background: 'var(--panel)', borderRight: '1px solid var(--line)', zoom: 'var(--practice-zoom, 1)' }}>
       <div className="p-3 space-y-2 shrink-0" style={{ borderBottom: '1px solid var(--line)' }}>
         <button className="btn btn-primary w-full justify-center" disabled={engine.status !== 'ready'} onClick={() => fileInput.current?.click()}>
           <Upload size={14} /> Add CSV / Excel…

@@ -12,6 +12,7 @@ import { ImportDialog } from './ImportDialog'
 import { DdlDialog } from './DdlDialog'
 import './editorTabs.css'
 import './textSize.css'
+import { useTextZoom } from './useTextZoom'
 import { GenerateDialog } from './GenerateDialog'
 import { CatalogDialog, DatasetProgressCard } from './CatalogDialog'
 import { WelcomeDialog } from './WelcomeDialog'
@@ -125,11 +126,13 @@ export function App() {
       /* ignore */
     }
   }, [sideW])
+  const textZoom = useTextZoom()
   const startSideResize = (e: React.PointerEvent) => {
     e.preventDefault()
     const x0 = e.clientX
     const w0 = sideW
-    const move = (ev: PointerEvent) => setSideW(Math.round(Math.min(SIDE_MAX, Math.max(SIDE_MIN, w0 + ev.clientX - x0))))
+    // the panel is drawn at sideW * textZoom, so a pointer move of N px is N / textZoom of the stored width
+    const move = (ev: PointerEvent) => setSideW(Math.round(Math.min(SIDE_MAX, Math.max(SIDE_MIN, w0 + (ev.clientX - x0) / textZoom))))
     const up = () => {
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', up)
@@ -162,7 +165,7 @@ export function App() {
         <PipelinePage />
         <BuildPage />
         <LessonPage />
-        <div className="shrink-0 hidden md:block relative" style={{ width: sideW }}>
+        <div className="shrink-0 hidden md:block relative" style={{ width: Math.round(sideW * textZoom) }}>
           <Sidebar />
           <div
             onPointerDown={startSideResize}
