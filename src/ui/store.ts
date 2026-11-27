@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { Table } from 'apache-arrow'
-import { cancelQuery, checkpoint, getEngine, insertArrow, isCancelled, onDatabaseMoved, query, queryCancellable, queryLimited, type EngineProgress } from '../db/engine'
+import { cancelQuery, checkpoint, getEngine, inTransaction, insertArrow, isCancelled, onDatabaseMoved, query, queryCancellable, queryLimited, rollback, setTransactionOpen, type EngineProgress } from '../db/engine'
 import { updateLosesTables, type MemoryReason } from '../core/dbLock'
 import { applyUpdate } from '../pwa/register'
 import { ROW_LIMIT } from '../core/rowLimit'
@@ -39,6 +39,7 @@ import { planGeneration, type GenPlan, type GenTable } from '../core/generate'
 import { runGeneration, type GenOutcome } from '../db/generate'
 import { runOrder } from '../core/pdScript'
 import { identitySyncSql } from '../core/identitySync'
+import { settleTransaction, TRANSACTION_OPEN_NOTE, type Settled } from '../core/transaction'
 import { hashWithPractice, hashWithoutPractice, practiceFromHash, readableError, type PracticeKind } from '../core/sqlPractice'
 import { buildFromHash, hashWithBuild, hashWithoutBuild } from '../core/build'
 import { lessonFromHash } from '../core/lesson'
@@ -770,6 +771,8 @@ export async function runSql(tabId: string, sql: string, limit?: number) {
   }
   const t0 = performance.now()
   const isStopped = () => stopped.has(tabId)
+  // The statement that is running (1-based; 'unknown' when the script goes to DuckDB in one piece), for the transaction note.
+  let failedAt: number | 'unknown' | null = null
   try {
     if (into) {
       if (!get().schemas.includes(into)) await createSchema(into)
@@ -777,11 +780,14 @@ export async function runSql(tabId: string, sql: string, limit?: number) {
       // the script's DROPs are given the dataset's name above).
       await query(`SET search_path = '${into}'`)
     }
+    failedAt = statements.length > 1 ? 1 : 'unknown'
     let { table, more } = await queryLimited(statements[0], tabId, isStopped, limit)
-    for (const st of statements.slice(1)) {
+    for (const [i, st] of statements.slice(1).entries()) {
+      failedAt = i + 2
       const next = await queryLimited(st, tabId, isStopped, limit)
       if (next.table.numCols > 0) ({ table, more } = next)
     }
+    failedAt = null
     // IDENTITY columns loaded with their own ids: the next INSERT without an id goes on after the highest one.
     for (const st of syncIdentity) {
       try {
@@ -793,15 +799,19 @@ export async function runSql(tabId: string, sql: string, limit?: number) {
     const ms = performance.now() - t0
     set((s) => ({ results: { ...s.results, [tabId]: { status: 'done', table, ms, sql, limit, more } } }))
     logRun(tabId, { sql, ok: true, text: `${rowsText(table.numRows, more)} · ${ms.toFixed(0)} ms${dialect === 'tsql' ? ' · T-SQL translated to DuckDB' : ''}${into ? ` · ${made.length} tables in the dataset ${into}` : ''}` })
+    // A transaction the script left open stays open for the next Run: no CHECKPOINT inside it (src/core/transaction.ts).
+    const settled = await settleRun(sql, null)
     // Always: the saved database must hold every change (src/db/engine.ts empties the WAL on
     // start), and a CHECKPOINT with nothing to write costs next to nothing.
     await checkpoint()
     if (WRITES.test(toRun)) await refreshCatalog()
+    if (settled.note) addLog({ sql: '-- transaction', ok: true, text: settled.note })
   } catch (e) {
     if (isCancelled(e)) {
       const ms = performance.now() - t0
       set((s) => ({ results: { ...s.results, [tabId]: { status: 'error', error: STOPPED, ms } } }))
       logRun(tabId, { sql, ok: false, text: `Stopped after ${(ms / 1000).toFixed(1)} s` })
+      await settleRun(sql, failedAt)
       // Statements of a script that ran before the stop may have changed tables.
       await checkpoint()
       if (WRITES.test(toRun)) await refreshCatalog()
@@ -809,11 +819,12 @@ export async function runSql(tabId: string, sql: string, limit?: number) {
     }
     const raw = String(e instanceof Error ? e.message : e)
     const nameHint = sqlNameHint(raw, get().tables)
-    const error = nameHint ? `${raw}
-${nameHint}` : raw
+    const rolledBack = (await settleRun(sql, failedAt)).note
+    const error = [raw, nameHint, rolledBack].filter(Boolean).join('\n')
     // In a T-SQL tab the hints are what the translation is for; they'd only repeat it.
     set((s) => ({ results: { ...s.results, [tabId]: { status: 'error', error, hints: dialect === 'tsql' ? [] : dialectHints(sql), ms: performance.now() - t0 } } }))
     logRun(tabId, { sql, ok: false, text: raw.split('\n')[0] })
+    if (rolledBack) addLog({ sql: '-- rollback', ok: true, text: rolledBack })
   } finally {
     if (into) {
       try {
@@ -824,6 +835,17 @@ ${nameHint}` : raw
       await refreshCatalog()
     }
   }
+}
+
+/** Whether an earlier Run left a transaction open (src/core/transaction.ts has the rule). */
+let transactionLeftOpen = false
+async function settleRun(sql: string, failed: number | 'unknown' | null): Promise<Settled> {
+  const r = await settleTransaction(sql, failed, transactionLeftOpen, { inTransaction, rollback })
+  transactionLeftOpen = r.open
+  setTransactionOpen(r.open)
+  if (r.open) set({ notice: TRANSACTION_OPEN_NOTE })
+  else set((s) => (s.notice === TRANSACTION_OPEN_NOTE ? { notice: null } : {}))
+  return r
 }
 
 /** The answers given for a script in a tab: a dataset's name, or null for My tables. */

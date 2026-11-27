@@ -306,9 +306,35 @@ export async function cancelQuery(tag: string): Promise<boolean> {
 export const isCancelled = (e: unknown) => /query was cancell?ed/i.test(String(e instanceof Error ? e.message : e))
 
 /** Writes the database file to OPFS so that the next visit sees the changes. */
+/**
+ * Whether the one connection is inside a transaction (open, or aborted by a failed statement), asked of DuckDB.
+ * txid_current() is a new number for every statement of its own and the same one inside a transaction, so two calls tell.
+ * (BEGIN is no probe: where a transaction with changes is open, the failed BEGIN aborts it.)
+ */
+export async function inTransaction(): Promise<boolean> {
+  try {
+    const first = (await query('SELECT txid_current() AS t')).getChildAt(0)?.get(0)
+    const second = (await query('SELECT txid_current() AS t')).getChildAt(0)?.get(0)
+    return first === second
+  } catch {
+    return true // "Current transaction is aborted"
+  }
+}
+
+/** ROLLBACK, as a script that failed inside a transaction needs it (the connection stays aborted until then). */
+export async function rollback(): Promise<void> {
+  await query('ROLLBACK')
+}
+
+/** A transaction a script left open: CHECKPOINT fails inside one (and aborts it), so it waits for the end of it. */
+let transactionOpen = false
+export const setTransactionOpen = (open: boolean) => {
+  transactionOpen = open
+}
+
 export async function checkpoint(): Promise<void> {
   const { persistent } = await getEngine()
-  if (persistent) await query('CHECKPOINT')
+  if (persistent && !transactionOpen) await query('CHECKPOINT')
 }
 
 /** A new table `name` in main from an Arrow table already in the page (a result in the grid). */
