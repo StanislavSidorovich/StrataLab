@@ -8,7 +8,7 @@ import { resolve } from 'node:path'
 import { loadPyodide, type PyodideInterface } from 'pyodide'
 import { SQLGLOT_VERSION, type TranslatedStatement } from '../src/dialects/tsql'
 import { foldKeys, runOrder } from '../src/core/pdScript'
-import { qualifyDrops, qualifyReferences, suggestDatasetName } from '../src/core/scriptDataset'
+import { qualifyDrops, qualifyReferences, scriptDatabase, suggestDatasetName } from '../src/core/scriptDataset'
 import { decodeSqlText } from '../src/core/sqlText'
 import { identitySyncSql } from '../src/core/identitySync'
 
@@ -109,6 +109,23 @@ describe('CREATE DATABASE, USE and SET IDENTITY_INSERT', () => {
     expect(one('/* create database x */ select 2')[0].database).toBeUndefined()
   })
 
+  it('leaves DROP DATABASE out too (SSMS and PowerDesigner scripts start with it), and it names no database', () => {
+    const d = translate('drop database music_festivals\ngo\ncreate database music_festivals\ngo')
+    expect(d[0].target).toBe('')
+    expect(d[0].error).toBeNull()
+    expect(d[0].database).toBeUndefined()
+    expect(translate('DROP DATABASE IF EXISTS [x y]')[0].target).toBe('')
+    expect(runOrder(translate('drop database x\ngo\nuse x\ngo'))).toEqual([])
+  })
+
+  it('keeps the SQL Server default for a bare numeric: (18, 0), so ids are whole numbers', () => {
+    const [t] = translate('create table T (ID numeric not null, A decimal, B numeric(10, 2))')
+    expect(t.target).toContain('ID DECIMAL(18, 0)')
+    expect(t.target).toContain('A DECIMAL(18, 0)')
+    expect(t.target).toContain('B DECIMAL(10, 2)')
+    expect(translate('select cast(5 as numeric)')[0].target).toContain('DECIMAL(18, 0)')
+  })
+
   it('has nothing to run for an empty script or one made only of those statements', () => {
     expect(runOrder(translate(''))).toEqual([])
     expect(runOrder(translate('-- nothing\n'))).toEqual([])
@@ -117,6 +134,12 @@ describe('CREATE DATABASE, USE and SET IDENTITY_INSERT', () => {
 })
 
 describe('the database a script names suggests the dataset', () => {
+  it('is the last one named: a script that starts with USE master still lands in its own database', () => {
+    const t = translate(['use master', 'go', 'drop database x', 'go', 'create database x', 'go', 'use x', 'go', 'create table A (id int)', 'go'].join('\n'))
+    expect(scriptDatabase(t)).toBe('x')
+    expect(scriptDatabase(translate('select 1'))).toBeUndefined()
+  })
+
   it('beats the tab title, and is made unique', () => {
     expect(suggestDatasetName('Query 1', [], [], 'music_festivals')).toBe('music_festivals')
     expect(suggestDatasetName('file.sql', [], [], 'Music Festivals')).toBe('music_festivals')

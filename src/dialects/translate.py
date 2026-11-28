@@ -81,7 +81,7 @@ _IDENTITY_NOTE = "SET IDENTITY_INSERT is left out: it lets SQL Server accept you
 # on (as "database") for the dataset a script's tables are offered.
 _DB_NAME = r"(\[[^\]\n]+\]|\"[^\"\n]+\"|[\w$@#]+)"
 _DATABASE_LINE = re.compile(
-    r"\A((?:\s|--[^\n]*(?=\n|\Z)|/\*.*?\*/)*?)(create\s+database|use)\s+" + _DB_NAME + r"([ \t]+[^\n;]*)?[ \t]*;?[ \t]*(?:\r?\n|\Z)",
+    r"\A((?:\s|--[^\n]*(?=\n|\Z)|/\*.*?\*/)*?)(create\s+database|drop\s+database(?:\s+if\s+exists)?|use)\s+" + _DB_NAME + r"([ \t]+[^\n;]*)?[ \t]*;?[ \t]*(?:\r?\n|\Z)",
     _FLAGS,
 )
 _CLUSTERED = re.compile(r"\b(?:non)?clustered\b[ \t]*", re.IGNORECASE)
@@ -189,6 +189,9 @@ def _fix(tree, notes):
         # BIT is a yes/no column in SQL Server; in DuckDB it is a string of bits.
         if dt.this == exp.DataType.Type.BIT:
             dt.replace(exp.DataType.build("BOOLEAN"))
+        # numeric / decimal with no (p, s): SQL Server makes it (18, 0), DuckDB (18, 3), so ids came out as 2.000.
+        elif dt.this == exp.DataType.Type.DECIMAL and not dt.expressions:
+            dt.set("expressions", [exp.DataTypeParam(this=exp.Literal.number(18)), exp.DataTypeParam(this=exp.Literal.number(0))])
         # NVARCHAR(MAX), NVARCHAR(50): one text type in DuckDB, Unicode and without a length.
         elif dt.this in TEXT_TYPES:
             dt.replace(exp.DataType.build("VARCHAR"))
@@ -268,15 +271,19 @@ def translate(script, pretty_multiline=True):
         if dbs:
             kw, name = dbs[-1]
             note = f"Lab has one database, so {kw.upper()} {name} is left out. Its nearest thing is a dataset: when a script makes tables, Lab offers {name} as the dataset's name."
+            if kw.lower().startswith("drop"):
+                note = f"Lab has one database, so {kw.upper()} {name} is left out. Running the script again replaces its tables: the script's own DROP TABLE lines do that."
             if not _has_code(text):
-                result.append({"source": whole, "at": at, "target": "", "notes": [note], "error": None, "database": name})
+                result.append({"source": whole, "at": at, "target": "", "notes": [note], "error": None, **({} if kw.lower().startswith("drop") else {"database": name})})
                 continue
         result.extend(_translate_one(text.strip(), at + max(0, source.find(text.strip())), pretty_multiline))
         if len(result) > first:
             if identity_lines:
                 result[first]["notes"] = [_IDENTITY_NOTE] + result[first]["notes"]
             if dbs:
-                result[first]["database"] = dbs[-1][1]
+                named = [d for d in dbs if not d[0].lower().startswith("drop")]
+                if named:
+                    result[first]["database"] = named[-1][1]
                 result[first]["notes"] = [note] + result[first]["notes"]
     return result
 

@@ -33,7 +33,7 @@ import { MAX_AI_SQL_ROWS, SQL_DIALECT_NAMES, buildSqlAiContext, replaceCurrentSt
 import type { Walkthrough } from '../data/walkthroughs'
 import { createSchema, listSchemas, moveTables, renameSchema } from '../db/ownDatasets'
 import { catalogSchemaState, datasetName, isOwnSchema, linkedTables } from '../core/ownDatasets'
-import { DATASET_AT, choiceKey, qualifyDrops, qualifyReferences, suggestDatasetName, tablesCreated } from '../core/scriptDataset'
+import { DATASET_AT, choiceKey, qualifyDrops, qualifyReferences, scriptDatabase, suggestDatasetName, tablesCreated } from '../core/scriptDataset'
 import { schemaForModel, showAsModel } from '../db/modelExport'
 import { planGeneration, type GenPlan, type GenTable } from '../core/generate'
 import { runGeneration, type GenOutcome } from '../db/generate'
@@ -738,7 +738,7 @@ export async function runSql(tabId: string, sql: string, limit?: number) {
     // One at a time, so the result shown is the last one that returns rows (as in PostgreSQL
     // tabs), and Stop can end any of them.
     statements = runOrder(translated)
-    database = translated.find((st) => st.database)?.database
+    database = scriptDatabase(translated)
     syncIdentity = identitySyncSql(translated)
     if (!statements.length) {
       // Only CREATE DATABASE / USE / comments: nothing for DuckDB to run.

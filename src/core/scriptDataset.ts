@@ -21,6 +21,11 @@ export function tablesCreated(sql: string): string[] {
   return [...new Set(names.map((n) => n.toLowerCase()))]
 }
 
+/** The database a script ends up in: the last one it names (`use master` ... `create database x` ... `use x` is x). */
+export function scriptDatabase(statements: { database?: string }[]): string | undefined {
+  return statements.filter((st) => st.database).pop()?.database
+}
+
 /**
  * What to offer as the dataset's name: the database the script itself names (`CREATE DATABASE x`, `USE x`),
  * else the tab's own name when it has one (a file's), else `my_dataset`; made unique.
